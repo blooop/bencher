@@ -3,10 +3,14 @@
 Each wrapper delegates to the existing renderer method on the live BenchResult
 (carried in ``BenchData.legacy_result``), so renderer logic is unchanged — this
 phase only moves *dispatch* onto the plugin registry. The registry-level match
-rule is permissive (a default ``PlotFilter()``, which matches every shape) because
+rule is permissive by default (a ``PlotFilter()``, which matches every shape) because
 today's renderers build their shape filters dynamically inside ``to_plot`` (scenario
 lists, over_time special cases) and return ``None`` on mismatch; centralizing those into
-declarative signatures is the plot-selection redesign (A2), not this phase.
+declarative signatures is the plot-selection redesign (A2), not this phase. A renderer
+*sharing* a chart type with another backend is the exception and declares its rule
+here: selection picks one implementation per chart type, so a shape rule the registry
+cannot see makes the renderer win a sweep it then declines to draw, and the other
+backend's output is lost rather than fallen back to.
 
 Priorities encode the legacy ``default_plot_callbacks()`` ordering so reports
 render plots in exactly the same order as before.
@@ -63,8 +67,8 @@ def _declared_kwargs(callback: Callable) -> frozenset[str] | None:
     return frozenset(params)
 
 
-def _builtin_specs() -> list[tuple[str, str, Callable]]:
-    """(name, backend, callback) for the default chart set, in legacy order."""
+def _builtin_specs() -> list[tuple[str, str, Callable, PlotFilter]]:
+    """(name, backend, callback, match) for the default chart set, in legacy order."""
     # Imported here (not module level) to avoid a circular import: the result
     # classes' module tree imports the plugin registry for to_auto dispatch.
     from bencher.results.histogram_result import HistogramResult
@@ -76,23 +80,26 @@ def _builtin_specs() -> list[tuple[str, str, Callable]]:
     from bencher.results.holoview_results.heatmap_result import HeatmapResult
     from bencher.results.holoview_results.line_result import LineResult
     from bencher.results.pane_result import PaneResult
-    from bencher.results.rerun_timeline import RerunTimelineResult
+    from bencher.results.rerun_timeline import TIMELINE_PLOT_FILTER, RerunTimelineResult
     from bencher.results.volume_result import VolumeResult
 
+    anything = PlotFilter()
     return [
-        ("bar", "holoviews", BarResult.to_plot),
-        ("box_whisker", "holoviews", BoxWhiskerResult.to_plot),
-        ("curve", "holoviews", CurveResult.to_plot),
-        ("line", "holoviews", LineResult.to_plot),
-        ("heatmap", "holoviews", HeatmapResult.to_plot),
-        ("histogram", "holoviews", HistogramResult.to_plot),
-        ("volume", "plotly", VolumeResult.to_plot),
-        ("panes", "panel", PaneResult.to_panes),
+        ("bar", "holoviews", BarResult.to_plot, anything),
+        ("box_whisker", "holoviews", BoxWhiskerResult.to_plot, anything),
+        ("curve", "holoviews", CurveResult.to_plot, anything),
+        ("line", "holoviews", LineResult.to_plot, anything),
+        ("heatmap", "holoviews", HeatmapResult.to_plot, anything),
+        ("histogram", "holoviews", HistogramResult.to_plot, anything),
+        ("volume", "plotly", VolumeResult.to_plot, anything),
+        ("panes", "panel", PaneResult.to_panes, anything),
         # The same chart type on the rerun backend: panel tiles the samples as one
         # pane each, rerun lays them along a timeline named after the swept
         # variable. Registering both under one name is what makes
         # BenchRunCfg(backend="rerun") a backend swap rather than a different report.
-        ("panes", "rerun", RerunTimelineResult.to_rerun_timeline),
+        # Its rule is declared rather than permissive because it shares the name: a
+        # 0-D sweep has no dimension to animate, and the panel tiling has to keep it.
+        ("panes", "rerun", RerunTimelineResult.to_rerun_timeline, TIMELINE_PLOT_FILTER),
     ]
 
 
@@ -157,12 +164,12 @@ CALLBACK_TO_PLUGIN: dict[Callable, str] = {}
 def register_builtin_plugins() -> None:
     """Register the default chart set with the global registry. Idempotent."""
     priority = 100
-    for name, backend, callback in _builtin_specs():
+    for name, backend, callback, match in _builtin_specs():
         register_plugin(
             LegacyResultPlugin(
                 name=name,
                 backend=backend,
-                match=PlotFilter(),
+                match=match,
                 priority=priority,
                 requires=frozenset({"legacy_result"}),
                 callback=callback,

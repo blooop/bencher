@@ -19,6 +19,7 @@ from bencher.plugins.registry import get_registry
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.rerun_timeline import (
     TimelineIndex,
+    _coord_label,
     _DurationIndex,
     _entity_parts,
     _readout_entity,
@@ -57,6 +58,12 @@ class ThreeDimSweep(bn.ParametrizedSweep):
         recording.log("pose", rr.Points2D([[self.theta, self.scale + self.offset]]))
         self.out_rerun = bn.capture_rerun_rrd(recording)
         return super().benchmark()
+
+
+class FiveStepSweep(StaticPoseSweep):
+    """A range whose interior steps are arithmetic, not exact decimals."""
+
+    scale = bn.FloatSweep(default=0.0, bounds=[-0.1, 0.1], samples=5)
 
 
 class InnerTimelineSweep(bn.ParametrizedSweep):
@@ -414,6 +421,18 @@ class TestInnerTimeline:
 
 
 class TestRerunTimelineND:
+    def test_a_branch_coordinate_is_named_the_way_a_reader_would_write_it(self):
+        """A sweep's interior is arithmetic: a five-step range over -0.1..0.1 steps
+        through 0.05000000000000002, and seventeen digits in a view title is noise
+        the reader has to parse past. It still has to look like a float."""
+        assert _coord_label(0.05000000000000002) == "0.05"
+        assert _coord_label(1.0) == "1.0"
+        assert _coord_label("head_sides") == "head_sides"
+        path = _timeline_path(_sweep(["theta", "scale"], cls=FiveStepSweep), timeline_dim="theta")
+        assert set(_indices(path)) == {
+            f"/scale_{label}/out_rerun/pose" for label in ("-0.1", "-0.05", "0.0", "0.05", "0.1")
+        }, sorted(_indices(path))
+
     def test_the_remaining_dimension_becomes_entity_branches(self):
         """One dimension can be time; the rest have to be somewhere in the tree."""
         path = _timeline_path(_sweep(["theta", "scale"]), timeline_dim="theta")
@@ -479,8 +498,32 @@ class TestBackendSwap:
     def test_both_backends_implement_the_same_chart_type(self):
         from bencher.plugins.builtins import _builtin_specs
 
-        panes = {(name, backend) for name, backend, _ in _builtin_specs() if name == "panes"}
+        panes = {(name, backend) for name, backend, _, _ in _builtin_specs() if name == "panes"}
         assert panes == {("panes", "panel"), ("panes", "rerun")}
+
+    def test_a_zero_dimensional_sweep_keeps_the_panel_tiling(self):
+        """The rerun implementation declines a 0-D sweep, so it must not *win* one.
+
+        Selection resolves a chart type to one backend. With a permissive registry
+        rule the rerun implementation took ``panes`` on a single-sample sweep and
+        then returned its shape-mismatch panel, so the report lost the recording
+        the panel tiling would have shown -- a preference silently deleting output.
+        """
+        res = _sweep([], result_vars=("out_rerun",), backend="rerun")
+        chosen = {
+            (p.name, p.backend) for p in get_registry().select(res.to_bench_data(), backend="rerun")
+        }
+        assert ("panes", "panel") in chosen
+        assert ("panes", "rerun") not in chosen
+
+    def test_the_preference_still_wins_once_there_is_an_axis(self):
+        """The guard is about shape, not about the rerun backend being second choice."""
+        res = _sweep(["theta"], result_vars=("out_rerun",), backend="rerun")
+        chosen = {
+            (p.name, p.backend) for p in get_registry().select(res.to_bench_data(), backend="rerun")
+        }
+        assert ("panes", "rerun") in chosen
+        assert ("panes", "panel") not in chosen
 
     def test_panel_is_chosen_by_default_and_rerun_when_preferred(self):
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
@@ -496,3 +539,61 @@ class TestBackendSwap:
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",), backend="rerun")
         assert res.bench_cfg.backend == "rerun"
         assert res.to_auto_plots() is not None
+
+
+def full_path(path: str) -> pn.pane.Markdown:
+    """A declared container handing the composed .rrd path back to the test.
+
+    Module level for the same reason as :func:`name_only`: the container is pickled
+    into the cache with the result var.
+    """
+    return pn.pane.Markdown(f"composed: {path}")
+
+
+class PathContainerSweep(StaticPoseSweep):
+    """A ResultRerun whose container reports where the composition was written."""
+
+    out_rerun = bn.ResultRerun(width=200, height=150, container=full_path)
+
+
+def _composed(res, **kwargs) -> str:
+    """The .rrd ``to_rerun_timeline`` composed, going through the public renderer."""
+    pane = res.to_rerun_timeline(**kwargs)
+    assert isinstance(pane, pn.pane.Markdown), type(pane)
+    return pane.object.removeprefix("composed: ")
+
+
+class TestSubsampling:
+    """``subsampling_divisions`` has to mean the same thing on both backends.
+
+    The panel implementation thins the samples it tiles; without the same argument
+    the rerun one turned a flag that shrinks a report into one that does nothing,
+    and a 2-D sweep swapping backends went from a readable grid to a viewer whose
+    views were too narrow to read.
+    """
+
+    def _res(self, input_vars):
+        bench = PathContainerSweep().to_bench()
+        return bench.plot_sweep(input_vars=input_vars, result_vars=["out_rerun"])
+
+    def test_every_sample_is_a_tick_when_nothing_is_thinned(self):
+        indices = _indices(_composed(self._res(["theta"])))
+        pose = next(entity for entity in indices if entity.endswith("/pose"))
+        assert sorted(indices[pose]["theta"]) == [1, 2, 3]
+
+    def test_thinning_drops_ticks_from_the_timeline(self):
+        """theta's three samples become the two the panel backend would have tiled,
+        and they are the ends of the range rather than the first two."""
+        indices = _indices(_composed(self._res(["theta"]), subsampling_divisions=2))
+        pose = next(entity for entity in indices if entity.endswith("/pose"))
+        assert sorted(indices[pose]["theta"]) == [1, 3]
+
+    def test_thinning_drops_branch_views(self):
+        """The tiling dimension is thinned too, which is where the width is won."""
+        res = self._res(["theta", "scale"])
+        full = {entity.split("/")[0] for entity in _indices(_composed(res))}
+        thinned = {
+            entity.split("/")[0] for entity in _indices(_composed(res, subsampling_divisions=2))
+        }
+        assert len(thinned) <= len(full), (thinned, full)
+        assert all(branch in full for branch in thinned), (thinned, full)

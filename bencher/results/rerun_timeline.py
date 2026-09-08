@@ -100,6 +100,21 @@ _RESULT_VIEW_KINDS: dict[type, RerunViewKind] = {
 }
 
 
+# The sweep shapes a timeline can be made of. Registered as the rerun ``panes``
+# plugin's match rule as well as checked inside the renderer: selection resolves a
+# chart type to one backend, so a rule the registry cannot see would let the rerun
+# implementation win a 0-D sweep and then decline to draw it -- losing the panel
+# implementation's output rather than falling back to it.
+TIMELINE_PLOT_FILTER = PlotFilter(
+    float_range=VarRange.unbounded(),
+    cat_range=VarRange.unbounded(),
+    panel_range=VarRange.unbounded(),
+    repeats_range=VarRange.at_least(1),
+    # A timeline needs a dimension to be made of; a 0-D sweep has none.
+    input_range=VarRange.at_least(1),
+)
+
+
 def _view_kind_for(result_var: Parameter) -> RerunViewKind | None:
     """The view kind for a directly-logged result var, or None if it has no mapping.
 
@@ -281,6 +296,20 @@ def default_timeline_dim(dataset: xr.Dataset, dims: list[str]) -> str:
     return max(candidates, key=lambda dim: (dataset.sizes[dim], candidates.index(dim)))
 
 
+def _coord_label(value: Any) -> str:
+    """A coordinate as a reader would write it.
+
+    A sweep's endpoints are exact but its interior is arithmetic, so a five-step
+    range over -0.1..0.1 has a step that ``str`` renders as 0.05000000000000002.
+    Rounding to six significant figures -- past any sweep resolution -- and taking
+    the shortest repr of *that* keeps a float looking like one (1.0, not 1) while
+    dropping the noise. Ties it creates are caught by :func:`_entity_parts`.
+    """
+    if isinstance(value, (float, np.floating)):
+        return repr(float(f"{float(value):.6g}"))
+    return str(value)
+
+
 def _entity_parts(dim: str, values: list[Any]) -> list[str]:
     """The entity-path segment naming each coordinate of a peeled dimension.
 
@@ -290,7 +319,10 @@ def _entity_parts(dim: str, values: list[Any]) -> list[str]:
     disambiguating the offenders: a mix of names and numbers in one axis is harder to
     read than numbers throughout.
     """
-    parts = [_UNSAFE_ENTITY_CHARS.sub("_", f"{dim}_{value}").strip("_") or "_" for value in values]
+    parts = [
+        _UNSAFE_ENTITY_CHARS.sub("_", f"{dim}_{_coord_label(value)}").strip("_") or "_"
+        for value in values
+    ]
     if len(set(parts)) < len(parts):
         logger.debug("coordinates of %s collide as entity paths; numbering them instead", dim)
         return [f"{dim}_{position}" for position in range(len(values))]
@@ -451,6 +483,7 @@ class RerunTimelineResult(BenchResultBase):
         result_var: Parameter | None = None,
         timeline_dim: str | None = None,
         index: TimelineIndex | str = TimelineIndex.tick,
+        subsampling_divisions: int | None = None,
         width: int | None = None,
         height: int | None = None,
         **_kwargs,
@@ -468,6 +501,11 @@ class RerunTimelineResult(BenchResultBase):
                 :func:`default_timeline_dim`.
             index (TimelineIndex | str, optional): How coordinates are encoded as
                 index values. Defaults to ``TimelineIndex.tick``.
+            subsampling_divisions (int, optional): Thin every swept dimension to this
+                resolution first, exactly as the panel ``panes`` implementation does
+                with the same argument -- the two backends have to answer one flag the
+                same way. Here it buys fewer branch views as much as fewer ticks.
+                Defaults to None (every sample).
             width (int, optional): Viewer width. Defaults to the widest ``width``
                 declared by a rendered result var, else 950.
             height (int, optional): Viewer height, chosen the same way, else 712.
@@ -478,15 +516,7 @@ class RerunTimelineResult(BenchResultBase):
             pn.panel | None: a pane holding one rerun viewer, or a message pane when
                 there is nothing to put on a timeline.
         """
-        plot_filter = PlotFilter(
-            float_range=VarRange.unbounded(),
-            cat_range=VarRange.unbounded(),
-            panel_range=VarRange.unbounded(),
-            repeats_range=VarRange.at_least(1),
-            # A timeline needs a dimension to be made of; a 0-D sweep has none.
-            input_range=VarRange.at_least(1),
-        )
-        matches_res = plot_filter.matches_result(
+        matches_res = TIMELINE_PLOT_FILTER.matches_result(
             self.plt_cnt_cfg, callable_name(self.to_rerun_timeline), override=False
         )
         if not matches_res.overall:
@@ -501,7 +531,9 @@ class RerunTimelineResult(BenchResultBase):
         if not result_vars:
             return None
 
-        dataset = self.to_dataset(ReduceType.SQUEEZE, deep=False)
+        dataset = self.to_dataset(
+            ReduceType.SQUEEZE, subsampling_divisions=subsampling_divisions, deep=False
+        )
         merged = self.to_rerun_timeline_path(
             dataset, result_vars, timeline_dim=timeline_dim, index=index
         )
@@ -685,7 +717,7 @@ class RerunTimelineResult(BenchResultBase):
                 f"/{parts[dim][position]}" for dim, position in zip(branch_dims, combo)
             )
             branch_label = ", ".join(
-                f"{dim}={branch_ds.coords[dim].values.item()}" for dim in branch_dims
+                f"{dim}={_coord_label(branch_ds.coords[dim].values.item())}" for dim in branch_dims
             )
             branch_views: list[_View] = []
             for result_var in result_vars:
