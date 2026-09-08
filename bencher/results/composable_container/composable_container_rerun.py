@@ -124,12 +124,17 @@ _VIEW_CLASS_NAMES = {
 
 
 def views_for_kinds(rrb, kinds: Iterable[RerunViewKind], *, origin: str, label: str):
-    """Build the view (or vertical stack of views) that displays one entity origin.
+    """Build the view (or tab strip of views) that displays one entity origin.
 
     Shared with the sweep-timeline composition in
     :mod:`bencher.results.rerun_timeline`, which lays out its own origins but needs
     the same archetype-to-view-class mapping.  ``rerun.blueprint`` is passed in as
     *rrb* rather than imported, keeping the rerun SDK out of this module's imports.
+
+    Tabs rather than a stack: an origin with several archetypes is usually a scene
+    plus its annotation -- a 3-D view and the markdown describing it -- and stacking
+    them spends half the height of the scene on text that is read once. Tabs give the
+    scene the whole panel and the text is one click away.
     """
     selected = set(kinds)
     ordered = [kind for kind in RerunViewKind if kind in selected] or [RerunViewKind.spatial_2d]
@@ -142,7 +147,7 @@ def views_for_kinds(rrb, kinds: Iterable[RerunViewKind], *, origin: str, label: 
     ]
     if len(views) == 1:
         return views[0]
-    return rrb.Vertical(*views, name=label)
+    return rrb.Tabs(*views, name=label)
 
 
 @dataclass(frozen=True)

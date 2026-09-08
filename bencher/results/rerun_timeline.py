@@ -67,6 +67,7 @@ from bencher.results.composable_container.composable_container_rerun import (
 from bencher.results.rerun_summary import leaf_recording_path
 from bencher.utils import callable_name
 from bencher.variables.results import (
+    PANEL_TYPES,
     ResultImage,
     ResultRerun,
     ResultString,
@@ -431,8 +432,13 @@ def _send_recording(recording, view: _View, path: str, timeline: str, arrow_type
             recording.send_chunks(_rewrite_chunk(rerooted, timeline, arrow_type, raw))
 
 
-def _layout_views(rrb, branches: list[list], branch_dims: list[str]):
-    """Arrange the views, grouped by branch.
+# How much of the viewer the read-out strip takes. It is a legend for the cursor,
+# not a panel to study, so it gets the sliver that makes it legible and no more.
+_READOUT_ROW_SHARES = (6, 1)
+
+
+def _layout_views(rrb, branches: list[list], branch_dims: list[str], readout=None):
+    """Arrange the views, grouped by branch, over the read-out strip.
 
     Each branch's result variables are stacked vertically so a sample's image and its
     metrics stay together; the branches are then laid out beside each other. One
@@ -443,13 +449,22 @@ def _layout_views(rrb, branches: list[list], branch_dims: list[str]):
 
     Flattening branch and variable into one row instead put a 3-colour sweep of an
     image and a metric into six columns, none of them wide enough to read.
+
+    *readout* is the swept parameter's value against the index. It spans the bottom
+    rather than standing as a branch of its own: it reads against the time cursor, so
+    it belongs on the axis the cursor moves along, and as a column it both stole a
+    branch's width and sat nowhere near the scrubber it annotates.
     """
     groups = [views[0] if len(views) == 1 else rrb.Vertical(*views) for views in branches]
     if len(groups) == 1:
-        return groups[0]
-    if len(branch_dims) <= 1:
-        return rrb.Horizontal(*groups)
-    return rrb.Grid(*groups)
+        layout = groups[0]
+    elif len(branch_dims) <= 1:
+        layout = rrb.Horizontal(*groups)
+    else:
+        layout = rrb.Grid(*groups)
+    if readout is None:
+        return layout
+    return rrb.Vertical(layout, readout, row_shares=list(_READOUT_ROW_SHARES))
 
 
 def _readout_entity(dim: str) -> str:
@@ -494,8 +509,9 @@ class RerunTimelineResult(BenchResultBase):
         automatically there and never under ``backend="panel"``.
 
         Args:
-            result_var (Parameter, optional): Render only this result var. Defaults to
-                None (every result var, in one recording, scrubbed together).
+            result_var (Parameter, optional): Render only this result var, whatever its
+                type. Defaults to None: every result var the panel ``panes`` would
+                tile (``PANEL_TYPES``), in one recording, scrubbed together.
             timeline_dim (str, optional): Which swept dimension becomes the timeline.
                 Defaults to the longest numeric dimension; see
                 :func:`default_timeline_dim`.
@@ -528,6 +544,13 @@ class RerunTimelineResult(BenchResultBase):
             )
 
         result_vars = self.get_results_var_list(result_var)
+        if result_var is None:
+            # The same result types the panel implementation of `panes` tiles. A
+            # scalar is not this chart type's job on either backend -- `line` and
+            # `heatmap` already plot it -- and giving each one its own view in each
+            # branch shrank the scene the sweep is actually about. Naming a result
+            # var explicitly still puts anything on the timeline.
+            result_vars = [rv for rv in result_vars if isinstance(rv, PANEL_TYPES)]
         if not result_vars:
             return None
 
@@ -604,7 +627,7 @@ class RerunTimelineResult(BenchResultBase):
         recording = rr.RecordingStream(
             "bencher_timeline", make_default=False, make_thread_default=False
         )
-        branches = self._log_sweep(
+        branches, readout = self._log_sweep(
             recording, dataset, result_vars, timeline_dim, branch_dims, encoding
         )
         if not branches:
@@ -621,6 +644,11 @@ class RerunTimelineResult(BenchResultBase):
                     for branch in branches
                 ],
                 branch_dims,
+                readout=None
+                if readout is None
+                else views_for_kinds(
+                    rrb, readout.view_kinds, origin=readout.origin, label=readout.label
+                ),
             ),
             # Pinned, not left to the viewer: a sample that recorded its own inner
             # timeline puts a second axis in the composition, and the sweep is the one
@@ -691,12 +719,16 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str,
         branch_dims: list[str],
         encoding: _IndexEncoding,
-    ) -> list[list[_View]]:
-        """Log every sample onto the sweep timeline; return the views, grouped by branch.
+    ) -> tuple[list[list[_View]], _View | None]:
+        """Log every sample onto the sweep timeline; return its views and the read-out.
 
         A view that received nothing is dropped rather than emitted empty, and a
         branch left with no views is dropped in turn, so a sweep whose samples are all
         missing returns nothing at all instead of a blueprint full of blank panels.
+
+        Returns:
+            The branch views, grouped by branch, and the value read-out — separate
+            because the read-out is laid out along the bottom rather than as a branch.
         """
         import rerun as rr
 
@@ -755,7 +787,6 @@ class RerunTimelineResult(BenchResultBase):
         readout = self._log_value_readout(staging, dataset, timeline_dim, encoding)
         if readout is not None:
             staged_any = True
-            branches.append([readout])
 
         if staged_any:
             from bencher.utils import gen_rerun_data_path
@@ -766,4 +797,4 @@ class RerunTimelineResult(BenchResultBase):
             _forward_stage(recording, staged_path, timeline_dim)
             # Purely an intermediate: the composition is what callers are handed.
             Path(staged_path).unlink(missing_ok=True)
-        return branches
+        return branches, readout

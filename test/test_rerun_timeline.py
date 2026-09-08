@@ -22,6 +22,7 @@ from bencher.results.rerun_timeline import (
     _coord_label,
     _DurationIndex,
     _entity_parts,
+    _layout_views,
     _readout_entity,
     _SequenceIndex,
     default_timeline_dim,
@@ -137,6 +138,16 @@ class ImageAndMetricSweep(bn.ParametrizedSweep):
         return super().benchmark()
 
 
+class RecordingAndMetricSweep(StaticPoseSweep):
+    """A scene and a number, which is the shape every real benchmark has."""
+
+    coverage = bn.ResultFloat(units="fraction")
+
+    def benchmark(self):
+        self.coverage = float(self.theta)
+        return super().benchmark()
+
+
 class FractionalSweep(bn.ParametrizedSweep):
     """A sweep whose coordinates are not whole numbers, so ticks cannot be them."""
 
@@ -177,6 +188,28 @@ class DeclaredContainerSweep(StaticPoseSweep):
     """A ResultRerun declaring how it renders, in place of the rerun viewer."""
 
     out_rerun = bn.ResultRerun(width=200, height=150, container=name_only)
+
+
+def full_path(path: str) -> pn.pane.Markdown:
+    """A declared container handing the composed .rrd path back to the test.
+
+    Module level for the same reason as :func:`name_only`: the container is pickled
+    into the cache with the result var.
+    """
+    return pn.pane.Markdown(f"composed: {path}")
+
+
+class PathContainerSweep(RecordingAndMetricSweep):
+    """A ResultRerun whose container reports where the composition was written."""
+
+    out_rerun = bn.ResultRerun(width=200, height=150, container=full_path)
+
+
+def _composed(res, **kwargs) -> str:
+    """The .rrd ``to_rerun_timeline`` composed, going through the public renderer."""
+    pane = res.to_rerun_timeline(**kwargs)
+    assert isinstance(pane, pn.pane.Markdown), type(pane)
+    return pane.object.removeprefix("composed: ")
 
 
 def _sweep(input_vars, cls=StaticPoseSweep, result_vars=("out_rerun",), **cfg):
@@ -482,6 +515,24 @@ class TestRerunTimelinePane:
         # The shape filter's mismatch panel, not a viewer and not a crash.
         assert not isinstance(res.to_rerun_timeline(), pn.pane.HTML)
 
+    def test_a_scalar_is_left_to_the_chart_types_that_plot_it(self):
+        """`panes` on the panel backend tiles PANEL_TYPES and no scalars, so neither
+        does this one. A view per metric per branch shrank the scene the sweep is
+        about, to replot numbers the line and heatmap charts already carry."""
+        bench = PathContainerSweep().to_bench()
+        res = bench.plot_sweep(input_vars=["theta"], result_vars=["out_rerun", "coverage"])
+        assert {rv.name for rv in res.bench_cfg.result_vars} == {"out_rerun", "coverage"}
+        assert set(_indices(_composed(res))) == {"/out_rerun/pose"}
+
+    def test_naming_a_scalar_still_puts_it_on_the_timeline(self):
+        """The default is about what to pick automatically, not about what is allowed:
+        an explicit ask is honoured whatever the type."""
+        res = _sweep(["freq"], cls=FractionalSweep, result_vars=("metric",))
+        metric = res.bench_cfg.result_vars[0]
+        assert "/metric" in _indices(
+            res.to_rerun_timeline_path(res.to_dataset(ReduceType.SQUEEZE, deep=False), [metric])
+        )
+
     def test_declared_container_wins_over_the_rerun_viewer(self):
         """Same precedence as to_rerun_grid_ds and the over_time path."""
         bench = DeclaredContainerSweep().to_bench()
@@ -541,28 +592,6 @@ class TestBackendSwap:
         assert res.to_auto_plots() is not None
 
 
-def full_path(path: str) -> pn.pane.Markdown:
-    """A declared container handing the composed .rrd path back to the test.
-
-    Module level for the same reason as :func:`name_only`: the container is pickled
-    into the cache with the result var.
-    """
-    return pn.pane.Markdown(f"composed: {path}")
-
-
-class PathContainerSweep(StaticPoseSweep):
-    """A ResultRerun whose container reports where the composition was written."""
-
-    out_rerun = bn.ResultRerun(width=200, height=150, container=full_path)
-
-
-def _composed(res, **kwargs) -> str:
-    """The .rrd ``to_rerun_timeline`` composed, going through the public renderer."""
-    pane = res.to_rerun_timeline(**kwargs)
-    assert isinstance(pane, pn.pane.Markdown), type(pane)
-    return pane.object.removeprefix("composed: ")
-
-
 class TestSubsampling:
     """``subsampling_divisions`` has to mean the same thing on both backends.
 
@@ -597,3 +626,57 @@ class TestSubsampling:
         }
         assert len(thinned) <= len(full), (thinned, full)
         assert all(branch in full for branch in thinned), (thinned, full)
+
+
+class TestLayout:
+    """Where the pieces sit, which is the difference between a viewer you can read
+    and one where the scene is a thumbnail."""
+
+    def test_the_read_out_spans_the_bottom_under_the_branches(self):
+        """It annotates the cursor, so it belongs on the cursor's axis. As a branch
+        of its own it both stole a column's width and sat nowhere near the scrubber."""
+        import rerun.blueprint as rrb
+
+        layout = _layout_views(rrb, [["a"], ["b"]], ["pose"], readout="value")
+        assert isinstance(layout, rrb.Vertical)
+        assert layout.contents[-1] == "value"
+        assert isinstance(layout.contents[0], rrb.Horizontal)
+        assert list(layout.contents[0].contents) == ["a", "b"]
+
+    def test_without_a_read_out_the_branches_are_the_whole_viewer(self):
+        import rerun.blueprint as rrb
+
+        layout = _layout_views(rrb, [["a"], ["b"]], ["pose"])
+        assert isinstance(layout, rrb.Horizontal)
+
+    def test_an_origin_with_two_archetypes_becomes_tabs_not_a_stack(self):
+        """A 3-D scene logged with a markdown note beside it is the common case, and
+        stacking them spent half the scene's height on text read once."""
+        import rerun.blueprint as rrb
+
+        from bencher.results.composable_container.composable_container_rerun import (
+            RerunViewKind,
+            views_for_kinds,
+        )
+
+        view = views_for_kinds(
+            rrb,
+            {RerunViewKind.spatial_3d, RerunViewKind.text_document},
+            origin="/out_rerun",
+            label="out_rerun",
+        )
+        assert isinstance(view, rrb.Tabs), type(view)
+        assert len(view.contents) == 2
+
+    def test_a_single_archetype_stays_a_bare_view(self):
+        import rerun.blueprint as rrb
+
+        from bencher.results.composable_container.composable_container_rerun import (
+            RerunViewKind,
+            views_for_kinds,
+        )
+
+        view = views_for_kinds(
+            rrb, {RerunViewKind.spatial_3d}, origin="/out_rerun", label="out_rerun"
+        )
+        assert isinstance(view, rrb.Spatial3DView), type(view)
