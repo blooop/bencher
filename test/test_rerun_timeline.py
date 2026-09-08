@@ -21,6 +21,7 @@ from bencher.results.rerun_timeline import (
     TimelineIndex,
     _DurationIndex,
     _entity_parts,
+    _readout_entity,
     _SequenceIndex,
     default_timeline_dim,
     encode_index,
@@ -109,6 +110,17 @@ class ImageAndMetricSweep(bn.ParametrizedSweep):
         return super().benchmark()
 
 
+class FractionalSweep(bn.ParametrizedSweep):
+    """A sweep whose coordinates are not whole numbers, so ticks cannot be them."""
+
+    freq = bn.FloatSweep(default=1.0, bounds=[1.0, 2.0], samples=3)
+    metric = bn.ResultFloat()
+
+    def benchmark(self):
+        self.metric = self.freq**2
+        return super().benchmark()
+
+
 class UnmappedResultSweep(bn.ParametrizedSweep):
     """A result type the rerun mapping has no archetype for, beside one it does."""
 
@@ -170,43 +182,69 @@ def _indices(path: str) -> dict[str, dict[str, list]]:
 
 
 class TestEncodeIndex:
-    def test_numeric_becomes_a_duration_carrying_the_values(self):
-        encoded = encode_index(np.array([1.0, 1.5, 4.0]), TimelineIndex.auto, "theta")
+    def test_whole_numbers_become_ticks_carrying_the_values(self):
+        """``#3`` for a polygon with three sides: the value, and no unit claimed."""
+        encoded = encode_index(np.array([3, 4, 7]), TimelineIndex.tick, "sides")
+        assert isinstance(encoded, _SequenceIndex)
+        assert encoded.values == (3, 4, 7)
+        assert encoded.shows_values
+
+    def test_integral_floats_count_as_whole_numbers(self):
+        """A FloatSweep over 1..3 in three samples is 1.0, 2.0, 3.0 -- ticks."""
+        encoded = encode_index(np.array([1.0, 2.0, 3.0]), TimelineIndex.tick, "theta")
+        assert encoded.values == (1, 2, 3)
+        assert encoded.shows_values
+
+    def test_fractional_values_fall_back_to_counting_samples(self):
+        """1.5 is not a tick, so the ticks count instead -- and say they are counting,
+        which is what makes the renderer add a read-out of the real value."""
+        encoded = encode_index(np.array([1.0, 1.5, 2.0]), TimelineIndex.tick, "theta")
+        assert encoded.values == (0, 1, 2)
+        assert not encoded.shows_values
+
+    def test_categorical_falls_back_to_counting_samples(self):
+        encoded = encode_index(np.array(["a", "b"]), TimelineIndex.tick, "shape")
+        assert isinstance(encoded, _SequenceIndex)
+        assert encoded.values == (0, 1)
+        assert not encoded.shows_values
+
+    def test_repeated_ticks_would_lose_samples_so_positions_are_used(self):
+        """Two samples on one index overwrite each other under latest-at."""
+        encoded = encode_index(np.array([2.0, 2.0, 5.0]), TimelineIndex.tick, "sides")
+        assert encoded.values == (0, 1, 2)
+        assert not encoded.shows_values
+
+    def test_position_counts_samples_even_for_whole_numbers(self):
+        encoded = encode_index(np.array([3, 4, 7]), TimelineIndex.position, "sides")
+        assert encoded.values == (0, 1, 2)
+        assert not encoded.shows_values
+
+    def test_duration_puts_the_values_on_a_time_axis(self):
+        encoded = encode_index(np.array([1.0, 1.5, 4.0]), TimelineIndex.duration, "theta")
         assert isinstance(encoded, _DurationIndex)
         assert encoded.values == (NANOS_PER_SECOND, 1_500_000_000, 4 * NANOS_PER_SECOND)
+        assert encoded.shows_values
 
-    def test_uneven_spacing_survives(self):
-        """A duration index is what keeps a non-uniform sweep non-uniform on the axis."""
-        encoded = encode_index(np.array([0.0, 1.0, 10.0]), TimelineIndex.auto, "theta")
+    def test_duration_is_the_encoding_that_keeps_uneven_spacing(self):
+        """Ticks are evenly spaced by construction; only the duration axis shows a
+        non-uniform sweep as non-uniform."""
+        encoded = encode_index(np.array([0.0, 1.0, 10.0]), TimelineIndex.duration, "theta")
         gaps = np.diff(encoded.values)
         assert gaps[1] == 9 * gaps[0]
 
-    def test_categorical_falls_back_to_a_sequence(self):
-        encoded = encode_index(np.array(["a", "b"]), TimelineIndex.auto, "shape")
-        assert isinstance(encoded, _SequenceIndex)
-        assert encoded.values == (0, 1)
-
-    def test_sequence_numbers_positions_even_for_numbers(self):
-        encoded = encode_index(np.array([1.0, 1.5, 4.0]), TimelineIndex.sequence, "theta")
-        assert encoded.values == (0, 1, 2)
-
-    def test_value_refuses_a_categorical_dimension(self):
+    def test_duration_refuses_a_categorical_dimension(self):
         """Silently renumbering would put a lie on the axis, so it raises instead."""
         with pytest.raises(ValueError, match="cannot be placed on a rerun time axis"):
-            encode_index(np.array(["a", "b"]), TimelineIndex.value, "shape")
+            encode_index(np.array(["a", "b"]), TimelineIndex.duration, "shape")
 
-    def test_sub_nanosecond_spacing_falls_back_to_a_sequence(self):
+    def test_duration_refuses_sub_nanosecond_spacing(self):
         """Rounding these to the same index would drop every sample but the last."""
-        coords = np.array([0.0, 1e-12, 2e-12])
-        encoded = encode_index(coords, TimelineIndex.auto, "theta")
-        assert isinstance(encoded, _SequenceIndex)
-        assert encoded.values == (0, 1, 2)
         with pytest.raises(ValueError, match="collapsing samples"):
-            encode_index(coords, TimelineIndex.value, "theta")
+            encode_index(np.array([0.0, 1e-12, 2e-12]), TimelineIndex.duration, "theta")
 
-    def test_values_too_large_for_an_i64_of_nanoseconds_fall_back(self):
-        encoded = encode_index(np.array([1e12, 2e12]), TimelineIndex.auto, "hertz")
-        assert isinstance(encoded, _SequenceIndex)
+    def test_duration_refuses_values_too_large_for_an_i64_of_nanoseconds(self):
+        with pytest.raises(ValueError, match="i64 range"):
+            encode_index(np.array([1e12, 2e12]), TimelineIndex.duration, "hertz")
 
 
 class TestDefaultTimelineDim:
@@ -240,10 +278,9 @@ class TestRerunTimeline1D:
         assert set(_indices(path)["/out_rerun/pose"]) == {"theta"}
 
     def test_the_timeline_carries_the_parameter_values(self):
-        """theta sweeps 1..3 in 3 samples, so the axis reads 1s, 2s, 3s."""
+        """theta sweeps 1..3 in 3 samples, so the axis reads #1, #2, #3."""
         path = _timeline_path(_sweep(["theta"]))
-        seconds = [v.total_seconds() for v in _indices(path)["/out_rerun/pose"]["theta"]]
-        assert sorted(seconds) == [1.0, 2.0, 3.0]
+        assert sorted(_indices(path)["/out_rerun/pose"]["theta"]) == [1, 2, 3]
 
     def test_log_time_is_dropped(self):
         """Wall-clock capture time says nothing about the sweep and would otherwise
@@ -251,11 +288,16 @@ class TestRerunTimeline1D:
         path = _timeline_path(_sweep(["theta"]))
         assert "log_time" not in _indices(path)["/out_rerun/pose"]
 
-    def test_sequence_index_numbers_the_samples(self):
-        path = _timeline_path(_sweep(["theta"]), index=TimelineIndex.sequence)
+    def test_position_index_numbers_the_samples(self):
+        path = _timeline_path(_sweep(["theta"]), index=TimelineIndex.position)
         assert sorted(_indices(path)["/out_rerun/pose"]["theta"]) == [0, 1, 2]
 
-    def test_categorical_sweep_gets_a_sequence_timeline(self):
+    def test_duration_index_is_still_available(self):
+        path = _timeline_path(_sweep(["theta"]), index=TimelineIndex.duration)
+        seconds = [v.total_seconds() for v in _indices(path)["/out_rerun/pose"]["theta"]]
+        assert sorted(seconds) == [1.0, 2.0, 3.0]
+
+    def test_categorical_sweep_gets_counted_ticks(self):
         path = _timeline_path(_sweep(["shape"], cls=CategoricalSweep))
         assert sorted(_indices(path)["/out_rerun/pose"]["shape"]) == [0, 1, 2]
 
@@ -271,7 +313,7 @@ class TestResultTypesOtherThanRecordings:
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
         entities = _indices(_timeline_path(res))
         assert set(entities) == {"/frame"}
-        assert sorted(v.total_seconds() for v in entities["/frame"]["size"]) == [2.0, 3.0, 4.0, 5.0]
+        assert sorted(entities["/frame"]["size"]) == [2, 3, 4, 5]
 
     def test_each_result_var_gets_its_own_origin_on_one_timeline(self):
         """An image and a metric are two views scrubbed together, not one view asked
@@ -281,6 +323,19 @@ class TestResultTypesOtherThanRecordings:
         assert set(entities) == {"/frame", "/coverage"}
         for timelines in entities.values():
             assert set(timelines) == {"size"}
+
+    def test_a_fractional_sweep_gets_a_read_out_of_the_parameter_value(self):
+        """The ticks only count the samples there, so nothing else on screen would
+        say which value the cursor is parked on."""
+        res = _sweep(["freq"], cls=FractionalSweep, result_vars=("metric",))
+        entities = _indices(_timeline_path(res))
+        assert _readout_entity("freq") in entities
+        assert sorted(entities[_readout_entity("freq")]["freq"]) == [0, 1, 2]
+
+    def test_a_tick_sweep_gets_no_read_out(self):
+        """``#3`` already is the value, so a plot of it against itself is clutter."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        assert _readout_entity("size") not in _indices(_timeline_path(res))
 
     def test_a_result_type_with_no_rerun_mapping_is_reported_once(self, caplog):
         """ResultPath has no archetype. The sweep must not fail, the mapped result var
@@ -299,7 +354,7 @@ class TestInnerTimeline:
         path = _timeline_path(_sweep(["freq"], cls=InnerTimelineSweep))
         timelines = _indices(path)["/out_rerun/wave"]
         assert set(timelines) == {"freq", "time_s"}
-        assert sorted({t.total_seconds() for t in timelines["freq"]}) == [1.0, 2.0]
+        assert sorted(set(timelines["freq"])) == [1, 2]
         assert sorted({round(t.total_seconds(), 3) for t in timelines["time_s"]}) == [
             0.0,
             0.1,
@@ -323,10 +378,8 @@ class TestRerunTimelineND:
     def test_branches_share_the_one_cursor(self):
         """Every branch is indexed at the same three ticks, so they animate together."""
         path = _timeline_path(_sweep(["theta", "scale"]), timeline_dim="theta")
-        ticks = {
-            frozenset(t.total_seconds() for t in tl["theta"]) for tl in _indices(path).values()
-        }
-        assert ticks == {frozenset({1.0, 2.0, 3.0})}
+        ticks = {frozenset(tl["theta"]) for tl in _indices(path).values()}
+        assert ticks == {frozenset({1, 2, 3})}
 
     def test_no_sample_is_dropped(self):
         entities = _indices(_timeline_path(_sweep(["theta", "scale"]), timeline_dim="theta"))

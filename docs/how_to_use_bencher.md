@@ -370,12 +370,21 @@ within the tick it sits on). Each result variable gets its own view, so an image
 swept beside a metric reads as a picture and a time series *of the sweep*, moving
 together under one cursor.
 
-A numeric sweep variable is encoded as a duration index, one second per unit, so
-the axis reads back the parameter's own values and keeps their spacing even when
-the sweep is not uniform. Coordinates that cannot survive that — categorical,
-spaced below a nanosecond, or too large for an i64 of nanoseconds — are numbered
-`0, 1, 2` instead; pass `index=bn.TimelineIndex.sequence` to ask for that
-explicitly.
+The axis is a tick counter, not a clock. Rerun labels a sequence index `#3` with
+no unit, which is the honest reading for a sweep — a polygon with three sides is
+`#3`, where `+3s` would claim a unit the parameter does not have. Where the
+coordinates are whole numbers the ticks *are* those numbers; where they are not
+(fractional floats, categories) the ticks count the samples and the parameter's
+real value is plotted against them in a small read-out view of its own, so the
+cursor position is still legible.
+
+`index=` overrides the choice:
+
+| `bn.TimelineIndex` | Axis |
+|---|---|
+| `tick` (default) | `#3`, `#4`, … — the coordinate where it is a whole number, else the sample's position |
+| `position` | `#0`, `#1`, … — always the sample's position |
+| `duration` | `+3s`, `+4s`, … — one second per unit; the only encoding that shows a non-uniform sweep as non-uniform |
 
 By default the timeline is the **longest numeric** dimension: a time axis reads as
 a continuum, so a three-value colour axis makes a poor one however the sweep was

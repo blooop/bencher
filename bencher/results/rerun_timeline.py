@@ -3,9 +3,14 @@
 This is the **rerun backend's implementation of the ``panes`` chart type**. Where the
 panel backend lays a sweep's samples out as a grid of images, one pane per sample,
 this lays them along a rerun timeline named after the swept variable: the samples
-share an entity path, so latest-at does the animation and dragging the time cursor
-sweeps the parameter. Both are registered under the name ``panes``, so
+share an entity path, so latest-at does the animation and dragging the cursor sweeps
+the parameter. Both are registered under the name ``panes``, so
 ``BenchRunCfg(backend="rerun")`` swaps one for the other with nothing else changing.
+
+Rerun's timeline is the only scrubber it has, so a sweep axis has to be expressed as
+one -- but it does not have to pretend to be a clock. An integer *sequence* index is
+labelled ``#3`` with no unit, so a polygon with three sides sits at ``#3``; see
+:class:`TimelineIndex`.
 
 Any result type can go on the timeline. A ``ResultRerun`` already *is* a recording,
 so its cached ``.rrd`` chunks are re-indexed onto the sweep timeline; everything
@@ -109,15 +114,21 @@ def _view_kind_for(result_var: Parameter) -> RerunViewKind | None:
 class TimelineIndex(StrEnum):
     """How a swept coordinate is encoded as a rerun index value.
 
-    Rerun has no float timeline: an index is either an integer sequence or a
-    nanosecond duration/timestamp. ``value`` therefore encodes a numeric coordinate
-    as a duration in seconds, which is the only encoding that keeps the parameter's
-    own numbers (and their uneven spacing) on the axis.
+    Rerun offers two kinds of index: an integer *sequence*, which the viewer labels
+    ``#3`` with no unit, and a nanosecond duration or timestamp, which it labels
+    ``+3s``. A sweep axis is neither a clock nor a stopwatch, so the sequence is the
+    honest one -- ``#3`` for a polygon with three sides says what it means, where
+    ``+3s`` claims a unit the parameter does not have.
     """
 
-    auto = "auto"  # value where the coordinates allow it, sequence otherwise
-    value = "value"  # duration in seconds; raises where that would lose samples
-    sequence = "sequence"  # 0, 1, 2, ... the sample's position along the dimension
+    #: Integer ticks. The coordinate's own value where that is a whole number, the
+    #: sample's position otherwise. No unit on the axis either way.
+    tick = "tick"
+    #: The sample's position, 0, 1, 2, ..., whatever the coordinates are.
+    position = "position"
+    #: A duration, one second per unit of the parameter. Reads as time, and is the
+    #: only encoding that shows a non-uniform sweep as non-uniform.
+    duration = "duration"
 
 
 @dataclass(frozen=True)
@@ -125,6 +136,9 @@ class _DurationIndex:
     """Coordinates are logged as durations, one second per unit of the parameter."""
 
     values: tuple[int, ...]  # nanoseconds
+
+    #: The axis shows the parameter's own numbers, so nothing else has to.
+    shows_values = True
 
     def arrow_type(self):
         import pyarrow as pa
@@ -139,9 +153,16 @@ class _DurationIndex:
 
 @dataclass(frozen=True)
 class _SequenceIndex:
-    """Coordinates are logged as their integer position along the dimension."""
+    """Coordinates are logged as integer ticks.
+
+    ``shows_values`` says whether those ticks *are* the coordinates (an integer
+    sweep) or merely count the samples (anything else). When they only count, the
+    parameter's actual value has to be legible somewhere else, so the renderer adds a
+    read-out of it against the tick.
+    """
 
     values: tuple[int, ...]
+    shows_values: bool
 
     def arrow_type(self):
         import pyarrow as pa
@@ -154,28 +175,47 @@ class _SequenceIndex:
 
 _IndexEncoding = _DurationIndex | _SequenceIndex
 
-# A duration index is an i64 count of nanoseconds, so a coordinate must land inside
-# this range once scaled by 1e9 -- roughly +/- 9.2e9 in parameter units.
+# Both index kinds are stored in an i64: a tick is that integer directly, a duration
+# is a count of nanoseconds, so a coordinate must land inside this range once scaled
+# by 1e9 -- roughly +/- 9.2e9 in parameter units.
 _INT64_MIN, _INT64_MAX = -(2**63), 2**63 - 1
 
 
-def _durations_or_none(coords: np.ndarray) -> tuple[int, ...] | None:
-    """Coordinates as nanosecond durations, or None if that would not be faithful.
+def _usable(values: tuple[int, ...]) -> bool:
+    """Whether an i64 index column can carry *values* without losing a sample.
 
-    Two ways it would not be. Coordinates spaced below a nanosecond round to the
-    same index, and samples sharing an index overwrite each other under latest-at --
-    the sweep would silently lose every sample but the last at each tick. Coordinates
-    beyond about 9.2e9 overflow the i64 the index is stored in. Both are decided here
-    rather than at the pyarrow cast so the caller can choose what to do about it.
+    Two ways it cannot. Values outside the i64 range do not fit. Repeated values put
+    two samples on one index, and samples sharing an index overwrite each other under
+    latest-at -- the sweep would silently lose every sample but the last at each tick.
+    Both are decided here rather than at the pyarrow cast so the caller can choose
+    what to do about it.
+    """
+    if any(v < _INT64_MIN or v > _INT64_MAX for v in values):
+        return False
+    return len(set(values)) == len(values)
+
+
+def _ticks_or_none(coords: np.ndarray) -> tuple[int, ...] | None:
+    """Coordinates as integer ticks, or None if they are not whole numbers."""
+    if not np.issubdtype(coords.dtype, np.number):
+        return None
+    floats = [float(c) for c in coords]
+    if not all(f.is_integer() for f in floats):
+        return None
+    values = tuple(int(f) for f in floats)
+    return values if _usable(values) else None
+
+
+def _durations_or_none(coords: np.ndarray) -> tuple[int, ...] | None:
+    """Coordinates as nanosecond durations, or None if that would lose a sample.
+
+    Coordinates spaced below a nanosecond round to the same index, which ``_usable``
+    catches as a repeat.
     """
     if not np.issubdtype(coords.dtype, np.number):
         return None
     values = tuple(round(float(c) * 1e9) for c in coords)
-    if any(v < _INT64_MIN or v > _INT64_MAX for v in values):
-        return None
-    if len(set(values)) < len(values):
-        return None
-    return values
+    return values if _usable(values) else None
 
 
 def encode_index(coords: np.ndarray, index: TimelineIndex, dim: str) -> _IndexEncoding:
@@ -187,28 +227,29 @@ def encode_index(coords: np.ndarray, index: TimelineIndex, dim: str) -> _IndexEn
         dim: the dimension name, used in the log line and error message.
 
     Raises:
-        ValueError: if ``TimelineIndex.value`` is asked for on coordinates that
+        ValueError: if ``TimelineIndex.duration`` is asked for on coordinates that
             cannot be put on a time axis without losing samples.
     """
+    positions = _SequenceIndex(values=tuple(range(len(coords))), shows_values=False)
     match TimelineIndex(index):
-        case TimelineIndex.sequence:
-            return _SequenceIndex(values=tuple(range(len(coords))))
-        case TimelineIndex.value:
+        case TimelineIndex.position:
+            return positions
+        case TimelineIndex.duration:
             values = _durations_or_none(coords)
             if values is None:
                 raise ValueError(
                     f"the coordinates of timeline dimension {dim!r} cannot be placed on a "
                     f"rerun time axis without collapsing samples onto the same index "
                     f"(non-numeric, spaced below a nanosecond, or out of i64 range); "
-                    f"pass index=TimelineIndex.sequence"
+                    f"pass index=TimelineIndex.tick"
                 )
             return _DurationIndex(values=values)
-        case TimelineIndex.auto:
-            values = _durations_or_none(coords)
+        case TimelineIndex.tick:
+            values = _ticks_or_none(coords)
             if values is None:
-                logger.debug("numbering the samples of %s instead of timing them", dim)
-                return _SequenceIndex(values=tuple(range(len(coords))))
-            return _DurationIndex(values=values)
+                logger.debug("counting the samples of %s: its values are not whole ticks", dim)
+                return positions
+            return _SequenceIndex(values=values, shows_values=True)
         case _ as unreachable:
             assert_never(unreachable)
 
@@ -374,6 +415,15 @@ def _layout_views(rrb, branches: list[list], branch_dims: list[str]):
     return rrb.Grid(*groups)
 
 
+def _readout_entity(dim: str) -> str:
+    """Entity path of the swept parameter's value read-out.
+
+    Under ``sweep/`` rather than beside the result variables so it cannot collide
+    with one that happens to share the dimension's name.
+    """
+    return f"/sweep/{dim}"
+
+
 def _declared_size(result_vars: list[Parameter], attribute: str, fallback: int) -> int:
     """The largest *attribute* declared by any result var, or *fallback*.
 
@@ -395,7 +445,7 @@ class RerunTimelineResult(BenchResultBase):
         self,
         result_var: Parameter | None = None,
         timeline_dim: str | None = None,
-        index: TimelineIndex | str = TimelineIndex.auto,
+        index: TimelineIndex | str = TimelineIndex.tick,
         width: int | None = None,
         height: int | None = None,
         **_kwargs,
@@ -476,7 +526,7 @@ class RerunTimelineResult(BenchResultBase):
         dataset: xr.Dataset,
         result_vars: list[Parameter],
         timeline_dim: str | None = None,
-        index: TimelineIndex | str = TimelineIndex.auto,
+        index: TimelineIndex | str = TimelineIndex.tick,
     ) -> str | None:
         """Compose *result_vars* into one ``.rrd`` on a timeline and return its path.
 
@@ -547,6 +597,46 @@ class RerunTimelineResult(BenchResultBase):
             handle.write(recording.memory_recording().drain_as_bytes())
         return str(output)
 
+    def _log_value_readout(
+        self,
+        staging,
+        dataset: xr.Dataset,
+        timeline_dim: str,
+        encoding: _IndexEncoding,
+    ) -> _View | None:
+        """Plot the swept parameter's value against the index, when the index hides it.
+
+        A tick index that carries the coordinates already says ``#3`` for a polygon
+        with three sides, and a duration axis reads the numbers off directly; neither
+        needs this. But a sweep whose values are not whole numbers falls back to
+        counting samples, and then nothing on screen says which value the cursor is
+        parked on -- so the value goes in a time series of its own, moving with the
+        same cursor.
+
+        Returns:
+            _View | None: the read-out's view, or None when the axis already shows
+            the values (or they are not numbers to plot).
+        """
+        import rerun as rr
+
+        if encoding.shows_values:
+            return None
+        coords = np.asarray(dataset.coords[timeline_dim].values)
+        if not np.issubdtype(coords.dtype, np.number):
+            return None
+
+        origin = _readout_entity(timeline_dim)
+        for raw, value in zip(encoding.values, coords):
+            encoding.set_time(staging, timeline_dim, raw)
+            staging.log(origin, rr.Scalars(float(value)))
+        staging.reset_time()
+        return _View(
+            origin=origin,
+            label=timeline_dim,
+            view_kinds={RerunViewKind.time_series},
+            logged=True,
+        )
+
     def _log_sweep(
         self,
         recording,
@@ -615,6 +705,11 @@ class RerunTimelineResult(BenchResultBase):
                     branch_views.append(view)
             if branch_views:
                 branches.append(branch_views)
+
+        readout = self._log_value_readout(staging, dataset, timeline_dim, encoding)
+        if readout is not None:
+            staged_any = True
+            branches.append([readout])
 
         if staged_any:
             from bencher.utils import gen_rerun_data_path
