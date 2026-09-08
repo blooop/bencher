@@ -438,15 +438,16 @@ def _send_recording(recording, view: _View, path: str, timeline: str, arrow_type
 _READOUT_ROW_SHARES = (6, 1)
 
 
-def _layout_views(rrb, branches: list[list], branch_dims: list[str], readout=None):
+def _layout_views(rrb, branches: list[list], branch_sizes: dict[str, int], readout=None):
     """Arrange the views, grouped by branch, over the read-out strip.
 
     Each branch's result variables are stacked vertically so a sample's image and its
     metrics stay together; the branches are then laid out beside each other. One
     peeled dimension is a row, which keeps the branch order (and so the parameter
-    order) readable left to right. More than one has already lost that ordering to
-    the flattened product, so it goes in a ``Grid``, which packs the branches without
-    growing one axis without bound.
+    order) readable left to right. With two dimensions, the first defines columns and
+    the second rows. Higher dimensions combine into rows, with the first dimension
+    still defining columns. The column count comes from the
+    sampled coordinates, so resizing cannot rearrange the axes.
 
     Flattening branch and variable into one row instead put a 3-colour sweep of an
     image and a metric into six columns, none of them wide enough to read.
@@ -456,13 +457,21 @@ def _layout_views(rrb, branches: list[list], branch_dims: list[str], readout=Non
     it belongs on the axis the cursor moves along, and as a column it both stole a
     branch's width and sat nowhere near the scrubber it annotates.
     """
-    groups = [views[0] if len(views) == 1 else rrb.Vertical(*views) for views in branches]
+    groups = [
+        (views[0] if len(views) == 1 else rrb.Vertical(*views))
+        if views
+        else rrb.TextDocumentView(name="No recording", contents=[])
+        for views in branches
+    ]
     if len(groups) == 1:
         layout = groups[0]
-    elif len(branch_dims) <= 1:
+    elif len(branch_sizes) <= 1:
         layout = rrb.Horizontal(*groups)
     else:
-        layout = rrb.Grid(*groups)
+        columns = branch_sizes[next(iter(branch_sizes))]
+        rows = len(groups) // columns
+        ordered = [groups[col * rows + row] for row in range(rows) for col in range(columns)]
+        layout = rrb.Grid(*ordered, grid_columns=columns)
     if readout is None:
         return layout
     return rrb.Vertical(layout, readout, row_shares=list(_READOUT_ROW_SHARES))
@@ -647,7 +656,7 @@ class RerunTimelineResult(BenchResultBase):
         branches, readout = self._log_sweep(
             recording, dataset, result_vars, timeline_dim, branch_dims, encoding
         )
-        if not branches:
+        if not any(branches):
             return None
 
         # Each sample owns exactly one tick, so a view must show that tick and no
@@ -673,7 +682,7 @@ class RerunTimelineResult(BenchResultBase):
                     ]
                     for branch in branches
                 ],
-                branch_dims,
+                {dim: dataset.sizes[dim] for dim in branch_dims},
                 # No cursor range on the read-out: it is a curve over the whole
                 # sweep with a cursor line on it, and one visible point is not that.
                 readout=None
@@ -754,9 +763,9 @@ class RerunTimelineResult(BenchResultBase):
     ) -> tuple[list[list[_View]], _View | None]:
         """Log every sample onto the sweep timeline; return its views and the read-out.
 
-        A view that received nothing is dropped rather than emitted empty, and a
-        branch left with no views is dropped in turn, so a sweep whose samples are all
-        missing returns nothing at all instead of a blueprint full of blank panels.
+        A view that received nothing is dropped. Empty branches retain their slots
+        in the Cartesian product so missing recordings cannot shift later cells to
+        another row or column. The caller omits an entirely empty composition.
 
         Returns:
             The branch views, grouped by branch, and the value read-out — separate
@@ -813,8 +822,7 @@ class RerunTimelineResult(BenchResultBase):
                 staging.reset_time()
                 if view.logged:
                     branch_views.append(view)
-            if branch_views:
-                branches.append(branch_views)
+            branches.append(branch_views)
 
         readout = self._log_value_readout(staging, dataset, timeline_dim, encoding)
         if readout is not None:

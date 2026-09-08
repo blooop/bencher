@@ -406,6 +406,13 @@ animates, the rest tile. The timeline stays one sample per tick at any
 dimensionality; what grows is the view count, the product of the peeled
 dimensions' sizes.
 
+With two remaining dimensions, the first defines columns and the second rows, in
+their sampled coordinate order. For example, `pose` then `scenario` gives one column
+per pose and one row per scenario. The column count is fixed when the recording
+is composed, so resizing the viewer preserves the axis mapping. Missing recordings
+leave empty cells. A single remaining dimension forms one row; with more than two,
+the first defines columns and combinations of the remaining dimensions define rows.
+
 For an *all*-rerun report — scalars included, mapped onto rerun's entity tree as
 bar charts, line graphs and tensors and laid out by a generated Blueprint, with
 every `ResultRerun` alongside them merged the way `rerun_grid` merges them — ask

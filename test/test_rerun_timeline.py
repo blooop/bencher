@@ -674,12 +674,88 @@ class TestLayout:
     """Where the pieces sit, which is the difference between a viewer you can read
     and one where the scene is a thumbnail."""
 
+    @pytest.mark.parametrize("rows, columns", [(3, 2), (2, 3)])
+    def test_two_axes_have_fixed_rows_and_columns(self, rows, columns):
+        import rerun.blueprint as rrb
+
+        cells = [[f"row{row}_col{col}"] for col in range(columns) for row in range(rows)]
+        layout = _layout_views(rrb, cells, {"pose": columns, "scenario": rows})
+        assert isinstance(layout, rrb.Grid)
+        assert layout.grid_columns == columns
+        assert list(layout.contents) == [
+            f"row{row}_col{col}" for row in range(rows) for col in range(columns)
+        ]
+
+    def test_missing_cell_keeps_its_place(self):
+        import rerun.blueprint as rrb
+
+        layout = _layout_views(rrb, [["a"], [], ["c"], ["d"]], {"pose": 2, "scene": 2})
+        assert layout.grid_columns == 2
+        assert len(layout.contents) == 4
+        assert isinstance(layout.contents[2], rrb.TextDocumentView)
+        assert list(layout.contents)[:2] == ["a", "c"]
+        assert layout.contents[3] == "d"
+
+    @pytest.mark.parametrize("missing", [False, True])
+    @pytest.mark.parametrize("subsampling", [None, 2])
+    def test_composed_recording_preserves_pose_scenario_coordinates(
+        self, monkeypatch, missing, subsampling
+    ):
+        from bencher.results import rerun_timeline as rt
+
+        res = _sweep(["theta"])
+        data = (
+            res.to_dataset(ReduceType.SQUEEZE)["out_rerun"]
+            .expand_dims(
+                pose=["Home", "TransportCompact", "DpdPregrasp"],
+                scenario=["freespace", "table"],
+            )
+            .transpose("theta", "pose", "scenario")
+            .copy(deep=True)
+        )
+        if missing:
+            data.loc[{"pose": "Home", "scenario": "table"}] = ""
+        layouts = []
+
+        def capture(rrb, branches, branch_dims, readout=None):
+            layout = _layout_views(rrb, branches, branch_dims, readout)
+            layouts.append(layout)
+            return layout
+
+        monkeypatch.setattr(rt, "_layout_views", capture)
+        path = res.to_rerun_timeline_path(
+            data.to_dataset(),
+            res.bench_cfg.result_vars,
+            timeline_dim="theta",
+            subsampling_divisions=subsampling,
+        )
+        assert path is not None
+        grid = layouts[0]
+        poses = list(data.coords["pose"].values)
+        if subsampling is not None:
+            poses = [poses[0], poses[-1]]
+        assert len(grid.contents) == len(poses) * 2
+        assert grid.grid_columns == len(poses)
+        for row, scenario in enumerate(data.coords["scenario"].values):
+            for col, pose in enumerate(poses):
+                view = grid.contents[row * len(poses) + col]
+                if missing and row == 1 and col == 0:
+                    assert "No recording" in str(view.name)
+                else:
+                    assert str(view.origin) == f"/pose_{pose}/scenario_{scenario}/out_rerun"
+
+    def test_no_recordings_still_returns_no_composition(self):
+        res = _sweep(["theta", "scale"])
+        dataset = res.to_dataset(ReduceType.SQUEEZE).copy(deep=True)
+        dataset["out_rerun"].values[:] = ""
+        assert res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars) is None
+
     def test_the_read_out_spans_the_bottom_under_the_branches(self):
         """It annotates the cursor, so it belongs on the cursor's axis. As a branch
         of its own it both stole a column's width and sat nowhere near the scrubber."""
         import rerun.blueprint as rrb
 
-        layout = _layout_views(rrb, [["a"], ["b"]], ["pose"], readout="value")
+        layout = _layout_views(rrb, [["a"], ["b"]], {"pose": 2}, readout="value")
         assert isinstance(layout, rrb.Vertical)
         assert layout.contents[-1] == "value"
         assert isinstance(layout.contents[0], rrb.Horizontal)
@@ -688,7 +764,7 @@ class TestLayout:
     def test_without_a_read_out_the_branches_are_the_whole_viewer(self):
         import rerun.blueprint as rrb
 
-        layout = _layout_views(rrb, [["a"], ["b"]], ["pose"])
+        layout = _layout_views(rrb, [["a"], ["b"]], {"pose": 2})
         assert isinstance(layout, rrb.Horizontal)
 
     def test_an_origin_with_two_archetypes_becomes_tabs_not_a_stack(self):
