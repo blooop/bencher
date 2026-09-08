@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import errno
+import hashlib
 import logging
 import os
 import random
@@ -24,6 +25,36 @@ logging.basicConfig(level=logging.INFO)
 _PORT_RANGE_MIN = 49152
 _PORT_RANGE_MAX = 65535
 _PORT_PROBE_ATTEMPTS = 100
+
+# DevPod 0.26 discovers listeners only from 1024 through 12000. Keep report
+# servers near the top of that window, and avoid OpenVSCode's reserved port.
+_DEVPOD_PORT_MIN = 10000
+_DEVPOD_PORT_MAX = 11999
+_DEVPOD_EXCLUDED_PORTS = frozenset({10800})
+
+
+def _candidate_ports():
+    """Yield automatic report ports in preference order.
+
+    Outside DevPod the ports are random draws from the IANA dynamic range. Inside
+    DevPod the workspace id picks a deterministic starting point in the range DevPod
+    forwards, so a given workspace always reaches its report on the same port.
+    """
+    workspace_id = os.environ.get("DEVPOD_WORKSPACE_ID")
+    if not workspace_id:
+        for _ in range(_PORT_PROBE_ATTEMPTS):
+            yield random.randint(_PORT_RANGE_MIN, _PORT_RANGE_MAX)
+        return
+
+    ports = tuple(
+        port
+        for port in range(_DEVPOD_PORT_MIN, _DEVPOD_PORT_MAX + 1)
+        if port not in _DEVPOD_EXCLUDED_PORTS
+    )
+    digest = hashlib.sha256(workspace_id.encode()).digest()
+    offset = int.from_bytes(digest[:8], "big") % len(ports)
+    for index in range(min(_PORT_PROBE_ATTEMPTS, len(ports))):
+        yield ports[(offset + index) % len(ports)]
 
 
 class _CorsStaticHandler(StaticFileHandler):
@@ -119,21 +150,20 @@ class BenchPlotServer:
 
     @staticmethod
     def _find_free_port() -> int:
-        """Find a free port by testing random ports in the dynamic/private range.
+        """Find a free report port, using DevPod's forwarded range when present.
 
         Using ``port=0`` with Tornado/Bokeh can fail on some Linux kernels
         (notably 6.x) because the kernel deterministically assigns the same
-        ephemeral port, causing ``EADDRINUSE`` when a previous server is
-        still running.  Picking a random port from the IANA dynamic range
-        avoids this.
+        ephemeral port, causing ``EADDRINUSE`` when a previous server is still
+        running. Outside DevPod, random IANA dynamic ports avoid this. Inside
+        DevPod, the workspace id selects a stable port its SSH service discovers.
 
         Note: there is an inherent TOCTOU race between probing the port here
         and the actual ``bind()`` inside Panel/Bokeh.  In practice the window
         is very small and the random selection makes collisions unlikely, but
         callers should be prepared for a rare ``OSError`` on server start.
         """
-        for _ in range(_PORT_PROBE_ATTEMPTS):
-            port = random.randint(_PORT_RANGE_MIN, _PORT_RANGE_MAX)
+        for port in _candidate_ports():
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.bind(("0.0.0.0", port))
