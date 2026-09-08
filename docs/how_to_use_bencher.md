@@ -341,6 +341,46 @@ plot types — like `video_summary`, they are opt-in because merging every recor
 expensive. This is the `ResultRerun` counterpart to `video_summary` for
 `ResultImage`/`ResultVideo`.
 
+### Scrubbing the sweep itself
+
+`to_rerun_summary()` splices recordings along whatever timeline each *sample*
+recorded. A benchmark that logs one static frame per sample has no such timeline, so
+there is nothing to splice and nothing to play. `to_rerun_timeline()` makes the swept
+parameter the time axis instead — every sample is written to one recording at the
+same entity paths, indexed by a rerun timeline named after the sweep variable:
+
+```python
+bench.plot_sweep(
+    input_vars=["shoulder"],
+    result_vars=["out_rerun"],
+    plot_callbacks=[bn.BenchResult.to_rerun_timeline],
+)
+```
+
+Dragging the time cursor now sweeps `shoulder`, one sample per tick. A numeric sweep
+variable is encoded as a duration index, one second per unit, so the axis reads back
+the parameter's own values and keeps their spacing even when the sweep is not
+uniform; pass `index=bn.TimelineIndex.sequence` to number the samples `0, 1, 2`
+instead, which is what a categorical sweep gets automatically.
+
+Only one dimension can be time. Rerun timelines are independent axes rather than a
+joint index — a latest-at query resolves on the timeline being viewed and ignores
+every other one — so a 2-D sweep cannot become two scrubbers. The other dimensions
+are peeled onto the entity tree instead, one branch and one Blueprint view each, all
+driven by the single shared cursor:
+
+```python
+from functools import partial
+
+plot_callbacks=[partial(bn.BenchResult.to_rerun_timeline, timeline_dim="shoulder")]
+```
+
+That is how the mapping scales: one dimension animates, the rest tile. The timeline
+stays one sample per tick at any dimensionality; what grows is the view count, which
+is the product of the peeled dimensions' sizes. Without `timeline_dim=` the last
+(fastest-varying) dimension is the one that plays, matching `to_rerun_summary()` and
+`to_video_summary()`.
+
 Setting `backend="rerun"` on `BenchRunCfg` renders the whole report in the rerun
 viewer rather than in holoviews. Scalar results — floats and booleans — are mapped
 onto rerun's entity tree as bar charts, line graphs and tensors, laid out by a
@@ -352,8 +392,9 @@ gap in the report.
 
 Two things to know if you pick the merged viewer by hand instead:
 
-* `rerun_summary` and `rerun_grid` are named-only plot types and `BenchRunCfg` has no
-  plot-selection knob, so `plot_callbacks=` is the only route to them.
+* `rerun_summary`, `rerun_grid` and `rerun_timeline` are named-only plot types and
+  `BenchRunCfg` has no plot-selection knob, so `plot_callbacks=` is the only route
+  to them.
 * Define the callback at module scope. The callback list is pickled into the result
   cache, so a closure fails with `AttributeError: Can't pickle local object`.
 

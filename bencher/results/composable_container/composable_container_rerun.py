@@ -123,6 +123,28 @@ _VIEW_CLASS_NAMES = {
 }
 
 
+def views_for_kinds(rrb, kinds: Iterable[RerunViewKind], *, origin: str, label: str):
+    """Build the view (or vertical stack of views) that displays one entity origin.
+
+    Shared with the sweep-timeline composition in
+    :mod:`bencher.results.rerun_timeline`, which lays out its own origins but needs
+    the same archetype-to-view-class mapping.  ``rerun.blueprint`` is passed in as
+    *rrb* rather than imported, keeping the rerun SDK out of this module's imports.
+    """
+    selected = set(kinds)
+    ordered = [kind for kind in RerunViewKind if kind in selected] or [RerunViewKind.spatial_2d]
+    views = [
+        getattr(rrb, _VIEW_CLASS_NAMES[kind])(
+            origin=origin,
+            name=label if len(ordered) == 1 else f"{label} — {_VIEW_NAMES[kind]}",
+        )
+        for kind in ordered
+    ]
+    if len(views) == 1:
+        return views[0]
+    return rrb.Vertical(*views, name=label)
+
+
 @dataclass(frozen=True)
 class _SharedViewLayout:
     """Every item is displayed in one shared view rooted at ``/``.
@@ -395,18 +417,7 @@ class ComposableContainerRerun(ComposableContainerBase):
 
     def _views(self, rrb, kinds: Iterable[RerunViewKind], *, origin: str, label: str):
         """Build the view (or vertical stack of views) that displays one origin."""
-        selected = set(kinds)
-        ordered = [kind for kind in RerunViewKind if kind in selected] or [RerunViewKind.spatial_2d]
-        views = [
-            getattr(rrb, _VIEW_CLASS_NAMES[kind])(
-                origin=origin,
-                name=label if len(ordered) == 1 else f"{label} — {_VIEW_NAMES[kind]}",
-            )
-            for kind in ordered
-        ]
-        if len(views) == 1:
-            return views[0]
-        return rrb.Vertical(*views, name=label)
+        return views_for_kinds(rrb, kinds, origin=origin, label=label)
 
     def _layout(self, rrb, items: list[_ComposedItem]):
         """Map the compose method onto a Blueprint layout of per-item views."""

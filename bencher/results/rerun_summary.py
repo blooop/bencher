@@ -45,6 +45,25 @@ from bencher.variables.results import ResultRerun, result_is_missing
 logger = logging.getLogger(__name__)
 
 
+def leaf_recording_path(
+    result: BenchResultBase, dataset: xr.Dataset, result_var: Parameter
+) -> str | None:
+    """Return the ``.rrd`` path for a fully-sliced *dataset*, or None if unrecorded.
+
+    Module level rather than a method because
+    :mod:`bencher.results.rerun_timeline` walks the same dataset to the same leaves
+    and must agree on what counts as an unrecorded sample.
+    """
+    value = result.zero_dim_da_to_val(dataset[result_var.name])
+    if result_is_missing(result_var, value):
+        return None
+    path = str(value)
+    if not path or not os.path.isfile(path):
+        logger.debug("rerun recording %s missing on disk", path)
+        return None
+    return path
+
+
 class RerunSummaryResult(BenchResultBase):
     """Renders all ``ResultRerun`` samples of a sweep as one merged recording."""
 
@@ -230,7 +249,7 @@ class RerunSummaryResult(BenchResultBase):
             compose_method = remaining.pop()
 
         if num_dims <= target_dimension or num_dims == 0:
-            return self._leaf_path(dataset, result_var)
+            return leaf_recording_path(self, dataset, result_var)
 
         selected_dim = dims[-1]
         outer = ComposableContainerRerun(compose_method=compose_method, name=selected_dim)
@@ -253,14 +272,3 @@ class RerunSummaryResult(BenchResultBase):
         if not outer.container:
             return None
         return outer.render()
-
-    def _leaf_path(self, dataset: xr.Dataset, result_var: Parameter) -> str | None:
-        """Return the ``.rrd`` path for a fully-sliced *dataset*, or None if unrecorded."""
-        value = self.zero_dim_da_to_val(dataset[result_var.name])
-        if result_is_missing(result_var, value):
-            return None
-        path = str(value)
-        if not path or not os.path.isfile(path):
-            logger.debug("rerun recording %s missing on disk", path)
-            return None
-        return path

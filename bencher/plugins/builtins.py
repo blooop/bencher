@@ -112,6 +112,7 @@ def _named_only_specs() -> list[tuple[str, str, Callable]]:
     from bencher.results.holoview_results.xy_scatter_result import XYScatterResult
     from bencher.results.rerun_result import RerunResult
     from bencher.results.rerun_summary import RerunSummaryResult
+    from bencher.results.rerun_timeline import RerunTimelineResult
     from bencher.results.video_summary import VideoSummaryResult
 
     # Appended rather than grouped next to "dataset" so existing priorities keep their
@@ -132,6 +133,10 @@ def _named_only_specs() -> list[tuple[str, str, Callable]]:
         # (like video_summary) because merging every recording is expensive.
         ("rerun_summary", "rerun", RerunSummaryResult.to_rerun_summary),
         ("rerun_grid", "rerun", RerunSummaryResult.to_rerun_grid),
+        # One swept dimension becomes the rerun timeline; the rest become entity
+        # branches. Named-only for the same reason as rerun_summary: it reads and
+        # re-encodes every sample recording.
+        ("rerun_timeline", "rerun", RerunTimelineResult.to_rerun_timeline),
         ("xy_scatter", "holoviews", XYScatterResult.to_plot),
         ("xy_curve", "holoviews", XYCurveResult.to_plot),
         ("xy_histogram", "holoviews", XYHistogramResult.to_plot),
