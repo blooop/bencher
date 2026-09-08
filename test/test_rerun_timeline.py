@@ -82,6 +82,23 @@ class InnerTimelineSweep(bn.ParametrizedSweep):
         return super().benchmark()
 
 
+class VaryingTreeSweep(bn.ParametrizedSweep):
+    """Each sample logs an entity named after itself, as a real rig sweep does.
+
+    The shape latest-at cannot animate on its own: a path written at one sample and
+    not the next is still the most recent value there, so it stays on screen.
+    """
+
+    part = bn.StringSweep(["arm", "mast", "skid"])
+    out_rerun = bn.ResultRerun(width=200, height=150)
+
+    def benchmark(self):
+        recording = rr.RecordingStream("test_rerun_timeline_tree", make_default=False)
+        recording.log(f"parts/{self.part}", rr.Points3D([[1.0, 2.0, 3.0]]))
+        self.out_rerun = bn.capture_rerun_rrd(recording)
+        return super().benchmark()
+
+
 class InnerTickSweep(bn.ParametrizedSweep):
     """Each sample records its inner timeline on ``log_tick``.
 
@@ -705,3 +722,83 @@ class TestLayout:
             rrb, {RerunViewKind.spatial_3d}, origin="/out_rerun", label="out_rerun"
         )
         assert isinstance(view, rrb.Spatial3DView), type(view)
+
+
+def _blueprint_archetypes(path: str) -> set[str]:
+    """Archetype names the composed recording's blueprint store carries."""
+    reader = RrdReader(str(path))
+    found = set()
+    for chunk in reader.stream(store=reader.blueprints()[0]):
+        for field in chunk.to_record_batch().schema:
+            archetype = (field.metadata or {}).get(b"rerun:archetype")
+            if archetype:
+                found.add(archetype.decode().rsplit(".", 1)[-1])
+    return found
+
+
+class TestOneSamplePerTick:
+    """A tick shows its own sample and no other.
+
+    Latest-at resolves to the most recent value at or before the cursor, which only
+    animates a sweep whose samples all write the same entity paths. A sweep over
+    configurations does not: each sample names its own parts, nothing clears the
+    ones the next sample lacks, and scrubbing to the end showed every part any
+    sample had ever logged, piled on top of each other.
+    """
+
+    def _res(self):
+        bench = VaryingTreeSweep().to_bench()
+        return bench.plot_sweep(input_vars=["part"], result_vars=["out_rerun"])
+
+    def test_the_samples_really_do_write_different_paths(self):
+        """Guards the test below it: with one shared path there is nothing to fix."""
+        parts = {e for e in _indices(_timeline_path(self._res())) if "/parts/" in e}
+        assert parts == {
+            "/out_rerun/parts/arm",
+            "/out_rerun/parts/mast",
+            "/out_rerun/parts/skid",
+        }, parts
+
+    def test_every_view_is_pinned_to_the_cursors_tick(self):
+        assert "VisibleTimeRanges" in _blueprint_archetypes(_timeline_path(self._res()))
+
+    def test_a_shared_path_sweep_is_pinned_the_same_way(self):
+        """Not a special case for varying trees — a tick is one sample either way."""
+        assert "VisibleTimeRanges" in _blueprint_archetypes(_timeline_path(_sweep(["theta"])))
+
+
+class TestViewTimeRanges:
+    def test_a_view_class_that_takes_a_range_gets_it(self):
+        import rerun.blueprint as rrb
+
+        from bencher.results.composable_container.composable_container_rerun import (
+            RerunViewKind,
+            views_for_kinds,
+        )
+
+        here = rrb.TimeRangeBoundary.cursor_relative(seq=0)
+        ranges = [rrb.VisibleTimeRange("theta", start=here, end=here)]
+        view = views_for_kinds(
+            rrb, {RerunViewKind.spatial_3d}, origin="/x", label="x", time_ranges=ranges
+        )
+        assert isinstance(view, rrb.Spatial3DView)
+        assert "VisibleTimeRanges" in view.properties
+
+    def test_a_view_class_that_does_not_is_still_built(self):
+        """TextDocumentView has no time_ranges. Refusing to build it would drop the
+        annotation from the report over a field it does not need -- it shows one
+        value regardless."""
+        import rerun.blueprint as rrb
+
+        from bencher.results.composable_container.composable_container_rerun import (
+            RerunViewKind,
+            views_for_kinds,
+        )
+
+        here = rrb.TimeRangeBoundary.cursor_relative(seq=0)
+        ranges = [rrb.VisibleTimeRange("theta", start=here, end=here)]
+        view = views_for_kinds(
+            rrb, {RerunViewKind.text_document}, origin="/x", label="x", time_ranges=ranges
+        )
+        assert isinstance(view, rrb.TextDocumentView)
+        assert "VisibleTimeRanges" not in view.properties

@@ -650,17 +650,32 @@ class RerunTimelineResult(BenchResultBase):
         if not branches:
             return None
 
+        # Each sample owns exactly one tick, so a view must show that tick and no
+        # other. Latest-at would otherwise carry an entity forward from whichever
+        # sample logged it last: the samples that share an entity path overwrite and
+        # look animated, and the ones that do not -- a sweep over configurations,
+        # where each names its own parts -- pile up instead of replacing.
+        here = rrb.TimeRangeBoundary.cursor_relative(seq=0)
+        cursor_only = [rrb.VisibleTimeRange(timeline_dim, start=here, end=here)]
         blueprint = rrb.Blueprint(
             _layout_views(
                 rrb,
                 [
                     [
-                        views_for_kinds(rrb, view.view_kinds, origin=view.origin, label=view.label)
+                        views_for_kinds(
+                            rrb,
+                            view.view_kinds,
+                            origin=view.origin,
+                            label=view.label,
+                            time_ranges=cursor_only,
+                        )
                         for view in branch
                     ]
                     for branch in branches
                 ],
                 branch_dims,
+                # No cursor range on the read-out: it is a curve over the whole
+                # sweep with a cursor line on it, and one visible point is not that.
                 readout=None
                 if readout is None
                 else views_for_kinds(
