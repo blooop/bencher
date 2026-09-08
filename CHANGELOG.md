@@ -66,6 +66,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sub-millisecond blip, offered to the viewer beside the sweep axis. Those logs are now
   staged in a recording of their own and forwarded through one rewrite pass, which costs
   a single extra file for the whole composition rather than a rewrite per sample.
+- **A golden-hash render test no longer depends on which fonts the host has installed.**
+  `test_cartesian_pil_renderer.py::TestDrawRegression::test_timeline` was the one
+  pixel-hash test whose shape draws text, and `_get_font` picks DejaVu, then Liberation,
+  then Pillow's built-in, whichever is present — so the hash recorded on a box with
+  DejaVu failed on a box with only Liberation, with nothing in the failure to say the
+  fonts were the difference. The hash now covers the film chrome with labels off, which
+  is byte-identical under four different fonts, and a companion test asserts what the
+  renderer is actually responsible for: that the labels change the reserved label band
+  and nothing above it.
 
 ## [1.125.0] - 2026-09-05
 

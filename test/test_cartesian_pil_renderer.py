@@ -4,6 +4,11 @@ These tests lock current behavior so that performance optimizations
 do not silently change the visual output.
 """
 
+# TimelineShape._skip_labels is set directly: it is the renderer's own overlay-mode
+# switch, and turning it off is what makes the golden hash independent of the host's
+# fonts. There is no public way to ask for a label-less strip.
+# pylint: disable=protected-access
+
 from __future__ import annotations
 
 import hashlib
@@ -13,6 +18,7 @@ from PIL import Image, ImageDraw
 
 from bencher.results.manim_cartesian.cartesian_product_cfg import CartesianProductCfg, SweepVar
 from bencher.results.manim_cartesian.cartesian_product_scene import (
+    FILM_LABEL_H,
     Cell,
     Group,
     Shape,
@@ -197,8 +203,45 @@ class TestDrawRegression:
         assert _render_hash(st, 300, 200) == "9626250f8b66be862e0709f1c9814cad"
 
     def test_timeline(self):
+        """Hashed with the frame labels off, because their glyphs come from whichever
+        font the host ships.
+
+        ``_get_font`` tries DejaVu, then Liberation, then Pillow's built-in, so this
+        was the one golden hash in the file that locked the *host's font set* rather
+        than the renderer: it was recorded on a box with DejaVu and failed on one with
+        only Liberation, with nothing in the failure to say the fonts were the
+        difference. The film chrome is font-independent and is what the hash is for;
+        the labels are covered by ``test_timeline_labels_stay_in_the_label_band``,
+        which asserts where they land rather than which glyphs they are.
+        """
         tl = TimelineShape(Cell(), 3)
-        assert _render_hash(tl, 500, 200) == "c77e2b39b2cdc21008b7f7008955be3b"
+        tl._skip_labels = True
+        assert _render_hash(tl, 500, 200) == "ef51a6ef6c6a42ad9465fbb27656e160"
+
+    def test_timeline_labels_stay_in_the_label_band(self):
+        """Turning labels off must change the label band and nothing above it.
+
+        Not a pixel hash: which glyphs ``t=1`` draws is the font's business, but the
+        band they are confined to is the renderer's -- a label that overflowed upwards
+        would paint over the film frames, and ``size()`` reserves ``FILM_LABEL_H`` for
+        exactly this strip.
+        """
+        rendered = {}
+        for skip in (False, True):
+            img = Image.new("RGB", (500, 200), (255, 255, 255))
+            tl = TimelineShape(Cell(), 3)
+            tl._skip_labels = skip
+            tl.draw(ImageDraw.Draw(img), 10, 10)
+            rendered[skip] = img
+
+        _, total_h = TimelineShape(Cell(), 3).size()
+        band_top = 10 + total_h - FILM_LABEL_H
+        with_labels, without = rendered[False], rendered[True]
+
+        above = (0, 0, 500, band_top)
+        assert with_labels.crop(above).tobytes() == without.crop(above).tobytes()
+        band = (0, band_top, 500, 200)
+        assert with_labels.crop(band).tobytes() != without.crop(band).tobytes()
 
 
 # ---------------------------------------------------------------------------
