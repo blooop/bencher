@@ -39,6 +39,10 @@ def _candidate_ports():
     Outside DevPod the ports are random draws from the IANA dynamic range. Inside
     DevPod the workspace id picks a deterministic starting point in the range DevPod
     forwards, so a given workspace always reaches its report on the same port.
+
+    Spreading workspaces across the range is best effort, not an allocation: two
+    ids can hash to the same starting port, and the loser of that tie falls
+    through to the next free port the way any occupied port is handled.
     """
     workspace_id = os.environ.get("DEVPOD_WORKSPACE_ID")
     if not workspace_id:

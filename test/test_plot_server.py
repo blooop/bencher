@@ -105,13 +105,17 @@ class TestBenchPlotServer(unittest.TestCase):
             second = next(_candidate_ports())
         self.assertEqual(first, second)
 
-    def test_devpod_workspaces_do_not_share_a_port(self):
-        """Two workspaces serving reports at once must not fight over one port."""
-        with patch.dict(os.environ, {"DEVPOD_WORKSPACE_ID": "bencher-feature-a"}):
-            first = next(_candidate_ports())
-        with patch.dict(os.environ, {"DEVPOD_WORKSPACE_ID": "bencher-feature-b"}):
-            second = next(_candidate_ports())
-        self.assertNotEqual(first, second)
+    def test_devpod_workspaces_spread_across_the_range(self):
+        """Workspaces should mostly get their own port rather than all pile on one.
+
+        Hashing spreads ids over the range, it does not allocate: a collision is
+        possible and probing absorbs it. This pins the spread, not a guarantee.
+        """
+        ports = []
+        for workspace in ("bencher-a", "bencher-b", "bencher-c", "rocker-1", "rocker-2"):
+            with patch.dict(os.environ, {"DEVPOD_WORKSPACE_ID": workspace}):
+                ports.append(next(_candidate_ports()))
+        self.assertEqual(len(set(ports)), len(ports), ports)
 
     def test_auto_port_outside_devpod_stays_in_the_dynamic_range(self):
         with patch.dict(os.environ, {}, clear=True):
