@@ -75,11 +75,16 @@ from bencher.variables.results import (
 
 logger = logging.getLogger(__name__)
 
-# Rerun's two automatic timelines. They are re-derived on every log call, so a
-# sample's ``log_time`` records when the .rrd happened to be captured, not anything
-# about the sweep. Carrying them into the composition would leave the viewer
-# defaulting to a wall-clock axis on which the whole sweep is a blip.
-_AUTOMATIC_TIMELINES = frozenset({"log_time", "log_tick"})
+# The timelines a sample's chunks lose on the way into the composition. Only the
+# wall clock: rerun stamps ``log_time`` on every log call and it cannot be
+# overwritten, so it records when the .rrd happened to be captured rather than
+# anything about the sweep, and carrying it through would offer the viewer an axis
+# on which the whole sweep is a blip. Rerun's other built-in timeline, ``log_tick``,
+# is not in here: it is only written to a chunk when the benchmark set it, and
+# bencher's own over-time recordings do exactly that (see
+# :func:`~bencher.results.rerun_result._log_to_rerun`), so dropping it would throw
+# away an axis somebody chose rather than an axis nobody did.
+_DROPPED_TIMELINES = frozenset({"log_time"})
 
 # Entity path parts are restricted to this alphabet so a coordinate value like
 # "0.5 rad" or "a/b" cannot inject a path separator or need escaping.
@@ -308,13 +313,13 @@ class _View:
 
 
 def _rewrite_chunk(chunk, timeline: str, arrow_type=None, raw_value: int | None = None) -> list:
-    """Return *chunk* with the automatic timelines dropped, optionally re-indexed.
+    """Return *chunk* with ``log_time`` dropped, optionally re-indexed.
 
-    Dropping ``log_time`` and ``log_tick`` is unconditional: they say when the data
-    happened to be captured, and leaving them in the composition offers the viewer a
-    wall-clock axis on which the whole sweep is a blip. Rerun stamps them on every
-    ``log()`` call and ``set_time`` cannot overwrite them, so the only way to be rid
-    of them is to rewrite the chunk after the fact.
+    Dropping ``log_time`` is unconditional: it says when the data happened to be
+    captured, and leaving it in the composition offers the viewer a wall-clock axis
+    on which the whole sweep is a blip. Rerun stamps it on every ``log()`` call and
+    ``set_time`` cannot overwrite it, so the only way to be rid of it is to rewrite
+    the chunk after the fact.
 
     *raw_value* adds the sweep index, for chunks that came from a sample's own ``.rrd``
     and so have no idea where in the sweep they sit. Every row of such a chunk belongs
@@ -329,7 +334,7 @@ def _rewrite_chunk(chunk, timeline: str, arrow_type=None, raw_value: int | None 
     keep = [
         position
         for position, arrow_field in enumerate(batch.schema)
-        if arrow_field.name not in _AUTOMATIC_TIMELINES
+        if arrow_field.name not in _DROPPED_TIMELINES
     ]
     columns = [batch.column(position) for position in keep]
     fields = [batch.schema.field(position) for position in keep]
@@ -462,7 +467,7 @@ class RerunTimelineResult(BenchResultBase):
                 Defaults to the longest numeric dimension; see
                 :func:`default_timeline_dim`.
             index (TimelineIndex | str, optional): How coordinates are encoded as
-                index values. Defaults to ``auto``.
+                index values. Defaults to ``TimelineIndex.tick``.
             width (int, optional): Viewer width. Defaults to the widest ``width``
                 declared by a rendered result var, else 950.
             height (int, optional): Viewer height, chosen the same way, else 712.
@@ -585,7 +590,10 @@ class RerunTimelineResult(BenchResultBase):
                 ],
                 branch_dims,
             ),
-            rrb.TimePanel(state="expanded"),
+            # Pinned, not left to the viewer: a sample that recorded its own inner
+            # timeline puts a second axis in the composition, and the sweep is the one
+            # the report is about, so it is the one the viewer should open on.
+            rrb.TimePanel(state="expanded", timeline=timeline_dim),
             auto_layout=False,
             auto_views=False,
             collapse_panels=True,
@@ -604,36 +612,42 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str,
         encoding: _IndexEncoding,
     ) -> _View | None:
-        """Plot the swept parameter's value against the index, when the index hides it.
+        """Show the swept parameter's value against the index, when the index hides it.
 
         A tick index that carries the coordinates already says ``#3`` for a polygon
         with three sides, and a duration axis reads the numbers off directly; neither
         needs this. But a sweep whose values are not whole numbers falls back to
         counting samples, and then nothing on screen says which value the cursor is
-        parked on -- so the value goes in a time series of its own, moving with the
-        same cursor.
+        parked on -- so the value goes in a read-out of its own, moving with the same
+        cursor.
+
+        Numbers are plotted as a time series, which shows where in the range the
+        cursor sits as well as the value. Categories have no position to plot, so they
+        are written out as text instead; without it a string sweep is a row of ``#0``,
+        ``#1``, ``#2`` with no trace of ``cube`` or ``sphere`` anywhere in the viewer.
 
         Returns:
             _View | None: the read-out's view, or None when the axis already shows
-            the values (or they are not numbers to plot).
+            the values.
         """
         import rerun as rr
 
         if encoding.shows_values:
             return None
         coords = np.asarray(dataset.coords[timeline_dim].values)
-        if not np.issubdtype(coords.dtype, np.number):
-            return None
-
+        numeric = bool(np.issubdtype(coords.dtype, np.number))
         origin = _readout_entity(timeline_dim)
         for raw, value in zip(encoding.values, coords):
             encoding.set_time(staging, timeline_dim, raw)
-            staging.log(origin, rr.Scalars(float(value)))
+            if numeric:
+                staging.log(origin, rr.Scalars(float(value)))
+            else:
+                staging.log(origin, rr.TextDocument(f"{timeline_dim} = {value}"))
         staging.reset_time()
         return _View(
             origin=origin,
             label=timeline_dim,
-            view_kinds={RerunViewKind.time_series},
+            view_kinds={RerunViewKind.time_series if numeric else RerunViewKind.text_document},
             logged=True,
         )
 

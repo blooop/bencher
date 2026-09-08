@@ -365,18 +365,19 @@ same polygon sweep rendered both ways in one report.
 Any result type goes on the timeline, not just recordings. Images become
 `rr.EncodedImage`, numbers `rr.Scalars`, strings `rr.TextDocument`, and a
 `ResultRerun`'s cached `.rrd` is re-indexed onto the sweep timeline (keeping any
-timeline the benchmark recorded inside a sample, so that can still be scrubbed
-within the tick it sits on). Each result variable gets its own view, so an image
-swept beside a metric reads as a picture and a time series *of the sweep*, moving
-together under one cursor.
+timeline the benchmark recorded inside a sample — `log_tick` included, which is what
+an over-time recording uses — so that can still be scrubbed within the tick it sits
+on; only the wall-clock `log_time` is dropped). Each result variable gets its own
+view, so an image swept beside a metric reads as a picture and a time series *of the
+sweep*, moving together under one cursor.
 
 The axis is a tick counter, not a clock. Rerun labels a sequence index `#3` with
 no unit, which is the honest reading for a sweep — a polygon with three sides is
 `#3`, where `+3s` would claim a unit the parameter does not have. Where the
-coordinates are whole numbers the ticks *are* those numbers; where they are not
-(fractional floats, categories) the ticks count the samples and the parameter's
-real value is plotted against them in a small read-out view of its own, so the
-cursor position is still legible.
+coordinates are whole numbers the ticks *are* those numbers; where they are not the
+ticks count the samples and the parameter's real value gets a small read-out view of
+its own so the cursor position is still legible — a time series for fractional
+floats, a text document for categories, which have no position to plot.
 
 `index=` overrides the choice:
 

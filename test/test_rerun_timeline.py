@@ -74,6 +74,26 @@ class InnerTimelineSweep(bn.ParametrizedSweep):
         return super().benchmark()
 
 
+class InnerTickSweep(bn.ParametrizedSweep):
+    """Each sample records its inner timeline on ``log_tick``.
+
+    That is what bencher's own over-time recordings do
+    (:func:`~bencher.results.rerun_result._log_to_rerun`), so a cached
+    ``ResultRerun`` really can arrive with a meaningful ``log_tick``.
+    """
+
+    freq = bn.FloatSweep(default=1.0, bounds=[1.0, 2.0], samples=2)
+    out_rerun = bn.ResultRerun(width=200, height=150)
+
+    def benchmark(self):
+        recording = rr.RecordingStream("test_rerun_timeline_tick", make_default=False)
+        for step in range(4):
+            recording.set_time("log_tick", sequence=step)
+            recording.log("wave", rr.Scalars(self.freq * step))
+        self.out_rerun = bn.capture_rerun_rrd(recording)
+        return super().benchmark()
+
+
 class CategoricalSweep(bn.ParametrizedSweep):
     """A sweep whose only dimension has no numeric position on an axis."""
 
@@ -178,6 +198,19 @@ def _indices(path: str) -> dict[str, dict[str, list]]:
                 continue
             column = batch.column(batch.schema.get_field_index(field.name))
             timelines.setdefault(field.name, []).extend(column.to_pylist())
+    return out
+
+
+def _components(path: str, entity: str) -> set[str]:
+    """The component column names logged at *entity* in a composed recording."""
+    reader = RrdReader(str(path))
+    out: set[str] = set()
+    for chunk in reader.stream(store=reader.recordings()[0]):
+        if str(chunk.entity_path) != entity:
+            continue
+        for field in chunk.to_record_batch().schema:
+            if (field.metadata or {}).get(b"rerun:kind") == b"data":
+                out.add(field.name)
     return out
 
 
@@ -332,6 +365,15 @@ class TestResultTypesOtherThanRecordings:
         assert _readout_entity("freq") in entities
         assert sorted(entities[_readout_entity("freq")]["freq"]) == [0, 1, 2]
 
+    def test_a_categorical_sweep_gets_a_text_read_out_of_the_category(self):
+        """Without it a string sweep is ``#0``, ``#1``, ``#2`` and nothing in the
+        viewer says whether the cursor is parked on ``cube`` or ``sphere``."""
+        path = _timeline_path(_sweep(["shape"], cls=CategoricalSweep))
+        readout = _readout_entity("shape")
+        assert sorted(_indices(path)[readout]["shape"]) == [0, 1, 2]
+        # Text, not a scalar: a category has no position on an axis to plot.
+        assert any(name.startswith("TextDocument") for name in _components(path, readout))
+
     def test_a_tick_sweep_gets_no_read_out(self):
         """``#3`` already is the value, so a plot of it against itself is clutter."""
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
@@ -361,6 +403,14 @@ class TestInnerTimeline:
             0.2,
             0.3,
         ]
+
+    def test_a_sample_keeps_an_inner_log_tick_timeline(self):
+        """``log_tick`` looks automatic but ``set_time`` overwrites it, and bencher's
+        over-time recordings use it as their timeline. Only ``log_time`` is dropped."""
+        path = _timeline_path(_sweep(["freq"], cls=InnerTickSweep))
+        timelines = _indices(path)["/out_rerun/wave"]
+        assert set(timelines) == {"freq", "log_tick"}
+        assert sorted(set(timelines["log_tick"])) == [0, 1, 2, 3]
 
 
 class TestRerunTimelineND:
