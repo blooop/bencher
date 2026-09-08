@@ -52,16 +52,20 @@ def example_rerun_backend(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench.plot_sweep(
         input_vars=["shape"],
         result_vars=["out_volume", "out_rerun"],
-        description="Setting ``backend`` to ``rerun`` on the run config renders the "
-        "whole report in the rerun viewer instead of holoviews.  ``out_volume`` is "
-        "mapped onto rerun's entity tree as a BarChart over the swept categories; "
-        "``out_rerun`` already *is* rerun data, so its three per-sample recordings "
-        "are merged into one recording and Blueprint, the same composition "
-        "``rerun_grid`` performs.",
-        post_description="The two families need different machinery: everything scalar "
-        "is mapped onto native archetypes, while a ``ResultRerun`` is composed from the "
-        "``.rrd`` each sample cached.  Passing a recording through the scalar renderers "
-        "used to drop it from the report entirely.",
+        description="``to_rerun_plots`` renders the *whole* report in the rerun viewer "
+        "instead of holoviews.  ``out_volume`` is mapped onto rerun's entity tree as a "
+        "BarChart over the swept categories; ``out_rerun`` already *is* rerun data, so "
+        "its three per-sample recordings are merged into one recording and Blueprint, "
+        "the same composition ``rerun_grid`` performs.",
+        post_description="This is a different report *shape*, which is why it is asked "
+        "for by callback rather than selected by ``backend``: the rerun backend is a "
+        "per-chart-type preference that swaps individual renderers under the usual "
+        "report -- see the Rerun Backend Choice example.  The two result families need "
+        "different machinery either way: everything scalar is mapped onto native "
+        "archetypes, while a ``ResultRerun`` is composed from the ``.rrd`` each sample "
+        "cached.  Passing a recording through the scalar renderers used to drop it from "
+        "the report entirely.",
+        plot_callbacks=[bn.BenchResult.to_rerun_plots],
     )
 
     return bench

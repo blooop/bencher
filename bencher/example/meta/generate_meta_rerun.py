@@ -7,8 +7,7 @@ Generates rerun examples for:
 - composable_{right,down,sequence,overlay}: combine two complete recordings, each
   animated over a ``time_s`` timeline so the composition modes are distinguishable
 - summary: 2 input vars, every per-sample recording merged into ONE viewer
-- timeline_1d: 1 input var mapped onto a named rerun timeline, scrubbable
-- timeline_2d: the same, with the second input var peeled onto the entity tree
+- backend_choice: the polygon example rendered by each backend in one report
 - backend: backend="rerun", scalars and recordings in one all-rerun report
 """
 
@@ -26,8 +25,7 @@ RERUN_EXAMPLES = [
     "composable_sequence",
     "composable_overlay",
     "summary",
-    "timeline_1d",
-    "timeline_2d",
+    "backend_choice",
     "backend",
 ]
 
@@ -63,8 +61,8 @@ class MetaRerun(MetaGeneratorBase):
             self._generate_composable(self.example.removeprefix("composable_"))
         elif self.example == "summary":
             self._generate_summary()
-        elif self.example.startswith("timeline_"):
-            self._generate_timeline(self.example.removeprefix("timeline_"))
+        elif self.example == "backend_choice":
+            self._generate_backend_choice()
         elif self.example == "backend":
             self._generate_backend()
 
@@ -246,115 +244,39 @@ bench.plot_sweep(
             body=body,
         )
 
-    def _generate_timeline(self, dims: str):
-        """A sweep whose parameter *is* the rerun timeline, in 1-D or 2-D."""
-        imports = "import math\n\nimport rerun as rr\n\nimport bencher as bn"
-        if dims == "2d":
-            imports = (
-                "import math\nfrom functools import partial\n\n"
-                "import rerun as rr\n\nimport bencher as bn"
-            )
-        second_var = (
-            ""
-            if dims == "1d"
-            else "\n    link_ratio = bn.FloatSweep(\n"
-            "        default=0.6,\n"
-            "        bounds=[0.4, 1.0],\n"
-            '        doc="Forearm length as a fraction of the upper arm",\n'
-            "        samples=3,\n"
-            "    )"
-        )
-        ratio = "1.0" if dims == "1d" else "self.link_ratio"
-        class_code = f'''
-class ArmPoseSweep(bn.ParametrizedSweep):
-    """Forward kinematics of a two-link planar arm.
+    def _generate_backend_choice(self):
+        """The same polygon sweep rendered by each backend, in one report."""
+        imports = "import bencher as bn\nfrom bencher.example.example_image import BenchPolygons"
+        body = """\
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, cache_results=False)
+bench = BenchPolygons().to_bench(run_cfg)
 
-    Each sample logs one static pose -- there is no time inside a sample, so the
-    only thing worth scrubbing is the sweep itself.
-    """
-
-    shoulder = bn.FloatSweep(
-        default=0.0, bounds=[0.0, 2.4], doc="Shoulder joint angle", units="rad", samples=13
-    ){second_var}
-
-    out_reach = bn.ResultFloat(units="m", doc="Distance from the base to the tool tip")
-    out_rerun = bn.ResultRerun(width=900, height=520)
-
-    def benchmark(self):
-        upper, fore = 1.0, {ratio}
-        elbow = self.shoulder * 1.7
-        joint = (upper * math.cos(self.shoulder), upper * math.sin(self.shoulder))
-        tip = (
-            joint[0] + fore * math.cos(self.shoulder + elbow),
-            joint[1] + fore * math.sin(self.shoulder + elbow),
-        )
-        self.out_reach = math.hypot(*tip)
-
-        recording = rr.RecordingStream("arm_pose_sample", make_default=False)
-        recording.log("arm/links", rr.LineStrips2D([[(0.0, 0.0), joint, tip]], radii=0.03))
-        recording.log("arm/joints", rr.Points2D([(0.0, 0.0), joint], radii=0.06))
-        recording.log("arm/tip", rr.Points2D([tip], radii=0.08, colors=[240, 140, 90]))
-        self.out_rerun = bn.capture_rerun_rrd(recording)
-        return super().benchmark()
-'''
-        if dims == "1d":
-            input_vars = '["shoulder"]'
-            callback = "bn.BenchResult.to_rerun_timeline"
-            description = (
-                '"Every sample records its own ``.rrd`` holding one static pose, so the "\n'
-                '    "per-sample viewers have nothing to play and ``rerun_summary`` has nothing "\n'
-                '    "to splice.  ``rerun_timeline`` instead makes the swept parameter itself the "\n'
-                '    "time axis: all 13 poses are written to ONE recording at the same entity "\n'
-                '    "paths, indexed by a rerun timeline named ``shoulder`` carrying the "\n'
-                '    "parameter\'s own values.  Dragging the time cursor sweeps the arm."'
-            )
-            post = (
-                '"A numeric sweep variable is encoded as a duration index, one second per "\n'
-                '    "unit, so the axis reads back the parameter values and keeps their spacing "\n'
-                '    "even when the sweep is not uniform.  Pass "\n'
-                '    "``index=bn.TimelineIndex.sequence`` to number the samples 0, 1, 2 instead -- "\n'
-                '    "which is what a categorical sweep gets automatically."'
-            )
-        else:
-            input_vars = '["shoulder", "link_ratio"]'
-            callback = 'partial(bn.BenchResult.to_rerun_timeline, timeline_dim="shoulder")'
-            description = (
-                '"Rerun timelines are independent axes, not a joint index: a latest-at query "\n'
-                '    "resolves on the timeline being viewed and ignores every other one, so two "\n'
-                '    "swept variables cannot become two scrubbers.  Exactly one dimension can be "\n'
-                '    "time.  Here ``shoulder`` is it, and ``link_ratio`` is peeled onto the entity "\n'
-                '    "tree instead -- one branch and one Blueprint view per forearm length."'
-            )
-            post = (
-                '"That is how the mapping scales: one dimension animates, the rest tile.  A "\n'
-                '    "3-D sweep gives a grid of views over the two peeled dimensions, all driven "\n'
-                '    "by the single shared cursor, so the views stay comparable frame for frame.  "\n'
-                '    "The cost is spatial, not temporal -- the view count is the product of the "\n'
-                '    "peeled dimensions\' sizes, while the timeline stays one sample per tick."'
-            )
-
-        body = f"""\
-bench = ArmPoseSweep().to_bench(run_cfg)
-bench.plot_sweep(
-    input_vars={input_vars},
-    result_vars=["out_reach", "out_rerun"],
-    description={description},
-    post_description={post},
-    plot_callbacks=[{callback}],
-)
+# The only difference between the two sweeps below. Everything else -- the
+# benchmark, the input vars, the result vars -- is identical.
+for backend in ("panel", "rerun"):
+    bench.run_cfg.backend = backend
+    bench.plot_sweep(
+        f"Polygons rendered by the {backend} backend",
+        input_vars=["sides", "color"],
+        result_vars=["polygon", "area"],
+        description=f"The same sweep, rendered by the ``{backend}`` backend.  "
+        "``backend`` is a per-chart-type preference applied during plot selection, "
+        "not a different report: a chart type the preferred backend implements "
+        "renders through it and the rest keep their best other implementation.  "
+        "Here that one chart type is ``panes``.",
+    )
 """
         self.generate_example(
-            title=(
-                "Rerun Timeline — scrub a 1-D sweep on the time axis"
-                if dims == "1d"
-                else "Rerun Timeline 2D — one dimension animates, the rest tile"
-            ),
+            title="Rerun Backend Choice — the same sweep rendered by panel and by rerun",
             output_dir=OUTPUT_DIR,
-            filename=f"example_rerun_timeline_{dims}",
-            function_name=f"example_rerun_timeline_{dims}",
+            filename="example_rerun_backend_choice",
+            function_name="example_rerun_backend_choice",
             imports=imports,
-            class_code=class_code,
             body=body,
+            # The panel backend tiles one pane per sample and the rerun backend puts
+            # them on a timeline, so both want more than the two samples per variable
+            # `bn.run` subsamples to by default.
+            run_kwargs={"subsampling_divisions": 4},
         )
 
     def _generate_backend(self):
@@ -406,16 +328,20 @@ bench = RerunBackendSweep().to_bench(run_cfg)
 bench.plot_sweep(
     input_vars=["shape"],
     result_vars=["out_volume", "out_rerun"],
-    description="Setting ``backend`` to ``rerun`` on the run config renders the "
-    "whole report in the rerun viewer instead of holoviews.  ``out_volume`` is "
-    "mapped onto rerun's entity tree as a BarChart over the swept categories; "
-    "``out_rerun`` already *is* rerun data, so its three per-sample recordings "
-    "are merged into one recording and Blueprint, the same composition "
-    "``rerun_grid`` performs.",
-    post_description="The two families need different machinery: everything scalar "
-    "is mapped onto native archetypes, while a ``ResultRerun`` is composed from the "
-    "``.rrd`` each sample cached.  Passing a recording through the scalar renderers "
-    "used to drop it from the report entirely.",
+    description="``to_rerun_plots`` renders the *whole* report in the rerun viewer "
+    "instead of holoviews.  ``out_volume`` is mapped onto rerun's entity tree as a "
+    "BarChart over the swept categories; ``out_rerun`` already *is* rerun data, so "
+    "its three per-sample recordings are merged into one recording and Blueprint, "
+    "the same composition ``rerun_grid`` performs.",
+    post_description="This is a different report *shape*, which is why it is asked "
+    "for by callback rather than selected by ``backend``: the rerun backend is a "
+    "per-chart-type preference that swaps individual renderers under the usual "
+    "report -- see the Rerun Backend Choice example.  The two result families need "
+    "different machinery either way: everything scalar is mapped onto native "
+    "archetypes, while a ``ResultRerun`` is composed from the ``.rrd`` each sample "
+    "cached.  Passing a recording through the scalar renderers used to drop it from "
+    "the report entirely.",
+    plot_callbacks=[bn.BenchResult.to_rerun_plots],
 )
 """
         self.generate_example(

@@ -647,11 +647,14 @@ class Bench(BenchPlotServer):
             post_description = ""
 
         if plot_callbacks is None:
-            if run_cfg.backend == "rerun":
-                from bencher.results.rerun_result import RerunResult
-
-                plot_callbacks = [RerunResult.to_rerun_plots]
-            elif self.plot_callbacks is not None and len(self.plot_callbacks) == 0:
+            # `backend` is not a different report: it is a per-chart-type *preference*,
+            # applied during plot selection by `to_auto_plots`. Swapping the whole
+            # callback list for a rerun-only report here meant the flag took effect on
+            # sweeps with no callbacks of their own and was silently ignored on every
+            # other one -- which is the opposite of a backend switch. The all-rerun
+            # entity-tree report is still available as
+            # `plot_callbacks=[BenchResult.to_rerun_plots]`.
+            if self.plot_callbacks is not None and len(self.plot_callbacks) == 0:
                 plot_callbacks = [BenchResult.to_auto_plots]
             else:
                 plot_callbacks = self.plot_callbacks

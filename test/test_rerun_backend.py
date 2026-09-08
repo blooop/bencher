@@ -19,6 +19,7 @@ import rerun as rr
 from rerun.experimental import RrdReader
 
 import bencher as bn
+from bencher.plugins.registry import get_registry
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.rerun_result import RerunResult
 
@@ -85,8 +86,28 @@ def _leaf_entity_paths(path: str) -> set[str]:
 
 
 class TestRerunBackendRecordings:
-    def test_backend_selects_the_rerun_report_callback(self):
+    def test_backend_is_a_plot_selection_preference_not_a_separate_report(self):
+        """``backend`` reaches plot selection, where a chart type implemented by both
+        backends resolves to the rerun one. It used to swap the whole callback list
+        for a rerun-only report, which only worked on sweeps that had no callbacks of
+        their own."""
         res = _sweep()
+        assert res.bench_cfg.backend == "rerun"
+        chosen = {(p.name, p.backend) for p in get_registry().select(res.to_bench_data())}
+        assert ("panes", "panel") in chosen
+        chosen_rerun = {
+            (p.name, p.backend) for p in get_registry().select(res.to_bench_data(), backend="rerun")
+        }
+        assert ("panes", "rerun") in chosen_rerun
+
+    def test_the_all_rerun_report_is_still_reachable_by_callback(self):
+        res = _sweep()
+        bench = BackendSweep().to_bench(bn.BenchRunCfg(repeats=1, backend="rerun"))
+        res = bench.plot_sweep(
+            input_vars=["shape"],
+            result_vars=["volume", "recording"],
+            plot_callbacks=[RerunResult.to_rerun_plots],
+        )
         assert res.bench_cfg.plot_callbacks == [RerunResult.to_rerun_plots]
 
     def test_recording_gets_its_own_pane_beside_the_scalar_viewer(self):

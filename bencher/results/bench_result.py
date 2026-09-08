@@ -557,6 +557,12 @@ class BenchResult(
                 plot_cols.append(bands)
 
         kwargs.setdefault("pane_layout", self.bench_cfg.pane_layout)
+        # The configured backend is a *preference*, so it belongs in selection rather
+        # than in a separate callback list: chart types the backend implements render
+        # through it, the rest keep their best other implementation. Without this,
+        # `backend="rerun"` only took effect on sweeps that had no plot callbacks of
+        # their own, which made it look like a different report rather than a swap.
+        kwargs.setdefault("backend", self.bench_cfg.backend)
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols

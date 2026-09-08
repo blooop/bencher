@@ -341,60 +341,81 @@ plot types — like `video_summary`, they are opt-in because merging every recor
 expensive. This is the `ResultRerun` counterpart to `video_summary` for
 `ResultImage`/`ResultVideo`.
 
-### Scrubbing the sweep itself
+### Choosing a backend: panel or rerun
 
-`to_rerun_summary()` splices recordings along whatever timeline each *sample*
-recorded. A benchmark that logs one static frame per sample has no such timeline, so
-there is nothing to splice and nothing to play. `to_rerun_timeline()` makes the swept
-parameter the time axis instead — every sample is written to one recording at the
-same entity paths, indexed by a rerun timeline named after the sweep variable:
+`BenchRunCfg(backend=...)` picks the *rendering library*, not a different report.
+It is a per-chart-type preference applied during plot selection: a chart type the
+preferred backend implements renders through it, and every other chart type keeps
+its best other implementation. So the same sweep, unchanged, runs under either:
 
 ```python
-bench.plot_sweep(
-    input_vars=["shoulder"],
-    result_vars=["out_rerun"],
-    plot_callbacks=[bn.BenchResult.to_rerun_timeline],
-)
+for backend in ("panel", "rerun"):
+    bench.run_cfg.backend = backend
+    bench.plot_sweep(input_vars=["sides", "color"], result_vars=["polygon", "area"])
 ```
 
-Dragging the time cursor now sweeps `shoulder`, one sample per tick. A numeric sweep
-variable is encoded as a duration index, one second per unit, so the axis reads back
-the parameter's own values and keeps their spacing even when the sweep is not
-uniform; pass `index=bn.TimelineIndex.sequence` to number the samples `0, 1, 2`
-instead, which is what a categorical sweep gets automatically.
+Today the one chart type both backends implement is `panes`, the renderer for
+media results. The panel backend tiles it — one pane per sample, laid out in a
+grid. The rerun backend puts the samples on a **timeline** named after the swept
+variable, in one embedded viewer: dragging the time cursor sweeps the parameter,
+one sample per tick. See
+[Rerun Backend Choice](reference/meta/rerun/example_rerun_backend_choice) for the
+same polygon sweep rendered both ways in one report.
 
-Only one dimension can be time. Rerun timelines are independent axes rather than a
-joint index — a latest-at query resolves on the timeline being viewed and ignores
-every other one — so a 2-D sweep cannot become two scrubbers. The other dimensions
-are peeled onto the entity tree instead, one branch and one Blueprint view each, all
-driven by the single shared cursor:
+Any result type goes on the timeline, not just recordings. Images become
+`rr.EncodedImage`, numbers `rr.Scalars`, strings `rr.TextDocument`, and a
+`ResultRerun`'s cached `.rrd` is re-indexed onto the sweep timeline (keeping any
+timeline the benchmark recorded inside a sample, so that can still be scrubbed
+within the tick it sits on). Each result variable gets its own view, so an image
+swept beside a metric reads as a picture and a time series *of the sweep*, moving
+together under one cursor.
+
+A numeric sweep variable is encoded as a duration index, one second per unit, so
+the axis reads back the parameter's own values and keeps their spacing even when
+the sweep is not uniform. Coordinates that cannot survive that — categorical,
+spaced below a nanosecond, or too large for an i64 of nanoseconds — are numbered
+`0, 1, 2` instead; pass `index=bn.TimelineIndex.sequence` to ask for that
+explicitly.
+
+By default the timeline is the **longest numeric** dimension: a time axis reads as
+a continuum, so a three-value colour axis makes a poor one however the sweep was
+declared. Pass `timeline_dim=` to choose:
 
 ```python
 from functools import partial
 
-plot_callbacks=[partial(bn.BenchResult.to_rerun_timeline, timeline_dim="shoulder")]
+plot_callbacks=[partial(bn.BenchResult.to_rerun_timeline, timeline_dim="sides")]
 ```
 
-That is how the mapping scales: one dimension animates, the rest tile. The timeline
-stays one sample per tick at any dimensionality; what grows is the view count, which
-is the product of the peeled dimensions' sizes. Without `timeline_dim=` the last
-(fastest-varying) dimension is the one that plays, matching `to_rerun_summary()` and
-`to_video_summary()`.
+Only one dimension can be time. Rerun timelines are independent axes rather than a
+joint index — a latest-at query resolves on the timeline being viewed and ignores
+every other one — so a 2-D sweep cannot become two scrubbers. The other dimensions
+are peeled onto the entity tree instead, one branch and one view each, all driven
+by the single shared cursor. That is how the mapping scales: one dimension
+animates, the rest tile. The timeline stays one sample per tick at any
+dimensionality; what grows is the view count, the product of the peeled
+dimensions' sizes.
 
-Setting `backend="rerun"` on `BenchRunCfg` renders the whole report in the rerun
-viewer rather than in holoviews. Scalar results — floats and booleans — are mapped
-onto rerun's entity tree as bar charts, line graphs and tensors, laid out by a
-generated Blueprint, and every `ResultRerun` alongside them gets its recordings
-merged the way `rerun_grid` merges them, in its own viewer sized by the result
-var's `width`/`height`.
+For an *all*-rerun report — scalars included, mapped onto rerun's entity tree as
+bar charts, line graphs and tensors and laid out by a generated Blueprint, with
+every `ResultRerun` alongside them merged the way `rerun_grid` merges them — ask
+for it by callback rather than by backend:
+
+```python
+bench.plot_sweep(..., plot_callbacks=[bn.BenchResult.to_rerun_plots])
+```
+
+That is a different report shape, not a backend swap, which is why it is not what
+`backend="rerun"` selects.
+
 A `ResultRerun` that recorded nothing logs a warning naming it instead of leaving a
 gap in the report.
 
 Two things to know if you pick the merged viewer by hand instead:
 
-* `rerun_summary`, `rerun_grid` and `rerun_timeline` are named-only plot types and
-  `BenchRunCfg` has no plot-selection knob, so `plot_callbacks=` is the only route
-  to them.
+* `rerun_summary` and `rerun_grid` are named-only plot types, so `plot_callbacks=`
+  is the only route to them. The sweep timeline is not named-only: it is `panes`
+  on the rerun backend, so `backend="rerun"` selects it.
 * Define the callback at module scope. The callback list is pickled into the result
   cache, so a closure fails with `AttributeError: Can't pickle local object`.
 

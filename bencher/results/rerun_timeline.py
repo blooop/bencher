@@ -1,43 +1,55 @@
 """Map a sweep dimension onto a Rerun timeline so the sweep can be scrubbed.
 
-``to_rerun_summary`` already merges a sweep's per-sample ``.rrd`` files into one
-recording, but it merges them by *splicing*: each sample keeps whatever timeline
-it recorded internally and is shifted to start after the previous one ends.  For
-the common case — a benchmark that logs a single static frame per sample — that
-leaves nothing meaningful to scrub.  The only timeline is rerun's automatic
-``log_time``, the samples land nanoseconds apart on a wall-clock axis, and the
-axis says nothing about which parameter value is on screen.
+This is the **rerun backend's implementation of the ``panes`` chart type**. Where the
+panel backend lays a sweep's samples out as a grid of images, one pane per sample,
+this lays them along a rerun timeline named after the swept variable: the samples
+share an entity path, so latest-at does the animation and dragging the time cursor
+sweeps the parameter. Both are registered under the name ``panes``, so
+``BenchRunCfg(backend="rerun")`` swaps one for the other with nothing else changing.
 
-This module composes the same recordings the other way round: one swept
-dimension becomes a *named* rerun timeline carrying the parameter's own values,
-and every sample is logged at the same entity path.  Scrubbing that timeline
-then sweeps the parameter, one sample per tick, with the parameter value written
-on the axis.
+Any result type can go on the timeline. A ``ResultRerun`` already *is* a recording,
+so its cached ``.rrd`` chunks are re-indexed onto the sweep timeline; everything
+else is logged onto the same timeline through the same archetype mapping the rerun
+backend uses for the entity tree
+(:func:`~bencher.results.rerun_result._log_result_var`) -- images as
+``rr.EncodedImage``, numbers as ``rr.Scalars``, and so on. A swept float alongside
+an image therefore reads as a time series *of* the sweep, moving in step with it.
+
+Why not just splice the recordings
+----------------------------------
+``to_rerun_summary`` merges a sweep's recordings by splicing: each sample keeps
+whatever timeline it recorded internally and is shifted to start after the previous
+one ends. A benchmark that logs a single static frame per sample has no such
+timeline, and rerun's automatic ``log_time`` cannot be written to (``set_time`` on
+it is ignored, the SDK always stamps wall clock), so there is nothing to splice and
+nothing to play.
 
 Scaling past one dimension
 --------------------------
-Rerun timelines are independent axes, not a joint index: a latest-at query
-resolves on the timeline being viewed and ignores the others, so logging a 2-D
-sweep as two timelines does not give a 2-D scrubber — parking one axis collapses
-the other to whichever sample happened to be logged last.  Only one dimension
-can be time.  The remaining dimensions are therefore peeled onto the entity
-tree, one branch per coordinate, each with its own Blueprint view: scrubbing the
-single timeline advances every branch together, so an N-D sweep reads as a grid
-of views animating in lockstep over the timeline dimension.
+Rerun timelines are independent axes, not a joint index: a latest-at query resolves
+on the timeline being viewed and ignores the others, so logging a 2-D sweep as two
+timelines does not give a 2-D scrubber -- parking one axis collapses the other to
+whichever sample happened to be logged last. Only one dimension can be time. The
+remaining dimensions are peeled onto the entity tree, one branch per coordinate,
+each with its own Blueprint view: scrubbing the single timeline advances every
+branch together, so an N-D sweep reads as a grid of views animating in lockstep
+over the timeline dimension.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import itertools
 import logging
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, assert_never
 
 import numpy as np
 import panel as pn
 import xarray as xr
-from param import Parameter
+from param import Number, Parameter
 from strenum import StrEnum
 
 from bencher.plotting.plot_filter import PlotFilter, VarRange
@@ -49,32 +61,62 @@ from bencher.results.composable_container.composable_container_rerun import (
 )
 from bencher.results.rerun_summary import leaf_recording_path
 from bencher.utils import callable_name
-from bencher.variables.results import ResultRerun
+from bencher.variables.results import (
+    ResultImage,
+    ResultRerun,
+    ResultString,
+    ResultVideo,
+)
 
 logger = logging.getLogger(__name__)
 
 # Rerun's two automatic timelines. They are re-derived on every log call, so a
-# sample's ``log_time`` records when the .rrd happened to be captured, not
-# anything about the sweep. Carrying them into the composition would leave the
-# viewer defaulting to a wall-clock axis on which the whole sweep is a blip.
+# sample's ``log_time`` records when the .rrd happened to be captured, not anything
+# about the sweep. Carrying them into the composition would leave the viewer
+# defaulting to a wall-clock axis on which the whole sweep is a blip.
 _AUTOMATIC_TIMELINES = frozenset({"log_time", "log_tick"})
 
 # Entity path parts are restricted to this alphabet so a coordinate value like
 # "0.5 rad" or "a/b" cannot inject a path separator or need escaping.
 _UNSAFE_ENTITY_CHARS = re.compile(r"[^0-9A-Za-z_.-]+")
 
+# Which Blueprint view displays each result type, given the archetype
+# ``_log_result_var`` writes for it (named in the comments). A ``ResultRerun`` is
+# absent because its view kinds are read back from the recording's own archetypes.
+_RESULT_VIEW_KINDS: dict[type, RerunViewKind] = {
+    ResultImage: RerunViewKind.spatial_2d,  # rr.EncodedImage
+    ResultVideo: RerunViewKind.spatial_2d,  # rr.AssetVideo
+    ResultString: RerunViewKind.text_document,  # rr.TextDocument
+}
+
+
+def _view_kind_for(result_var: Parameter) -> RerunViewKind | None:
+    """The view kind for a directly-logged result var, or None if it has no mapping.
+
+    None rather than a default: ``_log_result_var`` warns and skips a result type it
+    has no archetype for, and inventing a view for data that was never logged would
+    put an empty panel in the report where the warning should be the only trace.
+    """
+    for result_type, kind in _RESULT_VIEW_KINDS.items():
+        if isinstance(result_var, result_type):
+            return kind
+    # Numeric family (ResultFloat/ResultBool/param.Number subclasses) -> rr.Scalars.
+    if isinstance(result_var, Number):
+        return RerunViewKind.time_series
+    return None
+
 
 class TimelineIndex(StrEnum):
     """How a swept coordinate is encoded as a rerun index value.
 
     Rerun has no float timeline: an index is either an integer sequence or a
-    nanosecond duration/timestamp. ``value`` therefore encodes a numeric
-    coordinate as a duration in seconds, which is the only encoding that keeps
-    the parameter's own numbers (and their uneven spacing) on the axis.
+    nanosecond duration/timestamp. ``value`` therefore encodes a numeric coordinate
+    as a duration in seconds, which is the only encoding that keeps the parameter's
+    own numbers (and their uneven spacing) on the axis.
     """
 
-    auto = "auto"  # value for numeric coordinates, sequence for everything else
-    value = "value"  # duration in seconds; raises on a non-numeric coordinate
+    auto = "auto"  # value where the coordinates allow it, sequence otherwise
+    value = "value"  # duration in seconds; raises where that would lose samples
     sequence = "sequence"  # 0, 1, 2, ... the sample's position along the dimension
 
 
@@ -89,6 +131,11 @@ class _DurationIndex:
 
         return pa.duration("ns")
 
+    def set_time(self, recording, timeline: str, raw: int) -> None:
+        # numpy, not timedelta: timedelta rounds to microseconds, which would merge
+        # coordinates that differ in the nanosecond digits.
+        recording.set_time(timeline, duration=np.timedelta64(raw, "ns"))
+
 
 @dataclass(frozen=True)
 class _SequenceIndex:
@@ -101,9 +148,11 @@ class _SequenceIndex:
 
         return pa.int64()
 
+    def set_time(self, recording, timeline: str, raw: int) -> None:
+        recording.set_time(timeline, sequence=raw)
+
 
 _IndexEncoding = _DurationIndex | _SequenceIndex
-
 
 # A duration index is an i64 count of nanoseconds, so a coordinate must land inside
 # this range once scaled by 1e9 -- roughly +/- 9.2e9 in parameter units.
@@ -164,6 +213,28 @@ def encode_index(coords: np.ndarray, index: TimelineIndex, dim: str) -> _IndexEn
             assert_never(unreachable)
 
 
+def default_timeline_dim(dataset: xr.Dataset, dims: list[str]) -> str:
+    """Which dimension to animate when the caller does not say.
+
+    A time axis reads as a continuum, so a numeric dimension is preferred over a
+    categorical one however the sweep was declared, and the longest such dimension is
+    preferred over a shorter one -- it makes the animation and leaves the small axes
+    to tile as branches. Ties go to the last dimension, the fastest-varying one, which
+    is what ``to_rerun_summary`` and ``to_video_summary`` sequence.
+
+    Taking the last dimension unconditionally instead made a 3-value colour axis the
+    timeline of a sweep whose other axis had five, which is the wrong way round: three
+    scrub ticks and five side-by-side views of one polygon each.
+    """
+    numeric = [
+        dim
+        for dim in dims
+        if np.issubdtype(np.asarray(dataset.coords[dim].values).dtype, np.number)
+    ]
+    candidates = numeric or dims
+    return max(candidates, key=lambda dim: (dataset.sizes[dim], candidates.index(dim)))
+
+
 def _entity_parts(dim: str, values: list[Any]) -> list[str]:
     """The entity-path segment naming each coordinate of a peeled dimension.
 
@@ -181,23 +252,34 @@ def _entity_parts(dim: str, values: list[Any]) -> list[str]:
 
 
 @dataclass
-class _Branch:
-    """One entity-tree branch: the samples of the timeline dimension at fixed
-    coordinates of every other dimension."""
+class _View:
+    """One entity origin, which becomes one Blueprint view.
 
-    prefix: str
+    There is one per (branch, result variable): a result var gets its own origin so
+    an image and a scalar swept together are two views side by side rather than one
+    view asked to draw both.
+    """
+
+    origin: str
     label: str
-    chunks: list = field(default_factory=list)
     view_kinds: set[RerunViewKind] = field(default_factory=set)
+    logged: bool = False
 
 
-def _retimed_chunks(chunk, timeline: str, arrow_type, raw_value: int) -> list:
-    """Return *chunk* with the automatic timelines dropped and *timeline* pinned.
+def _rewrite_chunk(chunk, timeline: str, arrow_type=None, raw_value: int | None = None) -> list:
+    """Return *chunk* with the automatic timelines dropped, optionally re-indexed.
 
-    Every row of the chunk belongs to one sample, so the whole column is the
-    single constant *raw_value*. Timelines the benchmark set itself are kept, so
-    a sample that recorded its own ``time_s`` can still be scrubbed within the
-    sweep tick it sits on.
+    Dropping ``log_time`` and ``log_tick`` is unconditional: they say when the data
+    happened to be captured, and leaving them in the composition offers the viewer a
+    wall-clock axis on which the whole sweep is a blip. Rerun stamps them on every
+    ``log()`` call and ``set_time`` cannot overwrite them, so the only way to be rid
+    of them is to rewrite the chunk after the fact.
+
+    *raw_value* adds the sweep index, for chunks that came from a sample's own ``.rrd``
+    and so have no idea where in the sweep they sit. Every row of such a chunk belongs
+    to one sample, so the whole column is that one constant. Timelines the benchmark
+    set itself are kept either way, so a sample that recorded its own ``time_s`` can
+    still be scrubbed within the sweep tick it sits on.
     """
     import pyarrow as pa
     from rerun.experimental import Chunk
@@ -211,27 +293,48 @@ def _retimed_chunks(chunk, timeline: str, arrow_type, raw_value: int) -> list:
     columns = [batch.column(position) for position in keep]
     fields = [batch.schema.field(position) for position in keep]
 
-    time_field = pa.field(
-        timeline,
-        arrow_type,
-        nullable=False,
-        metadata={
-            b"rerun:index_name": timeline.encode(),
-            b"rerun:is_sorted": b"true",
-            b"rerun:kind": b"index",
-        },
-    )
-    # After the control columns (RowId), which rerun requires to come first.
-    at = sum(1 for f in fields if (f.metadata or {}).get(b"rerun:kind") == b"control")
-    columns.insert(at, pa.array([raw_value] * batch.num_rows).cast(arrow_type))
-    fields.insert(at, time_field)
+    if raw_value is not None:
+        time_field = pa.field(
+            timeline,
+            arrow_type,
+            nullable=False,
+            metadata={
+                b"rerun:index_name": timeline.encode(),
+                b"rerun:is_sorted": b"true",
+                b"rerun:kind": b"index",
+            },
+        )
+        # After the control columns (RowId), which rerun requires to come first.
+        at = sum(1 for f in fields if (f.metadata or {}).get(b"rerun:kind") == b"control")
+        columns.insert(at, pa.array([raw_value] * batch.num_rows).cast(arrow_type))
+        fields.insert(at, time_field)
+    elif len(keep) == batch.num_columns:
+        return [chunk]
 
     schema = pa.schema(fields, metadata=batch.schema.metadata)
     return Chunk.from_record_batch(pa.RecordBatch.from_arrays(columns, schema=schema))
 
 
-def _read_branch_chunks(branch: _Branch, path: str, timeline: str, arrow_type, raw: int) -> None:
-    """Read one sample's ``.rrd`` into *branch*, re-rooted and re-timed."""
+def _forward_stage(recording, staged_path: str, timeline: str) -> None:
+    """Move a staging recording's chunks into *recording*, stripping ``log_time``.
+
+    Everything that is not a ``ResultRerun`` is logged with ``recording.log()``, which
+    means rerun stamps ``log_time`` on it. Staging those logs in a recording of their
+    own and forwarding them through one rewrite pass costs a single extra file for the
+    whole composition, rather than a rewrite per sample.
+    """
+    from rerun.experimental import RrdReader
+
+    reader = RrdReader(staged_path)
+    for store in reader.recordings():
+        for chunk in reader.stream(store=store):
+            if str(chunk.entity_path).lstrip("/").startswith("__properties"):
+                continue
+            recording.send_chunks(_rewrite_chunk(chunk, timeline))
+
+
+def _send_recording(recording, view: _View, path: str, timeline: str, arrow_type, raw: int) -> None:
+    """Re-root one sample's ``.rrd`` under *view*, re-timed onto the sweep timeline."""
     from rerun.experimental import RrdReader
 
     reader = RrdReader(path)
@@ -244,60 +347,88 @@ def _read_branch_chunks(branch: _Branch, path: str, timeline: str, arrow_type, r
             if source.startswith("__properties"):
                 continue
             batch = chunk.to_record_batch()
-            branch.view_kinds.update(_batch_view_kinds(batch))
-            rerooted = chunk.with_entity_path(f"{branch.prefix}/{source}")
-            branch.chunks.extend(_retimed_chunks(rerooted, timeline, arrow_type, raw))
+            view.view_kinds.update(_batch_view_kinds(batch))
+            view.logged = True
+            rerooted = chunk.with_entity_path(f"{view.origin}/{source}")
+            recording.send_chunks(_rewrite_chunk(rerooted, timeline, arrow_type, raw))
 
 
-def _layout_views(rrb, views: list, branch_dims: list[str]):
-    """Arrange one view per branch.
+def _layout_views(rrb, branches: list[list], branch_dims: list[str]):
+    """Arrange the views, grouped by branch.
 
-    A 1-D sweep peels nothing and has a single view. One peeled dimension is a row,
-    which keeps the branch order (and so the parameter order) readable left to right.
-    Two or more peeled dimensions have already lost that ordering to the flattened
-    product, so they go in a ``Grid``, which packs them without growing one axis
-    without bound.
+    Each branch's result variables are stacked vertically so a sample's image and its
+    metrics stay together; the branches are then laid out beside each other. One
+    peeled dimension is a row, which keeps the branch order (and so the parameter
+    order) readable left to right. More than one has already lost that ordering to
+    the flattened product, so it goes in a ``Grid``, which packs the branches without
+    growing one axis without bound.
+
+    Flattening branch and variable into one row instead put a 3-colour sweep of an
+    image and a metric into six columns, none of them wide enough to read.
     """
-    if len(views) == 1:
-        return views[0]
-    if len(branch_dims) == 1:
-        return rrb.Horizontal(*views)
-    return rrb.Grid(*views)
+    groups = [views[0] if len(views) == 1 else rrb.Vertical(*views) for views in branches]
+    if len(groups) == 1:
+        return groups[0]
+    if len(branch_dims) <= 1:
+        return rrb.Horizontal(*groups)
+    return rrb.Grid(*groups)
+
+
+def _declared_size(result_vars: list[Parameter], attribute: str, fallback: int) -> int:
+    """The largest *attribute* declared by any result var, or *fallback*.
+
+    Only a ``ResultRerun`` carries viewer sizing, so a sweep of images has none to
+    read and falls back to the size the other rerun renderers default to.
+    """
+    sizes = [
+        getattr(rv, attribute)
+        for rv in result_vars
+        if isinstance(getattr(rv, attribute, None), int)
+    ]
+    return max(sizes) if sizes else fallback
 
 
 class RerunTimelineResult(BenchResultBase):
-    """Renders a sweep's ``ResultRerun`` samples as one scrubbable recording."""
+    """Renders a sweep as one rerun recording scrubbed by a swept parameter."""
 
     def to_rerun_timeline(
         self,
         result_var: Parameter | None = None,
-        result_types=(ResultRerun,),
         timeline_dim: str | None = None,
         index: TimelineIndex | str = TimelineIndex.auto,
-        pane_collection: pn.pane = None,
-        **kwargs,
+        width: int | None = None,
+        height: int | None = None,
+        **_kwargs,
     ) -> pn.panel | None:
-        """Merge every recording into one viewer scrubbed by a swept parameter.
+        """Render the sweep as one rerun viewer scrubbed by a swept parameter.
+
+        This is the ``panes`` chart type under ``backend="rerun"``, so it is selected
+        automatically there and never under ``backend="panel"``.
 
         Args:
-            result_var (Parameter, optional): The result var to render. Defaults to None (all).
-            result_types (tuple, optional): Result types to render. Defaults to (ResultRerun,).
+            result_var (Parameter, optional): Render only this result var. Defaults to
+                None (every result var, in one recording, scrubbed together).
             timeline_dim (str, optional): Which swept dimension becomes the timeline.
-                Defaults to the last (fastest varying) dimension of the dataset.
+                Defaults to the longest numeric dimension; see
+                :func:`default_timeline_dim`.
             index (TimelineIndex | str, optional): How coordinates are encoded as
                 index values. Defaults to ``auto``.
-            pane_collection (pn.pane, optional): Collection to stack multiple result
-                vars into. Defaults to ``pn.Row()``.
-            **kwargs: Passed to the viewer pane (e.g. ``width``, ``height``).
+            width (int, optional): Viewer width. Defaults to the widest ``width``
+                declared by a rendered result var, else 950.
+            height (int, optional): Viewer height, chosen the same way, else 712.
+            **_kwargs: Unused, accepted because plot callbacks are invoked with
+                ``override=`` and the panel plot-size keywords.
 
         Returns:
-            pn.panel | None: a panel pane holding one rerun viewer per result var.
+            pn.panel | None: a pane holding one rerun viewer, or a message pane when
+                there is nothing to put on a timeline.
         """
         plot_filter = PlotFilter(
             float_range=VarRange.unbounded(),
             cat_range=VarRange.unbounded(),
-            panel_range=VarRange.at_least(1),
+            panel_range=VarRange.unbounded(),
             repeats_range=VarRange.at_least(1),
+            # A timeline needs a dimension to be made of; a 0-D sweep has none.
             input_range=VarRange.at_least(1),
         )
         matches_res = plot_filter.matches_result(
@@ -306,91 +437,65 @@ class RerunTimelineResult(BenchResultBase):
         if not matches_res.overall:
             return matches_res.to_panel()
 
-        if pane_collection is None:
-            pane_collection = pn.Row()
+        if importlib.util.find_spec("rerun") is None:
+            return pn.pane.Markdown(
+                "**rerun** is not installed. Install it with `pip install rerun-sdk`."
+            )
+
+        result_vars = self.get_results_var_list(result_var)
+        if not result_vars:
+            return None
 
         dataset = self.to_dataset(ReduceType.SQUEEZE, deep=False)
-        for rv in self.get_results_var_list(result_var):
-            if isinstance(rv, result_types):
-                pane = self.to_rerun_timeline_ds(
-                    dataset, rv, timeline_dim=timeline_dim, index=index, **kwargs
-                )
-                if pane is not None:
-                    pane_collection.append(pane)
-        return pane_collection
-
-    def to_rerun_timeline_ds(
-        self,
-        dataset: xr.Dataset,
-        result_var: Parameter,
-        timeline_dim: str | None = None,
-        index: TimelineIndex | str = TimelineIndex.auto,
-        width: int | None = None,
-        height: int | None = None,
-        **_kwargs,
-    ) -> pn.pane.HTML | None:
-        """Render *result_var*'s recordings in *dataset* as one scrubbable viewer.
-
-        Args:
-            dataset (xr.Dataset): The dataset holding the benchmark results.
-            result_var (Parameter): The result variable to render.
-            timeline_dim (str, optional): See :meth:`to_rerun_timeline`.
-            index (TimelineIndex | str, optional): See :meth:`to_rerun_timeline`.
-            width (int, optional): Viewer width. Defaults to the result var's width.
-            height (int, optional): Viewer height. Defaults to the result var's height.
-            **_kwargs: Unused, accepted for parity with other renderers (plot
-                callbacks are invoked with ``override=``).
-
-        Returns:
-            pn.pane.HTML | None: the viewer pane, or None if nothing was recorded.
-
-        Raises:
-            ValueError: if *timeline_dim* names a dimension the dataset does not have.
-        """
         merged = self.to_rerun_timeline_path(
-            dataset, result_var, timeline_dim=timeline_dim, index=index
+            dataset, result_vars, timeline_dim=timeline_dim, index=index
         )
         if merged is None:
-            logger.debug("no rerun recordings to place on a timeline for %s", result_var.name)
+            logger.debug("no samples to place on a rerun timeline")
             return None
 
         # A container declared on the result var wins over the rerun viewer, the same
-        # precedence to_rerun_grid_ds uses. The composition is itself an .rrd path, so
-        # a single-argument renderer applies unchanged.
-        render = self.declared_container(result_var)
-        if render is not None:
-            return render(merged)
+        # precedence to_rerun_grid_ds and the over_time path use. The composition is
+        # one .rrd path, so it only applies to a single result var -- with several in
+        # one recording there is no one var whose container should win.
+        if len(result_vars) == 1:
+            render = self.declared_container(result_vars[0])
+            if render is not None:
+                return render(merged)
 
         from bencher.utils_rrd import rrd_file_to_pane
 
         return rrd_file_to_pane(
             merged,
-            width=width if width is not None else result_var.width,
-            height=height if height is not None else result_var.height,
+            width=width if width is not None else _declared_size(result_vars, "width", 950),
+            height=height if height is not None else _declared_size(result_vars, "height", 712),
         )
 
     def to_rerun_timeline_path(
         self,
         dataset: xr.Dataset,
-        result_var: Parameter,
+        result_vars: list[Parameter],
         timeline_dim: str | None = None,
         index: TimelineIndex | str = TimelineIndex.auto,
     ) -> str | None:
-        """Compose *result_var*'s recordings into one ``.rrd`` and return its path.
+        """Compose *result_vars* into one ``.rrd`` on a timeline and return its path.
 
-        Split out from :meth:`to_rerun_timeline_ds` so the composition can be
-        inspected — by tests, or by anyone who wants the file rather than a pane —
-        without a viewer in the way.
+        Split out from :meth:`to_rerun_timeline` so the composition can be inspected
+        -- by tests, or by anyone who wants the file rather than a pane -- without a
+        viewer in the way.
 
         Returns:
-            str | None: path to the composed recording, or None if the sweep
-            recorded nothing.
+            str | None: path to the composed recording, or None if the sweep recorded
+            nothing that could go on a timeline.
+
+        Raises:
+            ValueError: if *timeline_dim* names a dimension the dataset does not have.
         """
         dims = list(dataset.sizes)
         if not dims:
             return None
         if timeline_dim is None:
-            timeline_dim = dims[-1]
+            timeline_dim = default_timeline_dim(dataset, dims)
         elif timeline_dim not in dims:
             raise ValueError(
                 f"timeline dimension {timeline_dim!r} is not a dimension of this sweep; "
@@ -401,79 +506,123 @@ class RerunTimelineResult(BenchResultBase):
         encoding = encode_index(coords, index, timeline_dim)
         branch_dims = [dim for dim in dims if dim != timeline_dim]
 
-        branches = self._build_branches(dataset, result_var, timeline_dim, branch_dims, encoding)
+        import rerun as rr
+        import rerun.blueprint as rrb
+
+        from bencher.utils import gen_rerun_data_path
+
+        # Underscore, not the "bencher/timeline" slash style ComposableContainerRerun
+        # uses: rerun 0.37 migrates a slashed application id to a generated entry name
+        # and logs a warning on every render saying so.
+        recording = rr.RecordingStream(
+            "bencher_timeline", make_default=False, make_thread_default=False
+        )
+        branches = self._log_sweep(
+            recording, dataset, result_vars, timeline_dim, branch_dims, encoding
+        )
         if not branches:
             return None
-        return _render_recording(branches, branch_dims)
 
-    def _build_branches(
+        blueprint = rrb.Blueprint(
+            _layout_views(
+                rrb,
+                [
+                    [
+                        views_for_kinds(rrb, view.view_kinds, origin=view.origin, label=view.label)
+                        for view in branch
+                    ]
+                    for branch in branches
+                ],
+                branch_dims,
+            ),
+            rrb.TimePanel(state="expanded"),
+            auto_layout=False,
+            auto_views=False,
+            collapse_panels=True,
+        )
+        recording.send_blueprint(blueprint, make_active=True, make_default=True)
+
+        output = gen_rerun_data_path("timeline")
+        with open(output, "wb") as handle:
+            handle.write(recording.memory_recording().drain_as_bytes())
+        return str(output)
+
+    def _log_sweep(
         self,
+        recording,
         dataset: xr.Dataset,
-        result_var: Parameter,
+        result_vars: list[Parameter],
         timeline_dim: str,
         branch_dims: list[str],
         encoding: _IndexEncoding,
-    ) -> list[_Branch]:
-        """One :class:`_Branch` per coordinate combination of *branch_dims*.
+    ) -> list[list[_View]]:
+        """Log every sample onto the sweep timeline; return the views, grouped by branch.
 
-        A branch with no recorded sample is dropped rather than emitted empty, so a
-        sweep whose recordings are all missing returns nothing at all instead of a
-        blueprint full of blank views.
+        A view that received nothing is dropped rather than emitted empty, and a
+        branch left with no views is dropped in turn, so a sweep whose samples are all
+        missing returns nothing at all instead of a blueprint full of blank panels.
         """
+        import rerun as rr
+
+        from bencher.results.rerun_result import _log_result_var
+
+        # Directly-logged result vars go through a staging recording so their
+        # SDK-stamped log_time can be stripped in one pass; see _forward_stage.
+        staging = rr.RecordingStream(
+            "bencher_timeline_stage", make_default=False, make_thread_default=False
+        )
+        staged_any = False
         arrow_type = encoding.arrow_type()
         parts = {dim: _entity_parts(dim, list(dataset.coords[dim].values)) for dim in branch_dims}
-        branches = []
-        for combo in itertools.product(*(range(dataset.sizes[d]) for d in branch_dims)):
-            selector = dict(zip(branch_dims, combo))
-            branch_ds = dataset.isel(selector) if selector else dataset
-            labels = [f"{dim}={branch_ds.coords[dim].values.item()}" for dim in branch_dims]
+        branches: list[list[_View]] = []
+        for combo in itertools.product(*(range(dataset.sizes[dim]) for dim in branch_dims)):
+            branch_ds = dataset.isel(dict(zip(branch_dims, combo))) if branch_dims else dataset
             prefix = "".join(
                 f"/{parts[dim][position]}" for dim, position in zip(branch_dims, combo)
             )
-            branch = _Branch(prefix=prefix, label=", ".join(labels) or timeline_dim)
-            for position, raw in enumerate(encoding.values):
-                sample = branch_ds.isel({timeline_dim: position})
-                path = leaf_recording_path(self, sample, result_var)
-                if path is None:
-                    continue
-                _read_branch_chunks(branch, path, timeline_dim, arrow_type, raw)
-            if branch.chunks:
-                branches.append(branch)
+            branch_label = ", ".join(
+                f"{dim}={branch_ds.coords[dim].values.item()}" for dim in branch_dims
+            )
+            branch_views: list[_View] = []
+            for result_var in result_vars:
+                label = result_var.name
+                if branch_label:
+                    label = f"{label} ({branch_label})"
+                view = _View(origin=f"{prefix}/{result_var.name}", label=label)
+                for position, raw in enumerate(encoding.values):
+                    sample = branch_ds.isel({timeline_dim: position})
+                    if isinstance(result_var, ResultRerun):
+                        path = leaf_recording_path(self, sample, result_var)
+                        if path is not None:
+                            _send_recording(recording, view, path, timeline_dim, arrow_type, raw)
+                        continue
+                    kind = _view_kind_for(result_var)
+                    if kind is None:
+                        # _log_result_var would warn once per sample; say it once.
+                        logger.warning(
+                            "No rerun timeline mapping for result var %s of type %s; skipping",
+                            result_var.name,
+                            type(result_var).__name__,
+                        )
+                        break
+                    encoding.set_time(staging, timeline_dim, raw)
+                    _log_result_var(rr, staging, sample, prefix, result_var)
+                    staged_any = True
+                    view.view_kinds.add(kind)
+                    view.logged = True
+                staging.reset_time()
+                if view.logged:
+                    branch_views.append(view)
+            if branch_views:
+                branches.append(branch_views)
+
+        if staged_any:
+            from bencher.utils import gen_rerun_data_path
+
+            staged_path = gen_rerun_data_path("timeline_stage")
+            with open(staged_path, "wb") as handle:
+                handle.write(staging.memory_recording().drain_as_bytes())
+            _forward_stage(recording, staged_path, timeline_dim)
+            # Purely an intermediate: the composition is what callers are handed.
+            Path(staged_path).unlink(missing_ok=True)
         return branches
-
-
-def _render_recording(branches: list[_Branch], branch_dims: list[str]) -> str:
-    """Write *branches* to one ``.rrd`` with a Blueprint view per branch."""
-    import rerun as rr
-    import rerun.blueprint as rrb
-
-    from bencher.utils import gen_rerun_data_path
-
-    # Underscore, not the "bencher/timeline" slash style ComposableContainerRerun uses:
-    # rerun 0.37 migrates a slashed application id to a generated entry name and logs a
-    # warning on every render saying so.
-    recording = rr.RecordingStream(
-        "bencher_timeline", make_default=False, make_thread_default=False
-    )
-    for branch in branches:
-        recording.send_chunks(branch.chunks)
-
-    # A 1-D sweep peels no dimension onto the entity tree, so every sample shares the
-    # root and one view shows the whole animation.
-    views = [
-        views_for_kinds(rrb, branch.view_kinds, origin=branch.prefix or "/", label=branch.label)
-        for branch in branches
-    ]
-    blueprint = rrb.Blueprint(
-        _layout_views(rrb, views, branch_dims),
-        rrb.TimePanel(state="expanded"),
-        auto_layout=False,
-        auto_views=False,
-        collapse_panels=True,
-    )
-    recording.send_blueprint(blueprint, make_active=True, make_default=True)
-
-    output = gen_rerun_data_path("timeline")
-    with open(output, "wb") as handle:
-        handle.write(recording.memory_recording().drain_as_bytes())
-    return str(output)

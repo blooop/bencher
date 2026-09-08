@@ -11,15 +11,18 @@ import numpy as np
 import panel as pn
 import pytest
 import rerun as rr
+from PIL import Image
 from rerun.experimental import RrdReader
 
 import bencher as bn
+from bencher.plugins.registry import get_registry
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.rerun_timeline import (
     TimelineIndex,
     _DurationIndex,
     _entity_parts,
     _SequenceIndex,
+    default_timeline_dim,
     encode_index,
 )
 
@@ -83,6 +86,45 @@ class CategoricalSweep(bn.ParametrizedSweep):
         return super().benchmark()
 
 
+class ImageAndMetricSweep(bn.ParametrizedSweep):
+    """The shape the polygon example has: an image and a metric, no recording.
+
+    Nothing here is rerun-specific, which is the point — this is what the rerun
+    backend has to be able to render for the backend flag to be a swap rather than a
+    different report.
+    """
+
+    size = bn.IntSweep(default=2, bounds=(2, 5))
+    palette = bn.StringSweep(["warm", "cool"])
+
+    frame = bn.ResultImage()
+    coverage = bn.ResultFloat(units="px")
+
+    def benchmark(self):
+        fill = (200, 80, 40) if self.palette == "warm" else (40, 80, 200)
+        path = bn.gen_image_path("frame")
+        Image.new("RGB", (self.size * 4, self.size * 4), fill).save(path, "PNG")
+        self.frame = str(path)
+        self.coverage = float(self.size**2)
+        return super().benchmark()
+
+
+class UnmappedResultSweep(bn.ParametrizedSweep):
+    """A result type the rerun mapping has no archetype for, beside one it does."""
+
+    size = bn.IntSweep(default=2, bounds=(2, 4))
+
+    frame = bn.ResultImage()
+    where = bn.ResultPath()
+
+    def benchmark(self):
+        path = bn.gen_image_path("unmapped")
+        Image.new("RGB", (8, 8), (10, 10, 10)).save(path, "PNG")
+        self.frame = str(path)
+        self.where = str(path)
+        return super().benchmark()
+
+
 def name_only(path: str) -> pn.pane.Markdown:
     """A declared container naming the composition instead of embedding a viewer.
 
@@ -98,15 +140,15 @@ class DeclaredContainerSweep(StaticPoseSweep):
     out_rerun = bn.ResultRerun(width=200, height=150, container=name_only)
 
 
-def _sweep(input_vars, cls=StaticPoseSweep):
-    bench = cls().to_bench()
-    return bench.plot_sweep(input_vars=input_vars, result_vars=["out_rerun"])
+def _sweep(input_vars, cls=StaticPoseSweep, result_vars=("out_rerun",), **cfg):
+    bench = cls().to_bench(bn.BenchRunCfg(**cfg) if cfg else None)
+    return bench.plot_sweep(input_vars=input_vars, result_vars=list(result_vars))
 
 
 def _timeline_path(res, **kwargs):
-    """Compose *res*'s only ResultRerun onto a timeline and return the .rrd path."""
+    """Compose *res*'s result vars onto a timeline and return the .rrd path."""
     dataset = res.to_dataset(ReduceType.SQUEEZE, deep=False)
-    return res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars[0], **kwargs)
+    return res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars, **kwargs)
 
 
 def _indices(path: str) -> dict[str, dict[str, list]]:
@@ -167,37 +209,87 @@ class TestEncodeIndex:
         assert isinstance(encoded, _SequenceIndex)
 
 
+class TestDefaultTimelineDim:
+    def test_prefers_a_numeric_dimension_over_a_categorical_one(self):
+        """A categorical axis is a facet, not a continuum, however long it is."""
+        res = _sweep(["size", "palette"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = res.to_dataset(ReduceType.SQUEEZE, deep=False)
+        assert default_timeline_dim(dataset, list(dataset.sizes)) == "size"
+
+    def test_prefers_the_longest_numeric_dimension(self):
+        res = _sweep(["theta", "scale"])
+        dataset = res.to_dataset(ReduceType.SQUEEZE, deep=False)
+        # theta has 3 samples and scale 2, and theta is not the last dimension.
+        assert default_timeline_dim(dataset, list(dataset.sizes)) == "theta"
+
+    def test_all_categorical_still_picks_one(self):
+        res = _sweep(["shape"], cls=CategoricalSweep)
+        dataset = res.to_dataset(ReduceType.SQUEEZE, deep=False)
+        assert default_timeline_dim(dataset, list(dataset.sizes)) == "shape"
+
+
 class TestRerunTimeline1D:
     def test_every_sample_shares_one_entity_path(self):
         """Latest-at only animates if the samples overwrite each other."""
         path = _timeline_path(_sweep(["theta"]))
         assert path is not None
-        entities = set(_indices(path))
-        assert entities == {"/pose"}
+        assert set(_indices(path)) == {"/out_rerun/pose"}
 
     def test_the_timeline_is_named_after_the_swept_variable(self):
         path = _timeline_path(_sweep(["theta"]))
-        assert set(_indices(path)["/pose"]) == {"theta"}
+        assert set(_indices(path)["/out_rerun/pose"]) == {"theta"}
 
     def test_the_timeline_carries_the_parameter_values(self):
         """theta sweeps 1..3 in 3 samples, so the axis reads 1s, 2s, 3s."""
         path = _timeline_path(_sweep(["theta"]))
-        seconds = [v.total_seconds() for v in _indices(path)["/pose"]["theta"]]
+        seconds = [v.total_seconds() for v in _indices(path)["/out_rerun/pose"]["theta"]]
         assert sorted(seconds) == [1.0, 2.0, 3.0]
 
     def test_log_time_is_dropped(self):
         """Wall-clock capture time says nothing about the sweep and would otherwise
         be the timeline the viewer opens on."""
         path = _timeline_path(_sweep(["theta"]))
-        assert "log_time" not in _indices(path)["/pose"]
+        assert "log_time" not in _indices(path)["/out_rerun/pose"]
 
     def test_sequence_index_numbers_the_samples(self):
         path = _timeline_path(_sweep(["theta"]), index=TimelineIndex.sequence)
-        assert sorted(_indices(path)["/pose"]["theta"]) == [0, 1, 2]
+        assert sorted(_indices(path)["/out_rerun/pose"]["theta"]) == [0, 1, 2]
 
     def test_categorical_sweep_gets_a_sequence_timeline(self):
         path = _timeline_path(_sweep(["shape"], cls=CategoricalSweep))
-        assert sorted(_indices(path)["/pose"]["shape"]) == [0, 1, 2]
+        assert sorted(_indices(path)["/out_rerun/pose"]["shape"]) == [0, 1, 2]
+
+
+class TestResultTypesOtherThanRecordings:
+    """A sweep with no ``ResultRerun`` at all still goes on the timeline.
+
+    This is what makes ``backend="rerun"`` a swap: the polygon example records
+    images and floats, not recordings.
+    """
+
+    def test_an_image_sweep_lands_on_the_timeline(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        entities = _indices(_timeline_path(res))
+        assert set(entities) == {"/frame"}
+        assert sorted(v.total_seconds() for v in entities["/frame"]["size"]) == [2.0, 3.0, 4.0, 5.0]
+
+    def test_each_result_var_gets_its_own_origin_on_one_timeline(self):
+        """An image and a metric are two views scrubbed together, not one view asked
+        to draw both."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame", "coverage"))
+        entities = _indices(_timeline_path(res))
+        assert set(entities) == {"/frame", "/coverage"}
+        for timelines in entities.values():
+            assert set(timelines) == {"size"}
+
+    def test_a_result_type_with_no_rerun_mapping_is_reported_once(self, caplog):
+        """ResultPath has no archetype. The sweep must not fail, the mapped result var
+        must still render, and the log must not carry one line per sample."""
+        res = _sweep(["size"], cls=UnmappedResultSweep, result_vars=("frame", "where"))
+        with caplog.at_level("WARNING", logger="bencher.results.rerun_timeline"):
+            path = _timeline_path(res)
+        assert caplog.text.count("No rerun timeline mapping") == 1, caplog.text
+        assert set(_indices(path)) == {"/frame"}
 
 
 class TestInnerTimeline:
@@ -205,7 +297,7 @@ class TestInnerTimeline:
         """The two are independent axes: ``freq`` steps between samples, ``time_s``
         within one. Keeping both means either can be scrubbed."""
         path = _timeline_path(_sweep(["freq"], cls=InnerTimelineSweep))
-        timelines = _indices(path)["/wave"]
+        timelines = _indices(path)["/out_rerun/wave"]
         assert set(timelines) == {"freq", "time_s"}
         assert sorted({t.total_seconds() for t in timelines["freq"]}) == [1.0, 2.0]
         assert sorted({round(t.total_seconds(), 3) for t in timelines["time_s"]}) == [
@@ -221,7 +313,10 @@ class TestRerunTimelineND:
         """One dimension can be time; the rest have to be somewhere in the tree."""
         path = _timeline_path(_sweep(["theta", "scale"]), timeline_dim="theta")
         entities = _indices(path)
-        assert set(entities) == {"/scale_1.0/pose", "/scale_2.0/pose"}
+        assert set(entities) == {
+            "/scale_1.0/out_rerun/pose",
+            "/scale_2.0/out_rerun/pose",
+        }
         for timelines in entities.values():
             assert set(timelines) == {"theta"}
 
@@ -236,12 +331,6 @@ class TestRerunTimelineND:
     def test_no_sample_is_dropped(self):
         entities = _indices(_timeline_path(_sweep(["theta", "scale"]), timeline_dim="theta"))
         assert sum(len(tl["theta"]) for tl in entities.values()) == 6
-
-    def test_the_default_timeline_is_the_last_dimension(self):
-        """Matches to_rerun_summary and to_video_summary, where the innermost
-        dimension is the one that plays."""
-        path = _timeline_path(_sweep(["theta", "scale"]))
-        assert set(_indices(path)) == {"/theta_1.0/pose", "/theta_2.0/pose", "/theta_3.0/pose"}
 
     def test_three_dimensions_tile_the_product_of_the_peeled_two(self):
         """The timeline stays one tick per sample; only the view count grows."""
@@ -261,23 +350,46 @@ class TestRerunTimelineND:
             _timeline_path(_sweep(["theta"]), timeline_dim="nope")
 
 
-class TestRerunTimelinePanes:
-    def test_one_pane_for_a_2d_sweep(self):
+class TestRerunTimelinePane:
+    def test_one_viewer_for_the_whole_sweep(self):
         res = _sweep(["theta", "scale"])
-        pane = res.to_rerun_timeline()
-        assert pane is not None
-        assert len(pane) == 1
+        assert isinstance(res.to_rerun_timeline(), pn.pane.HTML)
+
+    def test_a_zero_dimensional_sweep_has_no_axis_to_animate(self):
+        res = _sweep([])
+        # The shape filter's mismatch panel, not a viewer and not a crash.
+        assert not isinstance(res.to_rerun_timeline(), pn.pane.HTML)
 
     def test_declared_container_wins_over_the_rerun_viewer(self):
         """Same precedence as to_rerun_grid_ds and the over_time path."""
         bench = DeclaredContainerSweep().to_bench()
         res = bench.plot_sweep(input_vars=["theta"], result_vars=["out_rerun"])
         pane = res.to_rerun_timeline()
-        assert pane is not None and len(pane) == 1
-        assert isinstance(pane[0], pn.pane.Markdown), type(pane[0])
-        assert pane[0].object.startswith("timeline: ")
+        assert isinstance(pane, pn.pane.Markdown), type(pane)
+        assert pane.object.startswith("timeline: ")
 
-    def test_registered_as_a_named_only_plot(self):
-        from bencher.plugins.builtins import _named_only_specs
 
-        assert "rerun_timeline" in {name for name, _, _ in _named_only_specs()}
+class TestBackendSwap:
+    """The renderer is the rerun backend's ``panes``, which is what makes
+    ``BenchRunCfg(backend=...)`` a swap rather than a different report."""
+
+    def test_both_backends_implement_the_same_chart_type(self):
+        from bencher.plugins.builtins import _builtin_specs
+
+        panes = {(name, backend) for name, backend, _ in _builtin_specs() if name == "panes"}
+        assert panes == {("panes", "panel"), ("panes", "rerun")}
+
+    def test_panel_is_chosen_by_default_and_rerun_when_preferred(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        data = res.to_bench_data()
+        by_default = {(p.name, p.backend) for p in get_registry().select(data)}
+        preferred = {(p.name, p.backend) for p in get_registry().select(data, backend="rerun")}
+        assert ("panes", "panel") in by_default and ("panes", "rerun") not in by_default
+        assert ("panes", "rerun") in preferred and ("panes", "panel") not in preferred
+
+    def test_the_configured_backend_reaches_plot_selection(self):
+        """``to_auto_plots`` is where the preference is applied; without it the flag
+        only took effect on sweeps that had no plot callbacks of their own."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",), backend="rerun")
+        assert res.bench_cfg.backend == "rerun"
+        assert res.to_auto_plots() is not None

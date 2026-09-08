@@ -76,6 +76,7 @@ def _builtin_specs() -> list[tuple[str, str, Callable]]:
     from bencher.results.holoview_results.heatmap_result import HeatmapResult
     from bencher.results.holoview_results.line_result import LineResult
     from bencher.results.pane_result import PaneResult
+    from bencher.results.rerun_timeline import RerunTimelineResult
     from bencher.results.volume_result import VolumeResult
 
     return [
@@ -87,6 +88,11 @@ def _builtin_specs() -> list[tuple[str, str, Callable]]:
         ("histogram", "holoviews", HistogramResult.to_plot),
         ("volume", "plotly", VolumeResult.to_plot),
         ("panes", "panel", PaneResult.to_panes),
+        # The same chart type on the rerun backend: panel tiles the samples as one
+        # pane each, rerun lays them along a timeline named after the swept
+        # variable. Registering both under one name is what makes
+        # BenchRunCfg(backend="rerun") a backend swap rather than a different report.
+        ("panes", "rerun", RerunTimelineResult.to_rerun_timeline),
     ]
 
 
@@ -112,7 +118,6 @@ def _named_only_specs() -> list[tuple[str, str, Callable]]:
     from bencher.results.holoview_results.xy_scatter_result import XYScatterResult
     from bencher.results.rerun_result import RerunResult
     from bencher.results.rerun_summary import RerunSummaryResult
-    from bencher.results.rerun_timeline import RerunTimelineResult
     from bencher.results.video_summary import VideoSummaryResult
 
     # Appended rather than grouped next to "dataset" so existing priorities keep their
@@ -133,10 +138,6 @@ def _named_only_specs() -> list[tuple[str, str, Callable]]:
         # (like video_summary) because merging every recording is expensive.
         ("rerun_summary", "rerun", RerunSummaryResult.to_rerun_summary),
         ("rerun_grid", "rerun", RerunSummaryResult.to_rerun_grid),
-        # One swept dimension becomes the rerun timeline; the rest become entity
-        # branches. Named-only for the same reason as rerun_summary: it reads and
-        # re-encodes every sample recording.
-        ("rerun_timeline", "rerun", RerunTimelineResult.to_rerun_timeline),
         ("xy_scatter", "holoviews", XYScatterResult.to_plot),
         ("xy_curve", "holoviews", XYCurveResult.to_plot),
         ("xy_histogram", "holoviews", XYHistogramResult.to_plot),
