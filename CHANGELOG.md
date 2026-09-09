@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   A single-objective study has a front of one, so this is also how its winner is
   rendered.
+- **The front plots itself under the slider.** A two-objective `plot_pareto_front`
+  stamps its objectives on the dataset, and the rerun timeline draws them as a scatter
+  in the read-out strip: every design a point, the cursor's own picked out and labelled.
+  Dragging the slider then says both which design is on screen and where along the trade
+  it sits, which the scene alone cannot. `to_rerun_timeline(readout_scatter=(x, y))`
+  asks for one on any sweep whose samples carry two such values; the dataset attribute
+  `bencher_readout_scatter` is the same request made by the sweep's producer.
 - **`OptimizeResult.pareto_trials(objective=None)`**, the front ordered along one
   objective rather than in the order optuna happened to find it, plus
   `OptimizeResult.searched` and the new `aggregated` / `agg_fn` fields recording what a
@@ -37,6 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New gallery example `example_optimize_pareto_scrub`: an antenna array whose element
   spacing trades beam width against side lobes, searched on both, with every design on
   the resulting front drawn and walked by one slider.
+
+### Fixed
+- **A study narrower than the sweep that seeds it now warm-starts.** Trials were built
+  with every objective the *sweep* recorded, so `optimize(result_vars=[one])` on a worker
+  declaring two directional results offered the study trials carrying two values against
+  its one direction. Optuna rejected them, the rejection was swallowed, and it read as a
+  study with nothing cached rather than as a mismatch. `bench_results_to_optuna_trials`
+  takes the study's targets and projects onto them, refusing an objective the sweep never
+  recorded rather than seeding a wrong slot.
 
 ### Changed
 - **The rerun timeline's read-out also names the coordinates riding on the timeline

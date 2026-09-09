@@ -42,6 +42,7 @@ from bencher.regression import RegressionError, detect_regressions
 from bencher.result_collector import ResultCollector
 from bencher.results.bench_result import BenchResult
 from bencher.results.optimize_result import OptimizeResult
+from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR
 from bencher.sample_order import SampleOrder
 from bencher.sweep_executor import SweepExecutor, validate_declared_vars, worker_kwargs_wrapper
 from bencher.sweep_timings import SweepTimings, phase_timer
@@ -1669,14 +1670,21 @@ class Bench(BenchPlotServer):
         )
 
         coords = {iv.name: (PARETO_RANK, [d[iv.name] for d in designs]) for iv in searched}
+        by_name = {rv.name: rv for rv in cfg.result_vars}
+        # What the study read for each design. Where it aggregated, that is a
+        # different number from any one of the samples beside the rank, so it gets a
+        # coordinate of its own; where it did not, the result variable is already
+        # one value per rank and is the same number.
+        scored = {
+            target: f"{target}_{result.agg_fn}" if result.aggregated else target
+            for target in result.target_names
+        }
         if result.aggregated:
-            # What the study read for this design: the aggregate over the dimensions
-            # swept beside the rank, which is a different number from any one of the
-            # samples under it and the one the front was ranked on.
-            by_name = {rv.name: rv for rv in cfg.result_vars}
             for index, target in enumerate(result.target_names):
-                name = f"{target}_{result.agg_fn}"
-                coords[name] = (PARETO_RANK, [trial.values[index] for trial in trials])
+                coords[scored[target]] = (
+                    PARETO_RANK,
+                    [trial.values[index] for trial in trials],
+                )
         res.ds = res.ds.assign_coords(coords)
         for iv in searched:
             units = getattr(iv, "units", None)
@@ -1686,7 +1694,13 @@ class Bench(BenchPlotServer):
             for target in result.target_names:
                 units = getattr(by_name.get(target), "units", None)
                 if units:
-                    res.ds.coords[f"{target}_{result.agg_fn}"].attrs["units"] = units
+                    res.ds.coords[scored[target]].attrs["units"] = units
+        # Two objectives are a picture: the front in the space it was ranked in, with
+        # the cursor's own design marked on it, which is what says where along the
+        # trade a tick sits. More than two have no one plane to draw, and one has no
+        # trade to show, so neither asks for it.
+        if len(result.target_names) == 2:
+            res.ds.attrs[READOUT_SCATTER_ATTR] = [scored[target] for target in result.target_names]
         # The coordinates went on after the dataset was set up, so its derived
         # views (plot counts, the to_dataset cache) are rebuilt to see them.
         res.post_setup()
@@ -1780,13 +1794,21 @@ class Bench(BenchPlotServer):
         """Build a deterministic cache key from an input dict and tag."""
         return hash_sha1((sorted(inputs.items()), tag))
 
-    def _warm_from_results(self, study: optuna.Study) -> int:
-        """Seed *study* from in-memory BenchResult objects. Returns count added."""
+    def _warm_from_results(self, study: optuna.Study, target_names: list[str]) -> int:
+        """Seed *study* from in-memory BenchResult objects. Returns count added.
+
+        *target_names* are the study's objectives, which need not be the sweep's: a
+        result variable gains a direction for the sake of one study and is then an
+        optuna target of every sweep that records it. Building trials from the
+        sweep's own targets made a one-objective study reject every seed it was
+        offered -- and the rejection was swallowed here, so it read as a study with
+        nothing cached rather than as a mismatch.
+        """
         added = 0
         for res in self.results:
             try:
                 if len(res.ds.sizes) > 0:
-                    trials = res.bench_results_to_optuna_trials(True)
+                    trials = res.bench_results_to_optuna_trials(True, target_names)
                     study.add_trials(trials)
                     added += len(trials)
             except Exception:  # pylint: disable=broad-except
@@ -1871,7 +1893,7 @@ class Bench(BenchPlotServer):
         target_names: list[str],
     ) -> int:
         """Seed *study* with cached evaluations. Returns count of added trials."""
-        added = self._warm_from_results(study)
+        added = self._warm_from_results(study, target_names)
         added += self._warm_from_sample_cache(
             study, bench_cfg, input_vars, constant_inputs, target_names
         )

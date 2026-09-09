@@ -47,6 +47,7 @@ import importlib.util
 import itertools
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, assert_never
@@ -91,6 +92,18 @@ _DROPPED_TIMELINES = frozenset({"log_time"})
 # Entity path parts are restricted to this alphabet so a coordinate value like
 # "0.5 rad" or "a/b" cannot inject a path separator or need escaping.
 _UNSAFE_ENTITY_CHARS = re.compile(r"[^0-9A-Za-z_.-]+")
+
+#: Dataset attribute naming two per-sample variables to draw as a tracking scatter
+#: beneath the timeline -- every sample as a point, the cursor's own picked out. Set
+#: by the producer of the sweep (``Bench.plot_pareto_front`` stamps the study's two
+#: objectives), because which pair is worth plotting against each other is a fact
+#: about the sweep and not something a renderer can infer from dtypes.
+READOUT_SCATTER_ATTR = "bencher_readout_scatter"
+
+# The tracking scatter's colours. The front is context and the cursor is the subject,
+# so the whole set is drawn faint and one point is drawn solid on top of it.
+_SCATTER_ALL_COLOR = (120, 130, 150)
+_SCATTER_CURRENT_COLOR = (255, 190, 60)
 
 # Which Blueprint view displays each result type, given the archetype
 # ``_log_result_var`` writes for it (named in the comments). A ``ResultRerun`` is
@@ -477,6 +490,21 @@ def _layout_views(rrb, branches: list[list], branch_sizes: dict[str, int], reado
     return rrb.Vertical(layout, readout, row_shares=list(_READOUT_ROW_SHARES))
 
 
+def _readout_layout(rrb, readouts: list[_View]):
+    """The read-out strip: nothing, one view, or the scatter beside the value.
+
+    Side by side rather than stacked, because the strip is a sliver by design and
+    halving its height again would leave neither legible.
+    """
+    if not readouts:
+        return None
+    built = [
+        views_for_kinds(rrb, view.view_kinds, origin=view.origin, label=view.label)
+        for view in readouts
+    ]
+    return built[0] if len(built) == 1 else rrb.Horizontal(*built)
+
+
 def _readout_entity(dim: str) -> str:
     """Entity path of the swept parameter's value read-out.
 
@@ -484,6 +512,30 @@ def _readout_entity(dim: str) -> str:
     with one that happens to share the dimension's name.
     """
     return f"/sweep/{dim}"
+
+
+def _front_entity(dim: str) -> str:
+    """Entity path of the tracking scatter.
+
+    A sibling of the read-out rather than a child: a view at the read-out's origin
+    would otherwise swallow the scatter and draw both in one panel.
+    """
+    return f"/front/{dim}"
+
+
+def _per_sample_values(dataset: xr.Dataset, name: str, dim: str) -> np.ndarray | None:
+    """*name*'s one value per sample of *dim*, whether it is a coordinate or a variable.
+
+    A sweep over a set of designs carries what it was ranked on either way: as a
+    coordinate riding on the dimension when the producer put it there, or as a
+    result variable when the sweep has no other dimension for it to span.
+    """
+    if name not in dataset.variables:
+        return None
+    array = dataset[name]
+    if array.dims != (dim,):
+        return None
+    return np.asarray(array.values)
 
 
 def _riding_coords(dataset: xr.Dataset, dim: str) -> list[str]:
@@ -537,6 +589,7 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str | None = None,
         index: TimelineIndex | str = TimelineIndex.tick,
         subsampling_divisions: int | None = None,
+        readout_scatter: Sequence[str] | None = None,
         width: int | None = None,
         height: int | None = None,
         **_kwargs,
@@ -561,6 +614,12 @@ class RerunTimelineResult(BenchResultBase):
                 this one tiles is branches -- a tick is a slider position, not a
                 panel, so thinning it costs resolution and buys no room.
                 Defaults to None (every sample).
+            readout_scatter (Sequence[str], optional): Two per-sample variables to
+                plot against each other beneath the timeline, every sample a point
+                and the cursor's own picked out — how a sweep over a *set* says
+                where in that set the slider is parked. Defaults to the dataset's
+                ``bencher_readout_scatter`` attribute, which the producer of the
+                sweep sets (see :data:`READOUT_SCATTER_ATTR`).
             width (int, optional): Viewer width. Defaults to the widest ``width``
                 declared by a rendered result var, else 950.
             height (int, optional): Viewer height, chosen the same way, else 712.
@@ -600,6 +659,7 @@ class RerunTimelineResult(BenchResultBase):
             timeline_dim=timeline_dim,
             index=index,
             subsampling_divisions=subsampling_divisions,
+            readout_scatter=readout_scatter,
         )
         if merged is None:
             logger.debug("no samples to place on a rerun timeline")
@@ -629,6 +689,7 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str | None = None,
         index: TimelineIndex | str = TimelineIndex.tick,
         subsampling_divisions: int | None = None,
+        readout_scatter: Sequence[str] | None = None,
     ) -> str | None:
         """Compose *result_vars* into one ``.rrd`` on a timeline and return its path.
 
@@ -641,7 +702,8 @@ class RerunTimelineResult(BenchResultBase):
             nothing that could go on a timeline.
 
         Raises:
-            ValueError: if *timeline_dim* names a dimension the dataset does not have.
+            ValueError: if *timeline_dim* names a dimension the dataset does not have,
+                or *readout_scatter* does not name exactly two variables.
         """
         dims = list(dataset.sizes)
         if not dims:
@@ -681,8 +743,16 @@ class RerunTimelineResult(BenchResultBase):
         recording = rr.RecordingStream(
             "bencher_timeline", make_default=False, make_thread_default=False
         )
-        branches, readout = self._log_sweep(
-            recording, dataset, result_vars, timeline_dim, branch_dims, encoding
+        if readout_scatter is None:
+            readout_scatter = dataset.attrs.get(READOUT_SCATTER_ATTR)
+        branches, readouts = self._log_sweep(
+            recording,
+            dataset,
+            result_vars,
+            timeline_dim,
+            branch_dims,
+            encoding,
+            readout_scatter,
         )
         if not any(branches):
             return None
@@ -711,13 +781,10 @@ class RerunTimelineResult(BenchResultBase):
                     for branch in branches
                 ],
                 {dim: dataset.sizes[dim] for dim in branch_dims},
-                # No cursor range on the read-out: it is a curve over the whole
-                # sweep with a cursor line on it, and one visible point is not that.
-                readout=None
-                if readout is None
-                else views_for_kinds(
-                    rrb, readout.view_kinds, origin=readout.origin, label=readout.label
-                ),
+                # No cursor range on the read-outs: each is a picture of the whole
+                # sweep with the cursor's own sample marked on it, and one visible
+                # point is not that.
+                readout=_readout_layout(rrb, readouts),
             ),
             # Pinned, not left to the viewer: a sample that recorded its own inner
             # timeline puts a second axis in the composition, and the sweep is the one
@@ -787,6 +854,79 @@ class RerunTimelineResult(BenchResultBase):
             logged=True,
         )
 
+    def _log_front_scatter(
+        self,
+        staging,
+        dataset: xr.Dataset,
+        timeline_dim: str,
+        encoding: _IndexEncoding,
+        scatter: Sequence[str],
+    ) -> _View | None:
+        """Plot every sample against two of its own numbers, and mark the cursor's.
+
+        A sweep over a set of designs is usually a set somebody has to choose *from* --
+        a Pareto front, a candidate list -- and the shape of that set in the space it
+        was ranked in is what the choice is made against. The whole set is logged
+        statically, so it is on screen at every tick, and the current sample is logged
+        per tick on top of it: latest-at then moves the highlight with the cursor,
+        which is what says where on the front the slider is parked.
+
+        Rerun's 2-D views put +y downward, so the vertical axis reads from the top;
+        the values are logged as they are rather than negated, so what the viewer
+        reports on hover is the number the sweep recorded.
+
+        Returns:
+            _View | None: the scatter's view, or None when the dataset does not carry
+            both named values one-per-sample.
+
+        Raises:
+            ValueError: if *scatter* does not name exactly two variables.
+        """
+        import rerun as rr
+
+        if len(scatter) != 2:
+            raise ValueError(
+                f"a tracking scatter needs exactly two variables to plot against each "
+                f"other, got {list(scatter)}"
+            )
+        x_name, y_name = scatter
+        x = _per_sample_values(dataset, x_name, timeline_dim)
+        y = _per_sample_values(dataset, y_name, timeline_dim)
+        if x is None or y is None:
+            logger.warning(
+                "no tracking scatter: %s and %s are not both one value per %s",
+                x_name,
+                y_name,
+                timeline_dim,
+            )
+            return None
+        origin = _front_entity(timeline_dim)
+        points = np.column_stack((x.astype(float), y.astype(float)))
+        staging.log(
+            f"{origin}/all",
+            rr.Points2D(points, colors=_SCATTER_ALL_COLOR, radii=rr.Radius.ui_points(3.0)),
+            static=True,
+        )
+        for position, raw in enumerate(encoding.values):
+            encoding.set_time(staging, timeline_dim, raw)
+            staging.log(
+                f"{origin}/current",
+                rr.Points2D(
+                    points[position : position + 1],
+                    colors=_SCATTER_CURRENT_COLOR,
+                    radii=rr.Radius.ui_points(7.0),
+                    labels=[_coord_label(dataset.coords[timeline_dim].values[position])],
+                    show_labels=True,
+                ),
+            )
+        staging.reset_time()
+        return _View(
+            origin=origin,
+            label=f"{x_name} (x) vs {y_name} (y)",
+            view_kinds={RerunViewKind.spatial_2d},
+            logged=True,
+        )
+
     def _log_sweep(
         self,
         recording,
@@ -795,16 +935,17 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str,
         branch_dims: list[str],
         encoding: _IndexEncoding,
-    ) -> tuple[list[list[_View]], _View | None]:
-        """Log every sample onto the sweep timeline; return its views and the read-out.
+        scatter: Sequence[str] | None = None,
+    ) -> tuple[list[list[_View]], list[_View]]:
+        """Log every sample onto the sweep timeline; return its views and the read-outs.
 
         A view that received nothing is dropped. Empty branches retain their slots
         in the Cartesian product so missing recordings cannot shift later cells to
         another row or column. The caller omits an entirely empty composition.
 
         Returns:
-            The branch views, grouped by branch, and the value read-out — separate
-            because the read-out is laid out along the bottom rather than as a branch.
+            The branch views, grouped by branch, and the read-outs — separate because
+            those are laid out along the bottom rather than as a branch.
         """
         import rerun as rr
 
@@ -859,9 +1000,17 @@ class RerunTimelineResult(BenchResultBase):
                     branch_views.append(view)
             branches.append(branch_views)
 
-        readout = self._log_value_readout(staging, dataset, timeline_dim, encoding)
-        if readout is not None:
-            staged_any = True
+        readouts = [
+            view
+            for view in (
+                self._log_front_scatter(staging, dataset, timeline_dim, encoding, scatter)
+                if scatter
+                else None,
+                self._log_value_readout(staging, dataset, timeline_dim, encoding),
+            )
+            if view is not None
+        ]
+        staged_any = staged_any or bool(readouts)
 
         if staged_any:
             from bencher.utils import gen_rerun_data_path
@@ -872,4 +1021,4 @@ class RerunTimelineResult(BenchResultBase):
             _forward_stage(recording, staged_path, timeline_dim)
             # Purely an intermediate: the composition is what callers are handed.
             Path(staged_path).unlink(missing_ok=True)
-        return branches, readout
+        return branches, readouts

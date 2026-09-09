@@ -125,18 +125,37 @@ class OptunaResult(BenchResultBase):
         study.optimize(wrapped, n_trials=n_trials)
         return study
 
-    def bench_results_to_optuna_trials(self, include_meta: bool = True) -> list:
+    def bench_results_to_optuna_trials(
+        self, include_meta: bool = True, target_names: list[str] | None = None
+    ) -> list:
         """Convert an xarray dataset to optuna trials so optuna can further optimise or plot.
 
         Args:
             include_meta (bool): When True, include all variables (inputs + meta like repeat
                 and over_time) as trial parameters for importance analysis. When False, use
                 only input variables with partition/aggregation via the optimize flag.
+            target_names: The objectives each trial should carry values for, in order.
+                Defaults to every directional result var of this result's own config.
+                A caller seeding a *study* must pass that study's targets: a trial's
+                values are positional against the study's directions, so a sweep that
+                records more objectives than the study searches would seed values in
+                the wrong slots -- or, with a differing count, be rejected outright.
 
         Returns:
             list[optuna.trial.FrozenTrial]: Optuna trials derived from benchmark results.
+
+        Raises:
+            ValueError: if *target_names* names a result this sweep did not record.
         """
-        target_names = self.bench_cfg.optuna_targets()
+        if target_names is None:
+            target_names = self.bench_cfg.optuna_targets()
+        else:
+            recorded = set(self.bench_cfg.optuna_targets())
+            missing = [name for name in target_names if name not in recorded]
+            if missing:
+                raise ValueError(
+                    f"cannot build trials for {missing}: this sweep recorded {sorted(recorded)}"
+                )
 
         if include_meta:
             # Importance analysis: every raw data point becomes a trial with all vars

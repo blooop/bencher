@@ -312,6 +312,21 @@ def _texts(path: str, entity: str) -> list[str]:
     return [text for _, text in sorted(rows)]
 
 
+def _xy(point) -> list:
+    """A logged 2-D position as ``[x, y]``, however arrow handed it back."""
+    return list(point.values()) if isinstance(point, dict) else list(point)
+
+
+def _static(path: str, entity: str) -> list[bool]:
+    """Whether each chunk logged at *entity* went to the static store."""
+    reader = RrdReader(str(path))
+    return [
+        chunk.is_static
+        for chunk in reader.stream(store=reader.recordings()[0])
+        if str(chunk.entity_path) == entity
+    ]
+
+
 def _components(path: str, entity: str) -> set[str]:
     """The component column names logged at *entity* in a composed recording."""
     reader = RrdReader(str(path))
@@ -541,16 +556,148 @@ class TestRidingCoordinates:
             "/light_day/out_rerun/pose",
             "/light_night/out_rerun/pose",
             _readout_entity("pareto_rank"),
+            # Two objectives, so the front also plots itself; see TestTrackingScatter.
+            "/front/pareto_rank/all",
+            "/front/pareto_rank/current",
         }
         ranks = list(range(len(result.pareto_trials())))
-        for entity in entities:
-            assert sorted(entities[entity]["pareto_rank"]) == ranks
+        for entity, timelines in entities.items():
+            # The whole set is static, so it has no index of its own to check.
+            if entity == "/front/pareto_rank/all":
+                assert timelines == {}
+                continue
+            assert sorted(timelines["pareto_rank"]) == ranks
         texts = _texts(path, _readout_entity("pareto_rank"))
         for rank, (text, trial) in enumerate(zip(texts, result.pareto_trials())):
             assert text.startswith(f"pareto_rank = {rank} \u00b7 theta = ")
             assert f"theta = {_coord_label(trial.params['theta'])} \u00b7" in text
             assert f"near_mean = {_coord_label(trial.values[0])} m" in text
             assert f"far_mean = {_coord_label(trial.values[1])} m" in text
+
+
+class TestTrackingScatter:
+    """Where on the front the slider is parked, drawn in the space it was ranked in."""
+
+    def _points(self, path: str, entity: str) -> list[list[list[float]]]:
+        """The Points2D positions logged at *entity*, one list of points per row."""
+        reader = RrdReader(str(path))
+        rows: list[list[list[float]]] = []
+        for chunk in reader.stream(store=reader.recordings()[0]):
+            if str(chunk.entity_path) != entity:
+                continue
+            batch = chunk.to_record_batch()
+            for i, field in enumerate(batch.schema):
+                if field.name.startswith("Points2D") and "positions" in field.name:
+                    for row in batch.column(i).to_pylist():
+                        rows.append([[float(v) for v in _xy(point)] for point in row])
+        return rows
+
+    def _scatter_dataset(self, res):
+        return res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            cost=("size", [4.0, 3.0, 2.0, 1.0]), risk=("size", [1.0, 2.0, 3.0, 4.0])
+        )
+
+    def test_the_whole_set_is_static_and_the_cursors_point_moves(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = res.to_rerun_timeline_path(
+            self._scatter_dataset(res),
+            res.bench_cfg.result_vars,
+            readout_scatter=("cost", "risk"),
+        )
+        entities = _indices(path)
+        origin = "/front/size"
+        # The set carries no sweep index and reads back static, which is what puts it
+        # on screen at every tick. (Only the composed result is pinned here: the
+        # log_time strip leaves an unindexed chunk reading static too, so this does
+        # not separately witness the `static=True` on the log call.)
+        assert _static(path, f"{origin}/all") == [True]
+        assert entities[f"{origin}/all"] == {}
+        # The highlight is one point per tick, which is what makes it follow the cursor.
+        # The four ticks arrive as one indexed chunk, not four static ones.
+        assert _static(path, f"{origin}/current") == [False]
+        assert sorted(entities[f"{origin}/current"]["size"]) == [2, 3, 4, 5]
+
+    def test_the_highlight_is_the_sample_the_cursor_is_on(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = res.to_rerun_timeline_path(
+            self._scatter_dataset(res),
+            res.bench_cfg.result_vars,
+            readout_scatter=("cost", "risk"),
+        )
+        every = self._points(path, "/front/size/all")
+        assert every == [[[4.0, 1.0], [3.0, 2.0], [2.0, 3.0], [1.0, 4.0]]]
+        # One point per tick, each the sample sitting at that tick.
+        assert self._points(path, "/front/size/current") == [
+            [[4.0, 1.0]],
+            [[3.0, 2.0]],
+            [[2.0, 3.0]],
+            [[1.0, 4.0]],
+        ]
+
+    def test_the_scatter_and_the_value_read_out_share_the_strip(self):
+        import rerun.blueprint as rrb
+
+        from bencher.results.composable_container.composable_container_rerun import (
+            RerunViewKind,
+        )
+        from bencher.results.rerun_timeline import _readout_layout, _View
+
+        views = [
+            _View(origin="/front/x", label="a vs b", view_kinds={RerunViewKind.spatial_2d}),
+            _View(origin="/sweep/x", label="x", view_kinds={RerunViewKind.text_document}),
+        ]
+        layout = _readout_layout(rrb, views)
+        assert isinstance(layout, rrb.Horizontal)
+        assert len(layout.contents) == 2
+        assert _readout_layout(rrb, []) is None
+        assert not isinstance(_readout_layout(rrb, views[:1]), rrb.Horizontal)
+
+    def test_a_sweep_that_does_not_carry_both_values_gets_no_scatter(self, caplog):
+        """Named against a dataset that has no such per-sample pair, it says so and
+        renders the rest rather than failing the whole composition."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        with caplog.at_level("WARNING", logger="bencher.results.rerun_timeline"):
+            path = res.to_rerun_timeline_path(
+                res.to_dataset(ReduceType.SQUEEZE),
+                res.bench_cfg.result_vars,
+                readout_scatter=("cost", "risk"),
+            )
+        assert "no tracking scatter" in caplog.text
+        assert "/front/size/all" not in _indices(path)
+        assert "/frame" in _indices(path)
+
+    def test_a_pair_is_what_a_plane_takes(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        with pytest.raises(ValueError, match="exactly two"):
+            res.to_rerun_timeline_path(
+                self._scatter_dataset(res),
+                res.bench_cfg.result_vars,
+                readout_scatter=("cost",),
+            )
+
+    def test_the_dataset_can_carry_the_request_itself(self):
+        """The producer of a sweep knows which pair is worth plotting; the renderer
+        cannot infer it, so the sweep says so on the dataset."""
+        from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR
+
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = ["cost", "risk"]
+        path = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+        assert "/front/size/all" in _indices(path)
+
+    def test_a_two_objective_front_plots_itself(self):
+        """End to end: the study's own objectives become the scatter's axes."""
+        bench = FrontSweep().to_bench(bn.BenchRunCfg(repeats=1))
+        result = bench.optimize(n_trials=4, aggregate=["light"], warm_start=False, plot=False)
+        res = bench.plot_pareto_front(result, result_vars=["out_rerun"], auto_plot=False)
+        from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR
+
+        assert res.ds.attrs[READOUT_SCATTER_ATTR] == ["near_mean", "far_mean"]
+        entities = _indices(_timeline_path(res))
+        assert "/front/pareto_rank/all" in entities
+        ranks = list(range(len(result.pareto_trials())))
+        assert sorted(entities["/front/pareto_rank/current"]["pareto_rank"]) == ranks
 
 
 class TestInnerTimeline:

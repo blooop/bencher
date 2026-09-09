@@ -557,3 +557,52 @@ class TestParetoScrubExample:
         assert res.to_rerun_timeline() is not None
         titles = [pane.name for pane in bench.report.pane]
         assert any(title.startswith("Pareto front of") for title in titles), titles
+
+
+class TestWarmStartTargets:
+    """A sweep's objectives need not be the study's."""
+
+    def test_a_narrower_study_still_takes_the_sweeps_seeds(self):
+        """`optimize(result_vars=[one])` on a worker declaring two directional
+        results used to warm-start from nothing: the trials were built with both
+        values, the study had one direction, and the rejection was swallowed."""
+        cfg = MultiObjective()
+        run_cfg = _run_cfg()
+        bench = bn.Bench("warm_narrow", cfg, run_cfg=run_cfg)
+        bench.plot_sweep(
+            input_vars=[cfg.param.x],
+            result_vars=[cfg.param.obj1, cfg.param.obj2],
+            run_cfg=run_cfg,
+        )
+        result = bench.optimize(
+            result_vars=[cfg.param.obj1], n_trials=3, warm_start=True, plot=False
+        )
+        assert len(result.study.directions) == 1
+        assert result.n_warm_start_trials > 0
+        for trial in result.study.trials:
+            assert len(trial.values) == 1
+
+    def test_the_values_land_in_the_studys_own_order(self):
+        """Trial values are positional against the study's directions, so seeding
+        a reordered study must reorder the values and not just their count."""
+        cfg = MultiObjective()
+        run_cfg = _run_cfg()
+        bench = bn.Bench("warm_order", cfg, run_cfg=run_cfg)
+        sweep = bench.plot_sweep(
+            input_vars=[cfg.param.x],
+            result_vars=[cfg.param.obj1, cfg.param.obj2],
+            run_cfg=run_cfg,
+        )
+        trials = sweep.bench_results_to_optuna_trials(True, ["obj2", "obj1"])
+        forward = sweep.bench_results_to_optuna_trials(True, ["obj1", "obj2"])
+        assert [t.values for t in trials] == [list(reversed(v.values)) for v in forward]
+
+    def test_an_objective_the_sweep_never_recorded_is_refused(self):
+        cfg = MultiObjective()
+        run_cfg = _run_cfg()
+        bench = bn.Bench("warm_missing", cfg, run_cfg=run_cfg)
+        sweep = bench.plot_sweep(
+            input_vars=[cfg.param.x], result_vars=[cfg.param.obj1], run_cfg=run_cfg
+        )
+        with pytest.raises(ValueError, match="cannot build trials"):
+            sweep.bench_results_to_optuna_trials(True, ["obj1", "obj2"])
