@@ -67,6 +67,10 @@ for handler in logging.root.handlers:
     handler.setFormatter(formatter)
 
 
+# The dimension plot_pareto_front sweeps: a design's position along the front.
+PARETO_RANK = "pareto_rank"
+
+
 def _agg_job_args(kwargs, agg_vars, combo):
     """Build job_args dict by merging Optuna-suggested kwargs with aggregate combo values."""
     job_args = dict(kwargs)
@@ -940,10 +944,7 @@ class Bench(BenchPlotServer):
 
         if bench_cfg.auto_plot:
             with phase_timer() as elapsed:
-                if os.environ.get("BENCHER_FORCE_SPLIT_RENDER"):
-                    self._append_result_via_split(bench_res)
-                else:
-                    self.report.append_result(bench_res)
+                self._append_to_report(bench_res)
             timings.render_ms = elapsed()
 
         timings.total_ms = timings.compute_total()
@@ -1514,6 +1515,8 @@ class Bench(BenchPlotServer):
             n_new_trials=n_trials,
             target_names=target_names,
             bench_cfg=bench_cfg,
+            aggregated=[v.name for v in agg_vars],
+            agg_fn=normalize_agg_fn(agg_fn).value if needs_agg else None,
         )
 
         if plot and self.results:
@@ -1521,6 +1524,183 @@ class Bench(BenchPlotServer):
                 self.report.append_to_result(res, res.to_optuna_plots())
 
         return result
+
+    def plot_pareto_front(
+        self,
+        result: OptimizeResult,
+        title: str | None = None,
+        result_vars: list | None = None,
+        description: str | None = None,
+        objective: str | None = None,
+        run_cfg: BenchRunCfg | None = None,
+        tag: str = "",
+        plot_callbacks: list[Callable] | bool | None = None,
+        auto_plot: bool | None = None,
+    ) -> BenchResult:
+        """Sweep along a study's Pareto front so every design on it gets the full report.
+
+        A Pareto front is a *set* of trials, and optuna draws it as a scatter: one dot
+        per design, legible only as its objective values. This lays the same trials out
+        as a sweep dimension, ``pareto_rank`` — the front ordered along *objective* (the
+        first target by default) best first, see :meth:`OptimizeResult.pareto_trials` —
+        and evaluates every result var the worker produces at each rank. The front then
+        gets whatever a sweep gets: the objectives as curves along the rank, and any media
+        the worker records — an image, a rerun scene — tiled one pane per design or, under
+        ``backend="rerun"``, on one timeline whose scrubber walks the front. A
+        single-objective study has a front of one, so this is also how its winner is
+        rendered.
+
+        The dimensions the study aggregated over (``optimize(aggregate=...)``) are swept
+        beside the rank, at the values the study looped, so a design is shown under every
+        condition it was judged across rather than one of them.
+
+        The searched inputs are not dimensions — a front is not a grid — so they travel
+        as coordinates *on* ``pareto_rank`` (``ds.coords["x"]``, one value per rank), and
+        so does each objective's aggregated value where the study aggregated. The rerun
+        timeline reads those out at the cursor, so scrubbing the front says which design
+        is on screen.
+
+        The front is never thinned: a rank is a design, so ``subsampling_divisions`` and
+        ``samples_per_var`` are ignored here, and the aggregated dimensions run at the
+        study's own resolution. Each rank is re-evaluated — the sweep asks the worker for
+        that trial's inputs again — since the trial's cache entries are keyed by the
+        searched inputs and this sweep's by the rank.
+
+        Args:
+            result: The study to lay out, as :meth:`optimize` returned it.
+            title: Tab title. Defaults to ``"Pareto front of <objectives>"``.
+            result_vars: Result variables to evaluate at each rank; names resolve
+                against this bench's worker. Defaults to every result variable the
+                worker declares, so the media that makes a front worth walking is
+                there and not just the numbers it was ranked on; a bench built on a
+                bare function falls back to the study's own result vars.
+            description: Prose under the title.
+            objective: The target to order the front along. Defaults to the first.
+            run_cfg: Run configuration. Defaults to a copy of this bench's.
+            tag: Cache tag, as for :meth:`plot_sweep`.
+            plot_callbacks: As for :meth:`plot_sweep`.
+            auto_plot: As for :meth:`plot_sweep`; ``None`` defers to ``run_cfg``.
+
+        A front of one -- every single-objective study -- is a sweep of one sample, so
+        the rank and everything riding on it squeeze away in the usual reductions. That
+        is the winner rendered as a point, which is what there is to show.
+
+        Returns:
+            BenchResult: the sweep along the front. Appended to the report, not to
+            ``self.results``: its inputs are the rank, which the worker does not take,
+            so a later :meth:`optimize` must not inherit them as defaults.
+
+        Raises:
+            ValueError: if the study finished no trial, was run without a
+                ``bench_cfg``, or *objective* is not one of its targets.
+        """
+        if result.bench_cfg is None:
+            raise ValueError("plot_pareto_front needs the study's bench_cfg to know its inputs")
+        worker = self.worker
+        if worker is None:
+            # A declaration-only bench (set_worker_class) can describe a sweep but not
+            # run one, and every rank here is a fresh evaluation.
+            raise RuntimeError(
+                "plot_pareto_front re-evaluates each design, so it needs a callable "
+                "worker; this bench was attached a worker class for declaration only"
+            )
+        trials = result.pareto_trials(objective)
+        if not trials:
+            raise ValueError("the study finished no trial, so there is no front to lay out")
+        if run_cfg is None:
+            run_cfg = deepcopy(self.run_cfg) if self.run_cfg is not None else BenchRunCfg()
+        else:
+            run_cfg = deepcopy(run_cfg)
+        # A rank is a design and the aggregated dims are what the study looped, so
+        # neither may be thinned to a resolution the study never ran at.
+        run_cfg.subsampling_divisions = 0
+        run_cfg.samples_per_var = None
+
+        # Read before plot_sweep, which writes its own auto_plot argument back onto
+        # the run_cfg it is handed -- so asking afterwards would always read False.
+        append = run_cfg.auto_plot if auto_plot is None else auto_plot
+
+        cfg = result.bench_cfg
+        along = result.target_names[0] if objective is None else objective
+        designs = [dict(trial.params) for trial in trials]
+        # Bounds rather than sample_values: an IntSweep over 0..n-1 yields every one
+        # of them, and only the bounds form carries the range optuna-side readers and
+        # the persistent hash both ask a sweep for.
+        rank = IntSweep(
+            default=0,
+            bounds=(0, len(designs) - 1),
+            doc=f"Position along the Pareto front, best {along} first",
+        )
+        rank.name = PARETO_RANK
+        swept = [deepcopy(iv) for iv in cfg.input_vars if iv.name in result.aggregated]
+        searched = [iv for iv in cfg.input_vars if iv.name not in result.aggregated]
+        if result_vars is not None:
+            result_vars_in = [
+                self.convert_vars_to_params(rv, "result", run_cfg) for rv in result_vars
+            ]
+        elif self.worker_class_instance is not None:
+            # Everything the worker produces, not the study's objectives. A study
+            # searches on the numbers it can rank, and what makes a front worth
+            # walking is usually the thing it cannot -- the scene, the pattern, the
+            # picture of the design. Defaulting to the objectives left exactly that
+            # out, so the sweep had no media to put on a timeline.
+            result_vars_in = self.get_result_vars(as_str=False)
+        else:
+            result_vars_in = deepcopy(cfg.result_vars)
+
+        def pareto_front_worker(**kwargs) -> dict:
+            design = designs[kwargs.pop(PARETO_RANK)]
+            return worker(**design, **kwargs)
+
+        front = Bench(self.bench_name, pareto_front_worker, run_cfg=run_cfg, report=self.report)
+        front.plot_callbacks = self.plot_callbacks
+        if title is None:
+            title = "Pareto front of " + " vs ".join(result.target_names)
+        res = front.plot_sweep(
+            title=title,
+            input_vars=[rank, *swept],
+            result_vars=result_vars_in,
+            const_vars=deepcopy(cfg.const_vars),
+            description=description,
+            tag=tag,
+            run_cfg=run_cfg,
+            plot_callbacks=plot_callbacks,
+            auto_plot=False,
+        )
+
+        coords = {iv.name: (PARETO_RANK, [d[iv.name] for d in designs]) for iv in searched}
+        if result.aggregated:
+            # What the study read for this design: the aggregate over the dimensions
+            # swept beside the rank, which is a different number from any one of the
+            # samples under it and the one the front was ranked on.
+            by_name = {rv.name: rv for rv in cfg.result_vars}
+            for index, target in enumerate(result.target_names):
+                name = f"{target}_{result.agg_fn}"
+                coords[name] = (PARETO_RANK, [trial.values[index] for trial in trials])
+        res.ds = res.ds.assign_coords(coords)
+        for iv in searched:
+            units = getattr(iv, "units", None)
+            if units:
+                res.ds.coords[iv.name].attrs["units"] = units
+        if result.aggregated:
+            for target in result.target_names:
+                units = getattr(by_name.get(target), "units", None)
+                if units:
+                    res.ds.coords[f"{target}_{result.agg_fn}"].attrs["units"] = units
+        # The coordinates went on after the dataset was set up, so its derived
+        # views (plot counts, the to_dataset cache) are rebuilt to see them.
+        res.post_setup()
+
+        if append:
+            self._append_to_report(res)
+        return res
+
+    def _append_to_report(self, bench_res: BenchResult) -> None:
+        """Render *bench_res* into the report, through the split path when forced."""
+        if os.environ.get("BENCHER_FORCE_SPLIT_RENDER"):
+            self._append_result_via_split(bench_res)
+        else:
+            self.report.append_result(bench_res)
 
     # ------------------------------------------------------------------
     # Private helpers for optimize()

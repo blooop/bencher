@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.127.0] - 2026-09-09
+
+### Added
+- **A Pareto front can be scrubbed, one design per tick.** `Bench.plot_pareto_front`
+  lays a study's front out as a sweep over a new dimension, `pareto_rank` — the front
+  ordered along one objective, best first — and re-evaluates the worker at each rank, so
+  the front gets whatever a sweep gets: the objectives as curves along it, and any media
+  the worker records tiled one pane per design or, under `backend="rerun"`, on one
+  timeline whose cursor walks the front. Optuna's own drawing of a front is a scatter,
+  which says what each design *scored* and nothing about what it *is*; for a design whose
+  worth is a shape or a scene, that is the half the choice turns on.
+
+  The dimensions the study aggregated over (`optimize(aggregate=...)`) are swept beside
+  the rank at the values the study looped, so a design is shown under every condition it
+  was judged across rather than one of them. The searched inputs are not dimensions — a
+  front is not a grid — so they ride on `pareto_rank` as coordinates, one value per rank,
+  and so does each objective's aggregated value. The front is never thinned: a rank is a
+  design, so `subsampling_divisions` and `samples_per_var` are ignored there. Result vars
+  default to everything the worker declares rather than the study's objectives, since
+  what makes a front worth walking is usually the result the study could not rank on.
+
+  A single-objective study has a front of one, so this is also how its winner is
+  rendered.
+- **`OptimizeResult.pareto_trials(objective=None)`**, the front ordered along one
+  objective rather than in the order optuna happened to find it, plus
+  `OptimizeResult.searched` and the new `aggregated` / `agg_fn` fields recording what a
+  trial's value actually means.
+- New gallery example `example_optimize_pareto_scrub`: an antenna array whose element
+  spacing trades beam width against side lobes, searched on both, with every design on
+  the resulting front drawn and walked by one slider.
+
+### Changed
+- **The rerun timeline's read-out also names the coordinates riding on the timeline
+  dimension.** A sweep over a *set* of designs rather than a grid carries what makes each
+  sample itself as coordinates on the swept dimension, and the ticks cannot show them:
+  `#3` says nothing about the design at rank 3. Those dimensions now get a text read-out
+  listing the dimension's own value and everything riding on it, so parking the cursor
+  says which design is on screen. A plain sweep whose ticks already carry its values is
+  unchanged — it still gets no read-out.
+
 ## [1.126.0] - 2026-09-08
 
 ### Added

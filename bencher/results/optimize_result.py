@@ -21,6 +21,11 @@ class OptimizeResult:
         n_new_trials: Number of new trials evaluated during optimization.
         target_names: Names of the optimization target variables.
         bench_cfg: Optional BenchCfg for rich report generation.
+        aggregated: Names of the input variables that were looped inside each trial
+            rather than suggested by optuna (``Bench.optimize(aggregate=...)``).
+        agg_fn: How those loops (and repeats) were combined into one value per
+            trial — an ``AggFn`` value such as ``"mean"`` — or None when nothing was
+            aggregated.
     """
 
     study: optuna.Study
@@ -28,6 +33,8 @@ class OptimizeResult:
     n_new_trials: int = 0
     target_names: list[str] = field(default_factory=list)
     bench_cfg: BenchCfg | None = None
+    aggregated: list[str] = field(default_factory=list)
+    agg_fn: str | None = None
 
     # ------------------------------------------------------------------
     # Single-objective helpers
@@ -61,6 +68,46 @@ class OptimizeResult:
     def best_trials(self) -> list[optuna.trial.FrozenTrial]:
         """Pareto-optimal trials (multi-objective)."""
         return self.study.best_trials
+
+    def pareto_trials(self, objective: str | None = None) -> list[optuna.trial.FrozenTrial]:
+        """The Pareto front ordered along one objective, best first.
+
+        ``best_trials`` is a set in trial order, which is the order optuna happened
+        to find them in. Sorting the front along *objective* — the first target by
+        default — turns it into a walk: the trial that is best on that objective
+        first, then each trade-off in turn, ending at the one that gave the most of
+        it away. That is the order a slider through the front should take. A
+        single-objective study has a front of one, its best trial.
+
+        Raises:
+            ValueError: if *objective* is not one of ``target_names``.
+        """
+        index = 0 if objective is None else self._target_index(objective)
+        descending = self.study.directions[index] == optuna.study.StudyDirection.MAXIMIZE
+        return sorted(
+            self.study.best_trials,
+            key=lambda trial: trial.values[index],
+            reverse=descending,
+        )
+
+    def _target_index(self, objective: str) -> int:
+        if objective not in self.target_names:
+            raise ValueError(
+                f"{objective!r} is not an objective of this study; "
+                f"its targets are {self.target_names}"
+            )
+        return self.target_names.index(objective)
+
+    @property
+    def searched(self) -> list[str]:
+        """Names of the input variables optuna suggested, in the study's order.
+
+        The complement of ``aggregated`` within the study's inputs, so it is empty
+        without a ``bench_cfg``.
+        """
+        if self.bench_cfg is None:
+            return []
+        return [iv.name for iv in self.bench_cfg.input_vars if iv.name not in self.aggregated]
 
     # ------------------------------------------------------------------
     # Text summary

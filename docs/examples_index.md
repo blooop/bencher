@@ -72,8 +72,9 @@ These sit in the same directory but are imported rather than run:
 
 - `bencher/example/optuna/` — optimisation examples: `example_optuna.py` (a Rastrigin
   toy problem), `example_optimize.py` (the first-class `bench.optimize()` API and the
-  `to_optimize()` one-liner), and `example_optimize_aggregate.py` (optimising a metric
-  aggregated over a nuisance dimension).
+  `to_optimize()` one-liner), `example_optimize_aggregate.py` (optimising a metric
+  aggregated over a nuisance dimension), and `example_optimize_pareto_scrub.py` (walking
+  a two-objective Pareto front design by design, each one drawn).
 - `bencher/example/generated/` — the auto-generated gallery. Do not edit by hand; it is
   produced by `bencher/example/meta/generate_examples.py`.
 - `bencher/example/meta/` — the generators themselves, plus `BenchMeta`, the

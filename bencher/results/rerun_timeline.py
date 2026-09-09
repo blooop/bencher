@@ -486,6 +486,34 @@ def _readout_entity(dim: str) -> str:
     return f"/sweep/{dim}"
 
 
+def _riding_coords(dataset: xr.Dataset, dim: str) -> list[str]:
+    """Coordinates that ride on *dim*: one value per sample and no axis of their own.
+
+    A sweep over a set of designs rather than a grid carries each design's inputs this
+    way -- ``Bench.plot_pareto_front`` puts the searched parameters on the rank -- and
+    they are what a reader parked on a tick wants to know.
+    """
+    # str(): xarray types a coordinate key as Hashable, but every name here reaches an
+    # entity path and a read-out line, both of which want the string.
+    return [
+        str(name) for name, coord in dataset.coords.items() if name != dim and coord.dims == (dim,)
+    ]
+
+
+def _readout_text(dataset: xr.Dataset, dim: str, position: int) -> str:
+    """One line naming the sample at *position*: the dimension's value, then what rides on it."""
+    sample = dataset.isel({dim: position})
+    parts = []
+    for name in (dim, *_riding_coords(dataset, dim)):
+        coord = sample.coords[name]
+        # "ul" is bencher's unitless marker, not a unit to print -- the same reading
+        # ``describe_variable`` gives it.
+        units = coord.attrs.get("units", "")
+        suffix = f" {units}" if units and units != "ul" else ""
+        parts.append(f"{name} = {_coord_label(coord.values.item())}{suffix}")
+    return " \u00b7 ".join(parts)
+
+
 def _declared_size(result_vars: list[Parameter], attribute: str, fallback: int) -> int:
     """The largest *attribute* declared by any result var, or *fallback*.
 
@@ -727,23 +755,30 @@ class RerunTimelineResult(BenchResultBase):
         are written out as text instead; without it a string sweep is a row of ``#0``,
         ``#1``, ``#2`` with no trace of ``cube`` or ``sphere`` anywhere in the viewer.
 
+        A dimension that carries other coordinates -- one value per sample, riding on
+        it rather than spanning an axis of their own -- gets a text read-out whatever
+        its index shows, listing them beside its own value. That is how a sweep over a
+        set of designs says which design the cursor is on: the rank is a whole number
+        and the axis shows it, but ``#3`` says nothing about the mount at rank 3.
+
         Returns:
             _View | None: the read-out's view, or None when the axis already shows
-            the values.
+            everything there is to show.
         """
         import rerun as rr
 
-        if encoding.shows_values:
+        riding = _riding_coords(dataset, timeline_dim)
+        if encoding.shows_values and not riding:
             return None
         coords = np.asarray(dataset.coords[timeline_dim].values)
-        numeric = bool(np.issubdtype(coords.dtype, np.number))
+        numeric = bool(np.issubdtype(coords.dtype, np.number)) and not riding
         origin = _readout_entity(timeline_dim)
-        for raw, value in zip(encoding.values, coords):
+        for position, (raw, value) in enumerate(zip(encoding.values, coords)):
             encoding.set_time(staging, timeline_dim, raw)
             if numeric:
                 staging.log(origin, rr.Scalars(float(value)))
             else:
-                staging.log(origin, rr.TextDocument(f"{timeline_dim} = {value}"))
+                staging.log(origin, rr.TextDocument(_readout_text(dataset, timeline_dim, position)))
         staging.reset_time()
         return _View(
             origin=origin,

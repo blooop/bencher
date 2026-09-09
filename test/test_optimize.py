@@ -5,6 +5,7 @@ from __future__ import annotations
 from enum import auto
 from typing import ClassVar
 
+import optuna
 import pytest
 
 import bencher as bn
@@ -60,6 +61,35 @@ class CategoricalProblem(bn.ParametrizedSweep):
     def benchmark(self):
         lookup = {Color.red: 1.0, Color.green: 0.5, Color.blue: 2.0}
         self.score = lookup[self.color] + (0.0 if self.flag else 0.3)
+
+
+class ArrayLike(bn.ParametrizedSweep):
+    """Two objectives plus a result the study cannot rank on."""
+
+    x = bn.FloatSweep(default=0, bounds=[0, 5], samples=5)
+
+    obj1 = bn.ResultFloat("ul", bn.OptDir.minimize)
+    obj2 = bn.ResultFloat("ul", bn.OptDir.maximize)
+    note = bn.ResultString()
+
+    def benchmark(self):
+        self.obj1 = float(self.x**2)
+        self.obj2 = float(-((self.x - 3) ** 2))
+        self.note = f"x={self.x:.3f}"
+
+
+class MultiObjectiveWithSeed(bn.ParametrizedSweep):
+    """Two conflicting objectives judged across a nuisance dimension."""
+
+    x = bn.FloatSweep(default=0, bounds=[0, 5], samples=5)
+    seed = bn.IntSweep(default=0, bounds=[0, 2], samples=3)
+
+    obj1 = bn.ResultFloat("ul", bn.OptDir.minimize)
+    obj2 = bn.ResultFloat("ul", bn.OptDir.maximize)
+
+    def benchmark(self):
+        self.obj1 = float(self.x**2 + self.seed * 0.1)
+        self.obj2 = float(-((self.x - 3) ** 2) - self.seed * 0.1)
 
 
 class FlakySphere(bn.ParametrizedSweep):
@@ -239,6 +269,18 @@ class TestAggregateOptimize:
         assert result is not None
         assert "x" in result.study.best_params
         assert "seed" in result.study.best_params
+        assert result.aggregated == []
+        assert result.agg_fn is None
+        assert result.searched == ["x", "seed"]
+
+    def test_the_result_records_what_was_aggregated_and_how(self):
+        """What a trial's value means -- the mean over which dimensions -- is part of
+        the result, so a later reading of the front does not have to guess it."""
+        bench = bn.Bench("agg_recorded", SphereWithSeed(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=4, aggregate=["seed"], agg_fn="max", plot=False)
+        assert result.aggregated == ["seed"]
+        assert result.agg_fn == "max"
+        assert result.searched == ["x"]
 
     @pytest.mark.parametrize("agg_fn", ["mean", "sum", "max", "min", "median"])
     def test_optimize_all_agg_fns(self, agg_fn):
@@ -380,3 +422,138 @@ class TestOptimizeResult:
         text = result.summary()
         assert "best value" in text
         assert "new trials" in text
+
+
+# ---------------------------------------------------------------------------
+# Sweeping along the Pareto front
+# ---------------------------------------------------------------------------
+
+
+class TestPlotParetoFront:
+    def test_every_result_var_the_worker_declares_is_evaluated_on_the_front(self):
+        """The objectives are what a study can rank; what makes a front worth walking
+        is usually what it cannot. Defaulting to the objectives left that out."""
+        bench = bn.Bench("pareto_rv_default", ArrayLike(), run_cfg=_run_cfg())
+        result = bench.optimize(
+            result_vars=["obj1", "obj2"], n_trials=6, warm_start=False, plot=False
+        )
+        assert result.target_names == ["obj1", "obj2"]
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        assert set(res.ds.data_vars) >= {"obj1", "obj2", "note"}
+
+    def test_the_front_becomes_a_sweep_over_its_rank(self):
+        """Each rank re-evaluates one trial's own design, in the order the walk takes."""
+        bench = bn.Bench("pareto_sweep", MultiObjective(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=12, warm_start=False, plot=False)
+        front = result.pareto_trials()
+        res = bench.plot_pareto_front(result)
+        ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+        assert list(ds.sizes) == ["pareto_rank"]
+        assert list(ds.coords["pareto_rank"].values) == list(range(len(front)))
+        assert list(ds.coords["x"].values) == pytest.approx([t.params["x"] for t in front])
+        assert list(ds["obj1"].values) == pytest.approx([t.values[0] for t in front])
+        assert list(ds["obj2"].values) == pytest.approx([t.values[1] for t in front])
+        # obj1 is minimised, so the walk starts where it is smallest.
+        assert list(ds["obj1"].values) == sorted(ds["obj1"].values)
+        # Nothing was aggregated, so the trial's values are the samples themselves
+        # and there is no separate aggregated reading to carry.
+        assert not [name for name in ds.coords if name.startswith("obj")]
+        assert "Pareto front of obj1 vs obj2" in [pane.name for pane in bench.report.pane]
+        # A later optimize() takes its defaults from bench.results, and the rank
+        # is not an input the worker accepts.
+        assert res not in bench.results
+
+    def test_aggregated_dimensions_are_swept_beside_the_rank(self):
+        """A design is shown under every condition it was judged across, and the
+        study's own reading of it -- the aggregate -- rides on the rank."""
+        bench = bn.Bench("pareto_agg", MultiObjectiveWithSeed(), run_cfg=_run_cfg())
+        result = bench.optimize(
+            n_trials=8, aggregate=["seed"], agg_fn="mean", warm_start=False, plot=False
+        )
+        front = result.pareto_trials()
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+        assert dict(ds.sizes) == {"pareto_rank": len(front), "seed": 3}
+        assert list(ds.coords["seed"].values) == [0, 1, 2]
+        assert list(ds.coords["x"].values) == pytest.approx([t.params["x"] for t in front])
+        for index, target in enumerate(("obj1", "obj2")):
+            aggregated = ds.coords[f"{target}_mean"]
+            assert list(aggregated.values) == pytest.approx([t.values[index] for t in front])
+            # The study's number really is the mean of the samples now beside it.
+            assert list(ds[target].mean("seed").values) == pytest.approx(list(aggregated.values))
+        assert ds.coords["obj1_mean"].attrs["units"] == "ul"
+
+    def test_a_single_objective_front_is_the_winner_as_one_rank(self):
+        bench = bn.Bench("pareto_one", SphereWithSeed(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=6, aggregate=["seed"], agg_fn="mean", plot=False)
+        (best,) = result.pareto_trials()
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        assert res.ds.sizes["pareto_rank"] == 1
+        assert res.ds.coords["x"].item() == pytest.approx(best.params["x"])
+        assert res.ds.coords["loss_mean"].item() == pytest.approx(best.values[0])
+        assert res.ds["loss"].mean().item() == pytest.approx(best.values[0])
+
+    def test_the_front_is_never_thinned(self):
+        """A rank is a design; subsampling would silently drop designs off the front."""
+        run_cfg = _run_cfg()
+        run_cfg.subsampling_divisions = 1
+        bench = bn.Bench("pareto_thin", MultiObjective(), run_cfg=run_cfg)
+        result = bench.optimize(n_trials=20, warm_start=False, plot=False)
+        assert len(result.pareto_trials()) > 2, "the front is too short for thinning to bite"
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        assert res.ds.sizes["pareto_rank"] == len(result.pareto_trials())
+
+    def test_result_vars_are_named_against_the_worker(self):
+        bench = bn.Bench("pareto_rv", MultiObjective(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=4, warm_start=False, plot=False)
+        res = bench.plot_pareto_front(result, result_vars=["obj2"], auto_plot=False)
+        assert list(res.ds.data_vars) == ["obj2"]
+
+    def test_the_walk_can_follow_the_other_objective(self):
+        bench = bn.Bench("pareto_along", MultiObjective(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=12, warm_start=False, plot=False)
+        res = bench.plot_pareto_front(result, objective="obj2", auto_plot=False)
+        obj2 = list(res.to_dataset(bn.ReduceType.SQUEEZE)["obj2"].values)
+        # obj2 is maximised, so its walk starts where it is largest.
+        assert obj2 == sorted(obj2, reverse=True)
+        with pytest.raises(ValueError, match="not an objective"):
+            bench.plot_pareto_front(result, objective="loss")
+
+    def test_a_study_that_finished_no_trial_has_no_front(self):
+        bench = bn.Bench("pareto_empty", MultiObjective(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=1, warm_start=False, plot=False)
+        result.study = optuna.create_study(directions=["minimize", "maximize"])
+        with pytest.raises(ValueError, match="no front"):
+            bench.plot_pareto_front(result)
+
+
+class TestParetoScrubExample:
+    def test_the_example_walks_a_real_front(self, monkeypatch):
+        """The gallery example is the documented shape of this feature, so it has to
+        actually produce a front with something on it to scrub."""
+        from bencher.example.optuna.example_optimize_pareto_scrub import (
+            example_optimize_pareto_scrub,
+        )
+
+        fronts = []
+        original = bn.Bench.plot_pareto_front
+
+        def spy(self, result, *args, **kwargs):
+            res = original(self, result, *args, **kwargs)
+            fronts.append((result, res))
+            return res
+
+        monkeypatch.setattr(bn.Bench, "plot_pareto_front", spy)
+        bench = example_optimize_pareto_scrub(_run_cfg())
+        assert len(fronts) == 1
+        result, res = fronts[0]
+        # A front of one would make the slider pointless, which is what the example
+        # exists to show -- the two objectives really do have to conflict.
+        assert res.ds.sizes["pareto_rank"] > 1
+        assert res.ds.sizes["steer"] == 2
+        assert {"spacing", "taper", "beam_width_max", "side_lobe_max"} <= set(res.ds.coords)
+        assert result.searched == ["spacing", "taper"]
+        # The point of the whole thing: one rerun viewer scrubbed by the rank.
+        assert res.to_rerun_timeline() is not None
+        titles = [pane.name for pane in bench.report.pane]
+        assert any(title.startswith("Pareto front of") for title in titles), titles

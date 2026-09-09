@@ -165,6 +165,28 @@ class RecordingAndMetricSweep(StaticPoseSweep):
         return super().benchmark()
 
 
+class FrontSweep(bn.ParametrizedSweep):
+    """A two-objective design space with a scene per design, judged under two lights.
+
+    ``theta`` trades ``near`` against ``far`` everywhere, so every trial is on the
+    front; ``light`` is a condition to aggregate over, not a design choice.
+    """
+
+    theta = bn.FloatSweep(default=1.0, bounds=[1.0, 3.0], samples=3)
+    light = bn.StringSweep(["day", "night"])
+    near = bn.ResultFloat(units="m", direction=bn.OptDir.minimize)
+    far = bn.ResultFloat(units="m", direction=bn.OptDir.minimize)
+    out_rerun = bn.ResultRerun(width=200, height=150)
+
+    def benchmark(self):
+        self.near = float(self.theta)
+        self.far = 3.0 - float(self.theta)
+        recording = rr.RecordingStream("test_rerun_timeline_front", make_default=False)
+        recording.log("pose", rr.Points2D([[self.theta, float(self.light == "day")]]))
+        self.out_rerun = bn.capture_rerun_rrd(recording)
+        return super().benchmark()
+
+
 class FractionalSweep(bn.ParametrizedSweep):
     """A sweep whose coordinates are not whole numbers, so ticks cannot be them."""
 
@@ -266,6 +288,28 @@ def _indices(path: str) -> dict[str, dict[str, list]]:
             column = batch.column(batch.schema.get_field_index(field.name))
             timelines.setdefault(field.name, []).extend(column.to_pylist())
     return out
+
+
+def _texts(path: str, entity: str) -> list[str]:
+    """The TextDocument texts logged at *entity*, in index order."""
+    reader = RrdReader(str(path))
+    rows: list[tuple[int, str]] = []
+    for chunk in reader.stream(store=reader.recordings()[0]):
+        if str(chunk.entity_path) != entity:
+            continue
+        batch = chunk.to_record_batch()
+        index = next(
+            batch.column(i).to_pylist()
+            for i, field in enumerate(batch.schema)
+            if (field.metadata or {}).get(b"rerun:kind") == b"index"
+        )
+        text = next(
+            batch.column(i).to_pylist()
+            for i, field in enumerate(batch.schema)
+            if field.name.startswith("TextDocument") and field.name.endswith("text")
+        )
+        rows.extend(zip(index, ("".join(t) if t else "" for t in text)))
+    return [text for _, text in sorted(rows)]
 
 
 def _components(path: str, entity: str) -> set[str]:
@@ -454,6 +498,59 @@ class TestResultTypesOtherThanRecordings:
             path = _timeline_path(res)
         assert caplog.text.count("No rerun timeline mapping") == 1, caplog.text
         assert set(_indices(path)) == {"/frame"}
+
+
+class TestRidingCoordinates:
+    """A sweep over a set of designs is not a grid: what makes rank 3 rank 3 rides on
+    the dimension as coordinates, and the read-out is where a reader finds it."""
+
+    def test_coordinates_riding_on_the_timeline_dimension_are_read_out(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            design=("size", ["a", "b", "c", "d"]), gain=("size", [0.5, 1.0, 1.5, 2.0])
+        )
+        dataset.coords["gain"].attrs["units"] = "dB"
+        path = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+        readout = _readout_entity("size")
+        # Whole-number ticks show the size already; the read-out is there for what
+        # they do not show, and it says the tick's own value too so it reads alone.
+        assert sorted(_indices(path)[readout]["size"]) == [2, 3, 4, 5]
+        assert _texts(path, readout) == [
+            "size = 2 \u00b7 design = a \u00b7 gain = 0.5 dB",
+            "size = 3 \u00b7 design = b \u00b7 gain = 1.0 dB",
+            "size = 4 \u00b7 design = c \u00b7 gain = 1.5 dB",
+            "size = 5 \u00b7 design = d \u00b7 gain = 2.0 dB",
+        ]
+
+    def test_a_coordinate_on_a_branch_dimension_is_not_a_read_out(self):
+        """Only what rides on the timeline dimension moves with the cursor."""
+        res = _sweep(["size", "palette"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = res.to_dataset(ReduceType.SQUEEZE).assign_coords(hue=("palette", [30.0, 210.0]))
+        path = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars, timeline_dim="size")
+        assert _readout_entity("size") not in _indices(path)
+
+    def test_a_pareto_front_is_scrubbed_by_rank_with_its_design_read_out(self):
+        """End to end from a study: the rank is the timeline, the aggregated condition
+        tiles, and the cursor names the design and its scores."""
+        bench = FrontSweep().to_bench(bn.BenchRunCfg(repeats=1))
+        result = bench.optimize(n_trials=4, aggregate=["light"], warm_start=False, plot=False)
+        res = bench.plot_pareto_front(result, result_vars=["out_rerun"], auto_plot=False)
+        path = _timeline_path(res)
+        entities = _indices(path)
+        assert set(entities) == {
+            "/light_day/out_rerun/pose",
+            "/light_night/out_rerun/pose",
+            _readout_entity("pareto_rank"),
+        }
+        ranks = list(range(len(result.pareto_trials())))
+        for entity in entities:
+            assert sorted(entities[entity]["pareto_rank"]) == ranks
+        texts = _texts(path, _readout_entity("pareto_rank"))
+        for rank, (text, trial) in enumerate(zip(texts, result.pareto_trials())):
+            assert text.startswith(f"pareto_rank = {rank} \u00b7 theta = ")
+            assert f"theta = {_coord_label(trial.params['theta'])} \u00b7" in text
+            assert f"near_mean = {_coord_label(trial.values[0])} m" in text
+            assert f"far_mean = {_coord_label(trial.values[1])} m" in text
 
 
 class TestInnerTimeline:

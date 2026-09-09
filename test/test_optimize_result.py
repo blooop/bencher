@@ -72,6 +72,9 @@ class TestSingleObjectiveSurface:
         assert res.n_new_trials == 0
         assert res.target_names == []
         assert res.bench_cfg is None
+        assert res.aggregated == []
+        assert res.agg_fn is None
+        assert res.searched == []
 
     def test_best_trials_returns_single_best(self):
         res = OptimizeResult(study=_make_single_objective_study())
@@ -155,6 +158,29 @@ class NanSphere(bn.ParametrizedSweep):
 
 def _run_cfg() -> bn.BenchRunCfg:
     return bn.BenchRunCfg(repeats=1, cache_results=False, cache_samples=False)
+
+
+class TestParetoTrials:
+    """The front as a walk, not a set: ordered along one objective, best first."""
+
+    def test_the_front_is_ordered_along_the_first_objective_best_first(self):
+        res = OptimizeResult(study=_make_multi_objective_study(), target_names=["obj1", "obj2"])
+        assert [t.params["x"] for t in res.pareto_trials()] == [0.5, 1.0, 2.0]
+        # The same trials optuna calls the front, nothing dominated let in.
+        assert {t.number for t in res.pareto_trials()} == {t.number for t in res.best_trials}
+
+    def test_a_maximised_objective_orders_the_front_from_its_largest_value(self):
+        res = OptimizeResult(study=_make_multi_objective_study(), target_names=["obj1", "obj2"])
+        assert [t.params["x"] for t in res.pareto_trials("obj2")] == [2.0, 1.0, 0.5]
+
+    def test_a_single_objective_study_has_a_front_of_its_best_trial(self):
+        res = OptimizeResult(study=_make_single_objective_study(), target_names=["loss"])
+        assert [t.params for t in res.pareto_trials()] == [{"x": 0.5}]
+
+    def test_an_objective_the_study_did_not_score_is_refused(self):
+        res = OptimizeResult(study=_make_multi_objective_study(), target_names=["obj1", "obj2"])
+        with pytest.raises(ValueError, match="not an objective"):
+            res.pareto_trials("obj3")
 
 
 class TestSweepStructure:
