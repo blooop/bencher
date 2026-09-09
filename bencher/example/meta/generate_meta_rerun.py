@@ -7,6 +7,7 @@ Generates rerun examples for:
 - composable_{right,down,sequence,overlay}: combine two complete recordings, each
   animated over a ``time_s`` timeline so the composition modes are distinguishable
 - summary: 2 input vars, every per-sample recording merged into ONE viewer
+- backend_choice: the polygon example rendered by each backend in one report
 - backend: backend="rerun", scalars and recordings in one all-rerun report
 """
 
@@ -24,6 +25,7 @@ RERUN_EXAMPLES = [
     "composable_sequence",
     "composable_overlay",
     "summary",
+    "backend_choice",
     "backend",
 ]
 
@@ -59,12 +61,14 @@ class MetaRerun(MetaGeneratorBase):
             self._generate_composable(self.example.removeprefix("composable_"))
         elif self.example == "summary":
             self._generate_summary()
+        elif self.example == "backend_choice":
+            self._generate_backend_choice()
         elif self.example == "backend":
             self._generate_backend()
 
     def _generate_capture_window(self):
         """Capture a rerun viewer window as a Panel widget inside a sweep."""
-        imports = "import math\nimport rerun as rr\nimport bencher as bn"
+        imports = "import math\n\nimport rerun as rr\n\nimport bencher as bn"
         class_code = '''
 class RerunSweep(bn.ParametrizedSweep):
     """Sweep that logs 2D geometry to rerun for each parameter combination.
@@ -240,6 +244,41 @@ bench.plot_sweep(
             body=body,
         )
 
+    def _generate_backend_choice(self):
+        """The same polygon sweep rendered by each backend, in one report."""
+        imports = "import bencher as bn\nfrom bencher.example.example_image import BenchPolygons"
+        body = """\
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, cache_results=False)
+bench = BenchPolygons().to_bench(run_cfg)
+
+# The only difference between the two sweeps below. Everything else -- the
+# benchmark, the input vars, the result vars -- is identical.
+for backend in ("panel", "rerun"):
+    bench.run_cfg.backend = backend
+    bench.plot_sweep(
+        f"Polygons rendered by the {backend} backend",
+        input_vars=["sides", "color"],
+        result_vars=["polygon", "area"],
+        description=f"The same sweep, rendered by the ``{backend}`` backend.  "
+        "``backend`` is a per-chart-type preference applied during plot selection, "
+        "not a different report: a chart type the preferred backend implements "
+        "renders through it and the rest keep their best other implementation.  "
+        "Here that one chart type is ``panes``.",
+    )
+"""
+        self.generate_example(
+            title="Rerun Backend Choice — the same sweep rendered by panel and by rerun",
+            output_dir=OUTPUT_DIR,
+            filename="example_rerun_backend_choice",
+            function_name="example_rerun_backend_choice",
+            imports=imports,
+            body=body,
+            # The panel backend tiles one pane per sample and the rerun backend puts
+            # them on a timeline, so both want more than the two samples per variable
+            # `bn.run` subsamples to by default.
+            run_kwargs={"subsampling_divisions": 4},
+        )
+
     def _generate_backend(self):
         """Render an entire sweep -- scalars and recordings alike -- in rerun."""
         imports = "import rerun as rr\n\nimport bencher as bn"
@@ -289,16 +328,20 @@ bench = RerunBackendSweep().to_bench(run_cfg)
 bench.plot_sweep(
     input_vars=["shape"],
     result_vars=["out_volume", "out_rerun"],
-    description="Setting ``backend`` to ``rerun`` on the run config renders the "
-    "whole report in the rerun viewer instead of holoviews.  ``out_volume`` is "
-    "mapped onto rerun's entity tree as a BarChart over the swept categories; "
-    "``out_rerun`` already *is* rerun data, so its three per-sample recordings "
-    "are merged into one recording and Blueprint, the same composition "
-    "``rerun_grid`` performs.",
-    post_description="The two families need different machinery: everything scalar "
-    "is mapped onto native archetypes, while a ``ResultRerun`` is composed from the "
-    "``.rrd`` each sample cached.  Passing a recording through the scalar renderers "
-    "used to drop it from the report entirely.",
+    description="``to_rerun_plots`` renders the *whole* report in the rerun viewer "
+    "instead of holoviews.  ``out_volume`` is mapped onto rerun's entity tree as a "
+    "BarChart over the swept categories; ``out_rerun`` already *is* rerun data, so "
+    "its three per-sample recordings are merged into one recording and Blueprint, "
+    "the same composition ``rerun_grid`` performs.",
+    post_description="This is a different report *shape*, which is why it is asked "
+    "for by callback rather than selected by ``backend``: the rerun backend is a "
+    "per-chart-type preference that swaps individual renderers under the usual "
+    "report -- see the Rerun Backend Choice example.  The two result families need "
+    "different machinery either way: everything scalar is mapped onto native "
+    "archetypes, while a ``ResultRerun`` is composed from the ``.rrd`` each sample "
+    "cached.  Passing a recording through the scalar renderers used to drop it from "
+    "the report entirely.",
+    plot_callbacks=[bn.BenchResult.to_rerun_plots],
 )
 """
         self.generate_example(

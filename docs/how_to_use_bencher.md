@@ -341,19 +341,98 @@ plot types — like `video_summary`, they are opt-in because merging every recor
 expensive. This is the `ResultRerun` counterpart to `video_summary` for
 `ResultImage`/`ResultVideo`.
 
-Setting `backend="rerun"` on `BenchRunCfg` renders the whole report in the rerun
-viewer rather than in holoviews. Scalar results — floats and booleans — are mapped
-onto rerun's entity tree as bar charts, line graphs and tensors, laid out by a
-generated Blueprint, and every `ResultRerun` alongside them gets its recordings
-merged the way `rerun_grid` merges them, in its own viewer sized by the result
-var's `width`/`height`.
+### Choosing a backend: panel or rerun
+
+`BenchRunCfg(backend=...)` picks the *rendering library*, not a different report.
+It is a per-chart-type preference applied during plot selection: a chart type the
+preferred backend implements renders through it, and every other chart type keeps
+its best other implementation. So the same sweep, unchanged, runs under either:
+
+```python
+for backend in ("panel", "rerun"):
+    bench.run_cfg.backend = backend
+    bench.plot_sweep(input_vars=["sides", "color"], result_vars=["polygon", "area"])
+```
+
+Today the one chart type both backends implement is `panes`, the renderer for
+media results. The panel backend tiles it — one pane per sample, laid out in a
+grid. The rerun backend puts the samples on a **timeline** named after the swept
+variable, in one embedded viewer: dragging the time cursor sweeps the parameter,
+one sample per tick. See
+[Rerun Backend Choice](reference/meta/rerun/example_rerun_backend_choice) for the
+same polygon sweep rendered both ways in one report.
+
+Any result type goes on the timeline, not just recordings. Images become
+`rr.EncodedImage`, numbers `rr.Scalars`, strings `rr.TextDocument`, and a
+`ResultRerun`'s cached `.rrd` is re-indexed onto the sweep timeline (keeping any
+timeline the benchmark recorded inside a sample — `log_tick` included, which is what
+an over-time recording uses — so that can still be scrubbed within the tick it sits
+on; only the wall-clock `log_time` is dropped). Each result variable gets its own
+view, so an image swept beside a metric reads as a picture and a time series *of the
+sweep*, moving together under one cursor.
+
+The axis is a tick counter, not a clock. Rerun labels a sequence index `#3` with
+no unit, which is the honest reading for a sweep — a polygon with three sides is
+`#3`, where `+3s` would claim a unit the parameter does not have. Where the
+coordinates are whole numbers the ticks *are* those numbers; where they are not the
+ticks count the samples and the parameter's real value gets a small read-out view of
+its own so the cursor position is still legible — a time series for fractional
+floats, a text document for categories, which have no position to plot.
+
+`index=` overrides the choice:
+
+| `bn.TimelineIndex` | Axis |
+|---|---|
+| `tick` (default) | `#3`, `#4`, … — the coordinate where it is a whole number, else the sample's position |
+| `position` | `#0`, `#1`, … — always the sample's position |
+| `duration` | `+3s`, `+4s`, … — one second per unit; the only encoding that shows a non-uniform sweep as non-uniform |
+
+By default the timeline is the **longest numeric** dimension: a time axis reads as
+a continuum, so a three-value colour axis makes a poor one however the sweep was
+declared. Pass `timeline_dim=` to choose:
+
+```python
+from functools import partial
+
+plot_callbacks=[partial(bn.BenchResult.to_rerun_timeline, timeline_dim="sides")]
+```
+
+Only one dimension can be time. Rerun timelines are independent axes rather than a
+joint index — a latest-at query resolves on the timeline being viewed and ignores
+every other one — so a 2-D sweep cannot become two scrubbers. The other dimensions
+are peeled onto the entity tree instead, one branch and one view each, all driven
+by the single shared cursor. That is how the mapping scales: one dimension
+animates, the rest tile. The timeline stays one sample per tick at any
+dimensionality; what grows is the view count, the product of the peeled
+dimensions' sizes.
+
+With two remaining dimensions, the first defines columns and the second rows, in
+their sampled coordinate order. For example, `pose` then `scenario` gives one column
+per pose and one row per scenario. The column count is fixed when the recording
+is composed, so resizing the viewer preserves the axis mapping. Missing recordings
+leave empty cells. A single remaining dimension forms one row; with more than two,
+the first defines columns and combinations of the remaining dimensions define rows.
+
+For an *all*-rerun report — scalars included, mapped onto rerun's entity tree as
+bar charts, line graphs and tensors and laid out by a generated Blueprint, with
+every `ResultRerun` alongside them merged the way `rerun_grid` merges them — ask
+for it by callback rather than by backend:
+
+```python
+bench.plot_sweep(..., plot_callbacks=[bn.BenchResult.to_rerun_plots])
+```
+
+That is a different report shape, not a backend swap, which is why it is not what
+`backend="rerun"` selects.
+
 A `ResultRerun` that recorded nothing logs a warning naming it instead of leaving a
 gap in the report.
 
 Two things to know if you pick the merged viewer by hand instead:
 
-* `rerun_summary` and `rerun_grid` are named-only plot types and `BenchRunCfg` has no
-  plot-selection knob, so `plot_callbacks=` is the only route to them.
+* `rerun_summary` and `rerun_grid` are named-only plot types, so `plot_callbacks=`
+  is the only route to them. The sweep timeline is not named-only: it is `panes`
+  on the rerun backend, so `backend="rerun"` selects it.
 * Define the callback at module scope. The callback list is pickled into the result
   cache, so a closure fails with `AttributeError: Can't pickle local object`.
 

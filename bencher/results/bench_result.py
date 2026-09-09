@@ -61,6 +61,7 @@ from bencher.results.holoview_results.xy_scatter_result import XYScatterResult
 from bencher.results.optuna_result import OptunaResult
 from bencher.results.pane_result import PaneResult
 from bencher.results.rerun_summary import RerunSummaryResult
+from bencher.results.rerun_timeline import RerunTimelineResult
 from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.volume_result import VolumeResult
 from bencher.utils import AggFn, listify, resolve_aggregate
@@ -104,6 +105,7 @@ class BenchResult(
     HoloviewResult,
     VideoSummaryResult,
     RerunSummaryResult,
+    RerunTimelineResult,
     DataSetResult,
     OptunaResult,
 ):  # pylint: disable=too-many-ancestors
@@ -555,6 +557,12 @@ class BenchResult(
                 plot_cols.append(bands)
 
         kwargs.setdefault("pane_layout", self.bench_cfg.pane_layout)
+        # The configured backend is a *preference*, so it belongs in selection rather
+        # than in a separate callback list: chart types the backend implements render
+        # through it, the rest keep their best other implementation. Without this,
+        # `backend="rerun"` only took effect on sweeps that had no plot callbacks of
+        # their own, which made it look like a different report rather than a swap.
+        kwargs.setdefault("backend", self.bench_cfg.backend)
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols

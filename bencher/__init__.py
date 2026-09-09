@@ -219,8 +219,8 @@ from .regression import (
 )
 from .results.bench_result import BenchResult
 
-# These three rerun names, plus RerunResult/RerunSummaryResult a few lines down -- five in
-# all -- are imported unconditionally, which is a statement of fact rather than optimism.
+# These three rerun names, plus RerunResult/RerunSummaryResult/RerunTimelineResult a few
+# lines down -- six in all -- are imported unconditionally, which is a statement of fact rather than optimism.
 # None of their three modules imports `rerun` at module scope; each defers it into the
 # method that needs it, so an `except ModuleNotFoundError` around them never fired in any
 # environment. Verified by importing `bencher` behind a `sys.meta_path` hook blocking
@@ -240,6 +240,7 @@ from .results.pane_result import PaneResult
 from .results.render_failure import RenderFailedWarning
 from .results.rerun_result import RerunResult
 from .results.rerun_summary import RerunSummaryResult
+from .results.rerun_timeline import RerunTimelineResult, TimelineIndex
 from .sample_order import SampleOrder
 from .variables.parametrised_sweep import ParametrizedSweep
 from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton

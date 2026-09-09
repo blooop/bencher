@@ -7,6 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.126.0] - 2026-09-08
+
+### Added
+- **A sweep can be scrubbed on a rerun timeline.** `to_rerun_timeline` writes every
+  sample of a sweep into one recording at the same entity paths, indexed by a rerun
+  timeline named after the swept variable, so dragging the cursor sweeps the parameter
+  one sample per tick. Any result type goes on the axis, through the same archetype
+  mapping the rerun backend already used for its entity tree — images as
+  `rr.EncodedImage`, numbers as `rr.Scalars`, strings as `rr.TextDocument` — and a
+  `ResultRerun` has its cached `.rrd` chunks re-indexed, keeping any timeline the
+  benchmark recorded *inside* a sample so that can still be scrubbed within the tick it
+  sits on. Each result variable gets its own view, so an image swept beside a metric
+  reads as a picture and a time series of the sweep under one cursor.
+
+  The axis is a tick counter, not a clock: rerun labels a sequence index `#3` with no
+  unit, and where the coordinates are whole numbers the ticks *are* those numbers, so a
+  polygon with three sides sits at `#3`. Where they are not — fractional floats,
+  categories — the ticks count the samples and the parameter's real value is plotted
+  against them in a read-out view of its own. `index=bn.TimelineIndex.duration` asks for
+  the old time axis instead, the only encoding that shows a non-uniform sweep as
+  non-uniform; `position` always counts.
+
+  Only one dimension can be time. Rerun timelines are independent axes rather than a
+  joint index — a latest-at query resolves on the timeline being viewed and ignores every
+  other one — so a 2-D sweep cannot become two scrubbers. The remaining dimensions are
+  peeled onto the entity tree, one branch and one view each, all advanced by the single
+  shared cursor: one dimension animates, the rest tile. The timeline stays one sample per
+  tick at any dimensionality; what grows is the view count. By default the timeline is
+  the longest *numeric* dimension, since a three-value colour axis makes a poor
+  continuum; `timeline_dim=` chooses.
+- New gallery example `example_rerun_backend_choice`: the existing polygon sweep,
+  unchanged, rendered by each backend in one report.
+
+### Changed
+- **`BenchRunCfg(backend=...)` is a rendering preference rather than a separate report,
+  and now actually takes effect.** It swapped the whole plot-callback list for a
+  rerun-only report, and only on sweeps that had no callbacks of their own — so any
+  sweep that added its own (the polygon example, for one) ignored the flag silently, and
+  where it did fire it produced a different report rather than the same one drawn
+  differently. The flag is now threaded into plot selection by `to_auto_plots`, where the
+  registry has always applied a preferred backend per chart type: a chart type the
+  preferred backend implements renders through it, and every other chart type keeps its
+  best other implementation.
+
+  `panes` is the first chart type both backends implement — panel tiles a sweep's media
+  samples one pane per sample, rerun lays them on the timeline described above — so the
+  same sweep now renders either way with nothing but the flag changing.
+
+  **Migration:** the all-rerun entity-tree report is unchanged but is no longer what
+  `backend="rerun"` selects. Ask for it by callback:
+  `plot_sweep(..., plot_callbacks=[bn.BenchResult.to_rerun_plots])`.
+
+### Fixed
+- **`log_time` no longer rides along into a composed timeline recording.** Rerun stamps
+  it on every `log()` call and `set_time` cannot overwrite it, so a directly-logged
+  result var arrived carrying a wall-clock axis on which the whole sweep is a
+  sub-millisecond blip, offered to the viewer beside the sweep axis. Those logs are now
+  staged in a recording of their own and forwarded through one rewrite pass, which costs
+  a single extra file for the whole composition rather than a rewrite per sample.
+- **A golden-hash render test no longer depends on which fonts the host has installed.**
+  `test_cartesian_pil_renderer.py::TestDrawRegression::test_timeline` was the one
+  pixel-hash test whose shape draws text, and `_get_font` picks DejaVu, then Liberation,
+  then Pillow's built-in, whichever is present — so the hash recorded on a box with
+  DejaVu failed on a box with only Liberation, with nothing in the failure to say the
+  fonts were the difference. The hash now covers the film chrome with labels off, which
+  is byte-identical under four different fonts, and a companion test asserts what the
+  renderer is actually responsible for: that the labels change the reserved label band
+  and nothing above it.
+
 ## [1.125.0] - 2026-09-05
 
 ### Changed

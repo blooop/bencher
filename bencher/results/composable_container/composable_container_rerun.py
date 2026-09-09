@@ -123,6 +123,57 @@ _VIEW_CLASS_NAMES = {
 }
 
 
+def _accepts_time_ranges(view_class) -> bool:
+    """Whether a Blueprint view class takes a ``time_ranges``.
+
+    Asked of the class rather than listed here: rerun adds the field to view types
+    over releases, and a hard-coded list would quietly stop pinning the ones that
+    gained it. The views that lack it show a single value anyway.
+    """
+    import inspect
+
+    try:
+        return "time_ranges" in inspect.signature(view_class).parameters
+    except (TypeError, ValueError):  # pragma: no cover - C-extension oddities
+        return False
+
+
+def views_for_kinds(
+    rrb, kinds: Iterable[RerunViewKind], *, origin: str, label: str, time_ranges=None
+):
+    """Build the view (or tab strip of views) that displays one entity origin.
+
+    Shared with the sweep-timeline composition in
+    :mod:`bencher.results.rerun_timeline`, which lays out its own origins but needs
+    the same archetype-to-view-class mapping.  ``rerun.blueprint`` is passed in as
+    *rrb* rather than imported, keeping the rerun SDK out of this module's imports.
+
+    Tabs rather than a stack: an origin with several archetypes is usually a scene
+    plus its annotation -- a 3-D view and the markdown describing it -- and stacking
+    them spends half the height of the scene on text that is read once. Tabs give the
+    scene the whole panel and the text is one click away.
+
+    *time_ranges* is passed to every view class that accepts one; the rest are built
+    without it rather than refused, since a view with no time range shows one value
+    regardless.
+    """
+    selected = set(kinds)
+    ordered = [kind for kind in RerunViewKind if kind in selected] or [RerunViewKind.spatial_2d]
+    views = []
+    for kind in ordered:
+        view_class = getattr(rrb, _VIEW_CLASS_NAMES[kind])
+        kwargs = {
+            "origin": origin,
+            "name": label if len(ordered) == 1 else f"{label} — {_VIEW_NAMES[kind]}",
+        }
+        if time_ranges is not None and _accepts_time_ranges(view_class):
+            kwargs["time_ranges"] = time_ranges
+        views.append(view_class(**kwargs))
+    if len(views) == 1:
+        return views[0]
+    return rrb.Tabs(*views, name=label)
+
+
 @dataclass(frozen=True)
 class _SharedViewLayout:
     """Every item is displayed in one shared view rooted at ``/``.
@@ -395,18 +446,7 @@ class ComposableContainerRerun(ComposableContainerBase):
 
     def _views(self, rrb, kinds: Iterable[RerunViewKind], *, origin: str, label: str):
         """Build the view (or vertical stack of views) that displays one origin."""
-        selected = set(kinds)
-        ordered = [kind for kind in RerunViewKind if kind in selected] or [RerunViewKind.spatial_2d]
-        views = [
-            getattr(rrb, _VIEW_CLASS_NAMES[kind])(
-                origin=origin,
-                name=label if len(ordered) == 1 else f"{label} — {_VIEW_NAMES[kind]}",
-            )
-            for kind in ordered
-        ]
-        if len(views) == 1:
-            return views[0]
-        return rrb.Vertical(*views, name=label)
+        return views_for_kinds(rrb, kinds, origin=origin, label=label)
 
     def _layout(self, rrb, items: list[_ComposedItem]):
         """Map the compose method onto a Blueprint layout of per-item views."""
