@@ -105,14 +105,19 @@ READOUT_SCATTER_ATTR = "bencher_readout_scatter"
 #: title says; without one the plot is drawn with its axes labelled and no title.
 READOUT_SCATTER_TITLE_ATTR = "bencher_readout_scatter_title"
 
+# Everything the plot draws is coloured for a light ground. Rerun's *web* viewer --
+# the one a published report embeds -- renders light, where a pale label is invisible;
+# its desktop viewer renders dark. Nothing in the data model is theme-aware, so one
+# of the two has to be chosen, and it is the one reports are read in.
+#
 # The tracking scatter's colours. The front is context and the cursor is the subject,
 # so the whole set is drawn faint and one point is drawn solid on top of it.
 _SCATTER_ALL_COLOR = (120, 130, 150)
-_SCATTER_CURRENT_COLOR = (255, 190, 60)
+_SCATTER_CURRENT_COLOR = (235, 140, 0)
 # The cursor's label is logged apart from its marker so the two can differ: rerun
-# draws a label in its entity's colour on a near-black pill, so the marker's amber
-# reads as dim text on a dark ground however well it marks a point.
-_SCATTER_LABEL_COLOR = (240, 243, 250)
+# draws a label in its entity's colour, so the marker's amber would be the text's
+# colour too, and amber on the pale pill cannot be read.
+_SCATTER_LABEL_COLOR = (0, 0, 0)
 # Logged in place of the cursor's marker at a tick whose sample has no position:
 # an empty batch is what clears an entity latest-at would otherwise carry forward.
 _NO_POINTS = np.zeros((0, 2))
@@ -730,11 +735,11 @@ def _front_entity(dim: str) -> str:
     return f"/front/{dim}"
 
 
-# The plot frame's colours: the axes read against the viewer's dark ground, the
-# grid is there to be looked past.
-_FRAME_COLOR = (170, 175, 185)
-_GRID_COLOR = (70, 75, 85)
-_TITLE_COLOR = (225, 230, 240)
+# The plot frame's colours: the axes and their labels read against the light ground,
+# the grid is there to be looked past.
+_FRAME_COLOR = (20, 20, 25)
+_GRID_COLOR = (170, 175, 185)
+_TITLE_COLOR = (0, 0, 0)
 
 
 def _nice_ticks(low: float, high: float, target: int = 4) -> list[float]:

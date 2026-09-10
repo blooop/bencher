@@ -49,9 +49,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   samples are in order along x. The read-out strip grows to hold it.
 
   The cursor's reading is logged apart from its marker: rerun paints a label in its
-  entity's colour on a near-black pill, so the marker's colour cannot also be the text's
-  without one of the two being wrong. The marker keeps the highlight colour, the text is
-  near-white, and draw order keeps the marker above the set it is picked out of.
+  entity's colour, so the marker's colour cannot also be the text's without one of the
+  two being wrong. The marker keeps the highlight colour, the text is black, and draw
+  order keeps the marker above the set it is picked out of.
+
+  The plot is coloured for a light ground, because rerun's *web* viewer — the one a
+  published report embeds — renders light while its desktop viewer renders dark, and
+  nothing in the data model is theme-aware. A pale label was invisible in a report.
 - **A two-objective `plot_pareto_front` adds optuna's own Pareto plot to the front's
   tab**, every trial the study ran as a point, dominated ones included, so the walk along
   the front is read against the search that found it.
