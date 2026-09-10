@@ -541,7 +541,7 @@ class BenchMetaGen(bn.ParametrizedSweep):
                 f"    benchable._time_offset = offset\n"
                 f"    run_cfg.clear_cache = True\n"
                 f"    run_cfg.clear_history = i == 0\n"
-                f"    res = bench.plot_sweep(\n"
+                f"    bench.plot_sweep(\n"
                 f'        "over_time",\n'
                 f"        input_vars={input_var_names!r},\n"
                 f"        result_vars={result_var_names!r},\n"

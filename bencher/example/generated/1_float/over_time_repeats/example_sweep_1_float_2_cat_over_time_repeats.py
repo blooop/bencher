@@ -40,7 +40,7 @@ def example_sweep_1_float_2_cat_over_time_repeats(
         benchable._time_offset = offset
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
-        res = bench.plot_sweep(
+        bench.plot_sweep(
             "over_time",
             input_vars=["array_size", "algorithm", "distribution"],
             result_vars=["time"],
