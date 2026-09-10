@@ -1274,6 +1274,20 @@ class TestBackendSwap:
         assert ("panes", "rerun") in chosen
         assert ("panes", "panel") not in chosen
 
+    def test_the_viewer_leads_the_plots(self):
+        """The pane group goes first, and winning that slot is still the rerun
+        implementation's job under ``backend="rerun"``.
+
+        The two are one assertion because priority does both: it orders the report
+        *and* arbitrates between backends of the same chart type. Reordering the
+        builtin specs to put the viewer on top has to keep the panel implementation
+        immediately below the rerun one, or the swap turns into a different report.
+        """
+        res = _sweep(["theta"], result_vars=("out_rerun",), backend="rerun")
+        chosen = get_registry().select(res.to_bench_data(), backend="rerun")
+        assert (chosen[0].name, chosen[0].backend) == ("panes", "rerun")
+        assert [p.name for p in chosen[1:]], "nothing after the viewer, so nothing was ordered"
+
     def test_panel_is_chosen_by_default_and_rerun_when_preferred(self):
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
         data = res.to_bench_data()

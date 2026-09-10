@@ -12,8 +12,16 @@ here: selection picks one implementation per chart type, so a shape rule the reg
 cannot see makes the renderer win a sweep it then declines to draw, and the other
 backend's output is lost rather than fallen back to.
 
-Priorities encode the legacy ``default_plot_callbacks()`` ordering so reports
-render plots in exactly the same order as before.
+Priorities are positional: the first spec below gets 100 and each subsequent one
+5 less, and ``select`` orders the chosen plugins by descending priority. So the
+list order *is* the order plots appear in a report. ``panes`` leads it because
+that group renders the sample itself -- the Rerun viewer, images, videos -- and
+the charts below it are derived from those samples; on a sweep whose subject is a
+per-sample recording, burying the viewer under every heatmap the sweep drew hides
+the thing the report is for. The two ``panes`` entries must stay adjacent and in
+this order (panel above rerun): priority is also what arbitrates between two
+backends implementing the *same* chart type, which is what makes
+``BenchRunCfg(backend="rerun")`` a backend swap rather than a different report.
 """
 
 from __future__ import annotations
@@ -68,7 +76,7 @@ def _declared_kwargs(callback: Callable) -> frozenset[str] | None:
 
 
 def _builtin_specs() -> list[tuple[str, str, Callable, PlotFilter]]:
-    """(name, backend, callback, match) for the default chart set, in legacy order."""
+    """(name, backend, callback, match) for the default chart set, in report order."""
     # Imported here (not module level) to avoid a circular import: the result
     # classes' module tree imports the plugin registry for to_auto dispatch.
     from bencher.results.histogram_result import HistogramResult
@@ -85,13 +93,7 @@ def _builtin_specs() -> list[tuple[str, str, Callable, PlotFilter]]:
 
     anything = PlotFilter()
     return [
-        ("bar", "holoviews", BarResult.to_plot, anything),
-        ("box_whisker", "holoviews", BoxWhiskerResult.to_plot, anything),
-        ("curve", "holoviews", CurveResult.to_plot, anything),
-        ("line", "holoviews", LineResult.to_plot, anything),
-        ("heatmap", "holoviews", HeatmapResult.to_plot, anything),
-        ("histogram", "holoviews", HistogramResult.to_plot, anything),
-        ("volume", "plotly", VolumeResult.to_plot, anything),
+        # The sample itself leads the report; the charts below are derived from it.
         ("panes", "panel", PaneResult.to_panes, anything),
         # The same chart type on the rerun backend: panel tiles the samples as one
         # pane each, rerun lays them along a timeline named after the swept
@@ -100,6 +102,13 @@ def _builtin_specs() -> list[tuple[str, str, Callable, PlotFilter]]:
         # Its rule is declared rather than permissive because it shares the name: a
         # 0-D sweep has no dimension to animate, and the panel tiling has to keep it.
         ("panes", "rerun", RerunTimelineResult.to_rerun_timeline, TIMELINE_PLOT_FILTER),
+        ("bar", "holoviews", BarResult.to_plot, anything),
+        ("box_whisker", "holoviews", BoxWhiskerResult.to_plot, anything),
+        ("curve", "holoviews", CurveResult.to_plot, anything),
+        ("line", "holoviews", LineResult.to_plot, anything),
+        ("heatmap", "holoviews", HeatmapResult.to_plot, anything),
+        ("histogram", "holoviews", HistogramResult.to_plot, anything),
+        ("volume", "plotly", VolumeResult.to_plot, anything),
     ]
 
 
@@ -127,9 +136,8 @@ def _named_only_specs() -> list[tuple[str, str, Callable]]:
     from bencher.results.rerun_summary import RerunSummaryResult
     from bencher.results.video_summary import VideoSummaryResult
 
-    # Appended rather than grouped next to "dataset" so existing priorities keep their
-    # numbers; priority is inert for named-only plugins, which are only ever selected
-    # by name (it decides between backends implementing the *same* chart type).
+    # Order here is inert: priority only decides between backends implementing the
+    # *same* chart type, and a named-only plugin is reached by name, never by rank.
     return [
         ("violin", "holoviews", ViolinResult.to_plot),
         ("scatter_jitter", "holoviews", ScatterJitterResult.to_plot),

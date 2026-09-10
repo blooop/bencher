@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The pane group renders first in a report.** `panes` — the rerun viewer, images and
+  videos — was the last of the auto plugins, so on a sweep whose subject is a per-sample
+  recording the viewer you read the sweep off sat underneath every heatmap and bar chart
+  the sweep drew. It now leads: the pane group shows the sample itself, and every chart
+  below it is derived from those samples. `plot_list` was no help here, being an include
+  filter rather than an order, and the workaround downstream was to re-render `panes`
+  through `extra_panels` and `remove_plots` on every sweep that wanted it.
+
+  Mechanically the two `("panes", ...)` specs move to the front of `_builtin_specs()` in
+  `bencher/plugins/builtins.py`; priorities are positional, so panes take 100/95 and every
+  chart type shifts down 10 keeping its relative order. The two stay adjacent with panel
+  above rerun, because priority is also what arbitrates between two backends implementing
+  the same chart type — that is what keeps `BenchRunCfg(backend="rerun")` a backend swap
+  rather than a different report. No flag: a report layout default is not a compatibility
+  surface, and the order is still overridable per sweep through `plot_callbacks`.
+
+  Only the auto-plot grid moves. `to_auto_plots` still opens with the sweep summary,
+  failed samples and the regression report, and closes with the post-description.
+
 ## [1.128.0] - 2026-09-10
 
 ### Added

@@ -255,8 +255,10 @@ class BenchResult(
     def default_plot_callbacks() -> list[callable]:
         """Get the default list of plot callback functions.
 
-        These callbacks are used by default in the to_auto method if no specific
-        plot list is provided.
+        Kept as the legacy reference for the default chart set. ``to_auto`` no longer
+        calls it: it dispatches through the plot plugin registry, whose registration
+        order in :mod:`bencher.plugins.builtins` sets the order plots appear in --
+        which is not this list's order (the pane group leads the report).
 
         Returns:
             list[callable]: A list of plotting callback functions

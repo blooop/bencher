@@ -5,6 +5,7 @@ import unittest
 import warnings
 
 import panel as pn
+from PIL import Image, ImageDraw
 
 import bencher as bn
 from bencher.plotting.plot_filter import PlotFilter
@@ -18,7 +19,9 @@ from bencher.results.bench_result import BenchResult
 from bencher.results.holoview_results.line_result import LineResult
 from bencher.results.render_failure import RenderFailedWarning
 
-BUILTIN_ORDER = ["bar", "box_whisker", "curve", "line", "heatmap", "histogram", "volume", "panes"]
+# Report order, which is what the positional priorities encode: the pane group
+# (rerun viewer, images, videos) leads, then the charts derived from those samples.
+BUILTIN_ORDER = ["panes", "bar", "box_whisker", "curve", "line", "heatmap", "histogram", "volume"]
 
 NAMED_ONLY = [
     "violin",
@@ -51,6 +54,23 @@ class FloatCat(bn.ParametrizedSweep):
         self.value = self.x * (2.0 if self.kind == "a" else 3.0)
 
 
+class ImageAndMetric(bn.ParametrizedSweep):
+    """A pane-typed result beside a numeric one: both groups render, so their
+    relative order in the report is observable."""
+
+    x = bn.FloatSweep(default=0, bounds=[0, 2], samples=3)
+    picture = bn.ResultImage()
+    value = bn.ResultFloat(units="m")
+
+    def benchmark(self):
+        path = bn.gen_image_path("plugins_builtins_order")
+        img = Image.new("RGB", (16, 16), (0, 0, 0))
+        ImageDraw.Draw(img).line([(0, 0), (15, int(self.x * 7))], fill=(255, 0, 0))
+        img.save(path, "PNG")
+        self.picture = path
+        self.value = self.x * 2.0
+
+
 class Cat(bn.ParametrizedSweep):
     kind = bn.StringSweep(["a", "b"])
     value = bn.ResultFloat(units="m")
@@ -80,7 +100,7 @@ class TestBuiltinRegistration(unittest.TestCase):
         for name in BUILTIN_ORDER:
             self.assertIn(name, names)
 
-    def test_priority_encodes_legacy_order(self):
+    def test_priority_encodes_report_order(self):
         reg = get_registry()
         priorities = [reg.get(name).priority for name in BUILTIN_ORDER]
         self.assertEqual(priorities, sorted(priorities, reverse=True))
@@ -102,7 +122,14 @@ class TestBuiltinRegistration(unittest.TestCase):
 
 
 class TestToAutoParity(unittest.TestCase):
-    """The registry-dispatched to_auto must reproduce the legacy callback loop."""
+    """The registry-dispatched to_auto must reproduce the legacy callback loop.
+
+    Parity is over *which* plots render, not their order: the pane group now leads the
+    report where the legacy list had it last (see TestPaneGroupLeadsThePlots). These
+    fixtures are numeric, so the pane group declines and the two agree position by
+    position; a fixture with a pane-typed result would not, and should assert against
+    the report order instead of this list.
+    """
 
     @classmethod
     def setUpClass(cls):
@@ -466,6 +493,69 @@ class TestLegacyResultPlugin(unittest.TestCase):
         self.assertEqual(pane.object, "out")
         self.assertIs(calls["result"], marker)
         self.assertEqual(calls["kwargs"], {"override": True})
+
+
+CHART_NAMES = frozenset(BUILTIN_ORDER) - {"panes"}
+
+
+def _descendant_types(pane) -> set[type]:
+    """Every panel type in a pane's subtree, so a rendered group can be identified
+    by what it contains (both groups come back as a bare ``pn.Row``)."""
+    out: set[type] = set()
+
+    def walk(obj) -> None:
+        out.add(type(obj))
+        for child in getattr(obj, "objects", None) or ():
+            walk(child)
+
+    walk(pane)
+    return out
+
+
+class TestPaneGroupLeadsThePlots(unittest.TestCase):
+    """The pane group renders the sample itself -- the rerun viewer, images, videos --
+    and every chart is derived from those samples, so the pane group goes first.
+
+    Pinned on the resulting order rather than on the priority numbers: the numbers are
+    positional and a spec inserted above ``panes`` would keep them descending while
+    quietly putting a heatmap back on top of the viewer.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        bench = bn.Bench("test_plugins_builtins_order", ImageAndMetric())
+        cls.res = bench.plot_sweep(
+            "sweep",
+            input_vars=["x"],
+            result_vars=["picture", "value"],
+            run_cfg=bn.BenchRunCfg(repeats=1, cache_results=False, cache_samples=False),
+            auto_plot=False,
+        )
+
+    def test_selection_puts_panes_ahead_of_every_chart(self):
+        names = [p.name for p in get_registry().select(self.res.to_bench_data())]
+        self.assertEqual(names[0], "panes")
+        charts = [n for n in names if n in CHART_NAMES]
+        self.assertGreater(len(charts), 0, "no chart selected, so nothing was ordered")
+
+    def test_the_rendered_report_opens_with_the_pane_group(self):
+        """What actually reaches the report, not what selection intended: only the
+        plugins that returned a pane are here, and each one is named."""
+        data = self.res.to_bench_data(render_kwargs=self.res.set_plot_size(override=False))
+        rendered = [name for name, _ in get_registry().render(data)]
+        self.assertEqual(rendered[0], "panes")
+        self.assertTrue(
+            set(rendered) & CHART_NAMES, f"no chart rendered, so nothing was ordered: {rendered}"
+        )
+
+    def test_to_auto_puts_the_images_above_the_charts(self):
+        panes = list(self.res.to_auto())
+        self.assertGreaterEqual(len(panes), 2)
+        first = _descendant_types(panes[0])
+        self.assertIn(pn.pane.PNG, first)
+        self.assertNotIn(pn.pane.HoloViews, first)
+        later = set().union(*(_descendant_types(p) for p in panes[1:]))
+        self.assertIn(pn.pane.HoloViews, later)
 
 
 if __name__ == "__main__":
