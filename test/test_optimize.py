@@ -9,6 +9,7 @@ import optuna
 import pytest
 
 import bencher as bn
+from bencher.bencher import WARM_STARTED
 from bencher.results.optimize_result import Aggregation
 from bencher.utils import AggFn
 
@@ -705,6 +706,46 @@ class TestParetoFrontWarmStartedTrials:
         ds = res.to_dataset(bn.ReduceType.SQUEEZE)
         assert set(ds.sizes) == {"pareto_rank", "seed"}
         assert list(ds.coords["x"].values) == pytest.approx([t.params["x"] for t in front])
+
+    def test_a_warm_seeded_score_is_not_the_aggregate_it_is_stamped_as(self, caplog):
+        """Warm start seeds one trial per raw sample, so a warm trial's value is one
+        evaluation and not the reduction over the looped dims. It competes on the
+        front against aggregated trials anyway, and the front then stamps every value
+        `{target}_{agg_fn}` -- a name the warm ones do not answer to. Reproduced:
+        obj1_mean read 0.0 at a rank whose mean over `seed` is 0.1."""
+        bench = bn.Bench("pareto_warm_score", MultiObjectiveWithSeed(), run_cfg=_run_cfg())
+        bench.plot_sweep(input_vars=["x", "seed"], auto_plot=False)
+        result = bench.optimize(n_trials=4, aggregate=["seed"], agg_fn="mean", plot=False)
+        front = result.pareto_trials()
+        assert any(trial.user_attrs.get(WARM_STARTED) for trial in front)
+        with caplog.at_level("WARNING", logger="bencher.bencher"):
+            res = bench.plot_pareto_front(result, auto_plot=False)
+        assert "obj1_mean" in caplog.text
+        assert "seeded from cache" in caplog.text
+        # The stamped score really is the un-aggregated one, which is what the
+        # warning is about.
+        ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+        stamped = [float(v) for v in ds.coords["obj1_mean"].values]
+        actual = [float(v) for v in ds["obj1"].mean(dim="seed").values]
+        assert stamped != pytest.approx(actual)
+
+    def test_a_front_with_no_warm_trial_on_it_is_stamped_without_complaint(self, caplog):
+        """The warning is about provenance, not about aggregating: a study that
+        aggregated and searched every trial itself stamps a score that is the
+        aggregate, and says nothing."""
+        bench = bn.Bench("pareto_warm_clean", MultiObjectiveWithSeed(), run_cfg=_run_cfg())
+        result = bench.optimize(
+            n_trials=4, aggregate=["seed"], agg_fn="mean", warm_start=False, plot=False
+        )
+        front = result.pareto_trials()
+        assert not any(trial.user_attrs.get(WARM_STARTED) for trial in front)
+        with caplog.at_level("WARNING", logger="bencher.bencher"):
+            res = bench.plot_pareto_front(result, auto_plot=False)
+        assert "seeded from cache" not in caplog.text
+        ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+        stamped = [float(v) for v in ds.coords["obj1_mean"].values]
+        actual = [float(v) for v in ds["obj1"].mean(dim="seed").values]
+        assert stamped == pytest.approx(actual)
 
     def test_a_trial_missing_an_input_the_study_searched_is_named(self):
         """A trial seeded by a narrower sweep carries no value for an input the study

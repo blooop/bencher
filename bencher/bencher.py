@@ -71,6 +71,11 @@ for handler in logging.root.handlers:
 # The dimension plot_pareto_front sweeps: a design's position along the front.
 PARETO_RANK = "pareto_rank"
 
+# Marks a trial that was seeded from cache rather than evaluated by the study.
+# A warm seed is one recorded sample, so its value is not the reduction an
+# aggregating study ranks on -- see `_warm_start_from_cache`.
+WARM_STARTED = "bencher_warm_started"
+
 
 def _pareto_design(trial, searched: list) -> dict:
     """The searched inputs of *trial*, which is the design it stands for.
@@ -1588,6 +1593,10 @@ class Bench(BenchPlotServer):
         timeline reads those out at the cursor, so scrubbing the front says which design
         is on screen.
 
+        A warm-started trial's value is one recorded sample, not that reduction, and it
+        reached the front by competing on it; a front carrying one is stamped with the
+        study's own numbers as ever, and warns which ranks they are.
+
         The front is never thinned: a rank is a design, so ``subsampling_divisions`` and
         ``samples_per_var`` are ignored here, and the aggregated dimensions run at the
         study's own resolution. Nor is it cached: a rank is a *position* on this front
@@ -1721,6 +1730,24 @@ class Bench(BenchPlotServer):
             for target in result.target_names
         }
         if result.aggregation:
+            # A warm seed is one recorded sample -- `_warm_start_from_cache` adds one
+            # trial per raw evaluation -- so its value is not the reduction the name
+            # about to be stamped on it claims. It reached the front by competing on
+            # that raw number against trials the study aggregated, which is a defect
+            # in warm start under aggregation and not one this can repair: the value
+            # the study ranked simply is not the aggregate.
+            warm = [trial.number for trial in trials if trial.user_attrs.get(WARM_STARTED)]
+            if warm:
+                logger.warning(
+                    "%s on this front were seeded from cache as single samples, so "
+                    "%s carry one evaluation rather than the %s over %s that the "
+                    "rest of the front carries; trial(s) %s",
+                    f"{len(warm)} of {len(trials)} trials",
+                    " and ".join(scored[t] for t in result.target_names),
+                    result.aggregation.fn.value,
+                    ", ".join(result.aggregation.dims) or "the repeats",
+                    warm,
+                )
             for index, target in enumerate(result.target_names):
                 coords[scored[target]] = (
                     PARETO_RANK,
@@ -1873,6 +1900,8 @@ class Bench(BenchPlotServer):
             try:
                 if len(res.ds.sizes) > 0:
                     trials = res.bench_results_to_optuna_trials(True, target_names)
+                    for trial in trials:
+                        trial.user_attrs[WARM_STARTED] = True
                     study.add_trials(trials)
                     added += len(trials)
             except Exception:  # pylint: disable=broad-except
@@ -1940,6 +1969,7 @@ class Bench(BenchPlotServer):
                         params=params,
                         distributions=distributions,
                         values=values,
+                        user_attrs={WARM_STARTED: True},
                     )
                     study.add_trial(trial)
                     added += 1
