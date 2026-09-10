@@ -912,16 +912,21 @@ def _log_plot_frame(
 
 
 def _per_sample_values(dataset: xr.Dataset, name: str, dim: str) -> np.ndarray | None:
-    """*name*'s one value per sample of *dim*, whether it is a coordinate or a variable.
+    """*name*'s one number per sample of *dim*, whether it is a coordinate or a variable.
 
     A sweep over a set of designs carries what it was ranked on either way: as a
     coordinate riding on the dimension when the producer put it there, or as a
     result variable when the sweep has no other dimension for it to span.
+
+    A non-numeric series -- a design's name, a category it falls in -- is one value
+    per sample but has no position on an axis, so it is not one of these.
     """
     if name not in dataset.variables:
         return None
     array = dataset[name]
     if array.dims != (dim,):
+        return None
+    if not np.issubdtype(array.dtype, np.number):
         return None
     return np.asarray(array.values)
 
@@ -1179,9 +1184,11 @@ class RerunTimelineResult(BenchResultBase):
                     for branch in branches
                 ],
                 {dim: dataset.sizes[dim] for dim in branch_dims},
-                # No cursor range on the read-outs: each is a picture of the whole
-                # sweep with the cursor's own sample marked on it, and one visible
-                # point is not that.
+                # No cursor range on the read-outs: the scatter and the scalar
+                # curve are pictures of the whole sweep with the cursor's own
+                # sample marked on them, and one visible point is not that. The
+                # text read-out is logged at every tick, so it reads the same
+                # either way.
                 readout=_readout_layout(rrb, readouts),
                 readout_shares=_readout_shares(readouts),
             ),
@@ -1283,7 +1290,7 @@ class RerunTimelineResult(BenchResultBase):
 
         Returns:
             _View | None: the scatter's view, or None when the dataset does not carry
-            both named values one-per-sample, or no sample carries both.
+            both named values as one number per sample, or no sample carries both.
         """
         import rerun as rr
 
@@ -1293,7 +1300,7 @@ class RerunTimelineResult(BenchResultBase):
         y = _per_sample_values(dataset, y_name, timeline_dim)
         if x is None or y is None:
             logger.warning(
-                "no tracking scatter: %s and %s are not both one value per %s",
+                "no tracking scatter: %s and %s are not both one number per %s",
                 x_name,
                 y_name,
                 timeline_dim,

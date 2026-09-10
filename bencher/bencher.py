@@ -71,6 +71,11 @@ for handler in logging.root.handlers:
 # The dimension plot_pareto_front sweeps: a design's position along the front.
 PARETO_RANK = "pareto_rank"
 
+# Marks a trial that was seeded from cache rather than evaluated by the study.
+# A warm seed is one recorded sample, so its value is not the reduction an
+# aggregating study ranks on -- see `_warm_start_from_cache`.
+WARM_STARTED = "bencher_warm_started"
+
 
 def _pareto_design(trial, searched: list) -> dict:
     """The searched inputs of *trial*, which is the design it stands for.
@@ -93,6 +98,32 @@ def _pareto_design(trial, searched: list) -> dict:
             "that did not search those inputs (see optimize(warm_start=...))"
         )
     return {iv.name: trial.params[iv.name] for iv in searched}
+
+
+class _ParetoFrontWorker:
+    """Evaluate the design at a rank, as :meth:`Bench.plot_pareto_front` sweeps them.
+
+    A class and not a closure so that it pickles: ``Executors.MULTIPROCESSING`` sends
+    the worker to its pool, and a function defined inside a method cannot be looked up
+    there ("Can't get local object"), which took the whole front down on any bench
+    configured for it.
+
+    Attributes:
+        worker: The bench's own worker, called with the design and whatever the front
+            sweeps beside the rank.
+        designs: One design per rank, in front order.
+    """
+
+    # callable_name() falls back to str() for an object with no __name__, which for an
+    # instance is its address -- and that reaches plot-filter keys.
+    __name__ = "pareto_front_worker"
+
+    def __init__(self, worker: Callable, designs: list[dict]):
+        self.worker = worker
+        self.designs = designs
+
+    def __call__(self, **kwargs) -> dict:
+        return self.worker(**self.designs[kwargs.pop(PARETO_RANK)], **kwargs)
 
 
 def _agg_job_args(kwargs, agg_vars, combo):
@@ -1588,11 +1619,16 @@ class Bench(BenchPlotServer):
         timeline reads those out at the cursor, so scrubbing the front says which design
         is on screen.
 
+        A warm-started trial's value is one recorded sample, not that reduction, and it
+        reached the front by competing on it; a front carrying one is stamped with the
+        study's own numbers as ever, and warns which ranks they are.
+
         The front is never thinned: a rank is a design, so ``subsampling_divisions`` and
         ``samples_per_var`` are ignored here, and the aggregated dimensions run at the
-        study's own resolution. Each rank is re-evaluated — the sweep asks the worker for
-        that trial's inputs again — since the trial's cache entries are keyed by the
-        searched inputs and this sweep's by the rank.
+        study's own resolution. Nor is it cached: a rank is a *position* on this front
+        and names no design, so neither cache key can tell one front from another, and
+        both are turned off here. Every rank is evaluated afresh, against the trial's
+        own inputs.
 
         Args:
             result: The study to lay out, as :meth:`optimize` returned it.
@@ -1647,6 +1683,13 @@ class Bench(BenchPlotServer):
         # neither may be thinned to a resolution the study never ran at.
         run_cfg.subsampling_divisions = 0
         run_cfg.samples_per_var = None
+        # Neither cache can see the designs: they live in the closure below, while
+        # `hash_persistent` is built from this sweep's vars and the per-sample key is
+        # `hash_sha1((sorted(job_args), tag))` -- and the only input here is a rank,
+        # which is the same 0..n-1 for every front. So a second front over the same
+        # bench was served the first one's samples under its own coordinates.
+        run_cfg.cache_results = False
+        run_cfg.cache_samples = False
 
         # Read before plot_sweep, which writes its own auto_plot argument back onto
         # the run_cfg it is handed -- so asking afterwards would always read False.
@@ -1681,11 +1724,12 @@ class Bench(BenchPlotServer):
         else:
             result_vars_in = deepcopy(cfg.result_vars)
 
-        def pareto_front_worker(**kwargs) -> dict:
-            design = designs[kwargs.pop(PARETO_RANK)]
-            return worker(**design, **kwargs)
-
-        front = Bench(self.bench_name, pareto_front_worker, run_cfg=run_cfg, report=self.report)
+        front = Bench(
+            self.bench_name,
+            _ParetoFrontWorker(worker, designs),
+            run_cfg=run_cfg,
+            report=self.report,
+        )
         front.plot_callbacks = self.plot_callbacks
         if title is None:
             title = "Pareto front of " + " vs ".join(result.target_names)
@@ -1713,6 +1757,24 @@ class Bench(BenchPlotServer):
             for target in result.target_names
         }
         if result.aggregation:
+            # A warm seed is one recorded sample -- `_warm_start_from_cache` adds one
+            # trial per raw evaluation -- so its value is not the reduction the name
+            # about to be stamped on it claims. It reached the front by competing on
+            # that raw number against trials the study aggregated, which is a defect
+            # in warm start under aggregation and not one this can repair: the value
+            # the study ranked simply is not the aggregate.
+            warm = [trial.number for trial in trials if trial.user_attrs.get(WARM_STARTED)]
+            if warm:
+                logger.warning(
+                    "%s on this front were seeded from cache as single samples, so "
+                    "%s carry one evaluation rather than the %s over %s that the "
+                    "rest of the front carries; trial(s) %s",
+                    f"{len(warm)} of {len(trials)} trials",
+                    " and ".join(scored[t] for t in result.target_names),
+                    result.aggregation.fn.value,
+                    ", ".join(result.aggregation.dims) or "the repeats",
+                    warm,
+                )
             for index, target in enumerate(result.target_names):
                 coords[scored[target]] = (
                     PARETO_RANK,
@@ -1865,6 +1927,8 @@ class Bench(BenchPlotServer):
             try:
                 if len(res.ds.sizes) > 0:
                     trials = res.bench_results_to_optuna_trials(True, target_names)
+                    for trial in trials:
+                        trial.user_attrs[WARM_STARTED] = True
                     study.add_trials(trials)
                     added += len(trials)
             except Exception:  # pylint: disable=broad-except
@@ -1932,6 +1996,7 @@ class Bench(BenchPlotServer):
                         params=params,
                         distributions=distributions,
                         values=values,
+                        user_attrs={WARM_STARTED: True},
                     )
                     study.add_trial(trial)
                     added += 1

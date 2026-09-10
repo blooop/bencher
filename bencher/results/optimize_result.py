@@ -24,6 +24,11 @@ class Aggregation:
     front, the load-bearing — fact that a trial's value is a different number from
     any one sample of it.
 
+    This describes how the study *searched*, which is not a guarantee about every
+    trial in it: warm start seeds one trial per recorded sample, so a seeded trial's
+    value is one evaluation whatever this says. Such a trial is marked
+    ``bencher.bencher.WARM_STARTED``.
+
     Attributes:
         fn: What combined them.
         dims: The input variables looped inside each trial rather than suggested by

@@ -112,8 +112,13 @@ def convert_dataset_bool_dims_to_str(dataset: xr.Dataset) -> xr.Dataset:
     """
     bool_coords = {}
     for c in dataset.coords:
-        if dataset.coords[c].dtype == bool:
-            bool_coords[c] = [str(vals) for vals in dataset.coords[c].values]
+        coord = dataset.coords[c]
+        if coord.dtype == bool:
+            # Carry the coordinate's own dims across. A bare list is read as a new
+            # dimension named after the coordinate, which is a no-op for a bool that
+            # *is* a dimension and wrong for one riding on another: a bool searched
+            # input on a Pareto front became an axis of its own, as wide as the front.
+            bool_coords[c] = (coord.dims, [str(vals) for vals in coord.values])
 
     if len(bool_coords) > 0:
         return dataset.assign_coords(bool_coords)

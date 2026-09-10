@@ -9,6 +9,7 @@ import optuna
 import pytest
 
 import bencher as bn
+from bencher.bencher import WARM_STARTED
 from bencher.results.optimize_result import Aggregation
 from bencher.utils import AggFn
 
@@ -63,6 +64,21 @@ class CategoricalProblem(bn.ParametrizedSweep):
     def benchmark(self):
         lookup = {Color.red: 1.0, Color.green: 0.5, Color.blue: 2.0}
         self.score = lookup[self.color] + (0.0 if self.flag else 0.3)
+
+
+class BoolDesign(bn.ParametrizedSweep):
+    """Two objectives searched over a float and a boolean."""
+
+    x = bn.FloatSweep(default=0, bounds=[0, 5], samples=5)
+    boost = bn.BoolSweep(default=False)
+
+    obj1 = bn.ResultFloat("ul", bn.OptDir.minimize)
+    obj2 = bn.ResultFloat("ul", bn.OptDir.maximize)
+
+    def benchmark(self):
+        gain = 1.5 if self.boost else 1.0
+        self.obj1 = float(self.x**2 * gain)
+        self.obj2 = float(-((self.x - 3) ** 2) * gain)
 
 
 class ArrayLike(bn.ParametrizedSweep):
@@ -551,6 +567,78 @@ class TestPlotParetoFront:
         with pytest.raises(ValueError, match="no front"):
             bench.plot_pareto_front(result)
 
+    def test_a_front_runs_on_a_bench_configured_for_multiprocessing(self):
+        """The front's worker was a closure over the designs, which a process pool
+        cannot look up: `AttributeError: Can't get local object
+        'Bench.plot_pareto_front.<locals>.pareto_front_worker'` took down every front
+        on a bench whose run_cfg asked for parallel samples."""
+        cfg = bn.BenchRunCfg()
+        cfg.repeats = 1
+        cfg.executor = bn.Executors.MULTIPROCESSING
+        bench = bn.Bench("pareto_multiprocessing", MultiObjective(), run_cfg=cfg)
+        result = bench.optimize(n_trials=8, warm_start=False, plot=False)
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+        front = result.pareto_trials()
+        assert ds.sizes["pareto_rank"] == len(front)
+        assert [float(v) for v in ds["obj1"].values] == pytest.approx(
+            [trial.params["x"] ** 2 for trial in front]
+        )
+
+    def test_a_second_front_is_not_served_the_first_ones_data(self):
+        """``pareto_rank`` is a position, not an identity: nothing in either cache key
+        -- ``hash_persistent`` or ``hash_sha1(sorted(job_args))`` -- can see which
+        designs the ranks stand for. With caching on, a second front over the same
+        bench replayed the first front's samples under the second's coordinates, so
+        every value and every picture belonged to a different design than the
+        read-out named."""
+        cfg = bn.BenchRunCfg()
+        cfg.repeats = 1
+        cfg.cache_results = True
+        cfg.cache_samples = True
+        cfg.clear_cache = True
+        cfg.clear_sample_cache = True
+
+        def walk(sampler_seed: int):
+            bench = bn.Bench("pareto_cache_blind", MultiObjective(), run_cfg=cfg)
+            result = bench.optimize(
+                n_trials=12,
+                warm_start=False,
+                plot=False,
+                sampler=optuna.samplers.TPESampler(seed=sampler_seed),
+            )
+            res = bench.plot_pareto_front(result, auto_plot=False)
+            ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+            return [float(v) for v in ds.coords["x"].values], [float(v) for v in ds["obj1"].values]
+
+        first_x, _ = walk(3)
+        cfg.clear_cache = False
+        cfg.clear_sample_cache = False
+        second_x, second_obj1 = walk(5)
+
+        # Two different fronts, or the replay would be indistinguishable from a hit.
+        assert first_x != second_x
+        # MultiObjective scores obj1 = x**2, so every rank's value is checkable
+        # against the design the coordinate says is there.
+        assert second_obj1 == pytest.approx([x**2 for x in second_x])
+
+    def test_a_boolean_design_input_still_rides_on_the_rank(self):
+        """``convert_dataset_bool_dims_to_str`` rebuilt every bool coordinate from a
+        bare list, which xarray reads as a new dimension of that name. That is right
+        for a bool that *is* a dimension and wrong for one riding on another, which
+        is the only shape a searched input takes here: ``boost`` became an axis of
+        its own, as wide as the front and every label the same, so it no longer
+        travelled with the rank and the read-out could not name it."""
+        bench = bn.Bench("pareto_bool_rank", BoolDesign(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=12, warm_start=False, plot=False)
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+        assert "boost" not in ds.sizes
+        assert ds.coords["boost"].dims == ("pareto_rank",)
+        assert list(ds.coords["boost"].values) == [
+            str(trial.params["boost"]) for trial in result.pareto_trials()
+        ]
+
 
 class TestParetoScrubExample:
     def test_the_example_walks_a_real_front(self, monkeypatch):
@@ -636,6 +724,46 @@ class TestParetoFrontWarmStartedTrials:
         ds = res.to_dataset(bn.ReduceType.SQUEEZE)
         assert set(ds.sizes) == {"pareto_rank", "seed"}
         assert list(ds.coords["x"].values) == pytest.approx([t.params["x"] for t in front])
+
+    def test_a_warm_seeded_score_is_not_the_aggregate_it_is_stamped_as(self, caplog):
+        """Warm start seeds one trial per raw sample, so a warm trial's value is one
+        evaluation and not the reduction over the looped dims. It competes on the
+        front against aggregated trials anyway, and the front then stamps every value
+        `{target}_{agg_fn}` -- a name the warm ones do not answer to. Reproduced:
+        obj1_mean read 0.0 at a rank whose mean over `seed` is 0.1."""
+        bench = bn.Bench("pareto_warm_score", MultiObjectiveWithSeed(), run_cfg=_run_cfg())
+        bench.plot_sweep(input_vars=["x", "seed"], auto_plot=False)
+        result = bench.optimize(n_trials=4, aggregate=["seed"], agg_fn="mean", plot=False)
+        front = result.pareto_trials()
+        assert any(trial.user_attrs.get(WARM_STARTED) for trial in front)
+        with caplog.at_level("WARNING", logger="bencher.bencher"):
+            res = bench.plot_pareto_front(result, auto_plot=False)
+        assert "obj1_mean" in caplog.text
+        assert "seeded from cache" in caplog.text
+        # The stamped score really is the un-aggregated one, which is what the
+        # warning is about.
+        ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+        stamped = [float(v) for v in ds.coords["obj1_mean"].values]
+        actual = [float(v) for v in ds["obj1"].mean(dim="seed").values]
+        assert stamped != pytest.approx(actual)
+
+    def test_a_front_with_no_warm_trial_on_it_is_stamped_without_complaint(self, caplog):
+        """The warning is about provenance, not about aggregating: a study that
+        aggregated and searched every trial itself stamps a score that is the
+        aggregate, and says nothing."""
+        bench = bn.Bench("pareto_warm_clean", MultiObjectiveWithSeed(), run_cfg=_run_cfg())
+        result = bench.optimize(
+            n_trials=4, aggregate=["seed"], agg_fn="mean", warm_start=False, plot=False
+        )
+        front = result.pareto_trials()
+        assert not any(trial.user_attrs.get(WARM_STARTED) for trial in front)
+        with caplog.at_level("WARNING", logger="bencher.bencher"):
+            res = bench.plot_pareto_front(result, auto_plot=False)
+        assert "seeded from cache" not in caplog.text
+        ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+        stamped = [float(v) for v in ds.coords["obj1_mean"].values]
+        actual = [float(v) for v in ds["obj1"].mean(dim="seed").values]
+        assert stamped == pytest.approx(actual)
 
     def test_a_trial_missing_an_input_the_study_searched_is_named(self):
         """A trial seeded by a narrower sweep carries no value for an input the study
