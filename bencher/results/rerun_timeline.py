@@ -752,10 +752,11 @@ class _ReadoutScatter:
         """*requested* if a caller named the axes, else the dataset's own request.
 
         Raises:
+            TypeError: if *requested* is one string. A string is a sequence of its
+                own characters, so it would otherwise be read as those.
             ValueError: if axes were asked for that are not two or three variables.
                 An empty request included -- that used to be falsy all the way down
-                and so silently suppressed the dataset's request instead -- and a
-                bare string, which is a sequence of its own characters.
+                and so silently suppressed the dataset's request instead.
         """
         title = None
         if requested is None:
@@ -767,7 +768,7 @@ class _ReadoutScatter:
             # tuple("xy") is ('x', 'y'), which passes the arity check below and then
             # suppresses the dataset's own request -- the failure the empty request
             # is an error for, reached by a likelier typo.
-            raise ValueError(
+            raise TypeError(
                 "a tracking scatter is named by a sequence of variable names, not by "
                 f"one string: {requested!r} would be read as its characters"
             )
@@ -1247,6 +1248,8 @@ class RerunTimelineResult(BenchResultBase):
             nothing that could go on a timeline.
 
         Raises:
+            TypeError: if *readout_scatter* is one string rather than a sequence of
+                variable names.
             ValueError: if *timeline_dim* names a dimension the dataset does not have,
                 or a *readout_scatter* was asked for that is not two or three
                 variables.

@@ -891,7 +891,7 @@ class TestTrackingScatter:
         dataset = self._scatter_dataset(res)
         dataset.attrs[READOUT_SCATTER_ATTR] = ["cost", "risk"]
         for named in ("xy", "cost"):
-            with pytest.raises(ValueError, match="one string"):
+            with pytest.raises(TypeError, match="one string"):
                 res.to_rerun_timeline_path(
                     dataset, res.bench_cfg.result_vars, readout_scatter=named
                 )
