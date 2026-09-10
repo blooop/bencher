@@ -787,6 +787,40 @@ class TestTrackingScatter:
         path = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
         assert "/front/size/all" in _indices(path)
 
+    def test_an_asked_for_pair_is_not_named_by_the_datasets_title(self):
+        """The title names what the *set* is, so it belongs to the pair its producer
+        asked for. Read whatever was drawn, it titled a spacing-against-taper plot
+        of a Pareto front's inputs "Pareto front"."""
+        from bencher.results.rerun_timeline import (
+            READOUT_SCATTER_ATTR,
+            READOUT_SCATTER_TITLE_ATTR,
+        )
+
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res).assign_coords(span=("size", [1.0, 2.0, 3.0, 4.0]))
+        dataset.attrs[READOUT_SCATTER_ATTR] = ["cost", "risk"]
+        dataset.attrs[READOUT_SCATTER_TITLE_ATTR] = "Pareto front"
+        # The producer's own request keeps the producer's own title.
+        titled = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+        assert "/front/size/axes/title" in _indices(titled)
+        # A different pair is a different set, which that title does not name.
+        asked = res.to_rerun_timeline_path(
+            dataset, res.bench_cfg.result_vars, readout_scatter=("span", "risk")
+        )
+        assert "/front/size/all" in _indices(asked)
+        assert "/front/size/axes/title" not in _indices(asked)
+
+    def test_a_request_naming_no_pair_at_all_is_refused(self):
+        """An empty request was falsy, so it silently suppressed the dataset's own
+        rather than saying it named no pair."""
+        from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR
+
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = ["cost", "risk"]
+        with pytest.raises(ValueError, match="exactly two"):
+            res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars, readout_scatter=())
+
     def test_a_two_objective_front_plots_itself(self):
         """End to end: the study's own objectives become the scatter's axes."""
         bench = FrontSweep().to_bench(bn.BenchRunCfg(repeats=1))

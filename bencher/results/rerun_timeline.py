@@ -47,7 +47,6 @@ import importlib.util
 import itertools
 import logging
 import re
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, assert_never
@@ -682,6 +681,46 @@ def _readout_entity(dim: str) -> str:
     return f"/sweep/{dim}"
 
 
+@dataclass(frozen=True)
+class _ReadoutScatter:
+    """A request to plot two of a sweep's per-sample values against each other.
+
+    The pair and its title travel together. A title says what the *set* is, so it
+    names the pair somebody asked to see and not whichever pair the renderer ended
+    up drawing: reading it off the dataset regardless titled a plot of a front's
+    *inputs* "Pareto front".
+    """
+
+    x: str
+    y: str
+    title: str | None = None
+
+    @classmethod
+    def resolve(
+        cls, dataset: xr.Dataset, requested: tuple[str, str] | None
+    ) -> _ReadoutScatter | None:
+        """*requested* if a caller named a pair, else the dataset's own request.
+
+        Raises:
+            ValueError: if a pair was asked for that is not exactly two variables.
+                An empty one included -- that used to be falsy all the way down and
+                so silently suppressed the dataset's request instead.
+        """
+        title = None
+        if requested is None:
+            requested = dataset.attrs.get(READOUT_SCATTER_ATTR)
+            if requested is None:
+                return None
+            title = dataset.attrs.get(READOUT_SCATTER_TITLE_ATTR)
+        pair = list(requested)
+        if len(pair) != 2:
+            raise ValueError(
+                "a tracking scatter needs exactly two variables to plot against each "
+                f"other, got {pair}"
+            )
+        return cls(pair[0], pair[1], title)
+
+
 def _front_entity(dim: str) -> str:
     """Entity path of the tracking scatter.
 
@@ -939,7 +978,7 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str | None = None,
         index: TimelineIndex | str = TimelineIndex.tick,
         subsampling_divisions: int | None = None,
-        readout_scatter: Sequence[str] | None = None,
+        readout_scatter: tuple[str, str] | None = None,
         width: int | None = None,
         height: int | None = None,
         **_kwargs,
@@ -964,12 +1003,14 @@ class RerunTimelineResult(BenchResultBase):
                 this one tiles is branches -- a tick is a slider position, not a
                 panel, so thinning it costs resolution and buys no room.
                 Defaults to None (every sample).
-            readout_scatter (Sequence[str], optional): Two per-sample variables to
+            readout_scatter (tuple[str, str], optional): Two per-sample variables to
                 plot against each other beneath the timeline, every sample a point
                 and the cursor's own picked out — how a sweep over a *set* says
                 where in that set the slider is parked. Defaults to the dataset's
                 ``bencher_readout_scatter`` attribute, which the producer of the
-                sweep sets (see :data:`READOUT_SCATTER_ATTR`).
+                sweep sets (see :data:`READOUT_SCATTER_ATTR`); the title carried
+                beside that attribute names *that* pair, so a pair asked for here
+                is drawn with its axes labelled and no title.
             width (int, optional): Viewer width. Defaults to the widest ``width``
                 declared by a rendered result var, else 950.
             height (int, optional): Viewer height, chosen the same way, else 712.
@@ -1039,7 +1080,7 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str | None = None,
         index: TimelineIndex | str = TimelineIndex.tick,
         subsampling_divisions: int | None = None,
-        readout_scatter: Sequence[str] | None = None,
+        readout_scatter: tuple[str, str] | None = None,
     ) -> str | None:
         """Compose *result_vars* into one ``.rrd`` on a timeline and return its path.
 
@@ -1053,8 +1094,12 @@ class RerunTimelineResult(BenchResultBase):
 
         Raises:
             ValueError: if *timeline_dim* names a dimension the dataset does not have,
-                or *readout_scatter* does not name exactly two variables.
+                or a *readout_scatter* was asked for that is not exactly two
+                variables.
         """
+        # Parsed here rather than where it is drawn: an arity error found halfway
+        # through logging has already staged a recording nobody unlinks.
+        scatter = _ReadoutScatter.resolve(dataset, readout_scatter)
         dims = list(dataset.sizes)
         if not dims:
             return None
@@ -1093,8 +1138,6 @@ class RerunTimelineResult(BenchResultBase):
         recording = rr.RecordingStream(
             "bencher_timeline", make_default=False, make_thread_default=False
         )
-        if readout_scatter is None:
-            readout_scatter = dataset.attrs.get(READOUT_SCATTER_ATTR)
         branches, readouts = self._log_sweep(
             recording,
             dataset,
@@ -1102,7 +1145,7 @@ class RerunTimelineResult(BenchResultBase):
             timeline_dim,
             branch_dims,
             encoding,
-            readout_scatter,
+            scatter,
         )
         if not any(branches):
             return None
@@ -1217,8 +1260,7 @@ class RerunTimelineResult(BenchResultBase):
         dataset: xr.Dataset,
         timeline_dim: str,
         encoding: _IndexEncoding,
-        scatter: Sequence[str],
-        title: str | None = None,
+        scatter: _ReadoutScatter,
     ) -> _View | None:
         """Plot every sample against two of its own numbers, and mark the cursor's.
 
@@ -1236,19 +1278,12 @@ class RerunTimelineResult(BenchResultBase):
 
         Returns:
             _View | None: the scatter's view, or None when the dataset does not carry
-            both named values one-per-sample.
-
-        Raises:
-            ValueError: if *scatter* does not name exactly two variables.
+            both named values one-per-sample, or no sample carries both.
         """
         import rerun as rr
 
-        if len(scatter) != 2:
-            raise ValueError(
-                f"a tracking scatter needs exactly two variables to plot against each "
-                f"other, got {list(scatter)}"
-            )
-        x_name, y_name = scatter
+        x_name, y_name = scatter.x, scatter.y
+        title = scatter.title
         x = _per_sample_values(dataset, x_name, timeline_dim)
         y = _per_sample_values(dataset, y_name, timeline_dim)
         if x is None or y is None:
@@ -1306,14 +1341,11 @@ class RerunTimelineResult(BenchResultBase):
             # The values themselves go in the label: the axes are the plot's own unit
             # box, so what the viewer reports on hover is a position on the frame
             # and not the number the sweep recorded.
-            labels = (
-                [
-                    f"{_coord_label(dataset.coords[timeline_dim].values[position])}: "
-                    f"{_coord_label(x[position])}, {_coord_label(y[position])}"
-                ]
-                if placed[position]
-                else []
+            reading = (
+                f"{_coord_label(dataset.coords[timeline_dim].values[position])}: "
+                f"{_coord_label(x[position])}, {_coord_label(y[position])}"
             )
+            labels = [reading] if placed[position] else []
             staging.log(
                 f"{origin}/current",
                 rr.Points2D(
@@ -1353,7 +1385,7 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str,
         branch_dims: list[str],
         encoding: _IndexEncoding,
-        scatter: Sequence[str] | None = None,
+        scatter: _ReadoutScatter | None = None,
     ) -> tuple[list[list[_View]], list[_View]]:
         """Log every sample onto the sweep timeline; return its views and the read-outs.
 
@@ -1436,15 +1468,8 @@ class RerunTimelineResult(BenchResultBase):
         readouts = [
             view
             for view in (
-                self._log_front_scatter(
-                    staging,
-                    dataset,
-                    timeline_dim,
-                    encoding,
-                    scatter,
-                    dataset.attrs.get(READOUT_SCATTER_TITLE_ATTR),
-                )
-                if scatter
+                self._log_front_scatter(staging, dataset, timeline_dim, encoding, scatter)
+                if scatter is not None
                 else None,
                 self._log_value_readout(staging, dataset, timeline_dim, encoding),
             )
