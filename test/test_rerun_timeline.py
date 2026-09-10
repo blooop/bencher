@@ -119,6 +119,38 @@ class InnerTickSweep(bn.ParametrizedSweep):
         return super().benchmark()
 
 
+class SharedSceneSweep(bn.ParametrizedSweep):
+    """A fixed scene with one moving part, which is what a rig sweep records.
+
+    ``scene`` is the same in every sample and ``probe`` moves with the sweep -- the
+    robot and the sensor mount being placed on it.
+    """
+
+    theta = bn.FloatSweep(default=1.0, bounds=[1.0, 3.0], samples=3)
+    out_rerun = bn.ResultRerun(width=200, height=150)
+
+    def benchmark(self):
+        recording = rr.RecordingStream("test_rerun_timeline_shared", make_default=False)
+        recording.log("scene/floor", rr.Points3D([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]), static=True)
+        recording.log("scene/wall", rr.Points3D([[2.0, 0.0, 0.0]]))
+        recording.log("probe", rr.Points3D([[self.theta, 0.0, 1.0]]))
+        self.out_rerun = bn.capture_rerun_rrd(recording)
+        return super().benchmark()
+
+
+class SharedSceneWithClockSweep(SharedSceneSweep):
+    """The same scene, but the wall is recorded on the sample's own timeline."""
+
+    def benchmark(self):
+        recording = rr.RecordingStream("test_rerun_timeline_shared_clock", make_default=False)
+        recording.log("scene/floor", rr.Points3D([[0.0, 0.0, 0.0]]), static=True)
+        recording.set_time("time_s", duration=0.5)
+        recording.log("scene/wall", rr.Points3D([[2.0, 0.0, 0.0]]))
+        recording.log("probe", rr.Points3D([[self.theta, 0.0, 1.0]]))
+        self.out_rerun = bn.capture_rerun_rrd(recording)
+        return bn.ParametrizedSweep.benchmark(self)
+
+
 class CategoricalSweep(bn.ParametrizedSweep):
     """A sweep whose only dimension has no numeric position on an axis."""
 
@@ -552,18 +584,19 @@ class TestRidingCoordinates:
         res = bench.plot_pareto_front(result, result_vars=["out_rerun"], auto_plot=False)
         path = _timeline_path(res)
         entities = _indices(path)
-        assert set(entities) == {
+        # Two objectives, so the front also plots itself; see TestTrackingScatter.
+        plot = {entity for entity in entities if entity.startswith("/front/pareto_rank/")}
+        assert set(entities) - plot == {
             "/light_day/out_rerun/pose",
             "/light_night/out_rerun/pose",
             _readout_entity("pareto_rank"),
-            # Two objectives, so the front also plots itself; see TestTrackingScatter.
-            "/front/pareto_rank/all",
-            "/front/pareto_rank/current",
         }
+        assert {"/front/pareto_rank/all", "/front/pareto_rank/current"} <= plot
         ranks = list(range(len(result.pareto_trials())))
         for entity, timelines in entities.items():
-            # The whole set is static, so it has no index of its own to check.
-            if entity == "/front/pareto_rank/all":
+            # The plot is static apart from the cursor's point, so it has no index
+            # of its own to check.
+            if entity in plot and entity != "/front/pareto_rank/current":
                 assert timelines == {}
                 continue
             assert sorted(timelines["pareto_rank"]) == ranks
@@ -624,15 +657,16 @@ class TestTrackingScatter:
             res.bench_cfg.result_vars,
             readout_scatter=("cost", "risk"),
         )
-        every = self._points(path, "/front/size/all")
-        assert every == [[[4.0, 1.0], [3.0, 2.0], [2.0, 3.0], [1.0, 4.0]]]
+        (every,) = self._points(path, "/front/size/all")
+        # Drawn on the plot's own box, not at the raw values: cost falls 4..1 so x
+        # falls left, risk rises 1..4 so y rises -- which in rerun's downward 2-D y is a
+        # falling coordinate -- and the four samples span the box less its padding.
+        xs = [point[0] for point in every]
+        ys = [point[1] for point in every]
+        assert xs == sorted(xs, reverse=True) and ys == sorted(ys, reverse=True)
+        assert 0 < xs[-1] < xs[0] < 160 and 0 < ys[-1] < ys[0] < 100
         # One point per tick, each the sample sitting at that tick.
-        assert self._points(path, "/front/size/current") == [
-            [[4.0, 1.0]],
-            [[3.0, 2.0]],
-            [[2.0, 3.0]],
-            [[1.0, 4.0]],
-        ]
+        assert self._points(path, "/front/size/current") == [[point] for point in every]
 
     def test_the_scatter_and_the_value_read_out_share_the_strip(self):
         import rerun.blueprint as rrb
@@ -698,6 +732,76 @@ class TestTrackingScatter:
         assert "/front/pareto_rank/all" in entities
         ranks = list(range(len(result.pareto_trials())))
         assert sorted(entities["/front/pareto_rank/current"]["pareto_rank"]) == ranks
+
+
+class TestSharedContent:
+    """What every sample records identically is stored once, not once per tick."""
+
+    def _chunks(self, path: str, entity: str) -> list[tuple[bool, list]]:
+        """``(is_static, sweep index values)`` per chunk logged at *entity*."""
+        reader = RrdReader(str(path))
+        out = []
+        for chunk in reader.stream(store=reader.recordings()[0]):
+            if str(chunk.entity_path) != entity:
+                continue
+            batch = chunk.to_record_batch()
+            ticks = [
+                batch.column(i).to_pylist()
+                for i, f in enumerate(batch.schema)
+                if (f.metadata or {}).get(b"rerun:kind") == b"index" and f.name == "theta"
+            ]
+            out.append((chunk.is_static, ticks[0] if ticks else []))
+        return out
+
+    def test_the_unchanging_scene_is_logged_once_and_static(self):
+        res = _sweep(["theta"], cls=SharedSceneSweep)
+        path = _timeline_path(res)
+        # Static in the sample or not: the wall was logged with the wall clock only,
+        # and identical at every tick is identical at every tick.
+        for part in ("floor", "wall"):
+            assert self._chunks(path, f"/out_rerun/scene/{part}") == [(True, [])]
+        # The moving part is still one chunk per tick, at its tick.
+        probe = self._chunks(path, "/out_rerun/probe")
+        assert [static for static, _ in probe] == [False, False, False]
+        assert sorted(tick for _, ticks in probe for tick in ticks) == [1, 2, 3]
+
+    def test_a_tick_with_no_recording_keeps_every_tick_separate(self):
+        """A static copy would show at the empty tick too, where there is nothing."""
+        res = _sweep(["theta"], cls=SharedSceneSweep)
+        dataset = res.to_dataset(ReduceType.SQUEEZE).copy(deep=True)
+        dataset["out_rerun"].values[1] = ""
+        path = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+        floor = self._chunks(path, "/out_rerun/scene/floor")
+        assert [static for static, _ in floor] == [False, False]
+        assert sorted(tick for _, ticks in floor for tick in ticks) == [1, 3]
+
+    def test_an_entity_on_the_samples_own_timeline_is_not_shared(self):
+        """Static data has no inner axis, and the sample's own clock is one."""
+        res = _sweep(["theta"], cls=SharedSceneWithClockSweep)
+        path = _timeline_path(res)
+        assert self._chunks(path, "/out_rerun/scene/floor") == [(True, [])]
+        wall = self._chunks(path, "/out_rerun/scene/wall")
+        assert [static for static, _ in wall] == [False, False, False]
+        assert "time_s" in _indices(path)["/out_rerun/scene/wall"]
+
+    def test_sharing_is_decided_per_branch(self):
+        """Two branches are two scenes; what one holds still the other may not."""
+        res = _sweep(["theta"], cls=SharedSceneSweep)
+        data = (
+            res.to_dataset(ReduceType.SQUEEZE)["out_rerun"]
+            .expand_dims(scene=["a", "b"])
+            .transpose("theta", "scene")
+            .copy(deep=True)
+        )
+        data.loc[{"scene": "b", "theta": 2.0}] = ""
+        path = res.to_rerun_timeline_path(
+            data.to_dataset(), res.bench_cfg.result_vars, timeline_dim="theta"
+        )
+        assert self._chunks(path, "/scene_a/out_rerun/scene/floor") == [(True, [])]
+        assert [s for s, _ in self._chunks(path, "/scene_b/out_rerun/scene/floor")] == [
+            False,
+            False,
+        ]
 
 
 class TestInnerTimeline:
@@ -961,8 +1065,8 @@ class TestLayout:
             data.loc[{"pose": "Home", "scenario": "table"}] = ""
         layouts = []
 
-        def capture(rrb, branches, branch_dims, readout=None):
-            layout = _layout_views(rrb, branches, branch_dims, readout)
+        def capture(rrb, branches, branch_dims, readout=None, **kwargs):
+            layout = _layout_views(rrb, branches, branch_dims, readout, **kwargs)
             layouts.append(layout)
             return layout
 

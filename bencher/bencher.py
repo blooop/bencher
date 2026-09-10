@@ -1707,7 +1707,23 @@ class Bench(BenchPlotServer):
 
         if append:
             self._append_to_report(res)
+            if len(result.target_names) == 2:
+                # Optuna's own picture of the front, in the same tab as the walk
+                # along it: every trial the study ran as a point in objective space,
+                # dominated ones included, so the front is read against the search
+                # that found it and not only against itself.
+                self.report.append(self._pareto_plot_pane(result))
         return res
+
+    @staticmethod
+    def _pareto_plot_pane(result: OptimizeResult) -> pn.viewable.Viewable:
+        """Optuna's Pareto-front scatter of *result* as a panel pane."""
+        # Function-scoped: optuna.visualization imports plotly, which is a slow
+        # import nothing else on the path needs.
+        from optuna.visualization import plot_pareto_front
+
+        figure = plot_pareto_front(result.study, target_names=list(result.target_names))
+        return pn.pane.Plotly(figure)
 
     def _append_to_report(self, bench_res: BenchResult) -> None:
         """Render *bench_res* into the report, through the split path when forced."""

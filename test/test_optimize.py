@@ -463,6 +463,31 @@ class TestPlotParetoFront:
         # is not an input the worker accepts.
         assert res not in bench.results
 
+    def test_two_objectives_put_optunas_pareto_plot_in_the_front_tab(self):
+        """The walk along the front and optuna's picture of it belong together: the
+        scatter says where each rank sits among every trial, dominated ones included."""
+        import panel as pn
+
+        bench = bn.Bench("pareto_plotly", MultiObjective(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=6, warm_start=False, plot=False)
+        bench.plot_pareto_front(result)
+        tab = bench.report.pane[-1]
+        assert tab.name == "Pareto front of obj1 vs obj2"
+        plots = [pane for pane in tab.objects if isinstance(pane, pn.pane.Plotly)]
+        assert len(plots) == 1
+        assert "Pareto" in plots[0].object.layout.title.text
+        assert plots[0].object.layout.xaxis.title.text == "obj1"
+        assert plots[0].object.layout.yaxis.title.text == "obj2"
+
+    def test_a_single_objective_front_has_no_pareto_plot_to_add(self):
+        import panel as pn
+
+        bench = bn.Bench("pareto_plotly_one", SphereWithSeed(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=4, aggregate=["seed"], agg_fn="mean", plot=False)
+        bench.plot_pareto_front(result)
+        tab = bench.report.pane[-1]
+        assert not [pane for pane in tab.objects if isinstance(pane, pn.pane.Plotly)]
+
     def test_aggregated_dimensions_are_swept_beside_the_rank(self):
         """A design is shown under every condition it was judged across, and the
         study's own reading of it -- the aggregate -- rides on the rank."""

@@ -37,6 +37,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it sits, which the scene alone cannot. `to_rerun_timeline(readout_scatter=(x, y))`
   asks for one on any sweep whose samples carry two such values; the dataset attribute
   `bencher_readout_scatter` is the same request made by the sweep's producer.
+
+  It is drawn as a plot, not dropped into a bare 2-D view: rerun has no chart with two
+  free axes (its time series takes the timeline as x), so the values are mapped onto a
+  fixed box and the axes, gridlines, round-number tick labels and axis titles are logged
+  as geometry around it, larger values upward. The cursor's point is labelled with its
+  actual values, since hover on the box reports positions, and the front is joined into
+  a curve where the samples are in order along x. The read-out strip grows to hold it.
+- **A two-objective `plot_pareto_front` adds optuna's own Pareto plot to the front's
+  tab**, every trial the study ran as a point, dominated ones included, so the walk along
+  the front is read against the search that found it.
 - **`OptimizeResult.pareto_trials(objective=None)`**, the front ordered along one
   objective rather than in the order optuna happened to find it, plus
   `OptimizeResult.searched` and the new `aggregated` / `agg_fn` fields recording what a
@@ -55,6 +65,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recorded rather than seeding a wrong slot.
 
 ### Changed
+- **The rerun timeline stores what a branch's samples have in common once.** Composing
+  a sweep of recordings forwarded every sample's every chunk, re-indexed onto its tick,
+  so a benchmark that draws a robot of a quarter-million triangles and then moves a
+  sensor across it stored the robot once per tick: a nine-view, four-tick front of such
+  recordings was 153 MB, of which the robot was nearly all. An entity whose content is
+  identical in every sample of a branch (by digest, row ids aside) is now logged once,
+  static, and the per-tick chunks carry only what changes. Static is the form the
+  cursor-pinned views can see at every tick, and it is only used where it is exact: a
+  branch missing a sample at any tick, or an entity with a timeline of the benchmark's
+  own, keeps every tick separate. The recording's size then follows the number of views
+  rather than the length of the sweep.
 - **The rerun timeline's read-out also names the coordinates riding on the timeline
   dimension.** A sweep over a *set* of designs rather than a grid carries what makes each
   sample itself as coordinates on the swept dimension, and the ticks cannot show them:
