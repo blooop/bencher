@@ -23,6 +23,7 @@ from bencher.results.rerun_timeline import (
     _DurationIndex,
     _entity_parts,
     _layout_views,
+    _PlotBox3D,
     _readout_entity,
     _SequenceIndex,
     default_timeline_dim,
@@ -219,6 +220,25 @@ class FrontSweep(bn.ParametrizedSweep):
         return super().benchmark()
 
 
+class ThreeObjectiveFrontSweep(bn.ParametrizedSweep):
+    """A three-objective design space, so its front has no one plane to be drawn on."""
+
+    theta = bn.FloatSweep(default=1.0, bounds=[1.0, 3.0], samples=3)
+    near = bn.ResultFloat(units="m", direction=bn.OptDir.minimize)
+    far = bn.ResultFloat(units="m", direction=bn.OptDir.minimize)
+    cost = bn.ResultFloat(units="ul", direction=bn.OptDir.minimize)
+    out_rerun = bn.ResultRerun(width=200, height=150)
+
+    def benchmark(self):
+        self.near = float(self.theta)
+        self.far = 3.0 - float(self.theta)
+        self.cost = abs(2.0 - float(self.theta))
+        recording = rr.RecordingStream("test_rerun_timeline_front_3d", make_default=False)
+        recording.log("pose", rr.Points2D([[self.theta, 0.0]]))
+        self.out_rerun = bn.capture_rerun_rrd(recording)
+        return super().benchmark()
+
+
 class FractionalSweep(bn.ParametrizedSweep):
     """A sweep whose coordinates are not whole numbers, so ticks cannot be them."""
 
@@ -361,6 +381,26 @@ def _media_types(path: str, entity: str) -> list[str]:
 def _xy(point) -> list:
     """A logged 2-D position as ``[x, y]``, however arrow handed it back."""
     return list(point.values()) if isinstance(point, dict) else list(point)
+
+
+def _xyz(point) -> list:
+    """A logged 3-D position as ``[x, y, z]``, however arrow handed it back."""
+    return list(point.values()) if isinstance(point, dict) else list(point)
+
+
+def _points3d(path: str, entity: str) -> list[list[list[float]]]:
+    """The Points3D positions logged at *entity*, one list of points per row."""
+    reader = RrdReader(str(path))
+    rows: list[list[list[float]]] = []
+    for chunk in reader.stream(store=reader.recordings()[0]):
+        if str(chunk.entity_path) != entity:
+            continue
+        batch = chunk.to_record_batch()
+        for i, field in enumerate(batch.schema):
+            if field.name.startswith("Points3D") and "positions" in field.name:
+                for row in batch.column(i).to_pylist():
+                    rows.append([[float(v) for v in _xyz(point)] for point in row])
+    return rows
 
 
 def _static(path: str, entity: str) -> list[bool]:
@@ -788,7 +828,7 @@ class TestTrackingScatter:
 
     def test_a_pair_is_what_a_plane_takes(self):
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
-        with pytest.raises(ValueError, match="exactly two"):
+        with pytest.raises(ValueError, match="two or three"):
             res.to_rerun_timeline_path(
                 self._scatter_dataset(res),
                 res.bench_cfg.result_vars,
@@ -837,7 +877,7 @@ class TestTrackingScatter:
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
         dataset = self._scatter_dataset(res)
         dataset.attrs[READOUT_SCATTER_ATTR] = ["cost", "risk"]
-        with pytest.raises(ValueError, match="exactly two"):
+        with pytest.raises(ValueError, match="two or three"):
             res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars, readout_scatter=())
 
     def test_a_two_objective_front_plots_itself(self):
@@ -852,6 +892,122 @@ class TestTrackingScatter:
         assert "/front/pareto_rank/all" in entities
         ranks = list(range(len(result.pareto_trials())))
         assert sorted(entities["/front/pareto_rank/current"]["pareto_rank"]) == ranks
+
+
+class TestTrackingScatter3D:
+    """Three objectives have no one plane, so the front goes in a rerun 3-D view."""
+
+    def _scatter_dataset(self, res):
+        return res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            cost=("size", [4.0, 3.0, 2.0, 1.0]),
+            risk=("size", [1.0, 2.0, 3.0, 4.0]),
+            mass=("size", [2.0, 2.0, 5.0, 9.0]),
+        )
+
+    def test_three_named_values_are_drawn_as_points_in_a_cube(self):
+        """Every sample a point, mapped onto one edge length per axis so three unlike
+        scales do not put the whole front in a sliver of the view."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = res.to_rerun_timeline_path(
+            self._scatter_dataset(res),
+            res.bench_cfg.result_vars,
+            readout_scatter=("cost", "risk", "mass"),
+        )
+        rows = _points3d(path, "/front/size/all")
+        assert len(rows) == 1, "the whole set arrives as one static chunk"
+        points = rows[0]
+        assert len(points) == 4
+        assert all(len(point) == 3 for point in points)
+        # cost falls as risk rises, so the two axes run opposite ways over the set.
+        xs = [point[0] for point in points]
+        ys = [point[1] for point in points]
+        assert xs == sorted(xs, reverse=True)
+        assert ys == sorted(ys)
+        # Every axis is mapped onto the same edge, whatever its own units.
+        for axis in range(3):
+            values = [point[axis] for point in points]
+            assert min(values) >= 0.0
+            assert max(values) <= _PlotBox3D.size
+
+    def test_the_whole_set_is_static_and_the_cursors_point_moves(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = res.to_rerun_timeline_path(
+            self._scatter_dataset(res),
+            res.bench_cfg.result_vars,
+            readout_scatter=("cost", "risk", "mass"),
+        )
+        assert _static(path, "/front/size/all") == [True]
+        assert _indices(path)["/front/size/current"]["size"] == [2, 3, 4, 5]
+
+    def test_the_highlight_is_the_sample_the_cursor_is_on(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = res.to_rerun_timeline_path(
+            self._scatter_dataset(res),
+            res.bench_cfg.result_vars,
+            readout_scatter=("cost", "risk", "mass"),
+        )
+        every = _points3d(path, "/front/size/all")[0]
+        # One point per tick, each the sample sitting at that tick.
+        assert _points3d(path, "/front/size/current") == [[point] for point in every]
+
+    def test_a_sample_with_no_value_is_left_off_and_clears_the_marker(self):
+        """Same rule as the flat plot: a NaN has no position, and latest-at must not
+        hold the previous tick's point at a tick that has none."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            cost=("size", [4.0, 3.0, 2.0, 1.0]),
+            risk=("size", [1.0, 2.0, float("nan"), 4.0]),
+            mass=("size", [2.0, 2.0, 5.0, 9.0]),
+        )
+        path = res.to_rerun_timeline_path(
+            dataset, res.bench_cfg.result_vars, readout_scatter=("cost", "risk", "mass")
+        )
+        assert len(_points3d(path, "/front/size/all")[0]) == 3
+        marked = _points3d(path, "/front/size/current")
+        assert marked[2] == [], "the unscored tick clears the marker"
+        assert all(len(row) == 1 for row in marked[:2] + marked[3:])
+
+    def test_a_third_axis_that_is_not_numbers_leaves_the_report_standing(self, caplog):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            cost=("size", [4.0, 3.0, 2.0, 1.0]),
+            risk=("size", [1.0, 2.0, 3.0, 4.0]),
+            shape=("size", ["wide", "narrow", "tall", "flat"]),
+        )
+        with caplog.at_level("WARNING", logger="bencher.results.rerun_timeline"):
+            path = res.to_rerun_timeline_path(
+                dataset, res.bench_cfg.result_vars, readout_scatter=("cost", "risk", "shape")
+            )
+        assert "no tracking scatter" in caplog.text
+        assert "/front/size/all" not in _indices(path)
+        assert "/frame" in _indices(path)
+
+    def test_four_values_are_not_a_space_to_draw_a_front_in(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        with pytest.raises(ValueError, match="two or three"):
+            res.to_rerun_timeline_path(
+                self._scatter_dataset(res),
+                res.bench_cfg.result_vars,
+                readout_scatter=("cost", "risk", "mass", "cost"),
+            )
+
+    def test_a_three_objective_front_plots_itself(self):
+        """End to end: a three-objective study stamps three axes and gets the 3-D view."""
+        bench = ThreeObjectiveFrontSweep().to_bench(bn.BenchRunCfg(repeats=1))
+        result = bench.optimize(n_trials=4, warm_start=False, plot=False)
+        # Every result var the worker declares, which is the default: a study that
+        # did not aggregate scores each rank with the objective itself, so those have
+        # to be on the sweep for the axes to name anything.
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR
+
+        assert res.ds.attrs[READOUT_SCATTER_ATTR] == ["near", "far", "cost"]
+        entities = _indices(_timeline_path(res))
+        assert "/front/pareto_rank/all" in entities
+        ranks = list(range(len(result.pareto_trials())))
+        assert sorted(entities["/front/pareto_rank/current"]["pareto_rank"]) == ranks
+        # A 3-D front is a surface, not a line, so it is never joined into a curve.
+        assert "/front/pareto_rank/all/curve" not in entities
 
 
 class TestSharedContent:

@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A three-objective Pareto front is drawn in a rerun 3-D view.** Two objectives make
+  a trade that can be drawn flat, and `plot_pareto_front` draws it on a frame this
+  package logs as geometry, because rerun has no chart with two free axes. Three
+  objectives have no such plane at all: any one projection hides a whole direction of
+  the trade, and which pair you happen to plot decides which designs look good. So a
+  three-objective front goes in the thing rerun *does* have — a real 3-D view, one
+  point per design in a cube the reader can orbit, the cursor's own design picked out
+  and labelled as the slider walks the front.
+
+  Each axis is mapped onto the same edge length, so three unlike scales — degrees
+  against decibels against a count — do not put the whole front in one sliver of the
+  view, and the true values go on as tick labels. No grid and no wireframe cage:
+  rerun's own view supplies depth, occlusion and an orbit camera, and a box in front
+  of the points fights all three. The front is not joined into a curve either, the way
+  the flat one is where its samples are ordered — a three-objective front is a
+  surface, so a line through it in tick order would draw a path and not the shape.
+
+  `to_rerun_timeline(readout_scatter=(x, y, z))` asks for one on any sweep whose
+  samples carry three such values, and `bencher_readout_scatter` takes two or three
+  names. A two-objective front is unchanged.
+- New gallery example `example_optimize_pareto_scrub_3d`: a finned heat sink trading
+  thermal resistance against back-pressure against metal, with every design on the
+  resulting front drawn and the front itself turnable.
+
+### Changed
+- A read-out view now carries what *kind* of plot it is as one field rather than 2-D
+  bounds beside a set of view kinds. The layout asks both "which view class" and "how
+  much height", and with the two apart a view could answer them inconsistently — a
+  plot rendered into the sliver of height meant for a legend.
+
 ## [1.127.0] - 2026-09-10
 
 ### Added

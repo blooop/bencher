@@ -1790,11 +1790,12 @@ class Bench(BenchPlotServer):
                 units = getattr(by_name.get(target), "units", None)
                 if units:
                     res.ds.coords[scored[target]].attrs["units"] = units
-        # Two objectives are a picture: the front in the space it was ranked in, with
-        # the cursor's own design marked on it, which is what says where along the
-        # trade a tick sits. More than two have no one plane to draw, and one has no
-        # trade to show, so neither asks for it.
-        if len(result.target_names) == 2:
+        # Two or three objectives are a picture: the front in the space it was ranked
+        # in, with the cursor's own design marked on it, which is what says where along
+        # the trade a tick sits. Two are drawn on a flat frame and three go in a rerun
+        # 3-D view the reader can orbit. One objective has no trade to show, and past
+        # three there is no space to put the front in, so neither asks for it.
+        if len(result.target_names) in (2, 3):
             res.ds.attrs[READOUT_SCATTER_ATTR] = [scored[target] for target in result.target_names]
             res.ds.attrs[READOUT_SCATTER_TITLE_ATTR] = "Pareto front"
         # The coordinates went on after the dataset was set up, so its derived
@@ -1803,11 +1804,12 @@ class Bench(BenchPlotServer):
 
         if append:
             self._append_to_report(res)
-            if len(result.target_names) == 2:
+            if len(result.target_names) in (2, 3):
                 # Optuna's own picture of the front, in the same tab as the walk
                 # along it: every trial the study ran as a point in objective space,
                 # dominated ones included, so the front is read against the search
-                # that found it and not only against itself.
+                # that found it and not only against itself. Two and three objectives
+                # are what optuna itself will draw.
                 self.report.append(self._pareto_plot_pane(result))
         return res
 

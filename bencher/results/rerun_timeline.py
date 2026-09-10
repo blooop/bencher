@@ -47,6 +47,7 @@ import importlib.util
 import itertools
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, assert_never
@@ -93,11 +94,12 @@ _DROPPED_TIMELINES = frozenset({"log_time"})
 # "0.5 rad" or "a/b" cannot inject a path separator or need escaping.
 _UNSAFE_ENTITY_CHARS = re.compile(r"[^0-9A-Za-z_.-]+")
 
-#: Dataset attribute naming two per-sample variables to draw as a tracking scatter
-#: beneath the timeline -- every sample as a point, the cursor's own picked out. Set
-#: by the producer of the sweep (``Bench.plot_pareto_front`` stamps the study's two
-#: objectives), because which pair is worth plotting against each other is a fact
-#: about the sweep and not something a renderer can infer from dtypes.
+#: Dataset attribute naming two or three per-sample variables to draw as a tracking
+#: scatter beneath the timeline -- every sample as a point, the cursor's own picked
+#: out. Two are drawn on a flat frame, three in a rerun 3-D view. Set by the producer
+#: of the sweep (``Bench.plot_pareto_front`` stamps the study's objectives), because
+#: which values are worth plotting against each other is a fact about the sweep and
+#: not something a renderer can infer from dtypes.
 READOUT_SCATTER_ATTR = "bencher_readout_scatter"
 
 #: Dataset attribute naming the tracking scatter's plot, e.g. "Pareto front". Only
@@ -121,6 +123,7 @@ _SCATTER_LABEL_COLOR = (0, 0, 0)
 # Logged in place of the cursor's marker at a tick whose sample has no position:
 # an empty batch is what clears an entity latest-at would otherwise carry forward.
 _NO_POINTS = np.zeros((0, 2))
+_NO_POINTS_3D = np.zeros((0, 3))
 
 # Which Blueprint view displays each result type, given the archetype
 # ``_log_result_var`` writes for it (named in the comments). A ``ResultRerun`` is
@@ -361,6 +364,23 @@ def _entity_parts(dim: str, values: list[Any]) -> list[str]:
     return parts
 
 
+@dataclass(frozen=True)
+class _Plot2D:
+    """A read-out plot drawn on a frame this module logs as geometry.
+
+    Attributes:
+        bounds: ``((x_min, x_max), (y_min, y_max))`` to open the view on. Fitting to
+            the data alone would crop the axis names and tick labels drawn around it.
+    """
+
+    bounds: tuple[tuple[float, float], tuple[float, float]]
+
+
+@dataclass(frozen=True)
+class _Plot3D:
+    """A read-out plot in a native rerun 3-D view, which frames and orbits itself."""
+
+
 @dataclass
 class _View:
     """One entity origin, which becomes one Blueprint view.
@@ -368,15 +388,19 @@ class _View:
     There is one per (branch, result variable): a result var gets its own origin so
     an image and a scalar swept together are two views side by side rather than one
     view asked to draw both.
+
+    Attributes:
+        plot: What kind of plot this read-out is, or None for an ordinary view built
+            from *view_kinds*. One field rather than a bounds-beside-kinds pair: the
+            layout asks both "which view class" and "how much height", and those must
+            not be able to disagree.
     """
 
     origin: str
     label: str
     view_kinds: set[RerunViewKind] = field(default_factory=set)
     logged: bool = False
-    #: ``((x_min, x_max), (y_min, y_max))`` to open a 2-D view on, for a view that
-    #: draws its own frame and labels: fit to the data alone would crop them.
-    bounds: tuple[tuple[float, float], tuple[float, float]] | None = None
+    plot: _Plot2D | _Plot3D | None = None
 
 
 def _rewrite_chunk(chunk, timeline: str, arrow_type=None, raw_value: int | None = None) -> list:
@@ -647,15 +671,23 @@ def _layout_views(
 
 
 def _readout_view(rrb, view: _View):
-    """One read-out's Blueprint view, opened on its own bounds where it has them."""
-    if view.bounds is None:
-        return views_for_kinds(rrb, view.view_kinds, origin=view.origin, label=view.label)
-    (x_min, x_max), (y_min, y_max) = view.bounds
-    return rrb.Spatial2DView(
-        origin=view.origin,
-        name=view.label,
-        visual_bounds=rrb.VisualBounds2D(x_range=(x_min, x_max), y_range=(y_min, y_max)),
-    )
+    """One read-out's Blueprint view: a drawn plot, a 3-D one, or an ordinary view."""
+    match view.plot:
+        case _Plot2D(bounds=((x_min, x_max), (y_min, y_max))):
+            return rrb.Spatial2DView(
+                origin=view.origin,
+                name=view.label,
+                visual_bounds=rrb.VisualBounds2D(x_range=(x_min, x_max), y_range=(y_min, y_max)),
+            )
+        case _Plot3D():
+            # No visual bounds: rerun fits a 3-D view to its contents and lets the
+            # viewer orbit it, which is the whole reason three objectives go here
+            # rather than onto a drawn frame.
+            return rrb.Spatial3DView(origin=view.origin, name=view.label)
+        case None:
+            return views_for_kinds(rrb, view.view_kinds, origin=view.origin, label=view.label)
+        case _:
+            assert_never(view.plot)
 
 
 def _readout_layout(rrb, readouts: list[_View]):
@@ -672,7 +704,7 @@ def _readout_layout(rrb, readouts: list[_View]):
 
 def _readout_shares(readouts: list[_View]) -> tuple[int, int]:
     """How much height the strip gets: a plot's share if any read-out is one."""
-    if any(RerunViewKind.spatial_2d in view.view_kinds for view in readouts):
+    if any(view.plot is not None for view in readouts):
         return _PLOT_ROW_SHARES
     return _READOUT_ROW_SHARES
 
@@ -688,28 +720,41 @@ def _readout_entity(dim: str) -> str:
 
 @dataclass(frozen=True)
 class _ReadoutScatter:
-    """A request to plot two of a sweep's per-sample values against each other.
+    """A request to plot two or three of a sweep's per-sample values against each other.
 
-    The pair and its title travel together. A title says what the *set* is, so it
-    names the pair somebody asked to see and not whichever pair the renderer ended
-    up drawing: reading it off the dataset regardless titled a plot of a front's
+    The axes and their title travel together. A title says what the *set* is, so it
+    names the axes somebody asked to see and not whichever the renderer ended up
+    drawing: reading it off the dataset regardless titled a plot of a front's
     *inputs* "Pareto front".
+
+    Two axes are drawn on a flat frame this module builds itself, three in a native
+    rerun 3-D view -- see :meth:`RerunTimelineResult._log_front_scatter`.
+
+    Attributes:
+        axes: Two or three per-sample variable names, in plotting order. The arity
+            is checked once, in :meth:`resolve`, so nothing downstream carries a
+            fourth meaning.
+        title: What the set is, or None to label the plot by its axes.
     """
 
-    x: str
-    y: str
+    axes: tuple[str, ...]
     title: str | None = None
+
+    @property
+    def spatial(self) -> bool:
+        """Whether this asks for the 3-D view rather than the drawn frame."""
+        return len(self.axes) == 3
 
     @classmethod
     def resolve(
-        cls, dataset: xr.Dataset, requested: tuple[str, str] | None
+        cls, dataset: xr.Dataset, requested: Sequence[str] | None
     ) -> _ReadoutScatter | None:
-        """*requested* if a caller named a pair, else the dataset's own request.
+        """*requested* if a caller named the axes, else the dataset's own request.
 
         Raises:
-            ValueError: if a pair was asked for that is not exactly two variables.
-                An empty one included -- that used to be falsy all the way down and
-                so silently suppressed the dataset's request instead.
+            ValueError: if axes were asked for that are not two or three variables.
+                An empty request included -- that used to be falsy all the way down
+                and so silently suppressed the dataset's request instead.
         """
         title = None
         if requested is None:
@@ -717,13 +762,13 @@ class _ReadoutScatter:
             if requested is None:
                 return None
             title = dataset.attrs.get(READOUT_SCATTER_TITLE_ATTR)
-        pair = list(requested)
-        if len(pair) != 2:
+        axes = tuple(requested)
+        if len(axes) not in (2, 3):
             raise ValueError(
-                "a tracking scatter needs exactly two variables to plot against each "
-                f"other, got {pair}"
+                "a tracking scatter needs two or three variables to plot against "
+                f"each other, got {list(axes)}"
             )
-        return cls(pair[0], pair[1], title)
+        return cls(axes, title)
 
 
 def _front_entity(dim: str) -> str:
@@ -772,6 +817,22 @@ def _monotonic(values: np.ndarray) -> bool:
     return bool(np.all(steps >= 0) or np.all(steps <= 0))
 
 
+#: How far past the data an axis runs, as a fraction of its span, so no point of the
+#: set sits on the frame or on the very end of an axis.
+_AXIS_PAD = 0.12
+
+
+def _padded_range(values: np.ndarray) -> tuple[float, float]:
+    """The range an axis is drawn over: the data's own, opened out by :data:`_AXIS_PAD`."""
+    low, high = float(np.min(values)), float(np.max(values))
+    if high == low:
+        # A flat axis still needs a range to be drawn on.
+        margin = abs(low) * 0.5 or 0.5
+        return low - margin, high + margin
+    margin = (high - low) * _AXIS_PAD
+    return low - margin, high + margin
+
+
 class _PlotFrame:
     """The unit box a 2-D read-out plot is drawn in, and the mapping onto it.
 
@@ -788,21 +849,10 @@ class _PlotFrame:
 
     width = 160.0
     height = 100.0
-    pad = 0.12
 
     def __init__(self, x: np.ndarray, y: np.ndarray) -> None:
-        self.x_range = self._padded(x)
-        self.y_range = self._padded(y)
-
-    @classmethod
-    def _padded(cls, values: np.ndarray) -> tuple[float, float]:
-        low, high = float(np.min(values)), float(np.max(values))
-        if high == low:
-            # A flat axis still needs a range to be drawn on.
-            margin = abs(low) * 0.5 or 0.5
-            return low - margin, high + margin
-        margin = (high - low) * cls.pad
-        return low - margin, high + margin
+        self.x_range = _padded_range(x)
+        self.y_range = _padded_range(y)
 
     def project_x(self, x) -> np.ndarray:
         low, high = self.x_range
@@ -911,6 +961,89 @@ def _log_plot_frame(
         )
 
 
+class _PlotBox3D:
+    """The unit cube a 3-D read-out plot is drawn in, and the mapping onto it.
+
+    Three objectives are three unlike scales -- degrees against decibels against a
+    count -- and a 3-D view frames what it is given, so plotting them at their own
+    values would put the whole front in a sliver of the cube. Each axis is mapped
+    onto the same edge length instead, larger values away from the origin, and the
+    true values go on as tick labels.
+
+    Unlike :class:`_PlotFrame` this draws no grid and no box: rerun's own 3-D view
+    supplies depth, occlusion and an orbit camera, and a wireframe cage in front of
+    the points would fight all three. Three labelled axes are enough to read
+    position from once the viewer can turn it.
+
+    As with :class:`_PlotFrame`, the values it is built from must be finite.
+    """
+
+    size = 100.0
+
+    def __init__(self, series: list[np.ndarray]) -> None:
+        self.ranges = [_padded_range(values) for values in series]
+
+    def project_axis(self, index: int, values) -> np.ndarray:
+        low, high = self.ranges[index]
+        return (np.asarray(values, dtype=float) - low) / (high - low) * self.size
+
+    def project(self, series: list[np.ndarray]) -> np.ndarray:
+        return np.column_stack([self.project_axis(i, v) for i, v in enumerate(series)])
+
+
+def _log_plot_box_3d(rr, staging, origin: str, box: _PlotBox3D, names: Sequence[str]) -> None:
+    """Draw the three axes, their tick labels and their names for *box*, static.
+
+    Labels are points of no size carrying text, as in the 2-D frame: a point's label
+    is the only text rerun draws at a position in a spatial view. The axis name sits
+    past the end of its own axis so it is never inside the cloud.
+    """
+    edge = box.size
+    staging.log(origin, rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
+    axes = [
+        [[0.0, 0.0, 0.0], [edge, 0.0, 0.0]],
+        [[0.0, 0.0, 0.0], [0.0, edge, 0.0]],
+        [[0.0, 0.0, 0.0], [0.0, 0.0, edge]],
+    ]
+    staging.log(
+        f"{origin}/axes",
+        rr.LineStrips3D(axes, colors=_FRAME_COLOR, radii=rr.Radius.ui_points(1.5)),
+        static=True,
+    )
+    no_size = rr.Radius.ui_points(0.0)
+    for index, name in enumerate(names):
+        ticks = _nice_ticks(*box.ranges[index])
+        positions = []
+        for value in box.project_axis(index, ticks):
+            point = [0.0, 0.0, 0.0]
+            point[index] = float(value)
+            positions.append(point)
+        staging.log(
+            f"{origin}/ticks/{index}",
+            rr.Points3D(
+                positions,
+                radii=no_size,
+                colors=_FRAME_COLOR,
+                labels=[_coord_label(t) for t in ticks],
+                show_labels=True,
+            ),
+            static=True,
+        )
+        far = [0.0, 0.0, 0.0]
+        far[index] = edge * 1.18
+        staging.log(
+            f"{origin}/axis_names/{index}",
+            rr.Points3D(
+                [far],
+                radii=no_size,
+                colors=_FRAME_COLOR,
+                labels=[name],
+                show_labels=True,
+            ),
+            static=True,
+        )
+
+
 def _per_sample_values(dataset: xr.Dataset, name: str, dim: str) -> np.ndarray | None:
     """*name*'s one number per sample of *dim*, whether it is a coordinate or a variable.
 
@@ -988,7 +1121,7 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str | None = None,
         index: TimelineIndex | str = TimelineIndex.tick,
         subsampling_divisions: int | None = None,
-        readout_scatter: tuple[str, str] | None = None,
+        readout_scatter: Sequence[str] | None = None,
         width: int | None = None,
         height: int | None = None,
         **_kwargs,
@@ -1013,14 +1146,16 @@ class RerunTimelineResult(BenchResultBase):
                 this one tiles is branches -- a tick is a slider position, not a
                 panel, so thinning it costs resolution and buys no room.
                 Defaults to None (every sample).
-            readout_scatter (tuple[str, str], optional): Two per-sample variables to
-                plot against each other beneath the timeline, every sample a point
-                and the cursor's own picked out — how a sweep over a *set* says
-                where in that set the slider is parked. Defaults to the dataset's
-                ``bencher_readout_scatter`` attribute, which the producer of the
-                sweep sets (see :data:`READOUT_SCATTER_ATTR`); the title carried
-                beside that attribute names *that* pair, so a pair asked for here
-                is drawn with its axes labelled and no title.
+            readout_scatter (Sequence[str], optional): Two or three per-sample
+                variables to plot against each other beneath the timeline, every
+                sample a point and the cursor's own picked out — how a sweep over a
+                *set* says where in that set the slider is parked. Two are drawn on
+                a flat frame; three go in a rerun 3-D view the reader can orbit.
+                Defaults to the dataset's ``bencher_readout_scatter`` attribute,
+                which the producer of the sweep sets (see
+                :data:`READOUT_SCATTER_ATTR`); the title carried beside that
+                attribute names *those* axes, so axes asked for here are drawn
+                labelled and with no title.
             width (int, optional): Viewer width. Defaults to the widest ``width``
                 declared by a rendered result var, else 950.
             height (int, optional): Viewer height, chosen the same way, else 712.
@@ -1090,7 +1225,7 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str | None = None,
         index: TimelineIndex | str = TimelineIndex.tick,
         subsampling_divisions: int | None = None,
-        readout_scatter: tuple[str, str] | None = None,
+        readout_scatter: Sequence[str] | None = None,
     ) -> str | None:
         """Compose *result_vars* into one ``.rrd`` on a timeline and return its path.
 
@@ -1104,7 +1239,7 @@ class RerunTimelineResult(BenchResultBase):
 
         Raises:
             ValueError: if *timeline_dim* names a dimension the dataset does not have,
-                or a *readout_scatter* was asked for that is not exactly two
+                or a *readout_scatter* was asked for that is not two or three
                 variables.
         """
         # Parsed here rather than where it is drawn: an arity error found halfway
@@ -1274,7 +1409,7 @@ class RerunTimelineResult(BenchResultBase):
         encoding: _IndexEncoding,
         scatter: _ReadoutScatter,
     ) -> _View | None:
-        """Plot every sample against two of its own numbers, and mark the cursor's.
+        """Plot every sample against two or three of its own numbers, cursor marked.
 
         A sweep over a set of designs is usually a set somebody has to choose *from* --
         a Pareto front, a candidate list -- and the shape of that set in the space it
@@ -1283,39 +1418,45 @@ class RerunTimelineResult(BenchResultBase):
         per tick on top of it: latest-at then moves the highlight with the cursor,
         which is what says where on the front the slider is parked.
 
-        Rerun has no plot view with two free axes -- its time series takes the
-        timeline as x -- so the plot is drawn: the values are mapped onto a fixed box
-        (see :class:`_PlotFrame`) and the axes, grid and tick labels are logged as
-        geometry around it, with the cursor's point labelled by its actual values.
+        Two axes are *drawn*: rerun has no plot view with two free axes -- its time
+        series takes the timeline as x -- so the values are mapped onto a fixed box
+        (see :class:`_PlotFrame`) and the axes, grid and tick labels go on as geometry
+        around it. Three axes need none of that, because a 3-D view is exactly the
+        thing rerun does have: the front goes in as points in a cube the viewer can
+        orbit (see :class:`_PlotBox3D`), which is also the only way to read a
+        three-objective front, since no one projection of it is faithful.
 
         Returns:
             _View | None: the scatter's view, or None when the dataset does not carry
-            both named values as one number per sample, or no sample carries both.
+            every named value as one number per sample, or no sample carries them all.
         """
         import rerun as rr
 
-        x_name, y_name = scatter.x, scatter.y
+        names = list(scatter.axes)
         title = scatter.title
-        x = _per_sample_values(dataset, x_name, timeline_dim)
-        y = _per_sample_values(dataset, y_name, timeline_dim)
-        if x is None or y is None:
+        series = [_per_sample_values(dataset, name, timeline_dim) for name in names]
+        if any(values is None for values in series):
             logger.warning(
-                "no tracking scatter: %s and %s are not both one number per %s",
-                x_name,
-                y_name,
+                "no tracking scatter: %s are not all one number per %s",
+                ", ".join(names),
                 timeline_dim,
             )
             return None
-        x = x.astype(float)
-        y = y.astype(float)
+        series = [values.astype(float) for values in series]
         # A sample the worker could not score carries NaN, and a NaN has no position
-        # on the frame: it is left off the set, off the range the axes are drawn from,
-        # and off the curve.
-        placed = np.isfinite(x) & np.isfinite(y)
+        # on the frame: it is left off the set, off the ranges the axes are drawn
+        # from, and off the curve.
+        placed = np.logical_and.reduce([np.isfinite(values) for values in series])
         if not placed.any():
-            logger.warning("no tracking scatter: no sample carries both %s and %s", x_name, y_name)
+            logger.warning("no tracking scatter: no sample carries all of %s", ", ".join(names))
             return None
         origin = _front_entity(timeline_dim)
+        if scatter.spatial:
+            return self._log_front_scatter_3d(
+                rr, staging, dataset, timeline_dim, encoding, origin, names, series, placed, title
+            )
+        x, y = series
+        x_name, y_name = names
         frame = _PlotFrame(x[placed], y[placed])
         _log_plot_frame(rr, staging, f"{origin}/axes", frame, x_name, y_name, title)
         points = frame.project(x, y)
@@ -1384,9 +1525,70 @@ class RerunTimelineResult(BenchResultBase):
         return _View(
             origin=origin,
             label=title or f"{y_name} against {x_name}",
-            view_kinds={RerunViewKind.spatial_2d},
             logged=True,
-            bounds=frame.bounds(titled=title is not None),
+            plot=_Plot2D(frame.bounds(titled=title is not None)),
+        )
+
+    @staticmethod
+    def _log_front_scatter_3d(
+        rr,
+        staging,
+        dataset: xr.Dataset,
+        timeline_dim: str,
+        encoding: _IndexEncoding,
+        origin: str,
+        names: list[str],
+        series: list[np.ndarray],
+        placed: np.ndarray,
+        title: str | None,
+    ) -> _View:
+        """The three-objective form of :meth:`_log_front_scatter`, in a 3-D view.
+
+        No frame, no grid and no curve: rerun draws the cube itself once the viewer
+        turns it, and a three-objective front is a surface rather than a line, so
+        joining the samples in tick order would draw a path through it and not its
+        shape.
+        """
+        box = _PlotBox3D([values[placed] for values in series])
+        _log_plot_box_3d(rr, staging, origin, box, names)
+        points = box.project(series)
+        staging.log(
+            f"{origin}/all",
+            rr.Points3D(points[placed], colors=_SCATTER_ALL_COLOR, radii=rr.Radius.ui_points(3.0)),
+            static=True,
+        )
+        for position, raw in enumerate(encoding.values):
+            encoding.set_time(staging, timeline_dim, raw)
+            # As in the 2-D form: an unscored sample clears the marker rather than
+            # leaving latest-at holding the previous tick's point.
+            marker = points[position : position + 1] if placed[position] else _NO_POINTS_3D
+            reading = "{}: {}".format(
+                _coord_label(dataset.coords[timeline_dim].values[position]),
+                ", ".join(_coord_label(values[position]) for values in series),
+            )
+            labels = [reading] if placed[position] else []
+            staging.log(
+                f"{origin}/current",
+                rr.Points3D(marker, colors=_SCATTER_CURRENT_COLOR, radii=rr.Radius.ui_points(7.0)),
+            )
+            # A separate entity for the text, so it is not painted in the marker's
+            # colour; see _SCATTER_LABEL_COLOR.
+            staging.log(
+                f"{origin}/current/reading",
+                rr.Points3D(
+                    marker,
+                    colors=_SCATTER_LABEL_COLOR,
+                    radii=rr.Radius.ui_points(0.0),
+                    labels=labels,
+                    show_labels=True,
+                ),
+            )
+        staging.reset_time()
+        return _View(
+            origin=origin,
+            label=title or " against ".join(names),
+            logged=True,
+            plot=_Plot3D(),
         )
 
     def _log_sweep(
