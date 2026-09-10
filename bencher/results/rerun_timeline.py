@@ -1184,9 +1184,11 @@ class RerunTimelineResult(BenchResultBase):
                     for branch in branches
                 ],
                 {dim: dataset.sizes[dim] for dim in branch_dims},
-                # No cursor range on the read-outs: each is a picture of the whole
-                # sweep with the cursor's own sample marked on it, and one visible
-                # point is not that.
+                # No cursor range on the read-outs: the scatter and the scalar
+                # curve are pictures of the whole sweep with the cursor's own
+                # sample marked on them, and one visible point is not that. The
+                # text read-out is logged at every tick, so it reads the same
+                # either way.
                 readout=_readout_layout(rrb, readouts),
                 readout_shares=_readout_shares(readouts),
             ),
