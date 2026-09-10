@@ -74,6 +74,20 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# What `to_auto` puts in an otherwise empty row. A constant because `to_auto_plots`
+# renders the pane group on its own and has to tell "nothing to show" apart from a
+# real pane -- matching the sentence as a literal in two places would rot.
+NO_PLOTTERS_MESSAGE = "No Plotters are able to represent these results"
+
+
+def _says_nothing_to_show(panes) -> bool:
+    """Whether a ``to_auto`` result is only its "nothing to show" placeholder."""
+    return (
+        len(panes) == 1
+        and isinstance(panes[0], pn.pane.Markdown)
+        and panes[0].object == NO_PLOTTERS_MESSAGE
+    )
+
 
 class BenchResult(
     # RerunResult resolves to either the real class or a fallback stub via the
@@ -329,7 +343,7 @@ class BenchResult(
         numeric_only: bool = False,
         backend: str | None = None,
         **kwargs,
-    ) -> list[pn.panel]:
+    ) -> pn.layout.ListPanel:
         """Automatically generate plots by dispatching through the plot plugin registry.
 
         Every registered plugin whose match rule fits this sweep renders, in
@@ -356,7 +370,10 @@ class BenchResult(
             **kwargs: Additional keyword arguments for plot configuration.
 
         Returns:
-            list[pn.panel]: A list of panel objects containing the generated plots.
+            pn.layout.ListPanel: `default_container` holding the generated plots (one
+                pane per plugin that rendered), or holding a "nothing to show" message
+                when none did. Iterable and indexable like the list the annotation used
+                to claim, which is how callers already treat it.
         """
         self.plt_cnt_cfg.print_debug = False
         include_names, extra_callbacks = self._normalize_plot_list(listify(plot_list))
@@ -383,7 +400,7 @@ class BenchResult(
 
         self.plt_cnt_cfg.print_debug = True
         if len(row.pane) == 0:
-            row.append(pn.pane.Markdown("No Plotters are able to represent these results"))
+            row.append(pn.pane.Markdown(NO_PLOTTERS_MESSAGE))
         return row.pane
 
     def explain_selection(
@@ -466,8 +483,8 @@ class BenchResult(
 
         Args:
             extra_panels: Extra panel callables or static panels to inject after the sweep
-                summary and before aggregate/auto plots. Each item is either a
-                callable(BenchResult) -> panel, or a static panel object.
+                summary and before the pane group and aggregate/auto plots. Each item is
+                either a callable(BenchResult) -> panel, or a static panel object.
             **kwargs: Additional keyword arguments for plot configuration.
 
         Returns:
@@ -508,7 +525,20 @@ class BenchResult(
                     name = getattr(ep, "__name__", repr(ep))
                     plot_cols.append(report_render_failure(f"Extra panel '{name}'", exc))
 
+        # --- The sample itself: rerun viewer, images, videos ---
+        # Ahead of Aggregated View and Over Time, not merely ahead of the charts inside
+        # to_auto: both of those sections are derived from the samples, so on a sweep
+        # whose subject is a per-sample recording they cannot be the first thing the
+        # reader meets. Plugin priority cannot reach this -- it orders one to_auto call,
+        # and this is section composition a level up. Below the regression report and
+        # extra_panels on purpose: regression is a warning, extra_panels is the caller's
+        # own injection, and both outrank a default layout.
+        pane_group = self._pane_group_section(kwargs)
+        plot_cols.extend(pane_group)
+
         # --- Dimension aggregation (orthogonal to over_time) ---
+        # numeric_only excludes the pane group, so the aggregate call needs no change
+        # to avoid drawing the viewer a second time here.
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:
             dims = ", ".join(self.bench_cfg.agg_over_dims)
             all_input_names = {iv.name for iv in self.bench_cfg.input_vars}
@@ -565,9 +595,61 @@ class BenchResult(
         # `backend="rerun"` only took effect on sweeps that had no plot callbacks of
         # their own, which made it look like a different report rather than a swap.
         kwargs.setdefault("backend", self.bench_cfg.backend)
-        plot_cols.append(self.to_auto(**kwargs))
+        # The pane group has its own section above, so the grid is charts only. Merged
+        # with whatever the caller asked to remove rather than replacing it.
+        remove_plots = [*(listify(kwargs.get("remove_plots")) or [])]
+        if PANES_PLUGIN_NAME not in remove_plots:
+            remove_plots.append(PANES_PLUGIN_NAME)
+        kwargs["remove_plots"] = remove_plots
+        grid = self.to_auto(**kwargs)
+        # "No Plotters" still belongs on a sweep nothing can draw, but not when the one
+        # thing that drew is the pane group already shown above.
+        if not (pane_group and _says_nothing_to_show(grid)):
+            plot_cols.append(grid)
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols
+
+    def _pane_group_section(self, kwargs: dict[str, Any]) -> list[pn.viewable.Viewable]:
+        """The pane group rendered as its own report section, or nothing.
+
+        Nothing when the caller's own ``to_auto`` arguments already drop it -- a
+        ``remove_plots``/``numeric_only`` that excludes it, or a ``plot_list`` that never
+        asked for it -- and nothing when it draws no pane, so a sweep without a
+        pane-typed result var gets no empty section and no "nothing to show" placeholder
+        in this slot.
+
+        ``kwargs`` is read, never mutated: the aggregate section builds its own
+        ``to_auto`` call out of it, and a plot kwarg added here would reach renderers
+        that never received one.
+        """
+        if not self._panes_selected(kwargs):
+            return []
+        pane_kwargs = {
+            k: v
+            for k, v in kwargs.items()
+            if k not in ("plot_list", "remove_plots", "numeric_only")
+        }
+        pane_kwargs.setdefault("pane_layout", self.bench_cfg.pane_layout)
+        # Resolved exactly as the final to_auto call does: with backend=None the panel
+        # tiling outranks the rerun timeline and the viewer degrades to per-sample tiles.
+        pane_kwargs.setdefault("backend", self.bench_cfg.backend)
+        panes = self.to_auto(plot_list=[PANES_PLUGIN_NAME], **pane_kwargs)
+        return [] if _says_nothing_to_show(panes) else [panes]
+
+    def _panes_selected(self, kwargs: dict[str, Any]) -> bool:
+        """Whether the caller's ``to_auto`` arguments leave the pane group renderable.
+
+        Answered through the same normalization ``to_auto`` uses, so a caller who
+        excludes the pane group cannot have it resurrected by the early render, and one
+        who restricts ``plot_list`` to a chart type cannot have it added back.
+        """
+        include_names, _ = self._normalize_plot_list(listify(kwargs.get("plot_list")))
+        exclude_names, _ = self._plot_exclusions(
+            listify(kwargs.get("remove_plots")), [], bool(kwargs.get("numeric_only", False))
+        )
+        if PANES_PLUGIN_NAME in exclude_names:
+            return False
+        return include_names is None or PANES_PLUGIN_NAME in include_names
 
     def _regression_section(self) -> list[pn.viewable.Viewable]:
         """Build the regression block as one report section, not loose panes.
