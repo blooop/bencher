@@ -567,6 +567,24 @@ class TestPlotParetoFront:
         with pytest.raises(ValueError, match="no front"):
             bench.plot_pareto_front(result)
 
+    def test_a_front_runs_on_a_bench_configured_for_multiprocessing(self):
+        """The front's worker was a closure over the designs, which a process pool
+        cannot look up: `AttributeError: Can't get local object
+        'Bench.plot_pareto_front.<locals>.pareto_front_worker'` took down every front
+        on a bench whose run_cfg asked for parallel samples."""
+        cfg = bn.BenchRunCfg()
+        cfg.repeats = 1
+        cfg.executor = bn.Executors.MULTIPROCESSING
+        bench = bn.Bench("pareto_multiprocessing", MultiObjective(), run_cfg=cfg)
+        result = bench.optimize(n_trials=8, warm_start=False, plot=False)
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+        front = result.pareto_trials()
+        assert ds.sizes["pareto_rank"] == len(front)
+        assert [float(v) for v in ds["obj1"].values] == pytest.approx(
+            [trial.params["x"] ** 2 for trial in front]
+        )
+
     def test_a_second_front_is_not_served_the_first_ones_data(self):
         """``pareto_rank`` is a position, not an identity: nothing in either cache key
         -- ``hash_persistent`` or ``hash_sha1(sorted(job_args))`` -- can see which

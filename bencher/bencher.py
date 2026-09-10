@@ -100,6 +100,32 @@ def _pareto_design(trial, searched: list) -> dict:
     return {iv.name: trial.params[iv.name] for iv in searched}
 
 
+class _ParetoFrontWorker:
+    """Evaluate the design at a rank, as :meth:`Bench.plot_pareto_front` sweeps them.
+
+    A class and not a closure so that it pickles: ``Executors.MULTIPROCESSING`` sends
+    the worker to its pool, and a function defined inside a method cannot be looked up
+    there ("Can't get local object"), which took the whole front down on any bench
+    configured for it.
+
+    Attributes:
+        worker: The bench's own worker, called with the design and whatever the front
+            sweeps beside the rank.
+        designs: One design per rank, in front order.
+    """
+
+    # callable_name() falls back to str() for an object with no __name__, which for an
+    # instance is its address -- and that reaches plot-filter keys.
+    __name__ = "pareto_front_worker"
+
+    def __init__(self, worker: Callable, designs: list[dict]):
+        self.worker = worker
+        self.designs = designs
+
+    def __call__(self, **kwargs) -> dict:
+        return self.worker(**self.designs[kwargs.pop(PARETO_RANK)], **kwargs)
+
+
 def _agg_job_args(kwargs, agg_vars, combo):
     """Build job_args dict by merging Optuna-suggested kwargs with aggregate combo values."""
     job_args = dict(kwargs)
@@ -1698,11 +1724,12 @@ class Bench(BenchPlotServer):
         else:
             result_vars_in = deepcopy(cfg.result_vars)
 
-        def pareto_front_worker(**kwargs) -> dict:
-            design = designs[kwargs.pop(PARETO_RANK)]
-            return worker(**design, **kwargs)
-
-        front = Bench(self.bench_name, pareto_front_worker, run_cfg=run_cfg, report=self.report)
+        front = Bench(
+            self.bench_name,
+            _ParetoFrontWorker(worker, designs),
+            run_cfg=run_cfg,
+            report=self.report,
+        )
         front.plot_callbacks = self.plot_callbacks
         if title is None:
             title = "Pareto front of " + " vs ".join(result.target_names)
