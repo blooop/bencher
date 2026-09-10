@@ -1463,7 +1463,7 @@ class RerunTimelineResult(BenchResultBase):
         # A sample the worker could not score carries NaN, and a NaN has no position
         # on the frame: it is left off the set, off the ranges the axes are drawn
         # from, and off the curve.
-        placed = np.logical_and.reduce([np.isfinite(values) for values in series])
+        placed = np.isfinite(np.stack(series)).all(axis=0)
         if not placed.any():
             logger.warning("no tracking scatter: no sample carries all of %s", ", ".join(names))
             return None
