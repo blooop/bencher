@@ -72,6 +72,29 @@ for handler in logging.root.handlers:
 PARETO_RANK = "pareto_rank"
 
 
+def _pareto_design(trial, searched: list) -> dict:
+    """The searched inputs of *trial*, which is the design it stands for.
+
+    Not ``trial.params``: a warm-started trial is built from every variable the
+    seeding sweep recorded (``bench_results_to_optuna_trials(include_meta=True)``),
+    so its params carry the dimensions the study aggregated over and ``repeat``
+    besides. Those are not the design -- the aggregated dims are swept beside the
+    rank, and handing them to the worker as well collides with that.
+
+    Raises:
+        ValueError: if *trial* carries no value for one of the *searched* inputs,
+            which a trial seeded by a narrower sweep does not.
+    """
+    missing = [iv.name for iv in searched if iv.name not in trial.params]
+    if missing:
+        raise ValueError(
+            f"trial {trial.number} is on the front but names no {missing}, so the "
+            "design it stands for cannot be re-evaluated; it was seeded from a sweep "
+            "that did not search those inputs (see optimize(warm_start=...))"
+        )
+    return {iv.name: trial.params[iv.name] for iv in searched}
+
+
 def _agg_job_args(kwargs, agg_vars, combo):
     """Build job_args dict by merging Optuna-suggested kwargs with aggregate combo values."""
     job_args = dict(kwargs)
@@ -1593,7 +1616,8 @@ class Bench(BenchPlotServer):
 
         Raises:
             ValueError: if the study finished no trial, was run without a
-                ``bench_cfg``, or *objective* is not one of its targets.
+                ``bench_cfg``, *objective* is not one of its targets, or a trial on
+                the front names no value for one of the searched inputs.
         """
         if result.bench_cfg is None:
             raise ValueError("plot_pareto_front needs the study's bench_cfg to know its inputs")
@@ -1623,7 +1647,9 @@ class Bench(BenchPlotServer):
 
         cfg = result.bench_cfg
         along = result.target_names[0] if objective is None else objective
-        designs = [dict(trial.params) for trial in trials]
+        swept = [deepcopy(iv) for iv in cfg.input_vars if iv.name in result.aggregated]
+        searched = [iv for iv in cfg.input_vars if iv.name not in result.aggregated]
+        designs = [_pareto_design(trial, searched) for trial in trials]
         # Bounds rather than sample_values: an IntSweep over 0..n-1 yields every one
         # of them, and only the bounds form carries the range optuna-side readers and
         # the persistent hash both ask a sweep for.
@@ -1633,8 +1659,6 @@ class Bench(BenchPlotServer):
             doc=f"Position along the Pareto front, best {along} first",
         )
         rank.name = PARETO_RANK
-        swept = [deepcopy(iv) for iv in cfg.input_vars if iv.name in result.aggregated]
-        searched = [iv for iv in cfg.input_vars if iv.name not in result.aggregated]
         if result_vars is not None:
             result_vars_in = [
                 self.convert_vars_to_params(rv, "result", run_cfg) for rv in result_vars

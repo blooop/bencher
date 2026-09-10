@@ -584,6 +584,39 @@ class TestParetoScrubExample:
         assert any(title.startswith("Pareto front of") for title in titles), titles
 
 
+class TestParetoFrontWarmStartedTrials:
+    """A warm-started trial's params are the seeding sweep's vars, not a design."""
+
+    def test_the_aggregated_dimension_is_swept_and_not_also_passed(self):
+        """Warm start builds a trial from every var the seeding sweep recorded, the
+        aggregated dims and ``repeat`` among them. Handing those to the worker whole
+        collided with the dims the front sweeps beside the rank."""
+        bench = bn.Bench("pareto_warm_agg", MultiObjectiveWithSeed(), run_cfg=_run_cfg())
+        bench.plot_sweep(input_vars=["x", "seed"], auto_plot=False)
+        result = bench.optimize(n_trials=4, aggregate=["seed"], agg_fn="mean", plot=False)
+        assert result.n_warm_start_trials > 0
+        front = result.pareto_trials()
+        # x=0, seed=0 scores obj1=0, which no aggregated trial can match, so a
+        # warm-started trial is on the front whatever optuna suggested.
+        assert any("seed" in trial.params for trial in front)
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+        assert set(ds.sizes) == {"pareto_rank", "seed"}
+        assert list(ds.coords["x"].values) == pytest.approx([t.params["x"] for t in front])
+
+    def test_a_trial_missing_an_input_the_study_searched_is_named(self):
+        """A trial seeded by a narrower sweep carries no value for an input the study
+        searched, so it is not a design this bench can re-evaluate. Reading it as one
+        reached the coordinate build as a bare KeyError."""
+        bench = bn.Bench("pareto_warm_narrow", MultiObjectiveWithSeed(), run_cfg=_run_cfg())
+        bench.plot_sweep(input_vars=["x"], auto_plot=False)
+        result = bench.optimize(input_vars=["x", "seed"], n_trials=4, plot=False)
+        assert result.n_warm_start_trials > 0
+        assert any("seed" not in trial.params for trial in result.pareto_trials())
+        with pytest.raises(ValueError, match="seed"):
+            bench.plot_pareto_front(result, auto_plot=False)
+
+
 class TestWarmStartTargets:
     """A sweep's objectives need not be the study's."""
 
