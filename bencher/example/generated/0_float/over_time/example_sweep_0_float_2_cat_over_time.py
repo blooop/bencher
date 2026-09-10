@@ -34,7 +34,7 @@ def example_sweep_0_float_2_cat_over_time(run_cfg: bn.BenchRunCfg | None = None)
         benchable._time_offset = offset
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
-        res = bench.plot_sweep(
+        bench.plot_sweep(
             "over_time",
             input_vars=["protocol", "region"],
             result_vars=["throughput"],

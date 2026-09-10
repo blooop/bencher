@@ -19,7 +19,7 @@ try:
     # scoop is an optional extra and is not in the default environment; the
     # except-ImportError below is the intended handling.
     from scoop import futures as scoop_future_executor  # ty: ignore[unresolved-import]
-except ImportError as e:
+except ImportError:
     scoop_future_executor = None
 
 
