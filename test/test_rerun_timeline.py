@@ -767,6 +767,25 @@ class TestTrackingScatter:
         assert "/front/size/all" not in _indices(path)
         assert "/frame" in _indices(path)
 
+    def test_a_pair_that_is_not_numbers_leaves_the_report_standing(self, caplog):
+        """A design's name is a per-sample value like any other, and naming one as an
+        axis reached ``astype(float)``, which raised out of the whole composition
+        rather than dropping the one strip it cannot draw."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            shape=("size", ["wide", "narrow", "tall", "flat"]),
+            risk=("size", [1.0, 2.0, 3.0, 4.0]),
+        )
+        with caplog.at_level("WARNING", logger="bencher.results.rerun_timeline"):
+            path = res.to_rerun_timeline_path(
+                dataset,
+                res.bench_cfg.result_vars,
+                readout_scatter=("shape", "risk"),
+            )
+        assert "no tracking scatter" in caplog.text
+        assert "/front/size/all" not in _indices(path)
+        assert "/frame" in _indices(path)
+
     def test_a_pair_is_what_a_plane_takes(self):
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
         with pytest.raises(ValueError, match="exactly two"):
