@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.128.0] - 2026-09-10
+
 ### Added
 - **A three-objective Pareto front is drawn in a rerun 3-D view.** Two objectives make
   a trade that can be drawn flat, and `plot_pareto_front` draws it on a frame this
@@ -37,6 +39,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bounds beside a set of view kinds. The layout asks both "which view class" and "how
   much height", and with the two apart a view could answer them inconsistently — a
   plot rendered into the sliver of height meant for a legend.
+
+### Fixed
+- **A second Pareto front was served the first one's samples.** `pareto_rank` is a
+  position on one front, not the design at that position, and neither cache key can
+  see which designs the ranks stand for — `hash_persistent` is built from the sweep's
+  own vars and the per-sample key from its job args, whose only input here is the
+  rank. So with `cache_results` or `cache_samples` on, a second front over the same
+  bench replayed the first's data under the second's coordinates: every number, every
+  image and every scene at rank *n* belonged to a different design than the read-out
+  beside it named. Since the sample cache is on disk, the collision held across runs.
+  Both caches are off for the front sweep now, beside the thinning already neutralised
+  there for the same reason.
+- **A readout-scatter axis that is not numbers took the whole report down.** A design's
+  *name* is a per-sample value like any other, and `readout_scatter=` is a pair of
+  names with nothing typing them, so naming one reached `astype(float)` and killed the
+  benchmark run. It now warns and draws no scatter, which is what both sibling guards
+  already did.
+- **A boolean design input became an axis of its own on a front.** Bool coordinates
+  were rebuilt from a bare list, which xarray reads as a new dimension — a no-op for a
+  bool that *is* a dimension, and wrong for one riding on the rank. `boost` came out as
+  an axis as wide as the front with every label the same, dropped out of the timeline
+  read-out, and went into the plot-type deduction.
+- **A Pareto front could not run at all under `Executors.MULTIPROCESSING`.** The front's
+  worker was a closure, which a process pool cannot look up in the child.
+- **A warm-seeded trial's single sample was stamped as the study's aggregate.** Warm
+  start seeds one trial per recorded sample, and those compete on the front against
+  aggregated ones, so `plot_pareto_front` labelled a raw value `{target}_{agg_fn}`.
+  The value the study ranked genuinely is not the aggregate, so the front now says so:
+  seeded trials are marked, and a front carrying one warns which ranks they are.
+  Warm start seeding un-reduced samples into an aggregating study is a defect in
+  `optimize` itself and is left for its own change.
 
 ## [1.127.0] - 2026-09-10
 
