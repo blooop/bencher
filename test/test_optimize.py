@@ -766,8 +766,17 @@ class TestParetoFrontWarmStartedTrials:
         obj1_mean read 0.0 at a rank whose mean over `seed` is 0.1."""
         bench = bn.Bench("pareto_warm_score", MultiObjectiveWithSeed(), run_cfg=_run_cfg())
         bench.plot_sweep(input_vars=["x", "seed"], auto_plot=False)
-        result = bench.optimize(n_trials=4, aggregate=["seed"], agg_fn="mean", plot=False)
+        result = bench.optimize(
+            n_trials=4,
+            aggregate=["seed"],
+            agg_fn="mean",
+            plot=False,
+            sampler=optuna.samplers.TPESampler(seed=0),
+        )
         front = result.pareto_trials()
+        # A front of one squeezes the rank away and every coordinate riding on it
+        # with it, so the scores below would not be there to read at all.
+        assert len(front) > 1
         assert any(trial.user_attrs.get(WARM_STARTED) for trial in front)
         with caplog.at_level("WARNING", logger="bencher.bencher"):
             res = bench.plot_pareto_front(result, auto_plot=False)
@@ -786,9 +795,16 @@ class TestParetoFrontWarmStartedTrials:
         aggregate, and says nothing."""
         bench = bn.Bench("pareto_warm_clean", MultiObjectiveWithSeed(), run_cfg=_run_cfg())
         result = bench.optimize(
-            n_trials=4, aggregate=["seed"], agg_fn="mean", warm_start=False, plot=False
+            n_trials=4,
+            aggregate=["seed"],
+            agg_fn="mean",
+            warm_start=False,
+            plot=False,
+            sampler=optuna.samplers.TPESampler(seed=0),
         )
         front = result.pareto_trials()
+        # As above: without more than one design on it there is no score coordinate.
+        assert len(front) > 1
         assert not any(trial.user_attrs.get(WARM_STARTED) for trial in front)
         with caplog.at_level("WARNING", logger="bencher.bencher"):
             res = bench.plot_pareto_front(result, auto_plot=False)
