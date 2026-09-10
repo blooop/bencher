@@ -880,6 +880,22 @@ class TestTrackingScatter:
         with pytest.raises(ValueError, match="two or three"):
             res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars, readout_scatter=())
 
+    def test_one_name_is_not_a_request_for_its_letters(self):
+        """`readout_scatter` is a sequence of names, and a string is a sequence of
+        characters: `readout_scatter="xy"` split into the axes 'x' and 'y', which the
+        arity check waved through and which then suppressed the dataset's own request
+        -- the same silent suppression the empty request was made an error for."""
+        from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR
+
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = ["cost", "risk"]
+        for named in ("xy", "cost"):
+            with pytest.raises(ValueError, match="one string"):
+                res.to_rerun_timeline_path(
+                    dataset, res.bench_cfg.result_vars, readout_scatter=named
+                )
+
     def test_a_two_objective_front_plots_itself(self):
         """End to end: the study's own objectives become the scatter's axes."""
         bench = FrontSweep().to_bench(bn.BenchRunCfg(repeats=1))

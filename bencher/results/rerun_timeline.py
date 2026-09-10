@@ -754,7 +754,8 @@ class _ReadoutScatter:
         Raises:
             ValueError: if axes were asked for that are not two or three variables.
                 An empty request included -- that used to be falsy all the way down
-                and so silently suppressed the dataset's request instead.
+                and so silently suppressed the dataset's request instead -- and a
+                bare string, which is a sequence of its own characters.
         """
         title = None
         if requested is None:
@@ -762,6 +763,14 @@ class _ReadoutScatter:
             if requested is None:
                 return None
             title = dataset.attrs.get(READOUT_SCATTER_TITLE_ATTR)
+        if isinstance(requested, str):
+            # tuple("xy") is ('x', 'y'), which passes the arity check below and then
+            # suppresses the dataset's own request -- the failure the empty request
+            # is an error for, reached by a likelier typo.
+            raise ValueError(
+                "a tracking scatter is named by a sequence of variable names, not by "
+                f"one string: {requested!r} would be read as its characters"
+            )
         axes = tuple(requested)
         if len(axes) not in (2, 3):
             raise ValueError(
