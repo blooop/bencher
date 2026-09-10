@@ -65,6 +65,21 @@ class CategoricalProblem(bn.ParametrizedSweep):
         self.score = lookup[self.color] + (0.0 if self.flag else 0.3)
 
 
+class BoolDesign(bn.ParametrizedSweep):
+    """Two objectives searched over a float and a boolean."""
+
+    x = bn.FloatSweep(default=0, bounds=[0, 5], samples=5)
+    boost = bn.BoolSweep(default=False)
+
+    obj1 = bn.ResultFloat("ul", bn.OptDir.minimize)
+    obj2 = bn.ResultFloat("ul", bn.OptDir.maximize)
+
+    def benchmark(self):
+        gain = 1.5 if self.boost else 1.0
+        self.obj1 = float(self.x**2 * gain)
+        self.obj2 = float(-((self.x - 3) ** 2) * gain)
+
+
 class ArrayLike(bn.ParametrizedSweep):
     """Two objectives plus a result the study cannot rank on."""
 
@@ -587,6 +602,23 @@ class TestPlotParetoFront:
         # MultiObjective scores obj1 = x**2, so every rank's value is checkable
         # against the design the coordinate says is there.
         assert second_obj1 == pytest.approx([x**2 for x in second_x])
+
+    def test_a_boolean_design_input_still_rides_on_the_rank(self):
+        """``convert_dataset_bool_dims_to_str`` rebuilt every bool coordinate from a
+        bare list, which xarray reads as a new dimension of that name. That is right
+        for a bool that *is* a dimension and wrong for one riding on another, which
+        is the only shape a searched input takes here: ``boost`` became an axis of
+        its own, as wide as the front and every label the same, so it no longer
+        travelled with the rank and the read-out could not name it."""
+        bench = bn.Bench("pareto_bool_rank", BoolDesign(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=12, warm_start=False, plot=False)
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+        assert "boost" not in ds.sizes
+        assert ds.coords["boost"].dims == ("pareto_rank",)
+        assert list(ds.coords["boost"].values) == [
+            str(trial.params["boost"]) for trial in result.pareto_trials()
+        ]
 
 
 class TestParetoScrubExample:
