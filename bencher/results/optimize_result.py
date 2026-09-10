@@ -7,8 +7,31 @@ from typing import TYPE_CHECKING, Any
 
 import optuna
 
+from bencher.utils import AggFn
+
 if TYPE_CHECKING:
     from bencher.bench_cfg import BenchCfg
+
+
+@dataclass(frozen=True)
+class Aggregation:
+    """How a study reduced several evaluations of one design to the value it ranked.
+
+    A study aggregates whenever it evaluated a design more than once: over the
+    dimensions ``Bench.optimize(aggregate=...)`` looped inside each trial, over the
+    repeats, or both. So ``dims`` is empty for a study that only had ``repeats > 1``,
+    and the presence of an ``Aggregation`` is the separate — and, for a reader of the
+    front, the load-bearing — fact that a trial's value is a different number from
+    any one sample of it.
+
+    Attributes:
+        fn: What combined them.
+        dims: The input variables looped inside each trial rather than suggested by
+            optuna, in the study's order. Empty when only the repeats were reduced.
+    """
+
+    fn: AggFn
+    dims: tuple[str, ...] = ()
 
 
 @dataclass
@@ -21,11 +44,9 @@ class OptimizeResult:
         n_new_trials: Number of new trials evaluated during optimization.
         target_names: Names of the optimization target variables.
         bench_cfg: Optional BenchCfg for rich report generation.
-        aggregated: Names of the input variables that were looped inside each trial
-            rather than suggested by optuna (``Bench.optimize(aggregate=...)``).
-        agg_fn: How those loops (and repeats) were combined into one value per
-            trial — an ``AggFn`` value such as ``"mean"`` — or None when nothing was
-            aggregated.
+        aggregation: How several evaluations of one design became the value the study
+            ranked, or None when a trial's value is one sample — see
+            :class:`Aggregation`.
     """
 
     study: optuna.Study
@@ -33,8 +54,7 @@ class OptimizeResult:
     n_new_trials: int = 0
     target_names: list[str] = field(default_factory=list)
     bench_cfg: BenchCfg | None = None
-    aggregated: list[str] = field(default_factory=list)
-    agg_fn: str | None = None
+    aggregation: Aggregation | None = None
 
     # ------------------------------------------------------------------
     # Single-objective helpers
@@ -102,12 +122,13 @@ class OptimizeResult:
     def searched(self) -> list[str]:
         """Names of the input variables optuna suggested, in the study's order.
 
-        The complement of ``aggregated`` within the study's inputs, so it is empty
-        without a ``bench_cfg``.
+        The complement of ``aggregation.dims`` within the study's inputs, so it is
+        empty without a ``bench_cfg``.
         """
         if self.bench_cfg is None:
             return []
-        return [iv.name for iv in self.bench_cfg.input_vars if iv.name not in self.aggregated]
+        looped = self.aggregation.dims if self.aggregation else ()
+        return [iv.name for iv in self.bench_cfg.input_vars if iv.name not in looped]
 
     # ------------------------------------------------------------------
     # Text summary

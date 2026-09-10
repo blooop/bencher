@@ -57,8 +57,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the front is read against the search that found it.
 - **`OptimizeResult.pareto_trials(objective=None)`**, the front ordered along one
   objective rather than in the order optuna happened to find it, plus
-  `OptimizeResult.searched` and the new `aggregated` / `agg_fn` fields recording what a
-  trial's value actually means.
+  `OptimizeResult.searched` and the new `aggregation` field recording what a trial's
+  value actually means — which dimensions were looped inside a trial and what combined
+  them, with `None` for a study whose trial value is one sample.
 - New gallery example `example_optimize_pareto_scrub`: an antenna array whose element
   spacing trades beam width against side lobes, searched on both, with every design on
   the resulting front drawn and walked by one slider.

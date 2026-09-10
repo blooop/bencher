@@ -72,8 +72,7 @@ class TestSingleObjectiveSurface:
         assert res.n_new_trials == 0
         assert res.target_names == []
         assert res.bench_cfg is None
-        assert res.aggregated == []
-        assert res.agg_fn is None
+        assert res.aggregation is None
         assert res.searched == []
 
     def test_best_trials_returns_single_best(self):

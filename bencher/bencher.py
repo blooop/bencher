@@ -41,7 +41,7 @@ from bencher.optuna_conversions import sweep_var_to_optuna_dist, sweep_var_to_su
 from bencher.regression import RegressionError, detect_regressions
 from bencher.result_collector import ResultCollector
 from bencher.results.bench_result import BenchResult
-from bencher.results.optimize_result import OptimizeResult
+from bencher.results.optimize_result import Aggregation, OptimizeResult
 from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR, READOUT_SCATTER_TITLE_ATTR
 from bencher.sample_order import SampleOrder
 from bencher.sweep_executor import SweepExecutor, validate_declared_vars, worker_kwargs_wrapper
@@ -1539,8 +1539,11 @@ class Bench(BenchPlotServer):
             n_new_trials=n_trials,
             target_names=target_names,
             bench_cfg=bench_cfg,
-            aggregated=[v.name for v in agg_vars],
-            agg_fn=normalize_agg_fn(agg_fn).value if needs_agg else None,
+            aggregation=Aggregation(
+                fn=normalize_agg_fn(agg_fn), dims=tuple(v.name for v in agg_vars)
+            )
+            if needs_agg
+            else None,
         )
 
         if plot and self.results:
@@ -1574,13 +1577,14 @@ class Bench(BenchPlotServer):
         single-objective study has a front of one, so this is also how its winner is
         rendered.
 
-        The dimensions the study aggregated over (``optimize(aggregate=...)``) are swept
-        beside the rank, at the values the study looped, so a design is shown under every
-        condition it was judged across rather than one of them.
+        The dimensions the study looped inside each trial (``optimize(aggregate=...)``)
+        are swept beside the rank, at the values the study looped, so a design is shown
+        under every condition it was judged across rather than one of them.
 
         The searched inputs are not dimensions — a front is not a grid — so they travel
         as coordinates *on* ``pareto_rank`` (``ds.coords["x"]``, one value per rank), and
-        so does each objective's aggregated value where the study aggregated. The rerun
+        so does each objective's aggregated value where the study aggregated at all --
+        over looped dimensions or only over its repeats. The rerun
         timeline reads those out at the cursor, so scrubbing the front says which design
         is on screen.
 
@@ -1647,8 +1651,9 @@ class Bench(BenchPlotServer):
 
         cfg = result.bench_cfg
         along = result.target_names[0] if objective is None else objective
-        swept = [deepcopy(iv) for iv in cfg.input_vars if iv.name in result.aggregated]
-        searched = [iv for iv in cfg.input_vars if iv.name not in result.aggregated]
+        looped = result.aggregation.dims if result.aggregation else ()
+        swept = [deepcopy(iv) for iv in cfg.input_vars if iv.name in looped]
+        searched = [iv for iv in cfg.input_vars if iv.name not in looped]
         designs = [_pareto_design(trial, searched) for trial in trials]
         # Bounds rather than sample_values: an IntSweep over 0..n-1 yields every one
         # of them, and only the bounds form carries the range optuna-side readers and
@@ -1695,15 +1700,16 @@ class Bench(BenchPlotServer):
 
         coords = {iv.name: (PARETO_RANK, [d[iv.name] for d in designs]) for iv in searched}
         by_name = {rv.name: rv for rv in cfg.result_vars}
-        # What the study read for each design. Where it aggregated, that is a
-        # different number from any one of the samples beside the rank, so it gets a
-        # coordinate of its own; where it did not, the result variable is already
-        # one value per rank and is the same number.
+        # What the study read for each design. Where it aggregated -- over looped
+        # dimensions, over repeats, or both -- that is a different number from any one
+        # of the samples beside the rank, so it gets a coordinate of its own; where it
+        # did not, the result variable is already one value per rank and is the same
+        # number.
         scored = {
-            target: f"{target}_{result.agg_fn}" if result.aggregated else target
+            target: f"{target}_{result.aggregation.fn.value}" if result.aggregation else target
             for target in result.target_names
         }
-        if result.aggregated:
+        if result.aggregation:
             for index, target in enumerate(result.target_names):
                 coords[scored[target]] = (
                     PARETO_RANK,
@@ -1714,7 +1720,7 @@ class Bench(BenchPlotServer):
             units = getattr(iv, "units", None)
             if units:
                 res.ds.coords[iv.name].attrs["units"] = units
-        if result.aggregated:
+        if result.aggregation:
             for target in result.target_names:
                 units = getattr(by_name.get(target), "units", None)
                 if units:

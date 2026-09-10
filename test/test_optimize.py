@@ -9,6 +9,8 @@ import optuna
 import pytest
 
 import bencher as bn
+from bencher.results.optimize_result import Aggregation
+from bencher.utils import AggFn
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -269,8 +271,7 @@ class TestAggregateOptimize:
         assert result is not None
         assert "x" in result.study.best_params
         assert "seed" in result.study.best_params
-        assert result.aggregated == []
-        assert result.agg_fn is None
+        assert result.aggregation is None
         assert result.searched == ["x", "seed"]
 
     def test_the_result_records_what_was_aggregated_and_how(self):
@@ -278,8 +279,7 @@ class TestAggregateOptimize:
         the result, so a later reading of the front does not have to guess it."""
         bench = bn.Bench("agg_recorded", SphereWithSeed(), run_cfg=_run_cfg())
         result = bench.optimize(n_trials=4, aggregate=["seed"], agg_fn="max", plot=False)
-        assert result.aggregated == ["seed"]
-        assert result.agg_fn == "max"
+        assert result.aggregation == Aggregation(fn=AggFn.MAX, dims=("seed",))
         assert result.searched == ["x"]
 
     @pytest.mark.parametrize("agg_fn", ["mean", "sum", "max", "min", "median"])
@@ -582,6 +582,39 @@ class TestParetoScrubExample:
         assert res.to_rerun_timeline() is not None
         titles = [pane.name for pane in bench.report.pane]
         assert any(title.startswith("Pareto front of") for title in titles), titles
+
+
+class TestParetoFrontAggregation:
+    def test_a_study_that_reduced_only_its_repeats_still_carries_its_score(self):
+        """``repeats > 1`` aggregates as surely as ``aggregate=`` does: the trial's
+        value is a mean over the repeats and is a different number from any one
+        sample. Reading "did it aggregate" off the aggregated *dimensions* answered
+        no, so the front carried no reading of its own and the scatter was stamped
+        with the sweep's fresh re-evaluation in place of what the study ranked on."""
+        bench = bn.Bench("pareto_repeats", MultiObjective(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=6, repeats=3, warm_start=False, plot=False)
+        assert result.aggregation is not None
+        assert result.aggregation.dims == ()
+        assert result.aggregation.fn is AggFn.MEAN
+        assert result.searched == ["x"]
+        front = result.pareto_trials()
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        assert list(res.ds.coords["obj1_mean"].values) == pytest.approx(
+            [t.values[0] for t in front]
+        )
+        assert list(res.ds.coords["obj2_mean"].values) == pytest.approx(
+            [t.values[1] for t in front]
+        )
+        assert res.ds.attrs["bencher_readout_scatter"] == ["obj1_mean", "obj2_mean"]
+
+    def test_a_study_that_reduced_nothing_has_no_aggregation(self):
+        """One repeat and nothing looped: a trial's value *is* the sample, so there
+        is no separate reading for the front to carry."""
+        bench = bn.Bench("pareto_plain", MultiObjective(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=6, warm_start=False, plot=False)
+        assert result.aggregation is None
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        assert res.ds.attrs["bencher_readout_scatter"] == ["obj1", "obj2"]
 
 
 class TestParetoFrontWarmStartedTrials:
