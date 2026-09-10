@@ -20,11 +20,15 @@ from PIL import Image, ImageDraw
 
 import bencher as bn
 
+#: The tallest fin the search may ask for. The cross-section is scaled to it, so a
+#: fin at this height fills the drawing rather than clipping off the top of it.
+_MAX_FIN_HEIGHT_MM = 40.0
+
 
 class HeatSink(bn.ParametrizedSweep):
     """A finned heat sink: thermal resistance against pressure drop against cost."""
 
-    fin_height = bn.FloatSweep(default=20.0, bounds=[8.0, 40.0], units="mm")
+    fin_height = bn.FloatSweep(default=20.0, bounds=[8.0, _MAX_FIN_HEIGHT_MM], units="mm")
     fin_pitch = bn.FloatSweep(default=4.0, bounds=[1.5, 8.0], units="mm")
 
     resistance = bn.ResultFloat(units="K/W", direction=bn.OptDir.minimize)
@@ -41,11 +45,15 @@ class HeatSink(bn.ParametrizedSweep):
 
     def benchmark(self):
         fins = self._fin_count()
-        # Surface area carries the heat away, so resistance falls as it grows.
-        area = fins * 2.0 * self.fin_height * self._DEPTH_MM
-        self.resistance = float(120.0 / area + 0.02)
-        # A tighter channel between taller fins costs more to push air through.
         gap = max(self.fin_pitch - self._THICKNESS_MM, 0.2)
+        area = fins * 2.0 * self.fin_height * self._DEPTH_MM
+        # Area alone does not carry the heat: below a couple of millimetres the
+        # boundary layers off facing fins meet and the channel stops flowing, so
+        # packing more surface in stops helping and starts hurting. Without that,
+        # nothing is dominated and every trial is on the front.
+        flowing = min(1.0, (gap / 2.0) ** 1.5)
+        self.resistance = float(120.0 / (area * flowing) + 0.02)
+        # A tighter channel between taller fins costs more to push air through.
         self.pressure_drop = float(4.0 * self.fin_height / gap**1.6)
         self.material = float(fins * self.fin_height * self._DEPTH_MM * self._THICKNESS_MM / 1000.0)
         self.profile = self._draw(fins)
@@ -53,19 +61,22 @@ class HeatSink(bn.ParametrizedSweep):
     def _draw(self, fins: int) -> str:
         """The sink's cross-section, which is the half a scatter cannot show."""
         width, height = 320, 200
-        scale = width / (self._WIDTH_MM * 1.2)
+        base_y = height - 30
+        across = (width - 40) / self._WIDTH_MM
+        # The tallest fin the sweep can ask for has to fit, or every design above the
+        # clipping height renders the same picture and the scrub shows nothing.
+        upward = (base_y - 15) / _MAX_FIN_HEIGHT_MM
         image = Image.new("RGB", (width, height), (18, 20, 26))
         draw = ImageDraw.Draw(image)
-        base_y = height - 30
         draw.rectangle(
-            [(20, base_y), (20 + self._WIDTH_MM * scale, base_y + 12)], fill=(90, 100, 120)
+            [(20, base_y), (20 + self._WIDTH_MM * across, base_y + 12)], fill=(90, 100, 120)
         )
         for index in range(fins):
-            x = 20 + index * self.fin_pitch * scale
+            x = 20 + index * self.fin_pitch * across
             draw.rectangle(
                 [
-                    (x, base_y - self.fin_height * scale * 2.2),
-                    (x + self._THICKNESS_MM * scale, base_y),
+                    (x, base_y - self.fin_height * upward),
+                    (x + self._THICKNESS_MM * across, base_y),
                 ],
                 fill=(120, 210, 255),
             )
