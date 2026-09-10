@@ -551,6 +551,43 @@ class TestPlotParetoFront:
         with pytest.raises(ValueError, match="no front"):
             bench.plot_pareto_front(result)
 
+    def test_a_second_front_is_not_served_the_first_ones_data(self):
+        """``pareto_rank`` is a position, not an identity: nothing in either cache key
+        -- ``hash_persistent`` or ``hash_sha1(sorted(job_args))`` -- can see which
+        designs the ranks stand for. With caching on, a second front over the same
+        bench replayed the first front's samples under the second's coordinates, so
+        every value and every picture belonged to a different design than the
+        read-out named."""
+        cfg = bn.BenchRunCfg()
+        cfg.repeats = 1
+        cfg.cache_results = True
+        cfg.cache_samples = True
+        cfg.clear_cache = True
+        cfg.clear_sample_cache = True
+
+        def walk(sampler_seed: int):
+            bench = bn.Bench("pareto_cache_blind", MultiObjective(), run_cfg=cfg)
+            result = bench.optimize(
+                n_trials=12,
+                warm_start=False,
+                plot=False,
+                sampler=optuna.samplers.TPESampler(seed=sampler_seed),
+            )
+            res = bench.plot_pareto_front(result, auto_plot=False)
+            ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+            return [float(v) for v in ds.coords["x"].values], [float(v) for v in ds["obj1"].values]
+
+        first_x, _ = walk(3)
+        cfg.clear_cache = False
+        cfg.clear_sample_cache = False
+        second_x, second_obj1 = walk(5)
+
+        # Two different fronts, or the replay would be indistinguishable from a hit.
+        assert first_x != second_x
+        # MultiObjective scores obj1 = x**2, so every rank's value is checkable
+        # against the design the coordinate says is there.
+        assert second_obj1 == pytest.approx([x**2 for x in second_x])
+
 
 class TestParetoScrubExample:
     def test_the_example_walks_a_real_front(self, monkeypatch):

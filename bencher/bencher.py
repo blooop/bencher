@@ -1590,9 +1590,10 @@ class Bench(BenchPlotServer):
 
         The front is never thinned: a rank is a design, so ``subsampling_divisions`` and
         ``samples_per_var`` are ignored here, and the aggregated dimensions run at the
-        study's own resolution. Each rank is re-evaluated — the sweep asks the worker for
-        that trial's inputs again — since the trial's cache entries are keyed by the
-        searched inputs and this sweep's by the rank.
+        study's own resolution. Nor is it cached: a rank is a *position* on this front
+        and names no design, so neither cache key can tell one front from another, and
+        both are turned off here. Every rank is evaluated afresh, against the trial's
+        own inputs.
 
         Args:
             result: The study to lay out, as :meth:`optimize` returned it.
@@ -1647,6 +1648,13 @@ class Bench(BenchPlotServer):
         # neither may be thinned to a resolution the study never ran at.
         run_cfg.subsampling_divisions = 0
         run_cfg.samples_per_var = None
+        # Neither cache can see the designs: they live in the closure below, while
+        # `hash_persistent` is built from this sweep's vars and the per-sample key is
+        # `hash_sha1((sorted(job_args), tag))` -- and the only input here is a rank,
+        # which is the same 0..n-1 for every front. So a second front over the same
+        # bench was served the first one's samples under its own coordinates.
+        run_cfg.cache_results = False
+        run_cfg.cache_samples = False
 
         # Read before plot_sweep, which writes its own auto_plot argument back onto
         # the run_cfg it is handed -- so asking afterwards would always read False.
