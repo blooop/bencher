@@ -344,6 +344,20 @@ def _texts(path: str, entity: str) -> list[str]:
     return [text for _, text in sorted(rows)]
 
 
+def _media_types(path: str, entity: str) -> list[str]:
+    """The TextDocument media types logged at *entity*, in index order."""
+    reader = RrdReader(str(path))
+    found: list[str] = []
+    for chunk in reader.stream(store=reader.recordings()[0]):
+        if str(chunk.entity_path) != entity:
+            continue
+        batch = chunk.to_record_batch()
+        for i, field in enumerate(batch.schema):
+            if field.name.startswith("TextDocument") and field.name.endswith("media_type"):
+                found.extend("".join(v) if v else "" for v in batch.column(i).to_pylist())
+    return found
+
+
 def _xy(point) -> list:
     """A logged 2-D position as ``[x, y]``, however arrow handed it back."""
     return list(point.values()) if isinstance(point, dict) else list(point)
@@ -562,12 +576,15 @@ class TestRidingCoordinates:
         # Whole-number ticks show the size already; the read-out is there for what
         # they do not show, and it says the tick's own value too so it reads alone.
         assert sorted(_indices(path)[readout]["size"]) == [2, 3, 4, 5]
+        # A bullet per field: a design carries its whole parameter set here, which run
+        # together is a paragraph to scan rather than a list to read.
         assert _texts(path, readout) == [
-            "size = 2 \u00b7 design = a \u00b7 gain = 0.5 dB",
-            "size = 3 \u00b7 design = b \u00b7 gain = 1.0 dB",
-            "size = 4 \u00b7 design = c \u00b7 gain = 1.5 dB",
-            "size = 5 \u00b7 design = d \u00b7 gain = 2.0 dB",
+            "- **size** = 2\n- **design** = a\n- **gain** = 0.5 dB",
+            "- **size** = 3\n- **design** = b\n- **gain** = 1.0 dB",
+            "- **size** = 4\n- **design** = c\n- **gain** = 1.5 dB",
+            "- **size** = 5\n- **design** = d\n- **gain** = 2.0 dB",
         ]
+        assert _media_types(path, readout) == ["text/markdown"] * 4
 
     def test_a_coordinate_on_a_branch_dimension_is_not_a_read_out(self):
         """Only what rides on the timeline dimension moves with the cursor."""
@@ -594,18 +611,19 @@ class TestRidingCoordinates:
         assert {"/front/pareto_rank/all", "/front/pareto_rank/current"} <= plot
         ranks = list(range(len(result.pareto_trials())))
         for entity, timelines in entities.items():
-            # The plot is static apart from the cursor's point, so it has no index
-            # of its own to check.
-            if entity in plot and entity != "/front/pareto_rank/current":
+            # The plot is static apart from the cursor's own marker and reading, so
+            # it has no index of its own to check.
+            if entity in plot and not entity.startswith("/front/pareto_rank/current"):
                 assert timelines == {}
                 continue
             assert sorted(timelines["pareto_rank"]) == ranks
         texts = _texts(path, _readout_entity("pareto_rank"))
         for rank, (text, trial) in enumerate(zip(texts, result.pareto_trials())):
-            assert text.startswith(f"pareto_rank = {rank} \u00b7 theta = ")
-            assert f"theta = {_coord_label(trial.params['theta'])} \u00b7" in text
-            assert f"near_mean = {_coord_label(trial.values[0])} m" in text
-            assert f"far_mean = {_coord_label(trial.values[1])} m" in text
+            lines = text.splitlines()
+            assert lines[0] == f"- **pareto_rank** = {rank}"
+            assert lines[1] == f"- **theta** = {_coord_label(trial.params['theta'])}"
+            assert f"- **near_mean** = {_coord_label(trial.values[0])} m" in lines
+            assert f"- **far_mean** = {_coord_label(trial.values[1])} m" in lines
 
 
 class TestTrackingScatter:

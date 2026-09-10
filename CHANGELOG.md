@@ -40,10 +40,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   It is drawn as a plot, not dropped into a bare 2-D view: rerun has no chart with two
   free axes (its time series takes the timeline as x), so the values are mapped onto a
-  fixed box and the axes, gridlines, round-number tick labels and axis titles are logged
-  as geometry around it, larger values upward. The cursor's point is labelled with its
-  actual values, since hover on the box reports positions, and the front is joined into
-  a curve where the samples are in order along x. The read-out strip grows to hold it.
+  fixed box and the title, axes, gridlines, round-number tick labels and axis names are
+  logged as geometry around it, larger values upward. Each axis name sits with its own
+  axis and the title above both, `bencher_readout_scatter_title` naming the plot —
+  `plot_pareto_front` stamps "Pareto front" — since only the sweep's producer knows what
+  the set of samples is. The cursor's point is labelled with its actual values, since
+  hover on the box reports positions, and the front is joined into a curve where the
+  samples are in order along x. The read-out strip grows to hold it.
+
+  The cursor's reading is logged apart from its marker: rerun paints a label in its
+  entity's colour on a near-black pill, so the marker's colour cannot also be the text's
+  without one of the two being wrong. The marker keeps the highlight colour, the text is
+  near-white, and draw order keeps the marker above the set it is picked out of.
 - **A two-objective `plot_pareto_front` adds optuna's own Pareto plot to the front's
   tab**, every trial the study ran as a point, dominated ones included, so the walk along
   the front is read against the search that found it.
@@ -81,8 +89,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sample itself as coordinates on the swept dimension, and the ticks cannot show them:
   `#3` says nothing about the design at rank 3. Those dimensions now get a text read-out
   listing the dimension's own value and everything riding on it, so parking the cursor
-  says which design is on screen. A plain sweep whose ticks already carry its values is
-  unchanged — it still gets no read-out.
+  says which design is on screen. It is written as a markdown bullet per field rather
+  than one line of them: a design carries its whole parameter set here, and run together
+  with separators that is a paragraph to scan rather than a list to read. A plain sweep
+  whose ticks already carry its values is unchanged — it still gets no read-out.
 
 ## [1.126.0] - 2026-09-08
 

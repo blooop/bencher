@@ -101,10 +101,19 @@ _UNSAFE_ENTITY_CHARS = re.compile(r"[^0-9A-Za-z_.-]+")
 #: about the sweep and not something a renderer can infer from dtypes.
 READOUT_SCATTER_ATTR = "bencher_readout_scatter"
 
+#: Dataset attribute naming the tracking scatter's plot, e.g. "Pareto front". Only
+#: the producer of a sweep knows what the set of samples *is*, and that is what a
+#: title says; without one the plot is drawn with its axes labelled and no title.
+READOUT_SCATTER_TITLE_ATTR = "bencher_readout_scatter_title"
+
 # The tracking scatter's colours. The front is context and the cursor is the subject,
 # so the whole set is drawn faint and one point is drawn solid on top of it.
 _SCATTER_ALL_COLOR = (120, 130, 150)
 _SCATTER_CURRENT_COLOR = (255, 190, 60)
+# The cursor's label is logged apart from its marker so the two can differ: rerun
+# draws a label in its entity's colour on a near-black pill, so the marker's amber
+# reads as dim text on a dark ground however well it marks a point.
+_SCATTER_LABEL_COLOR = (240, 243, 250)
 
 # Which Blueprint view displays each result type, given the archetype
 # ``_log_result_var`` writes for it (named in the comments). A ``ResultRerun`` is
@@ -683,6 +692,7 @@ def _front_entity(dim: str) -> str:
 # grid is there to be looked past.
 _FRAME_COLOR = (170, 175, 185)
 _GRID_COLOR = (70, 75, 85)
+_TITLE_COLOR = (225, 230, 240)
 
 
 def _nice_ticks(low: float, high: float, target: int = 4) -> list[float]:
@@ -755,21 +765,28 @@ class _PlotFrame:
     def project(self, x, y) -> np.ndarray:
         return np.column_stack((self.project_x(x), self.project_y(y)))
 
-    def bounds(self) -> tuple[tuple[float, float], tuple[float, float]]:
-        """What the view should open on: the box plus room for labels left and below."""
+    def bounds(self, titled: bool) -> tuple[tuple[float, float], tuple[float, float]]:
+        """What the view opens on: the box plus room for the labels around it.
+
+        Above the box sit the y axis name and, when there is one, the title; below it
+        the tick row and the x axis name; to the left the y tick labels.
+        """
         return (
             (-0.3 * self.width, 1.3 * self.width),
-            (-0.2 * self.height, 1.42 * self.height),
+            ((-0.54 if titled else -0.3) * self.height, 1.52 * self.height),
         )
 
 
-def _log_plot_frame(rr, staging, origin: str, frame: _PlotFrame, x_name: str, y_name: str) -> None:
-    """Draw axes, gridlines, tick labels and axis titles for *frame*, all static.
+def _log_plot_frame(
+    rr, staging, origin: str, frame: _PlotFrame, x_name: str, y_name: str, title: str | None
+) -> None:
+    """Draw the title, axes, gridlines, tick labels and axis names for *frame*, static.
 
     Labels are points of no size carrying text: rerun has no free-standing text in a
-    spatial view, and a point's label is the one thing it draws at a position. The
-    frame is drawn for the height the read-out strip has: title, box, tick row and
-    axis title stacked, which is what :meth:`_PlotFrame.bounds` opens the view on.
+    spatial view, and a point's label is the one thing it draws at a position. Rerun
+    hangs a label centred *below* its point, so each is placed above what it labels.
+    The pieces stack the way a plot's do -- title, y axis name, box, tick row, x axis
+    name -- which is the height :meth:`_PlotFrame.bounds` opens the view on.
     """
     w, h = frame.width, frame.height
     x_ticks = _nice_ticks(*frame.x_range)
@@ -816,13 +833,13 @@ def _log_plot_frame(rr, staging, origin: str, frame: _PlotFrame, x_name: str, y_
         ),
         static=True,
     )
-    # Rerun hangs a label centred under its point, so the titles are centred over
-    # and under the box -- the y title where a plot title goes, the x title under the
-    # tick row. Beside the y axis, a long name would run across the plot.
+    # Each axis name sits with its own axis: the y name over the top of the y axis,
+    # the x name under the tick row it belongs to. Alongside the y axis instead, a
+    # long name would run across the plot, rotation being something rerun cannot do.
     staging.log(
-        f"{origin}/titles",
+        f"{origin}/axis_names",
         rr.Points2D(
-            [[0.5 * w, h + 0.18 * h], [0.5 * w, -0.2 * h]],
+            [[0.5 * w, h + 0.24 * h], [0.0, -0.22 * h]],
             radii=no_size,
             colors=_FRAME_COLOR,
             labels=[x_name, y_name],
@@ -830,6 +847,18 @@ def _log_plot_frame(rr, staging, origin: str, frame: _PlotFrame, x_name: str, y_
         ),
         static=True,
     )
+    if title is not None:
+        staging.log(
+            f"{origin}/title",
+            rr.Points2D(
+                [[0.5 * w, -0.44 * h]],
+                radii=no_size,
+                colors=_TITLE_COLOR,
+                labels=[title],
+                show_labels=True,
+            ),
+            static=True,
+        )
 
 
 def _per_sample_values(dataset: xr.Dataset, name: str, dim: str) -> np.ndarray | None:
@@ -862,17 +891,23 @@ def _riding_coords(dataset: xr.Dataset, dim: str) -> list[str]:
 
 
 def _readout_text(dataset: xr.Dataset, dim: str, position: int) -> str:
-    """One line naming the sample at *position*: the dimension's value, then what rides on it."""
+    """Markdown naming the sample at *position*: its own value, then what rides on it.
+
+    One bullet per field rather than one line of them. A design carries its whole
+    parameter set here -- five offsets, a placement and two scores for a lidar mount --
+    and run together with separators that is a paragraph to scan rather than a list to
+    read, wrapped at whatever width the strip happens to have.
+    """
     sample = dataset.isel({dim: position})
-    parts = []
+    lines = []
     for name in (dim, *_riding_coords(dataset, dim)):
         coord = sample.coords[name]
         # "ul" is bencher's unitless marker, not a unit to print -- the same reading
         # ``describe_variable`` gives it.
         units = coord.attrs.get("units", "")
         suffix = f" {units}" if units and units != "ul" else ""
-        parts.append(f"{name} = {_coord_label(coord.values.item())}{suffix}")
-    return " \u00b7 ".join(parts)
+        lines.append(f"- **{name}** = {_coord_label(coord.values.item())}{suffix}")
+    return "\n".join(lines)
 
 
 def _declared_size(result_vars: list[Parameter], attribute: str, fallback: int) -> int:
@@ -1155,7 +1190,13 @@ class RerunTimelineResult(BenchResultBase):
             if numeric:
                 staging.log(origin, rr.Scalars(float(value)))
             else:
-                staging.log(origin, rr.TextDocument(_readout_text(dataset, timeline_dim, position)))
+                staging.log(
+                    origin,
+                    rr.TextDocument(
+                        _readout_text(dataset, timeline_dim, position),
+                        media_type=rr.MediaType.MARKDOWN,
+                    ),
+                )
         staging.reset_time()
         return _View(
             origin=origin,
@@ -1171,6 +1212,7 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str,
         encoding: _IndexEncoding,
         scatter: Sequence[str],
+        title: str | None = None,
     ) -> _View | None:
         """Plot every sample against two of its own numbers, and mark the cursor's.
 
@@ -1213,11 +1255,18 @@ class RerunTimelineResult(BenchResultBase):
             return None
         origin = _front_entity(timeline_dim)
         frame = _PlotFrame(x.astype(float), y.astype(float))
-        _log_plot_frame(rr, staging, f"{origin}/axes", frame, x_name, y_name)
+        _log_plot_frame(rr, staging, f"{origin}/axes", frame, x_name, y_name, title)
         points = frame.project(x, y)
+        # Draw order, so the cursor's marker is never buried under the set it is
+        # picked out of -- one point of each sits at exactly the same place.
         staging.log(
             f"{origin}/all",
-            rr.Points2D(points, colors=_SCATTER_ALL_COLOR, radii=rr.Radius.ui_points(3.0)),
+            rr.Points2D(
+                points,
+                colors=_SCATTER_ALL_COLOR,
+                radii=rr.Radius.ui_points(3.0),
+                draw_order=1.0,
+            ),
             static=True,
         )
         if _monotonic(x):
@@ -1226,7 +1275,10 @@ class RerunTimelineResult(BenchResultBase):
             staging.log(
                 f"{origin}/all/curve",
                 rr.LineStrips2D(
-                    [points], colors=_SCATTER_ALL_COLOR, radii=rr.Radius.ui_points(1.0)
+                    [points],
+                    colors=_SCATTER_ALL_COLOR,
+                    radii=rr.Radius.ui_points(1.0),
+                    draw_order=0.0,
                 ),
                 static=True,
             )
@@ -1245,17 +1297,29 @@ class RerunTimelineResult(BenchResultBase):
                     points[position : position + 1],
                     colors=_SCATTER_CURRENT_COLOR,
                     radii=rr.Radius.ui_points(7.0),
+                    draw_order=2.0,
+                ),
+            )
+            # The reading rides on an entity of its own so it is not painted in the
+            # marker's colour; see _SCATTER_LABEL_COLOR.
+            staging.log(
+                f"{origin}/current/reading",
+                rr.Points2D(
+                    points[position : position + 1],
+                    colors=_SCATTER_LABEL_COLOR,
+                    radii=rr.Radius.ui_points(0.0),
                     labels=[label],
                     show_labels=True,
+                    draw_order=3.0,
                 ),
             )
         staging.reset_time()
         return _View(
             origin=origin,
-            label=f"{y_name} against {x_name}",
+            label=title or f"{y_name} against {x_name}",
             view_kinds={RerunViewKind.spatial_2d},
             logged=True,
-            bounds=frame.bounds(),
+            bounds=frame.bounds(titled=title is not None),
         )
 
     def _log_sweep(
@@ -1349,7 +1413,14 @@ class RerunTimelineResult(BenchResultBase):
         readouts = [
             view
             for view in (
-                self._log_front_scatter(staging, dataset, timeline_dim, encoding, scatter)
+                self._log_front_scatter(
+                    staging,
+                    dataset,
+                    timeline_dim,
+                    encoding,
+                    scatter,
+                    dataset.attrs.get(READOUT_SCATTER_TITLE_ATTR),
+                )
                 if scatter
                 else None,
                 self._log_value_readout(staging, dataset, timeline_dim, encoding),

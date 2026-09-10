@@ -42,7 +42,7 @@ from bencher.regression import RegressionError, detect_regressions
 from bencher.result_collector import ResultCollector
 from bencher.results.bench_result import BenchResult
 from bencher.results.optimize_result import OptimizeResult
-from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR
+from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR, READOUT_SCATTER_TITLE_ATTR
 from bencher.sample_order import SampleOrder
 from bencher.sweep_executor import SweepExecutor, validate_declared_vars, worker_kwargs_wrapper
 from bencher.sweep_timings import SweepTimings, phase_timer
@@ -1701,6 +1701,7 @@ class Bench(BenchPlotServer):
         # trade to show, so neither asks for it.
         if len(result.target_names) == 2:
             res.ds.attrs[READOUT_SCATTER_ATTR] = [scored[target] for target in result.target_names]
+            res.ds.attrs[READOUT_SCATTER_TITLE_ATTR] = "Pareto front"
         # The coordinates went on after the dataset was set up, so its derived
         # views (plot counts, the to_dataset cache) are rebuilt to see them.
         res.post_setup()
