@@ -41,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plot rendered into the sliver of height meant for a legend.
 
 ### Fixed
+- **An axis was labelled past its own end.** `_nice_ticks` documents that ticks
+  outside the range are dropped and kept one up to half a step beyond it. The flat
+  plot absorbed that inside its frame; the 3-D box has none, so the stray label
+  projected past the end of the axis line and landed on the axis name.
+- **`readout_scatter="xy"` was read as the axes `x` and `y`.** A string is a sequence
+  of its own characters, so it passed the arity check, drew nothing, and silently
+  suppressed the dataset's own request — the failure an empty request is already an
+  error for. It is now a `TypeError`.
 - **A second Pareto front was served the first one's samples.** `pareto_rank` is a
   position on one front, not the design at that position, and neither cache key can
   see which designs the ranks stand for — `hash_persistent` is built from the sweep's
