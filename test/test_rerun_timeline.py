@@ -688,6 +688,53 @@ class TestTrackingScatter:
         # One point per tick, each the sample sitting at that tick.
         assert self._points(path, "/front/size/current") == [[point] for point in every]
 
+    def _nan_dataset(self, res):
+        """A sample the worker could not score, which is what a NaN in a series is."""
+        return res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            cost=("size", [4.0, float("nan"), 2.0, 1.0]),
+            risk=("size", [1.0, 2.0, 3.0, 4.0]),
+        )
+
+    def test_a_sample_with_no_value_leaves_the_plot_standing(self):
+        """An unscored sample used to reach the tick arithmetic as a NaN range and
+        raise out of the whole run -- the report, not just the strip."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = res.to_rerun_timeline_path(
+            self._nan_dataset(res),
+            res.bench_cfg.result_vars,
+            readout_scatter=("cost", "risk"),
+        )
+        assert path is not None
+        # The three samples carrying both values are placed; the one that is not
+        # scored has nowhere on the frame to go and is left off it.
+        rows = self._points(path, "/front/size/all")
+        assert len(rows) == 1
+        assert len(rows[0]) == 3
+
+    def test_the_cursor_is_left_on_no_point_where_its_sample_has_none(self):
+        """Not logging at that tick would leave latest-at showing the previous
+        sample's point as the cursor's, which is the one thing it must not say."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = res.to_rerun_timeline_path(
+            self._nan_dataset(res),
+            res.bench_cfg.result_vars,
+            readout_scatter=("cost", "risk"),
+        )
+        assert [len(row) for row in self._points(path, "/front/size/current")] == [1, 0, 1, 1]
+
+    def test_a_series_no_sample_scored_draws_no_plot(self):
+        """Nothing to place is the same case as a pair that does not ride on the
+        dimension: warn, draw no scatter, and leave the rest of the strip alone."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            cost=("size", [float("nan")] * 4), risk=("size", [1.0, 2.0, 3.0, 4.0])
+        )
+        path = res.to_rerun_timeline_path(
+            dataset, res.bench_cfg.result_vars, readout_scatter=("cost", "risk")
+        )
+        assert path is not None
+        assert self._points(path, "/front/size/all") == []
+
     def test_the_scatter_and_the_value_read_out_share_the_strip(self):
         import rerun.blueprint as rrb
 

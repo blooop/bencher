@@ -114,6 +114,9 @@ _SCATTER_CURRENT_COLOR = (255, 190, 60)
 # draws a label in its entity's colour on a near-black pill, so the marker's amber
 # reads as dim text on a dark ground however well it marks a point.
 _SCATTER_LABEL_COLOR = (240, 243, 250)
+# Logged in place of the cursor's marker at a tick whose sample has no position:
+# an empty batch is what clears an entity latest-at would otherwise carry forward.
+_NO_POINTS = np.zeros((0, 2))
 
 # Which Blueprint view displays each result type, given the archetype
 # ``_log_result_var`` writes for it (named in the comments). A ``ResultRerun`` is
@@ -734,6 +737,9 @@ class _PlotFrame:
     larger values upward, and the axes are drawn on that box with the true values as
     tick labels. The box is padded past the data by a little so no point sits on
     the frame.
+
+    The values it is built from must be finite: the range is what the tick arithmetic
+    reads, and a NaN reaching that raises rather than degrading. Callers filter.
     """
 
     width = 160.0
@@ -1253,8 +1259,17 @@ class RerunTimelineResult(BenchResultBase):
                 timeline_dim,
             )
             return None
+        x = x.astype(float)
+        y = y.astype(float)
+        # A sample the worker could not score carries NaN, and a NaN has no position
+        # on the frame: it is left off the set, off the range the axes are drawn from,
+        # and off the curve.
+        placed = np.isfinite(x) & np.isfinite(y)
+        if not placed.any():
+            logger.warning("no tracking scatter: no sample carries both %s and %s", x_name, y_name)
+            return None
         origin = _front_entity(timeline_dim)
-        frame = _PlotFrame(x.astype(float), y.astype(float))
+        frame = _PlotFrame(x[placed], y[placed])
         _log_plot_frame(rr, staging, f"{origin}/axes", frame, x_name, y_name, title)
         points = frame.project(x, y)
         # Draw order, so the cursor's marker is never buried under the set it is
@@ -1262,20 +1277,20 @@ class RerunTimelineResult(BenchResultBase):
         staging.log(
             f"{origin}/all",
             rr.Points2D(
-                points,
+                points[placed],
                 colors=_SCATTER_ALL_COLOR,
                 radii=rr.Radius.ui_points(3.0),
                 draw_order=1.0,
             ),
             static=True,
         )
-        if _monotonic(x):
+        if _monotonic(x[placed]):
             # The samples are in order along x, so joining them draws the set as the
             # curve it is -- a front -- rather than leaving the eye to connect dots.
             staging.log(
                 f"{origin}/all/curve",
                 rr.LineStrips2D(
-                    [points],
+                    [points[placed]],
                     colors=_SCATTER_ALL_COLOR,
                     radii=rr.Radius.ui_points(1.0),
                     draw_order=0.0,
@@ -1284,17 +1299,25 @@ class RerunTimelineResult(BenchResultBase):
             )
         for position, raw in enumerate(encoding.values):
             encoding.set_time(staging, timeline_dim, raw)
+            # An unscored sample clears the marker rather than leaving it unlogged:
+            # latest-at would otherwise hold the previous tick's point and read as
+            # this design's score.
+            marker = points[position : position + 1] if placed[position] else _NO_POINTS
             # The values themselves go in the label: the axes are the plot's own unit
             # box, so what the viewer reports on hover is a position on the frame
             # and not the number the sweep recorded.
-            label = (
-                f"{_coord_label(dataset.coords[timeline_dim].values[position])}: "
-                f"{_coord_label(x[position])}, {_coord_label(y[position])}"
+            labels = (
+                [
+                    f"{_coord_label(dataset.coords[timeline_dim].values[position])}: "
+                    f"{_coord_label(x[position])}, {_coord_label(y[position])}"
+                ]
+                if placed[position]
+                else []
             )
             staging.log(
                 f"{origin}/current",
                 rr.Points2D(
-                    points[position : position + 1],
+                    marker,
                     colors=_SCATTER_CURRENT_COLOR,
                     radii=rr.Radius.ui_points(7.0),
                     draw_order=2.0,
@@ -1305,10 +1328,10 @@ class RerunTimelineResult(BenchResultBase):
             staging.log(
                 f"{origin}/current/reading",
                 rr.Points2D(
-                    points[position : position + 1],
+                    marker,
                     colors=_SCATTER_LABEL_COLOR,
                     radii=rr.Radius.ui_points(0.0),
-                    labels=[label],
+                    labels=labels,
                     show_labels=True,
                     draw_order=3.0,
                 ),
