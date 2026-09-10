@@ -671,6 +671,77 @@ class TestParetoScrubExample:
         titles = [pane.name for pane in bench.report.pane]
         assert any(title.startswith("Pareto front of") for title in titles), titles
 
+    def test_every_heat_sink_on_the_front_draws_a_different_picture(self):
+        """The example exists to show every design on the front *drawn*, so two
+        designs that differ must not render the same picture. The fins were scaled
+        past the top of the canvas: every height from 17.4mm up (of a 8-40mm range)
+        clipped to the same image."""
+        import hashlib
+        from pathlib import Path
+
+        from bencher.example.optuna.example_optimize_pareto_scrub_3d import HeatSink
+
+        digests = set()
+        for height in (8.0, 12.0, 18.0, 24.0, 32.0, 40.0):
+            sink = HeatSink()
+            sink.fin_height = height
+            sink.fin_pitch = 4.0
+            sink.benchmark()
+            digests.add(hashlib.md5(Path(sink.profile).read_bytes()).hexdigest())
+        assert len(digests) == 6, "fin height is not visible across its whole range"
+
+    def test_a_choked_heat_sink_is_beaten_on_every_objective(self):
+        """A front that is every trial is not a front. Packing the fins tighter used
+        to buy surface area at no thermal cost, so nothing was ever dominated and the
+        example reported "60 designs of 60 trials are Pareto optimal". Below a couple
+        of millimetres the channel stops flowing, so a too-tight design is now beaten
+        outright -- worse heat, worse back-pressure and more metal at once."""
+        from bencher.example.optuna.example_optimize_pareto_scrub_3d import HeatSink
+
+        def score(height: float, pitch: float) -> tuple[float, float, float]:
+            sink = HeatSink()
+            sink.fin_height = height
+            sink.fin_pitch = pitch
+            sink.benchmark()
+            return sink.resistance, sink.pressure_drop, sink.material
+
+        choked = score(30.0, 1.6)
+        looser = score(20.0, 4.0)
+        assert all(a < b for a, b in zip(looser, choked, strict=True)), (looser, choked)
+
+    def test_the_3d_example_walks_a_three_objective_front(self, monkeypatch):
+        """The three-objective gallery example, which is the documented shape of the
+        3-D front: three axes stamped on the dataset and a front with more than one
+        design on it, or there is nothing to turn."""
+        from bencher.example.optuna.example_optimize_pareto_scrub_3d import (
+            example_optimize_pareto_scrub_3d,
+        )
+        from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR
+
+        fronts = []
+        original = bn.Bench.plot_pareto_front
+
+        def spy(self, result, *args, **kwargs):
+            res = original(self, result, *args, **kwargs)
+            fronts.append((result, res))
+            return res
+
+        monkeypatch.setattr(bn.Bench, "plot_pareto_front", spy)
+        bench = example_optimize_pareto_scrub_3d(_run_cfg())
+        assert len(fronts) == 1
+        result, res = fronts[0]
+        assert len(result.target_names) == 3
+        assert res.ds.sizes["pareto_rank"] > 1
+        assert res.ds.attrs[READOUT_SCATTER_ATTR] == [
+            "resistance",
+            "pressure_drop",
+            "material",
+        ]
+        assert result.searched == ["fin_height", "fin_pitch"]
+        assert res.to_rerun_timeline() is not None
+        titles = [pane.name for pane in bench.report.pane]
+        assert any(title.startswith("Pareto front of") for title in titles), titles
+
 
 class TestParetoFrontAggregation:
     def test_a_study_that_reduced_only_its_repeats_still_carries_its_score(self):

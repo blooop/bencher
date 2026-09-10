@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.128.0] - 2026-09-10
+
+### Added
+- **A three-objective Pareto front is drawn in a rerun 3-D view.** Two objectives make
+  a trade that can be drawn flat, and `plot_pareto_front` draws it on a frame this
+  package logs as geometry, because rerun has no chart with two free axes. Three
+  objectives have no such plane at all: any one projection hides a whole direction of
+  the trade, and which pair you happen to plot decides which designs look good. So a
+  three-objective front goes in the thing rerun *does* have — a real 3-D view, one
+  point per design in a cube the reader can orbit, the cursor's own design picked out
+  and labelled as the slider walks the front.
+
+  Each axis is mapped onto the same edge length, so three unlike scales — degrees
+  against decibels against a count — do not put the whole front in one sliver of the
+  view, and the true values go on as tick labels. No grid and no wireframe cage:
+  rerun's own view supplies depth, occlusion and an orbit camera, and a box in front
+  of the points fights all three. The front is not joined into a curve either, the way
+  the flat one is where its samples are ordered — a three-objective front is a
+  surface, so a line through it in tick order would draw a path and not the shape.
+
+  `to_rerun_timeline(readout_scatter=(x, y, z))` asks for one on any sweep whose
+  samples carry three such values, and `bencher_readout_scatter` takes two or three
+  names. A two-objective front is unchanged.
+- New gallery example `example_optimize_pareto_scrub_3d`: a finned heat sink trading
+  thermal resistance against back-pressure against metal, with every design on the
+  resulting front drawn and the front itself turnable.
+
+### Changed
+- A read-out view now carries what *kind* of plot it is as one field rather than 2-D
+  bounds beside a set of view kinds. The layout asks both "which view class" and "how
+  much height", and with the two apart a view could answer them inconsistently — a
+  plot rendered into the sliver of height meant for a legend.
+
+### Fixed
+- **An axis was labelled past its own end.** `_nice_ticks` documents that ticks
+  outside the range are dropped and kept one up to half a step beyond it. The flat
+  plot absorbed that inside its frame; the 3-D box has none, so the stray label
+  projected past the end of the axis line and landed on the axis name.
+- **`readout_scatter="xy"` was read as the axes `x` and `y`.** A string is a sequence
+  of its own characters, so it passed the arity check, drew nothing, and silently
+  suppressed the dataset's own request — the failure an empty request is already an
+  error for. It is now a `TypeError`.
+- **A second Pareto front was served the first one's samples.** `pareto_rank` is a
+  position on one front, not the design at that position, and neither cache key can
+  see which designs the ranks stand for — `hash_persistent` is built from the sweep's
+  own vars and the per-sample key from its job args, whose only input here is the
+  rank. So with `cache_results` or `cache_samples` on, a second front over the same
+  bench replayed the first's data under the second's coordinates: every number, every
+  image and every scene at rank *n* belonged to a different design than the read-out
+  beside it named. Since the sample cache is on disk, the collision held across runs.
+  Both caches are off for the front sweep now, beside the thinning already neutralised
+  there for the same reason.
+- **A readout-scatter axis that is not numbers took the whole report down.** A design's
+  *name* is a per-sample value like any other, and `readout_scatter=` is a pair of
+  names with nothing typing them, so naming one reached `astype(float)` and killed the
+  benchmark run. It now warns and draws no scatter, which is what both sibling guards
+  already did.
+- **A boolean design input became an axis of its own on a front.** Bool coordinates
+  were rebuilt from a bare list, which xarray reads as a new dimension — a no-op for a
+  bool that *is* a dimension, and wrong for one riding on the rank. `boost` came out as
+  an axis as wide as the front with every label the same, dropped out of the timeline
+  read-out, and went into the plot-type deduction.
+- **A Pareto front could not run at all under `Executors.MULTIPROCESSING`.** The front's
+  worker was a closure, which a process pool cannot look up in the child.
+- **A warm-seeded trial's single sample was stamped as the study's aggregate.** Warm
+  start seeds one trial per recorded sample, and those compete on the front against
+  aggregated ones, so `plot_pareto_front` labelled a raw value `{target}_{agg_fn}`.
+  The value the study ranked genuinely is not the aggregate, so the front now says so:
+  seeded trials are marked, and a front carrying one warns which ranks they are.
+  Warm start seeding un-reduced samples into an aggregating study is a defect in
+  `optimize` itself and is left for its own change.
+
 ## [1.127.0] - 2026-09-10
 
 ### Added
