@@ -675,7 +675,9 @@ class TestTrackingScatter:
             res.bench_cfg.result_vars,
             readout_scatter=("cost", "risk"),
         )
-        (every,) = self._points(path, "/front/size/all")
+        rows = self._points(path, "/front/size/all")
+        assert len(rows) == 1
+        every = rows[0]
         # Drawn on the plot's own box, not at the raw values: cost falls 4..1 so x
         # falls left, risk rises 1..4 so y rises -- which in rerun's downward 2-D y is a
         # falling coordinate -- and the four samples span the box less its padding.
