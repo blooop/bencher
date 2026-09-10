@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.127.0] - 2026-09-09
+## [1.127.0] - 2026-09-10
 
 ### Added
 - **A Pareto front can be scrubbed, one design per tick.** `Bench.plot_pareto_front`
