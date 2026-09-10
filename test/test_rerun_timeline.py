@@ -23,6 +23,7 @@ from bencher.results.rerun_timeline import (
     _DurationIndex,
     _entity_parts,
     _layout_views,
+    _nice_ticks,
     _PlotBox3D,
     _readout_entity,
     _SequenceIndex,
@@ -908,6 +909,36 @@ class TestTrackingScatter:
         assert "/front/pareto_rank/all" in entities
         ranks = list(range(len(result.pareto_trials())))
         assert sorted(entities["/front/pareto_rank/current"]["pareto_rank"]) == ranks
+
+
+class TestNiceTicks:
+    """Round-number tick values that stay inside the axis they label."""
+
+    @pytest.mark.parametrize(
+        "low,high",
+        [
+            (-5.418, 50.568),  # the heat sink's material axis
+            (-26.812, 270.912),  # its pressure-drop axis
+            (0.0, 1.0),
+            (-1.0, 1.0),
+            (0.017, 0.045),
+            (-300.0, -12.0),
+            (1e-6, 3e-6),
+            (0.0, 1e7),
+        ],
+    )
+    def test_no_tick_falls_outside_the_range_it_labels(self, low, high):
+        """`np.arange(first, high + step / 2, step)` overshot by up to half a step, so
+        a padded axis was labelled past its own end -- which the flat plot got away
+        with inside its frame and the 3-D box did not, the stray label landing on the
+        axis name."""
+        ticks = _nice_ticks(low, high)
+        assert ticks, "an axis with a span always has at least one tick"
+        assert min(ticks) >= low
+        assert max(ticks) <= high
+
+    def test_a_flat_axis_is_labelled_at_its_one_value(self):
+        assert _nice_ticks(2.0, 2.0) == [2.0]
 
 
 class TestTrackingScatter3D:

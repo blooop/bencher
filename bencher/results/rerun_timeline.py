@@ -815,10 +815,15 @@ def _nice_ticks(low: float, high: float, target: int = 4) -> list[float]:
         1 if fraction < 1.5 else 2 if fraction < 3.5 else 5 if fraction < 7.5 else 10
     )
     first = np.ceil(low / step) * step
+    # Half a step of slack so a tick landing on `high` survives the float arithmetic
+    # that put it there, then dropped if it is genuinely past the end: an axis is
+    # labelled only where it has data-side meaning, and in a 3-D box a tick beyond
+    # the axis line has nothing under it and lands on the axis name.
     ticks = np.arange(first, high + step / 2, step)
     # Round off the arithmetic so a tick is 0.3, not 0.30000000000000004.
     decimals = max(0, -int(np.floor(np.log10(step))))
-    return [float(round(t, decimals)) for t in ticks]
+    rounded = [float(round(t, decimals)) for t in ticks]
+    return [t for t in rounded if low - step * 1e-9 <= t <= high + step * 1e-9]
 
 
 def _monotonic(values: np.ndarray) -> bool:
