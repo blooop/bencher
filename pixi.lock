@@ -1592,7 +1592,7 @@ packages:
   - pytest-cov>=4.1,<=7.1.0 ; extra == 'test'
   - pytest>=7.4,<=9.1.1 ; extra == 'test'
   - hypothesis>=6.104.2,<=6.165.10 ; extra == 'test'
-  - ruff>=0.5.0,<=0.16.5 ; extra == 'test'
+  - ruff>=0.16.0,<=0.16.5 ; extra == 'test'
   - sphinxcontrib-mermaid>=1.0,<3.0 ; extra == 'test'
   - coverage>=7.5.4,<=7.16.0 ; extra == 'test'
   - prek>=0.2.28,<0.6.0 ; extra == 'test'
