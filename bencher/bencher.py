@@ -1622,6 +1622,9 @@ class Bench(BenchPlotServer):
             ValueError: if the study finished no trial, was run without a
                 ``bench_cfg``, *objective* is not one of its targets, or a trial on
                 the front names no value for one of the searched inputs.
+            RuntimeError: if this bench has a worker *class* rather than a callable
+                worker. Every rank here is a fresh evaluation, which a
+                declaration-only bench cannot run.
         """
         if result.bench_cfg is None:
             raise ValueError("plot_pareto_front needs the study's bench_cfg to know its inputs")
@@ -1847,9 +1850,15 @@ class Bench(BenchPlotServer):
         *target_names* are the study's objectives, which need not be the sweep's: a
         result variable gains a direction for the sake of one study and is then an
         optuna target of every sweep that records it. Building trials from the
-        sweep's own targets made a one-objective study reject every seed it was
-        offered -- and the rejection was swallowed here, so it read as a study with
-        nothing cached rather than as a mismatch.
+        sweep's own targets therefore made a one-objective study reject every seed
+        it was offered, since a trial's values are positional against the study's
+        directions.
+
+        ``self.results`` holds whatever sweeps this bench has run, so a result that
+        records none of the study's objectives is not a mismatch to report -- it is
+        simply not a seed. That is what the broad ``except`` is for, and it means a
+        study whose targets *no* result records still reads as one with nothing
+        cached.
         """
         added = 0
         for res in self.results:
