@@ -119,6 +119,38 @@ class InnerTickSweep(bn.ParametrizedSweep):
         return super().benchmark()
 
 
+class SharedSceneSweep(bn.ParametrizedSweep):
+    """A fixed scene with one moving part, which is what a rig sweep records.
+
+    ``scene`` is the same in every sample and ``probe`` moves with the sweep -- the
+    robot and the sensor mount being placed on it.
+    """
+
+    theta = bn.FloatSweep(default=1.0, bounds=[1.0, 3.0], samples=3)
+    out_rerun = bn.ResultRerun(width=200, height=150)
+
+    def benchmark(self):
+        recording = rr.RecordingStream("test_rerun_timeline_shared", make_default=False)
+        recording.log("scene/floor", rr.Points3D([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]), static=True)
+        recording.log("scene/wall", rr.Points3D([[2.0, 0.0, 0.0]]))
+        recording.log("probe", rr.Points3D([[self.theta, 0.0, 1.0]]))
+        self.out_rerun = bn.capture_rerun_rrd(recording)
+        return super().benchmark()
+
+
+class SharedSceneWithClockSweep(SharedSceneSweep):
+    """The same scene, but the wall is recorded on the sample's own timeline."""
+
+    def benchmark(self):
+        recording = rr.RecordingStream("test_rerun_timeline_shared_clock", make_default=False)
+        recording.log("scene/floor", rr.Points3D([[0.0, 0.0, 0.0]]), static=True)
+        recording.set_time("time_s", duration=0.5)
+        recording.log("scene/wall", rr.Points3D([[2.0, 0.0, 0.0]]))
+        recording.log("probe", rr.Points3D([[self.theta, 0.0, 1.0]]))
+        self.out_rerun = bn.capture_rerun_rrd(recording)
+        return bn.ParametrizedSweep.benchmark(self)
+
+
 class CategoricalSweep(bn.ParametrizedSweep):
     """A sweep whose only dimension has no numeric position on an axis."""
 
@@ -162,6 +194,28 @@ class RecordingAndMetricSweep(StaticPoseSweep):
 
     def benchmark(self):
         self.coverage = float(self.theta)
+        return super().benchmark()
+
+
+class FrontSweep(bn.ParametrizedSweep):
+    """A two-objective design space with a scene per design, judged under two lights.
+
+    ``theta`` trades ``near`` against ``far`` everywhere, so every trial is on the
+    front; ``light`` is a condition to aggregate over, not a design choice.
+    """
+
+    theta = bn.FloatSweep(default=1.0, bounds=[1.0, 3.0], samples=3)
+    light = bn.StringSweep(["day", "night"])
+    near = bn.ResultFloat(units="m", direction=bn.OptDir.minimize)
+    far = bn.ResultFloat(units="m", direction=bn.OptDir.minimize)
+    out_rerun = bn.ResultRerun(width=200, height=150)
+
+    def benchmark(self):
+        self.near = float(self.theta)
+        self.far = 3.0 - float(self.theta)
+        recording = rr.RecordingStream("test_rerun_timeline_front", make_default=False)
+        recording.log("pose", rr.Points2D([[self.theta, float(self.light == "day")]]))
+        self.out_rerun = bn.capture_rerun_rrd(recording)
         return super().benchmark()
 
 
@@ -266,6 +320,57 @@ def _indices(path: str) -> dict[str, dict[str, list]]:
             column = batch.column(batch.schema.get_field_index(field.name))
             timelines.setdefault(field.name, []).extend(column.to_pylist())
     return out
+
+
+def _texts(path: str, entity: str) -> list[str]:
+    """The TextDocument texts logged at *entity*, in index order."""
+    reader = RrdReader(str(path))
+    rows: list[tuple[int, str]] = []
+    for chunk in reader.stream(store=reader.recordings()[0]):
+        if str(chunk.entity_path) != entity:
+            continue
+        batch = chunk.to_record_batch()
+        index = next(
+            batch.column(i).to_pylist()
+            for i, field in enumerate(batch.schema)
+            if (field.metadata or {}).get(b"rerun:kind") == b"index"
+        )
+        text = next(
+            batch.column(i).to_pylist()
+            for i, field in enumerate(batch.schema)
+            if field.name.startswith("TextDocument") and field.name.endswith("text")
+        )
+        rows.extend(zip(index, ("".join(t) if t else "" for t in text)))
+    return [text for _, text in sorted(rows)]
+
+
+def _media_types(path: str, entity: str) -> list[str]:
+    """The TextDocument media types logged at *entity*, in index order."""
+    reader = RrdReader(str(path))
+    found: list[str] = []
+    for chunk in reader.stream(store=reader.recordings()[0]):
+        if str(chunk.entity_path) != entity:
+            continue
+        batch = chunk.to_record_batch()
+        for i, field in enumerate(batch.schema):
+            if field.name.startswith("TextDocument") and field.name.endswith("media_type"):
+                found.extend("".join(v) if v else "" for v in batch.column(i).to_pylist())
+    return found
+
+
+def _xy(point) -> list:
+    """A logged 2-D position as ``[x, y]``, however arrow handed it back."""
+    return list(point.values()) if isinstance(point, dict) else list(point)
+
+
+def _static(path: str, entity: str) -> list[bool]:
+    """Whether each chunk logged at *entity* went to the static store."""
+    reader = RrdReader(str(path))
+    return [
+        chunk.is_static
+        for chunk in reader.stream(store=reader.recordings()[0])
+        if str(chunk.entity_path) == entity
+    ]
 
 
 def _components(path: str, entity: str) -> set[str]:
@@ -454,6 +559,350 @@ class TestResultTypesOtherThanRecordings:
             path = _timeline_path(res)
         assert caplog.text.count("No rerun timeline mapping") == 1, caplog.text
         assert set(_indices(path)) == {"/frame"}
+
+
+class TestRidingCoordinates:
+    """A sweep over a set of designs is not a grid: what makes rank 3 rank 3 rides on
+    the dimension as coordinates, and the read-out is where a reader finds it."""
+
+    def test_coordinates_riding_on_the_timeline_dimension_are_read_out(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            design=("size", ["a", "b", "c", "d"]), gain=("size", [0.5, 1.0, 1.5, 2.0])
+        )
+        dataset.coords["gain"].attrs["units"] = "dB"
+        path = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+        readout = _readout_entity("size")
+        # Whole-number ticks show the size already; the read-out is there for what
+        # they do not show, and it says the tick's own value too so it reads alone.
+        assert sorted(_indices(path)[readout]["size"]) == [2, 3, 4, 5]
+        # A bullet per field: a design carries its whole parameter set here, which run
+        # together is a paragraph to scan rather than a list to read.
+        assert _texts(path, readout) == [
+            "- **size** = 2\n- **design** = a\n- **gain** = 0.5 dB",
+            "- **size** = 3\n- **design** = b\n- **gain** = 1.0 dB",
+            "- **size** = 4\n- **design** = c\n- **gain** = 1.5 dB",
+            "- **size** = 5\n- **design** = d\n- **gain** = 2.0 dB",
+        ]
+        assert _media_types(path, readout) == ["text/markdown"] * 4
+
+    def test_a_coordinate_on_a_branch_dimension_is_not_a_read_out(self):
+        """Only what rides on the timeline dimension moves with the cursor."""
+        res = _sweep(["size", "palette"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = res.to_dataset(ReduceType.SQUEEZE).assign_coords(hue=("palette", [30.0, 210.0]))
+        path = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars, timeline_dim="size")
+        assert _readout_entity("size") not in _indices(path)
+
+    def test_a_pareto_front_is_scrubbed_by_rank_with_its_design_read_out(self):
+        """End to end from a study: the rank is the timeline, the aggregated condition
+        tiles, and the cursor names the design and its scores."""
+        bench = FrontSweep().to_bench(bn.BenchRunCfg(repeats=1))
+        result = bench.optimize(n_trials=4, aggregate=["light"], warm_start=False, plot=False)
+        res = bench.plot_pareto_front(result, result_vars=["out_rerun"], auto_plot=False)
+        path = _timeline_path(res)
+        entities = _indices(path)
+        # Two objectives, so the front also plots itself; see TestTrackingScatter.
+        plot = {entity for entity in entities if entity.startswith("/front/pareto_rank/")}
+        assert set(entities) - plot == {
+            "/light_day/out_rerun/pose",
+            "/light_night/out_rerun/pose",
+            _readout_entity("pareto_rank"),
+        }
+        assert {"/front/pareto_rank/all", "/front/pareto_rank/current"} <= plot
+        ranks = list(range(len(result.pareto_trials())))
+        for entity, timelines in entities.items():
+            # The plot is static apart from the cursor's own marker and reading, so
+            # it has no index of its own to check.
+            if entity in plot and not entity.startswith("/front/pareto_rank/current"):
+                assert timelines == {}
+                continue
+            assert sorted(timelines["pareto_rank"]) == ranks
+        texts = _texts(path, _readout_entity("pareto_rank"))
+        for rank, (text, trial) in enumerate(zip(texts, result.pareto_trials())):
+            lines = text.splitlines()
+            assert lines[0] == f"- **pareto_rank** = {rank}"
+            assert lines[1] == f"- **theta** = {_coord_label(trial.params['theta'])}"
+            assert f"- **near_mean** = {_coord_label(trial.values[0])} m" in lines
+            assert f"- **far_mean** = {_coord_label(trial.values[1])} m" in lines
+
+
+class TestTrackingScatter:
+    """Where on the front the slider is parked, drawn in the space it was ranked in."""
+
+    def _points(self, path: str, entity: str) -> list[list[list[float]]]:
+        """The Points2D positions logged at *entity*, one list of points per row."""
+        reader = RrdReader(str(path))
+        rows: list[list[list[float]]] = []
+        for chunk in reader.stream(store=reader.recordings()[0]):
+            if str(chunk.entity_path) != entity:
+                continue
+            batch = chunk.to_record_batch()
+            for i, field in enumerate(batch.schema):
+                if field.name.startswith("Points2D") and "positions" in field.name:
+                    for row in batch.column(i).to_pylist():
+                        rows.append([[float(v) for v in _xy(point)] for point in row])
+        return rows
+
+    def _scatter_dataset(self, res):
+        return res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            cost=("size", [4.0, 3.0, 2.0, 1.0]), risk=("size", [1.0, 2.0, 3.0, 4.0])
+        )
+
+    def test_the_whole_set_is_static_and_the_cursors_point_moves(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = res.to_rerun_timeline_path(
+            self._scatter_dataset(res),
+            res.bench_cfg.result_vars,
+            readout_scatter=("cost", "risk"),
+        )
+        entities = _indices(path)
+        origin = "/front/size"
+        # The set carries no sweep index and reads back static, which is what puts it
+        # on screen at every tick. (Only the composed result is pinned here: the
+        # log_time strip leaves an unindexed chunk reading static too, so this does
+        # not separately witness the `static=True` on the log call.)
+        assert _static(path, f"{origin}/all") == [True]
+        assert entities[f"{origin}/all"] == {}
+        # The highlight is one point per tick, which is what makes it follow the cursor.
+        # The four ticks arrive as one indexed chunk, not four static ones.
+        assert _static(path, f"{origin}/current") == [False]
+        assert sorted(entities[f"{origin}/current"]["size"]) == [2, 3, 4, 5]
+
+    def test_the_highlight_is_the_sample_the_cursor_is_on(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = res.to_rerun_timeline_path(
+            self._scatter_dataset(res),
+            res.bench_cfg.result_vars,
+            readout_scatter=("cost", "risk"),
+        )
+        rows = self._points(path, "/front/size/all")
+        assert len(rows) == 1
+        every = rows[0]
+        # Drawn on the plot's own box, not at the raw values: cost falls 4..1 so x
+        # falls left, risk rises 1..4 so y rises -- which in rerun's downward 2-D y is a
+        # falling coordinate -- and the four samples span the box less its padding.
+        xs = [point[0] for point in every]
+        ys = [point[1] for point in every]
+        assert xs == sorted(xs, reverse=True) and ys == sorted(ys, reverse=True)
+        assert 0 < xs[-1] < xs[0] < 160 and 0 < ys[-1] < ys[0] < 100
+        # One point per tick, each the sample sitting at that tick.
+        assert self._points(path, "/front/size/current") == [[point] for point in every]
+
+    def _nan_dataset(self, res):
+        """A sample the worker could not score, which is what a NaN in a series is."""
+        return res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            cost=("size", [4.0, float("nan"), 2.0, 1.0]),
+            risk=("size", [1.0, 2.0, 3.0, 4.0]),
+        )
+
+    def test_a_sample_with_no_value_leaves_the_plot_standing(self):
+        """An unscored sample used to reach the tick arithmetic as a NaN range and
+        raise out of the whole run -- the report, not just the strip."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = res.to_rerun_timeline_path(
+            self._nan_dataset(res),
+            res.bench_cfg.result_vars,
+            readout_scatter=("cost", "risk"),
+        )
+        assert path is not None
+        # The three samples carrying both values are placed; the one that is not
+        # scored has nowhere on the frame to go and is left off it.
+        rows = self._points(path, "/front/size/all")
+        assert len(rows) == 1
+        assert len(rows[0]) == 3
+
+    def test_the_cursor_is_left_on_no_point_where_its_sample_has_none(self):
+        """Not logging at that tick would leave latest-at showing the previous
+        sample's point as the cursor's, which is the one thing it must not say."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = res.to_rerun_timeline_path(
+            self._nan_dataset(res),
+            res.bench_cfg.result_vars,
+            readout_scatter=("cost", "risk"),
+        )
+        assert [len(row) for row in self._points(path, "/front/size/current")] == [1, 0, 1, 1]
+
+    def test_a_series_no_sample_scored_draws_no_plot(self):
+        """Nothing to place is the same case as a pair that does not ride on the
+        dimension: warn, draw no scatter, and leave the rest of the strip alone."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            cost=("size", [float("nan")] * 4), risk=("size", [1.0, 2.0, 3.0, 4.0])
+        )
+        path = res.to_rerun_timeline_path(
+            dataset, res.bench_cfg.result_vars, readout_scatter=("cost", "risk")
+        )
+        assert path is not None
+        assert self._points(path, "/front/size/all") == []
+
+    def test_the_scatter_and_the_value_read_out_share_the_strip(self):
+        import rerun.blueprint as rrb
+
+        from bencher.results.composable_container.composable_container_rerun import (
+            RerunViewKind,
+        )
+        from bencher.results.rerun_timeline import _readout_layout, _View
+
+        views = [
+            _View(origin="/front/x", label="a vs b", view_kinds={RerunViewKind.spatial_2d}),
+            _View(origin="/sweep/x", label="x", view_kinds={RerunViewKind.text_document}),
+        ]
+        layout = _readout_layout(rrb, views)
+        assert isinstance(layout, rrb.Horizontal)
+        assert len(layout.contents) == 2
+        assert _readout_layout(rrb, []) is None
+        assert not isinstance(_readout_layout(rrb, views[:1]), rrb.Horizontal)
+
+    def test_a_sweep_that_does_not_carry_both_values_gets_no_scatter(self, caplog):
+        """Named against a dataset that has no such per-sample pair, it says so and
+        renders the rest rather than failing the whole composition."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        with caplog.at_level("WARNING", logger="bencher.results.rerun_timeline"):
+            path = res.to_rerun_timeline_path(
+                res.to_dataset(ReduceType.SQUEEZE),
+                res.bench_cfg.result_vars,
+                readout_scatter=("cost", "risk"),
+            )
+        assert "no tracking scatter" in caplog.text
+        assert "/front/size/all" not in _indices(path)
+        assert "/frame" in _indices(path)
+
+    def test_a_pair_is_what_a_plane_takes(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        with pytest.raises(ValueError, match="exactly two"):
+            res.to_rerun_timeline_path(
+                self._scatter_dataset(res),
+                res.bench_cfg.result_vars,
+                readout_scatter=("cost",),
+            )
+
+    def test_the_dataset_can_carry_the_request_itself(self):
+        """The producer of a sweep knows which pair is worth plotting; the renderer
+        cannot infer it, so the sweep says so on the dataset."""
+        from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR
+
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = ["cost", "risk"]
+        path = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+        assert "/front/size/all" in _indices(path)
+
+    def test_an_asked_for_pair_is_not_named_by_the_datasets_title(self):
+        """The title names what the *set* is, so it belongs to the pair its producer
+        asked for. Read whatever was drawn, it titled a spacing-against-taper plot
+        of a Pareto front's inputs "Pareto front"."""
+        from bencher.results.rerun_timeline import (
+            READOUT_SCATTER_ATTR,
+            READOUT_SCATTER_TITLE_ATTR,
+        )
+
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res).assign_coords(span=("size", [1.0, 2.0, 3.0, 4.0]))
+        dataset.attrs[READOUT_SCATTER_ATTR] = ["cost", "risk"]
+        dataset.attrs[READOUT_SCATTER_TITLE_ATTR] = "Pareto front"
+        # The producer's own request keeps the producer's own title.
+        titled = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+        assert "/front/size/axes/title" in _indices(titled)
+        # A different pair is a different set, which that title does not name.
+        asked = res.to_rerun_timeline_path(
+            dataset, res.bench_cfg.result_vars, readout_scatter=("span", "risk")
+        )
+        assert "/front/size/all" in _indices(asked)
+        assert "/front/size/axes/title" not in _indices(asked)
+
+    def test_a_request_naming_no_pair_at_all_is_refused(self):
+        """An empty request was falsy, so it silently suppressed the dataset's own
+        rather than saying it named no pair."""
+        from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR
+
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = ["cost", "risk"]
+        with pytest.raises(ValueError, match="exactly two"):
+            res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars, readout_scatter=())
+
+    def test_a_two_objective_front_plots_itself(self):
+        """End to end: the study's own objectives become the scatter's axes."""
+        bench = FrontSweep().to_bench(bn.BenchRunCfg(repeats=1))
+        result = bench.optimize(n_trials=4, aggregate=["light"], warm_start=False, plot=False)
+        res = bench.plot_pareto_front(result, result_vars=["out_rerun"], auto_plot=False)
+        from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR
+
+        assert res.ds.attrs[READOUT_SCATTER_ATTR] == ["near_mean", "far_mean"]
+        entities = _indices(_timeline_path(res))
+        assert "/front/pareto_rank/all" in entities
+        ranks = list(range(len(result.pareto_trials())))
+        assert sorted(entities["/front/pareto_rank/current"]["pareto_rank"]) == ranks
+
+
+class TestSharedContent:
+    """What every sample records identically is stored once, not once per tick."""
+
+    def _chunks(self, path: str, entity: str) -> list[tuple[bool, list]]:
+        """``(is_static, sweep index values)`` per chunk logged at *entity*."""
+        reader = RrdReader(str(path))
+        out = []
+        for chunk in reader.stream(store=reader.recordings()[0]):
+            if str(chunk.entity_path) != entity:
+                continue
+            batch = chunk.to_record_batch()
+            ticks = [
+                batch.column(i).to_pylist()
+                for i, f in enumerate(batch.schema)
+                if (f.metadata or {}).get(b"rerun:kind") == b"index" and f.name == "theta"
+            ]
+            out.append((chunk.is_static, ticks[0] if ticks else []))
+        return out
+
+    def test_the_unchanging_scene_is_logged_once_and_static(self):
+        res = _sweep(["theta"], cls=SharedSceneSweep)
+        path = _timeline_path(res)
+        # Static in the sample or not: the wall was logged with the wall clock only,
+        # and identical at every tick is identical at every tick.
+        for part in ("floor", "wall"):
+            assert self._chunks(path, f"/out_rerun/scene/{part}") == [(True, [])]
+        # The moving part is still one chunk per tick, at its tick.
+        probe = self._chunks(path, "/out_rerun/probe")
+        assert [static for static, _ in probe] == [False, False, False]
+        assert sorted(tick for _, ticks in probe for tick in ticks) == [1, 2, 3]
+
+    def test_a_tick_with_no_recording_keeps_every_tick_separate(self):
+        """A static copy would show at the empty tick too, where there is nothing."""
+        res = _sweep(["theta"], cls=SharedSceneSweep)
+        dataset = res.to_dataset(ReduceType.SQUEEZE).copy(deep=True)
+        dataset["out_rerun"].values[1] = ""
+        path = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+        floor = self._chunks(path, "/out_rerun/scene/floor")
+        assert [static for static, _ in floor] == [False, False]
+        assert sorted(tick for _, ticks in floor for tick in ticks) == [1, 3]
+
+    def test_an_entity_on_the_samples_own_timeline_is_not_shared(self):
+        """Static data has no inner axis, and the sample's own clock is one."""
+        res = _sweep(["theta"], cls=SharedSceneWithClockSweep)
+        path = _timeline_path(res)
+        assert self._chunks(path, "/out_rerun/scene/floor") == [(True, [])]
+        wall = self._chunks(path, "/out_rerun/scene/wall")
+        assert [static for static, _ in wall] == [False, False, False]
+        assert "time_s" in _indices(path)["/out_rerun/scene/wall"]
+
+    def test_sharing_is_decided_per_branch(self):
+        """Two branches are two scenes; what one holds still the other may not."""
+        res = _sweep(["theta"], cls=SharedSceneSweep)
+        data = (
+            res.to_dataset(ReduceType.SQUEEZE)["out_rerun"]
+            .expand_dims(scene=["a", "b"])
+            .transpose("theta", "scene")
+            .copy(deep=True)
+        )
+        data.loc[{"scene": "b", "theta": 2.0}] = ""
+        path = res.to_rerun_timeline_path(
+            data.to_dataset(), res.bench_cfg.result_vars, timeline_dim="theta"
+        )
+        assert self._chunks(path, "/scene_a/out_rerun/scene/floor") == [(True, [])]
+        assert [s for s, _ in self._chunks(path, "/scene_b/out_rerun/scene/floor")] == [
+            False,
+            False,
+        ]
 
 
 class TestInnerTimeline:
@@ -717,8 +1166,8 @@ class TestLayout:
             data.loc[{"pose": "Home", "scenario": "table"}] = ""
         layouts = []
 
-        def capture(rrb, branches, branch_dims, readout=None):
-            layout = _layout_views(rrb, branches, branch_dims, readout)
+        def capture(rrb, branches, branch_dims, readout=None, **kwargs):
+            layout = _layout_views(rrb, branches, branch_dims, readout, **kwargs)
             layouts.append(layout)
             return layout
 

@@ -62,6 +62,7 @@ from bencher.results.bench_result_base import BenchResultBase, ReduceType
 from bencher.results.composable_container.composable_container_rerun import (
     RerunViewKind,
     _batch_view_kinds,
+    _index_fields,
     views_for_kinds,
 )
 from bencher.results.rerun_summary import leaf_recording_path
@@ -91,6 +92,35 @@ _DROPPED_TIMELINES = frozenset({"log_time"})
 # Entity path parts are restricted to this alphabet so a coordinate value like
 # "0.5 rad" or "a/b" cannot inject a path separator or need escaping.
 _UNSAFE_ENTITY_CHARS = re.compile(r"[^0-9A-Za-z_.-]+")
+
+#: Dataset attribute naming two per-sample variables to draw as a tracking scatter
+#: beneath the timeline -- every sample as a point, the cursor's own picked out. Set
+#: by the producer of the sweep (``Bench.plot_pareto_front`` stamps the study's two
+#: objectives), because which pair is worth plotting against each other is a fact
+#: about the sweep and not something a renderer can infer from dtypes.
+READOUT_SCATTER_ATTR = "bencher_readout_scatter"
+
+#: Dataset attribute naming the tracking scatter's plot, e.g. "Pareto front". Only
+#: the producer of a sweep knows what the set of samples *is*, and that is what a
+#: title says; without one the plot is drawn with its axes labelled and no title.
+READOUT_SCATTER_TITLE_ATTR = "bencher_readout_scatter_title"
+
+# Everything the plot draws is coloured for a light ground. Rerun's *web* viewer --
+# the one a published report embeds -- renders light, where a pale label is invisible;
+# its desktop viewer renders dark. Nothing in the data model is theme-aware, so one
+# of the two has to be chosen, and it is the one reports are read in.
+#
+# The tracking scatter's colours. The front is context and the cursor is the subject,
+# so the whole set is drawn faint and one point is drawn solid on top of it.
+_SCATTER_ALL_COLOR = (120, 130, 150)
+_SCATTER_CURRENT_COLOR = (235, 140, 0)
+# The cursor's label is logged apart from its marker so the two can differ: rerun
+# draws a label in its entity's colour, so the marker's amber would be the text's
+# colour too, and amber on the pale pill cannot be read.
+_SCATTER_LABEL_COLOR = (0, 0, 0)
+# Logged in place of the cursor's marker at a tick whose sample has no position:
+# an empty batch is what clears an entity latest-at would otherwise carry forward.
+_NO_POINTS = np.zeros((0, 2))
 
 # Which Blueprint view displays each result type, given the archetype
 # ``_log_result_var`` writes for it (named in the comments). A ``ResultRerun`` is
@@ -344,6 +374,9 @@ class _View:
     label: str
     view_kinds: set[RerunViewKind] = field(default_factory=set)
     logged: bool = False
+    #: ``((x_min, x_max), (y_min, y_max))`` to open a 2-D view on, for a view that
+    #: draws its own frame and labels: fit to the data alone would crop them.
+    bounds: tuple[tuple[float, float], tuple[float, float]] | None = None
 
 
 def _rewrite_chunk(chunk, timeline: str, arrow_type=None, raw_value: int | None = None) -> list:
@@ -413,32 +446,168 @@ def _forward_stage(recording, staged_path: str, timeline: str) -> None:
             recording.send_chunks(_rewrite_chunk(chunk, timeline))
 
 
-def _send_recording(recording, view: _View, path: str, timeline: str, arrow_type, raw: int) -> None:
-    """Re-root one sample's ``.rrd`` under *view*, re-timed onto the sweep timeline."""
+def _sample_chunks(path: str):
+    """Yield ``(entity, chunk)`` for every data chunk in one sample's ``.rrd``.
+
+    Recording properties are per-file metadata (start time, app id). Every sample
+    carries one; forwarding them would add a ``__properties`` entity to each branch
+    that displays nothing, so they are not data and are not yielded.
+    """
     from rerun.experimental import RrdReader
 
     reader = RrdReader(path)
     for store in reader.recordings():
         for chunk in reader.stream(store=store):
-            source = str(chunk.entity_path).lstrip("/")
-            # Recording properties are per-file metadata (start time, app id). Every
-            # sample carries one; forwarding them would add a __properties entity to
-            # each branch that displays nothing.
-            if source.startswith("__properties"):
+            entity = str(chunk.entity_path).lstrip("/")
+            if entity.startswith("__properties"):
                 continue
+            yield entity, chunk
+
+
+def _content_key(batch) -> bytes:
+    """A digest of what a chunk says, ignoring the row ids rerun stamps on it.
+
+    Two chunks that say the same thing about the same components digest the same
+    whichever file they came from: the ``RowId`` control column is minted per log
+    call and the wall clock per capture, so both are left out. Arrow IPC is the
+    medium because it serialises schema and data together deterministically, where
+    hashing the buffers directly would see padding and offsets that differ between
+    equal arrays.
+    """
+    import hashlib
+
+    import pyarrow as pa
+
+    keep = [
+        position
+        for position, arrow_field in enumerate(batch.schema)
+        if (arrow_field.metadata or {}).get(b"rerun:kind") != b"control"
+        and arrow_field.name not in _DROPPED_TIMELINES
+    ]
+    # Field metadata carries the component identity and is kept, but re-ordered:
+    # rerun writes it from a hash map, so two files spell the same metadata in a
+    # different order and the IPC bytes would differ over nothing.
+    fields = [
+        pa.field(
+            arrow_field.name,
+            arrow_field.type,
+            arrow_field.nullable,
+            metadata=dict(sorted((arrow_field.metadata or {}).items())),
+        )
+        for arrow_field in (batch.schema.field(position) for position in keep)
+    ]
+    subset = pa.RecordBatch.from_arrays(
+        [batch.column(position) for position in keep], schema=pa.schema(fields)
+    )
+    sink = pa.BufferOutputStream()
+    with pa.ipc.new_stream(sink, subset.schema) as writer:
+        writer.write_batch(subset)
+    return hashlib.blake2b(sink.getvalue().to_pybytes(), digest_size=16).digest()
+
+
+def _shared_entities(samples: list[tuple[int, str]], n_ticks: int) -> set[str]:
+    """The entities that every one of a branch's samples records identically.
+
+    Such an entity is the same picture at every tick, so it can be logged once, as
+    static data, and the viewer shows it at every tick anyway; logging it per tick
+    stores one copy per sample of something that never changes. A benchmark that
+    draws a robot with a quarter-million triangles and then sweeps a sensor mount
+    across it is the case this exists for: the mount moves, the robot does not, and
+    without this the robot is most of the file, repeated once per tick.
+
+    Static is the only safe form for a shared copy. The branch views are pinned to
+    the cursor's own tick (see :meth:`RerunTimelineResult.to_rerun_timeline_path`), so
+    an entity logged at one tick is invisible at the others whatever latest-at would
+    say; static data shows under every time range. And static overrides temporal
+    for the same component, which is why the decision is per *entity* and needs
+    every chunk of it to match: a component that is static from one chunk and
+    per-tick from another would have the static copy win at every tick.
+
+    An entity is shared only when the branch has a sample at every tick -- a tick
+    with no recording must show nothing, and a static copy would show there too --
+    and only when none of its chunks carries a timeline of the benchmark's own: a
+    sample that recorded its own ``time_s`` has an inner axis to keep, which static
+    data has none of.
+    """
+    if len(samples) != n_ticks:
+        return set()
+    # keys[entity] is the sorted digests of the entity's chunks, or None where a
+    # chunk of it has an inner timeline and so the entity is out of the running.
+    per_tick: list[dict[str, list[bytes] | None]] = []
+    for _, path in samples:
+        keys: dict[str, list[bytes] | None] = {}
+        for entity, chunk in _sample_chunks(path):
+            if entity in keys and keys[entity] is None:
+                continue
+            batch = chunk.to_record_batch()
+            if any(f.name not in _DROPPED_TIMELINES for f in _index_fields(batch)):
+                keys[entity] = None
+                continue
+            found = keys.setdefault(entity, [])
+            assert found is not None
+            found.append(_content_key(batch))
+        per_tick.append({entity: None if k is None else sorted(k) for entity, k in keys.items()})
+    first = per_tick[0]
+    return {
+        entity
+        for entity, keys in first.items()
+        if keys is not None and all(other.get(entity) == keys for other in per_tick[1:])
+    }
+
+
+def _send_recordings(
+    recording,
+    view: _View,
+    samples: list[tuple[int, str]],
+    n_ticks: int,
+    timeline: str,
+    arrow_type,
+) -> None:
+    """Re-root a branch's sample ``.rrd`` files under *view* on the sweep timeline.
+
+    *samples* pairs each tick's raw index value with the recording captured there,
+    for the ticks that have one; *n_ticks* is how many the branch has in all. What
+    is the same in every sample is sent once and static, everything else once per
+    tick at that tick -- see :func:`_shared_entities`.
+    """
+    shared = _shared_entities(samples, n_ticks)
+    if shared:
+        logger.debug(
+            "%s: %d entities are identical at all %d ticks and are logged once",
+            view.origin,
+            len(shared),
+            n_ticks,
+        )
+    first_raw = samples[0][0]
+    for raw, path in samples:
+        for entity, chunk in _sample_chunks(path):
             batch = chunk.to_record_batch()
             view.view_kinds.update(_batch_view_kinds(batch))
             view.logged = True
-            rerooted = chunk.with_entity_path(f"{view.origin}/{source}")
-            recording.send_chunks(_rewrite_chunk(rerooted, timeline, arrow_type, raw))
+            rerooted = chunk.with_entity_path(f"{view.origin}/{entity}")
+            if entity not in shared:
+                recording.send_chunks(_rewrite_chunk(rerooted, timeline, arrow_type, raw))
+            elif raw == first_raw:
+                # The wall clock is the only index it can carry, so stripping that
+                # leaves it static.
+                recording.send_chunks(_rewrite_chunk(rerooted, timeline))
 
 
 # How much of the viewer the read-out strip takes. It is a legend for the cursor,
 # not a panel to study, so it gets the sliver that makes it legible and no more.
 _READOUT_ROW_SHARES = (6, 1)
+# Unless it holds a plot: axes, tick labels and a point to find among them need
+# height a legend does not, and a plot in a sliver is a plot nobody can read.
+_PLOT_ROW_SHARES = (5, 2)
 
 
-def _layout_views(rrb, branches: list[list], branch_sizes: dict[str, int], readout=None):
+def _layout_views(
+    rrb,
+    branches: list[list],
+    branch_sizes: dict[str, int],
+    readout=None,
+    readout_shares: tuple[int, int] = _READOUT_ROW_SHARES,
+):
     """Arrange the views, grouped by branch, over the read-out strip.
 
     Each branch's result variables are stacked vertically so a sample's image and its
@@ -474,7 +643,38 @@ def _layout_views(rrb, branches: list[list], branch_sizes: dict[str, int], reado
         layout = rrb.Grid(*ordered, grid_columns=columns)
     if readout is None:
         return layout
-    return rrb.Vertical(layout, readout, row_shares=list(_READOUT_ROW_SHARES))
+    return rrb.Vertical(layout, readout, row_shares=list(readout_shares))
+
+
+def _readout_view(rrb, view: _View):
+    """One read-out's Blueprint view, opened on its own bounds where it has them."""
+    if view.bounds is None:
+        return views_for_kinds(rrb, view.view_kinds, origin=view.origin, label=view.label)
+    (x_min, x_max), (y_min, y_max) = view.bounds
+    return rrb.Spatial2DView(
+        origin=view.origin,
+        name=view.label,
+        visual_bounds=rrb.VisualBounds2D(x_range=(x_min, x_max), y_range=(y_min, y_max)),
+    )
+
+
+def _readout_layout(rrb, readouts: list[_View]):
+    """The read-out strip: nothing, one view, or the scatter beside the value.
+
+    Side by side rather than stacked, because the strip is a sliver by design and
+    halving its height again would leave neither legible.
+    """
+    if not readouts:
+        return None
+    built = [_readout_view(rrb, view) for view in readouts]
+    return built[0] if len(built) == 1 else rrb.Horizontal(*built)
+
+
+def _readout_shares(readouts: list[_View]) -> tuple[int, int]:
+    """How much height the strip gets: a plot's share if any read-out is one."""
+    if any(RerunViewKind.spatial_2d in view.view_kinds for view in readouts):
+        return _PLOT_ROW_SHARES
+    return _READOUT_ROW_SHARES
 
 
 def _readout_entity(dim: str) -> str:
@@ -484,6 +684,280 @@ def _readout_entity(dim: str) -> str:
     with one that happens to share the dimension's name.
     """
     return f"/sweep/{dim}"
+
+
+@dataclass(frozen=True)
+class _ReadoutScatter:
+    """A request to plot two of a sweep's per-sample values against each other.
+
+    The pair and its title travel together. A title says what the *set* is, so it
+    names the pair somebody asked to see and not whichever pair the renderer ended
+    up drawing: reading it off the dataset regardless titled a plot of a front's
+    *inputs* "Pareto front".
+    """
+
+    x: str
+    y: str
+    title: str | None = None
+
+    @classmethod
+    def resolve(
+        cls, dataset: xr.Dataset, requested: tuple[str, str] | None
+    ) -> _ReadoutScatter | None:
+        """*requested* if a caller named a pair, else the dataset's own request.
+
+        Raises:
+            ValueError: if a pair was asked for that is not exactly two variables.
+                An empty one included -- that used to be falsy all the way down and
+                so silently suppressed the dataset's request instead.
+        """
+        title = None
+        if requested is None:
+            requested = dataset.attrs.get(READOUT_SCATTER_ATTR)
+            if requested is None:
+                return None
+            title = dataset.attrs.get(READOUT_SCATTER_TITLE_ATTR)
+        pair = list(requested)
+        if len(pair) != 2:
+            raise ValueError(
+                "a tracking scatter needs exactly two variables to plot against each "
+                f"other, got {pair}"
+            )
+        return cls(pair[0], pair[1], title)
+
+
+def _front_entity(dim: str) -> str:
+    """Entity path of the tracking scatter.
+
+    A sibling of the read-out rather than a child: a view at the read-out's origin
+    would otherwise swallow the scatter and draw both in one panel.
+    """
+    return f"/front/{dim}"
+
+
+# The plot frame's colours: the axes and their labels read against the light ground,
+# the grid is there to be looked past.
+_FRAME_COLOR = (20, 20, 25)
+_GRID_COLOR = (170, 175, 185)
+_TITLE_COLOR = (0, 0, 0)
+
+
+def _nice_ticks(low: float, high: float, target: int = 4) -> list[float]:
+    """About *target* round-number tick values covering ``[low, high]``.
+
+    The step is 1, 2 or 5 times a power of ten -- the spacing every plotting library
+    settles on -- chosen so the range holds roughly *target* of them. Ticks outside
+    the range are dropped, so a padded axis is labelled only where it has data-side
+    meaning.
+    """
+    span = high - low
+    if span <= 0:
+        return [low]
+    raw = span / max(target - 1, 1)
+    magnitude = 10 ** np.floor(np.log10(raw))
+    fraction = raw / magnitude
+    step = magnitude * (
+        1 if fraction < 1.5 else 2 if fraction < 3.5 else 5 if fraction < 7.5 else 10
+    )
+    first = np.ceil(low / step) * step
+    ticks = np.arange(first, high + step / 2, step)
+    # Round off the arithmetic so a tick is 0.3, not 0.30000000000000004.
+    decimals = max(0, -int(np.floor(np.log10(step))))
+    return [float(round(t, decimals)) for t in ticks]
+
+
+def _monotonic(values: np.ndarray) -> bool:
+    """Whether *values* never turn back, so a line through them in order is a curve."""
+    steps = np.diff(np.asarray(values, dtype=float))
+    return bool(np.all(steps >= 0) or np.all(steps <= 0))
+
+
+class _PlotFrame:
+    """The unit box a 2-D read-out plot is drawn in, and the mapping onto it.
+
+    A rerun 2-D view keeps its aspect ratio and puts +y downward, so two objectives
+    of unlike scale drawn at their own values would come out as a sliver with the
+    better end at the top. The data is instead mapped onto a fixed landscape box,
+    larger values upward, and the axes are drawn on that box with the true values as
+    tick labels. The box is padded past the data by a little so no point sits on
+    the frame.
+
+    The values it is built from must be finite: the range is what the tick arithmetic
+    reads, and a NaN reaching that raises rather than degrading. Callers filter.
+    """
+
+    width = 160.0
+    height = 100.0
+    pad = 0.12
+
+    def __init__(self, x: np.ndarray, y: np.ndarray) -> None:
+        self.x_range = self._padded(x)
+        self.y_range = self._padded(y)
+
+    @classmethod
+    def _padded(cls, values: np.ndarray) -> tuple[float, float]:
+        low, high = float(np.min(values)), float(np.max(values))
+        if high == low:
+            # A flat axis still needs a range to be drawn on.
+            margin = abs(low) * 0.5 or 0.5
+            return low - margin, high + margin
+        margin = (high - low) * cls.pad
+        return low - margin, high + margin
+
+    def project_x(self, x) -> np.ndarray:
+        low, high = self.x_range
+        return (np.asarray(x, dtype=float) - low) / (high - low) * self.width
+
+    def project_y(self, y) -> np.ndarray:
+        low, high = self.y_range
+        return self.height - (np.asarray(y, dtype=float) - low) / (high - low) * self.height
+
+    def project(self, x, y) -> np.ndarray:
+        return np.column_stack((self.project_x(x), self.project_y(y)))
+
+    def bounds(self, titled: bool) -> tuple[tuple[float, float], tuple[float, float]]:
+        """What the view opens on: the box plus room for the labels around it.
+
+        Above the box sit the y axis name and, when there is one, the title; below it
+        the tick row and the x axis name; to the left the y tick labels.
+        """
+        return (
+            (-0.3 * self.width, 1.3 * self.width),
+            ((-0.6 if titled else -0.34) * self.height, 1.52 * self.height),
+        )
+
+
+def _log_plot_frame(
+    rr, staging, origin: str, frame: _PlotFrame, x_name: str, y_name: str, title: str | None
+) -> None:
+    """Draw the title, axes, gridlines, tick labels and axis names for *frame*, static.
+
+    Labels are points of no size carrying text: rerun has no free-standing text in a
+    spatial view, and a point's label is the one thing it draws at a position. Rerun
+    hangs a label centred *below* its point, so each is placed above what it labels.
+    The pieces stack the way a plot's do -- title, y axis name, box, tick row, x axis
+    name -- which is the height :meth:`_PlotFrame.bounds` opens the view on.
+    """
+    w, h = frame.width, frame.height
+    x_ticks = _nice_ticks(*frame.x_range)
+    y_ticks = _nice_ticks(*frame.y_range)
+    px = frame.project_x(x_ticks)
+    py = frame.project_y(y_ticks)
+    staging.log(
+        f"{origin}/frame",
+        rr.LineStrips2D(
+            [[[0.0, h], [w, h]], [[0.0, 0.0], [0.0, h]]],
+            colors=_FRAME_COLOR,
+            radii=rr.Radius.ui_points(1.5),
+        ),
+        static=True,
+    )
+    grid = [[[float(v), 0.0], [float(v), h]] for v in px] + [
+        [[0.0, float(v)], [w, float(v)]] for v in py
+    ]
+    staging.log(
+        f"{origin}/grid",
+        rr.LineStrips2D(grid, colors=_GRID_COLOR, radii=rr.Radius.ui_points(0.5)),
+        static=True,
+    )
+    no_size = rr.Radius.ui_points(0.0)
+    staging.log(
+        f"{origin}/x_ticks",
+        rr.Points2D(
+            [[float(v), h + 0.05 * h] for v in px],
+            radii=no_size,
+            colors=_FRAME_COLOR,
+            labels=[_coord_label(t) for t in x_ticks],
+            show_labels=True,
+        ),
+        static=True,
+    )
+    staging.log(
+        f"{origin}/y_ticks",
+        rr.Points2D(
+            [[-0.15 * w, float(v)] for v in py],
+            radii=no_size,
+            colors=_FRAME_COLOR,
+            labels=[_coord_label(t) for t in y_ticks],
+            show_labels=True,
+        ),
+        static=True,
+    )
+    # Each axis name sits with its own axis: the y name over the top of the y axis,
+    # the x name under the tick row it belongs to. Alongside the y axis instead, a
+    # long name would run across the plot, rotation being something rerun cannot do.
+    staging.log(
+        f"{origin}/axis_names",
+        rr.Points2D(
+            [[0.5 * w, h + 0.24 * h], [0.0, -0.26 * h]],
+            radii=no_size,
+            colors=_FRAME_COLOR,
+            labels=[x_name, y_name],
+            show_labels=True,
+        ),
+        static=True,
+    )
+    if title is not None:
+        staging.log(
+            f"{origin}/title",
+            rr.Points2D(
+                [[0.5 * w, -0.5 * h]],
+                radii=no_size,
+                colors=_TITLE_COLOR,
+                labels=[title],
+                show_labels=True,
+            ),
+            static=True,
+        )
+
+
+def _per_sample_values(dataset: xr.Dataset, name: str, dim: str) -> np.ndarray | None:
+    """*name*'s one value per sample of *dim*, whether it is a coordinate or a variable.
+
+    A sweep over a set of designs carries what it was ranked on either way: as a
+    coordinate riding on the dimension when the producer put it there, or as a
+    result variable when the sweep has no other dimension for it to span.
+    """
+    if name not in dataset.variables:
+        return None
+    array = dataset[name]
+    if array.dims != (dim,):
+        return None
+    return np.asarray(array.values)
+
+
+def _riding_coords(dataset: xr.Dataset, dim: str) -> list[str]:
+    """Coordinates that ride on *dim*: one value per sample and no axis of their own.
+
+    A sweep over a set of designs rather than a grid carries each design's inputs this
+    way -- ``Bench.plot_pareto_front`` puts the searched parameters on the rank -- and
+    they are what a reader parked on a tick wants to know.
+    """
+    # str(): xarray types a coordinate key as Hashable, but every name here reaches an
+    # entity path and a read-out line, both of which want the string.
+    return [
+        str(name) for name, coord in dataset.coords.items() if name != dim and coord.dims == (dim,)
+    ]
+
+
+def _readout_text(dataset: xr.Dataset, dim: str, position: int) -> str:
+    """Markdown naming the sample at *position*: its own value, then what rides on it.
+
+    One bullet per field rather than one line of them. A design carries its whole
+    parameter set here -- five offsets, a placement and two scores for a lidar mount --
+    and run together with separators that is a paragraph to scan rather than a list to
+    read, wrapped at whatever width the strip happens to have.
+    """
+    sample = dataset.isel({dim: position})
+    lines = []
+    for name in (dim, *_riding_coords(dataset, dim)):
+        coord = sample.coords[name]
+        # "ul" is bencher's unitless marker, not a unit to print -- the same reading
+        # ``describe_variable`` gives it.
+        units = coord.attrs.get("units", "")
+        suffix = f" {units}" if units and units != "ul" else ""
+        lines.append(f"- **{name}** = {_coord_label(coord.values.item())}{suffix}")
+    return "\n".join(lines)
 
 
 def _declared_size(result_vars: list[Parameter], attribute: str, fallback: int) -> int:
@@ -509,6 +983,7 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str | None = None,
         index: TimelineIndex | str = TimelineIndex.tick,
         subsampling_divisions: int | None = None,
+        readout_scatter: tuple[str, str] | None = None,
         width: int | None = None,
         height: int | None = None,
         **_kwargs,
@@ -533,6 +1008,14 @@ class RerunTimelineResult(BenchResultBase):
                 this one tiles is branches -- a tick is a slider position, not a
                 panel, so thinning it costs resolution and buys no room.
                 Defaults to None (every sample).
+            readout_scatter (tuple[str, str], optional): Two per-sample variables to
+                plot against each other beneath the timeline, every sample a point
+                and the cursor's own picked out — how a sweep over a *set* says
+                where in that set the slider is parked. Defaults to the dataset's
+                ``bencher_readout_scatter`` attribute, which the producer of the
+                sweep sets (see :data:`READOUT_SCATTER_ATTR`); the title carried
+                beside that attribute names *that* pair, so a pair asked for here
+                is drawn with its axes labelled and no title.
             width (int, optional): Viewer width. Defaults to the widest ``width``
                 declared by a rendered result var, else 950.
             height (int, optional): Viewer height, chosen the same way, else 712.
@@ -572,6 +1055,7 @@ class RerunTimelineResult(BenchResultBase):
             timeline_dim=timeline_dim,
             index=index,
             subsampling_divisions=subsampling_divisions,
+            readout_scatter=readout_scatter,
         )
         if merged is None:
             logger.debug("no samples to place on a rerun timeline")
@@ -601,6 +1085,7 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str | None = None,
         index: TimelineIndex | str = TimelineIndex.tick,
         subsampling_divisions: int | None = None,
+        readout_scatter: tuple[str, str] | None = None,
     ) -> str | None:
         """Compose *result_vars* into one ``.rrd`` on a timeline and return its path.
 
@@ -613,8 +1098,13 @@ class RerunTimelineResult(BenchResultBase):
             nothing that could go on a timeline.
 
         Raises:
-            ValueError: if *timeline_dim* names a dimension the dataset does not have.
+            ValueError: if *timeline_dim* names a dimension the dataset does not have,
+                or a *readout_scatter* was asked for that is not exactly two
+                variables.
         """
+        # Parsed here rather than where it is drawn: an arity error found halfway
+        # through logging has already staged a recording nobody unlinks.
+        scatter = _ReadoutScatter.resolve(dataset, readout_scatter)
         dims = list(dataset.sizes)
         if not dims:
             return None
@@ -653,8 +1143,14 @@ class RerunTimelineResult(BenchResultBase):
         recording = rr.RecordingStream(
             "bencher_timeline", make_default=False, make_thread_default=False
         )
-        branches, readout = self._log_sweep(
-            recording, dataset, result_vars, timeline_dim, branch_dims, encoding
+        branches, readouts = self._log_sweep(
+            recording,
+            dataset,
+            result_vars,
+            timeline_dim,
+            branch_dims,
+            encoding,
+            scatter,
         )
         if not any(branches):
             return None
@@ -683,13 +1179,11 @@ class RerunTimelineResult(BenchResultBase):
                     for branch in branches
                 ],
                 {dim: dataset.sizes[dim] for dim in branch_dims},
-                # No cursor range on the read-out: it is a curve over the whole
-                # sweep with a cursor line on it, and one visible point is not that.
-                readout=None
-                if readout is None
-                else views_for_kinds(
-                    rrb, readout.view_kinds, origin=readout.origin, label=readout.label
-                ),
+                # No cursor range on the read-outs: each is a picture of the whole
+                # sweep with the cursor's own sample marked on it, and one visible
+                # point is not that.
+                readout=_readout_layout(rrb, readouts),
+                readout_shares=_readout_shares(readouts),
             ),
             # Pinned, not left to the viewer: a sample that recorded its own inner
             # timeline puts a second axis in the composition, and the sweep is the one
@@ -727,29 +1221,165 @@ class RerunTimelineResult(BenchResultBase):
         are written out as text instead; without it a string sweep is a row of ``#0``,
         ``#1``, ``#2`` with no trace of ``cube`` or ``sphere`` anywhere in the viewer.
 
+        A dimension that carries other coordinates -- one value per sample, riding on
+        it rather than spanning an axis of their own -- gets a text read-out whatever
+        its index shows, listing them beside its own value. That is how a sweep over a
+        set of designs says which design the cursor is on: the rank is a whole number
+        and the axis shows it, but ``#3`` says nothing about the mount at rank 3.
+
         Returns:
             _View | None: the read-out's view, or None when the axis already shows
-            the values.
+            everything there is to show.
         """
         import rerun as rr
 
-        if encoding.shows_values:
+        riding = _riding_coords(dataset, timeline_dim)
+        if encoding.shows_values and not riding:
             return None
         coords = np.asarray(dataset.coords[timeline_dim].values)
-        numeric = bool(np.issubdtype(coords.dtype, np.number))
+        numeric = bool(np.issubdtype(coords.dtype, np.number)) and not riding
         origin = _readout_entity(timeline_dim)
-        for raw, value in zip(encoding.values, coords):
+        for position, (raw, value) in enumerate(zip(encoding.values, coords)):
             encoding.set_time(staging, timeline_dim, raw)
             if numeric:
                 staging.log(origin, rr.Scalars(float(value)))
             else:
-                staging.log(origin, rr.TextDocument(f"{timeline_dim} = {value}"))
+                staging.log(
+                    origin,
+                    rr.TextDocument(
+                        _readout_text(dataset, timeline_dim, position),
+                        media_type=rr.MediaType.MARKDOWN,
+                    ),
+                )
         staging.reset_time()
         return _View(
             origin=origin,
             label=timeline_dim,
             view_kinds={RerunViewKind.time_series if numeric else RerunViewKind.text_document},
             logged=True,
+        )
+
+    def _log_front_scatter(
+        self,
+        staging,
+        dataset: xr.Dataset,
+        timeline_dim: str,
+        encoding: _IndexEncoding,
+        scatter: _ReadoutScatter,
+    ) -> _View | None:
+        """Plot every sample against two of its own numbers, and mark the cursor's.
+
+        A sweep over a set of designs is usually a set somebody has to choose *from* --
+        a Pareto front, a candidate list -- and the shape of that set in the space it
+        was ranked in is what the choice is made against. The whole set is logged
+        statically, so it is on screen at every tick, and the current sample is logged
+        per tick on top of it: latest-at then moves the highlight with the cursor,
+        which is what says where on the front the slider is parked.
+
+        Rerun has no plot view with two free axes -- its time series takes the
+        timeline as x -- so the plot is drawn: the values are mapped onto a fixed box
+        (see :class:`_PlotFrame`) and the axes, grid and tick labels are logged as
+        geometry around it, with the cursor's point labelled by its actual values.
+
+        Returns:
+            _View | None: the scatter's view, or None when the dataset does not carry
+            both named values one-per-sample, or no sample carries both.
+        """
+        import rerun as rr
+
+        x_name, y_name = scatter.x, scatter.y
+        title = scatter.title
+        x = _per_sample_values(dataset, x_name, timeline_dim)
+        y = _per_sample_values(dataset, y_name, timeline_dim)
+        if x is None or y is None:
+            logger.warning(
+                "no tracking scatter: %s and %s are not both one value per %s",
+                x_name,
+                y_name,
+                timeline_dim,
+            )
+            return None
+        x = x.astype(float)
+        y = y.astype(float)
+        # A sample the worker could not score carries NaN, and a NaN has no position
+        # on the frame: it is left off the set, off the range the axes are drawn from,
+        # and off the curve.
+        placed = np.isfinite(x) & np.isfinite(y)
+        if not placed.any():
+            logger.warning("no tracking scatter: no sample carries both %s and %s", x_name, y_name)
+            return None
+        origin = _front_entity(timeline_dim)
+        frame = _PlotFrame(x[placed], y[placed])
+        _log_plot_frame(rr, staging, f"{origin}/axes", frame, x_name, y_name, title)
+        points = frame.project(x, y)
+        # Draw order, so the cursor's marker is never buried under the set it is
+        # picked out of -- one point of each sits at exactly the same place.
+        staging.log(
+            f"{origin}/all",
+            rr.Points2D(
+                points[placed],
+                colors=_SCATTER_ALL_COLOR,
+                radii=rr.Radius.ui_points(3.0),
+                draw_order=1.0,
+            ),
+            static=True,
+        )
+        if _monotonic(x[placed]):
+            # The samples are in order along x, so joining them draws the set as the
+            # curve it is -- a front -- rather than leaving the eye to connect dots.
+            staging.log(
+                f"{origin}/all/curve",
+                rr.LineStrips2D(
+                    [points[placed]],
+                    colors=_SCATTER_ALL_COLOR,
+                    radii=rr.Radius.ui_points(1.0),
+                    draw_order=0.0,
+                ),
+                static=True,
+            )
+        for position, raw in enumerate(encoding.values):
+            encoding.set_time(staging, timeline_dim, raw)
+            # An unscored sample clears the marker rather than leaving it unlogged:
+            # latest-at would otherwise hold the previous tick's point and read as
+            # this design's score.
+            marker = points[position : position + 1] if placed[position] else _NO_POINTS
+            # The values themselves go in the label: the axes are the plot's own unit
+            # box, so what the viewer reports on hover is a position on the frame
+            # and not the number the sweep recorded.
+            reading = (
+                f"{_coord_label(dataset.coords[timeline_dim].values[position])}: "
+                f"{_coord_label(x[position])}, {_coord_label(y[position])}"
+            )
+            labels = [reading] if placed[position] else []
+            staging.log(
+                f"{origin}/current",
+                rr.Points2D(
+                    marker,
+                    colors=_SCATTER_CURRENT_COLOR,
+                    radii=rr.Radius.ui_points(7.0),
+                    draw_order=2.0,
+                ),
+            )
+            # The reading rides on an entity of its own so it is not painted in the
+            # marker's colour; see _SCATTER_LABEL_COLOR.
+            staging.log(
+                f"{origin}/current/reading",
+                rr.Points2D(
+                    marker,
+                    colors=_SCATTER_LABEL_COLOR,
+                    radii=rr.Radius.ui_points(0.0),
+                    labels=labels,
+                    show_labels=True,
+                    draw_order=3.0,
+                ),
+            )
+        staging.reset_time()
+        return _View(
+            origin=origin,
+            label=title or f"{y_name} against {x_name}",
+            view_kinds={RerunViewKind.spatial_2d},
+            logged=True,
+            bounds=frame.bounds(titled=title is not None),
         )
 
     def _log_sweep(
@@ -760,16 +1390,17 @@ class RerunTimelineResult(BenchResultBase):
         timeline_dim: str,
         branch_dims: list[str],
         encoding: _IndexEncoding,
-    ) -> tuple[list[list[_View]], _View | None]:
-        """Log every sample onto the sweep timeline; return its views and the read-out.
+        scatter: _ReadoutScatter | None = None,
+    ) -> tuple[list[list[_View]], list[_View]]:
+        """Log every sample onto the sweep timeline; return its views and the read-outs.
 
         A view that received nothing is dropped. Empty branches retain their slots
         in the Cartesian product so missing recordings cannot shift later cells to
         another row or column. The caller omits an entirely empty composition.
 
         Returns:
-            The branch views, grouped by branch, and the value read-out — separate
-            because the read-out is laid out along the bottom rather than as a branch.
+            The branch views, grouped by branch, and the read-outs — separate because
+            those are laid out along the bottom rather than as a branch.
         """
         import rerun as rr
 
@@ -798,13 +1429,28 @@ class RerunTimelineResult(BenchResultBase):
                 if branch_label:
                     label = f"{label} ({branch_label})"
                 view = _View(origin=f"{prefix}/{result_var.name}", label=label)
+                if isinstance(result_var, ResultRerun):
+                    # The whole branch at once, not tick by tick: what the samples
+                    # have in common is decided across them.
+                    samples = [
+                        (raw, path)
+                        for position, raw in enumerate(encoding.values)
+                        if (
+                            path := leaf_recording_path(
+                                self, branch_ds.isel({timeline_dim: position}), result_var
+                            )
+                        )
+                        is not None
+                    ]
+                    if samples:
+                        _send_recordings(
+                            recording, view, samples, len(encoding.values), timeline_dim, arrow_type
+                        )
+                    if view.logged:
+                        branch_views.append(view)
+                    continue
                 for position, raw in enumerate(encoding.values):
                     sample = branch_ds.isel({timeline_dim: position})
-                    if isinstance(result_var, ResultRerun):
-                        path = leaf_recording_path(self, sample, result_var)
-                        if path is not None:
-                            _send_recording(recording, view, path, timeline_dim, arrow_type, raw)
-                        continue
                     kind = _view_kind_for(result_var)
                     if kind is None:
                         # _log_result_var would warn once per sample; say it once.
@@ -824,9 +1470,17 @@ class RerunTimelineResult(BenchResultBase):
                     branch_views.append(view)
             branches.append(branch_views)
 
-        readout = self._log_value_readout(staging, dataset, timeline_dim, encoding)
-        if readout is not None:
-            staged_any = True
+        readouts = [
+            view
+            for view in (
+                self._log_front_scatter(staging, dataset, timeline_dim, encoding, scatter)
+                if scatter is not None
+                else None,
+                self._log_value_readout(staging, dataset, timeline_dim, encoding),
+            )
+            if view is not None
+        ]
+        staged_any = staged_any or bool(readouts)
 
         if staged_any:
             from bencher.utils import gen_rerun_data_path
@@ -837,4 +1491,4 @@ class RerunTimelineResult(BenchResultBase):
             _forward_stage(recording, staged_path, timeline_dim)
             # Purely an intermediate: the composition is what callers are handed.
             Path(staged_path).unlink(missing_ok=True)
-        return branches, readout
+        return branches, readouts
