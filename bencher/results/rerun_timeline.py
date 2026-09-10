@@ -738,7 +738,7 @@ class _PlotFrame:
 
     width = 160.0
     height = 100.0
-    pad = 0.06
+    pad = 0.12
 
     def __init__(self, x: np.ndarray, y: np.ndarray) -> None:
         self.x_range = self._padded(x)
@@ -773,7 +773,7 @@ class _PlotFrame:
         """
         return (
             (-0.3 * self.width, 1.3 * self.width),
-            ((-0.54 if titled else -0.3) * self.height, 1.52 * self.height),
+            ((-0.6 if titled else -0.34) * self.height, 1.52 * self.height),
         )
 
 
@@ -839,7 +839,7 @@ def _log_plot_frame(
     staging.log(
         f"{origin}/axis_names",
         rr.Points2D(
-            [[0.5 * w, h + 0.24 * h], [0.0, -0.22 * h]],
+            [[0.5 * w, h + 0.24 * h], [0.0, -0.26 * h]],
             radii=no_size,
             colors=_FRAME_COLOR,
             labels=[x_name, y_name],
@@ -851,7 +851,7 @@ def _log_plot_frame(
         staging.log(
             f"{origin}/title",
             rr.Points2D(
-                [[0.5 * w, -0.44 * h]],
+                [[0.5 * w, -0.5 * h]],
                 radii=no_size,
                 colors=_TITLE_COLOR,
                 labels=[title],
