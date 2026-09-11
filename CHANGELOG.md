@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.129.0] - 2026-09-11
+
 ### Changed
 - **The pane group renders first in a report.** `panes` — the rerun viewer, images and
   videos — was the last of the auto plugins, so on a sweep whose subject is a per-sample
