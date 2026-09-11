@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.129.0] - 2026-09-11
+
+### Changed
+- **The pane group renders first in a report.** `panes` — the rerun viewer, images and
+  videos — was the last of the auto plugins, so on a sweep whose subject is a per-sample
+  recording the viewer you read the sweep off sat underneath every heatmap and bar chart
+  the sweep drew. It now leads: the pane group shows the sample itself, and every chart
+  below it is derived from those samples. `plot_list` was no help here, being an include
+  filter rather than an order, and the workaround downstream was to re-render `panes`
+  through `extra_panels` and `remove_plots` on every sweep that wanted it.
+
+  Mechanically the two `("panes", ...)` specs move to the front of `_builtin_specs()` in
+  `bencher/plugins/builtins.py`; priorities are positional, so panes take 100/95 and every
+  chart type shifts down 10 keeping its relative order. The two stay adjacent with panel
+  above rerun, because priority is also what arbitrates between two backends implementing
+  the same chart type — that is what keeps `BenchRunCfg(backend="rerun")` a backend swap
+  rather than a different report. No flag: a report layout default is not a compatibility
+  surface, and the order is still overridable per sweep through `plot_callbacks`.
+
+  The pane group is also lifted out of the final grid into its own report section,
+  placed after `extra_panels` and **before** the Aggregated View and Over Time
+  sections. Plugin priority cannot reach that: it orders one `to_auto` call, and
+  `to_auto_plots` composes the tab a level up, so on a sweep with `aggregate=` set the
+  viewer still landed below curves derived from the very samples it shows. Regression
+  and `extra_panels` keep their place above it — regression is a warning and
+  `extra_panels` is the caller's own injection, so both outrank a default layout — and
+  the sweep summary stays at the top of the tab.
+
+  The caller's own `to_auto` arguments still decide: `plot_list`, `remove_plots` and
+  `numeric_only` are merged, not overwritten, so a caller who excludes the pane group
+  gets it nowhere and one who restricts `plot_list` to a chart type does not get it
+  back. A sweep with no pane-typed result var gets no section at all — no empty pane,
+  no stray heading, and no "No Plotters are able to represent these results", which
+  still appears on a report that genuinely has nothing to draw.
+
 ## [1.128.0] - 2026-09-10
 
 ### Added
