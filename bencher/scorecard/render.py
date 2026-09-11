@@ -81,6 +81,7 @@ def generate_scorecard(
     *,
     chrome: Chrome | None = None,
     output_name: str = "index.html",
+    generated_at: datetime | None = None,
 ) -> Path:
     """Render the scorecard for all summaries under *reports_dir*.
 
@@ -91,6 +92,7 @@ def generate_scorecard(
         chrome: Optional page header / CI nav content.
         output_name: File written under *reports_dir* (the scorecard is usually
             published as ``index.html`` so it is the landing page).
+        generated_at: Explicit page timestamp for reproducible publication retries.
 
     Returns:
         The path to the written HTML file.
@@ -140,7 +142,9 @@ def generate_scorecard(
         nightly_url=_sanitize_url(chrome.nightly_url),
         main_url=_sanitize_url(chrome.main_url),
         stable_url=_sanitize_url(chrome.stable_url),
-        generated_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
+        generated_at=(generated_at or datetime.now(UTC))
+        .astimezone(UTC)
+        .strftime("%Y-%m-%d %H:%M UTC"),
     )
 
     output_path = reports_dir / output_name
