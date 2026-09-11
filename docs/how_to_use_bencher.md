@@ -735,3 +735,36 @@ Every command in this repository goes through Pixi — `pixi run test`, `pixi ru
 is how "works on my machine" bugs and spurious lint failures get in. This applies only to
 developing bencher; users who installed `holobench` from PyPI run their own benchmarks
 normally.
+
+## Transferring history
+
+Set `BenchRunCfg(history_namespace="machine-name")` to isolate a machine's
+baselines without changing its benchmark or configuration keys. The empty
+namespace keeps existing cache keys. Moving old history into a named namespace
+is an explicit migration: export the empty namespace, assign the intended
+`snapshot.namespace`, then restore it. Only do this when that machine's origin
+is known; an ambiguous shared history should remain in its original namespace.
+
+`bencher.history_transfer.HistorySnapshot.export(cachedir, namespace=...)`
+reads the native records used by collection. Its optional `keys` selects existing
+configuration keys. `to_bytes()` and `from_bytes()` transfer these records as a
+pickle between trusted writers. Associated media and blob files remain references
+and must travel separately with their cache-relative layout intact.
+
+`snapshot.merge(other, max_time_events=20)` returns a new snapshot containing
+both writers' distinct executions. `snapshot.restore(cachedir)` merges into the
+local cache in one transaction. A duplicate execution with conflicting values,
+different input coordinates, incompatible column identities, or a different
+namespace raises instead of overwriting data. Keep a failed transfer for retry
+or inspection. Remote writers should read a generation, merge, and conditionally
+replace that generation, retrying the merge after a competing update.
+
+For categorical execution IDs such as UUIDs, supply
+`BenchRunCfg(time_event=id, time_event_metadata={"executed_at": utc_iso_time,
+"label": display_label})`. Transfer merges order them by execution time;
+legacy coordinates without metadata sort by their string representation.
+Timestamps must include a timezone. Merge follows the depth limit recorded by
+collection, or an explicit `max_time_events` override. A record without a limit
+keeps all executions; merging never deletes configurations absent from a newer snapshot.
+Trends can be projected directly from `snapshot.records[key]["dataset"]`, so
+the dashboard and the next comparison use the same history.

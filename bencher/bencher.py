@@ -952,6 +952,8 @@ class Bench(BenchPlotServer):
                         series_id=bench_cfg.series,
                         tag=bench_cfg.tag,
                         config_summary=history_config_summary(bench_cfg),
+                        namespace=run_cfg.history_namespace,
+                        event_metadata=run_cfg.time_event_metadata,
                     )
                     # sync the over_time meta variable with the actual accumulated values
                     if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
@@ -1078,6 +1080,8 @@ class Bench(BenchPlotServer):
         tag: str | None = None,
         series_id: str | None = None,
         config_summary: dict | None = None,
+        namespace: str = "",
+        event_metadata: dict | None = None,
     ) -> xr.Dataset:
         """Load, reconcile, and persist historical benchmark data from cache.
 
@@ -1096,6 +1100,8 @@ class Bench(BenchPlotServer):
             tag=tag,
             series_id=series_id,
             config_summary=config_summary,
+            namespace=namespace,
+            event_metadata=event_metadata,
         )
 
     def setup_dataset(
