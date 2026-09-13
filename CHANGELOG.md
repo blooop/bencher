@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.131.0] - 2026-09-13
+
+### Added
+- Complete execution export with `BenchReport.save_report()`, bundled
+  `save_results()` rendering and `bencher ... --report`. Frozen UUID directories
+  inventory tabs, per-result summaries and referenced local media with byte sizes
+  and SHA-256 digests. Retries verify and reuse existing output.
+- Collection-time UTC provenance and opt-in UUID history events, with separate
+  display labels and launcher-supplied workflow, revision, lane and attempt.
+- Shared runner complete-report mode via `report_directory` or
+  `BENCHER_REPORT_DIR`, preserving every requested sweep and its collection keys.
+
 ## [1.130.0] - 2026-09-11
 
 ### Added

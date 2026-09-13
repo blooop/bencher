@@ -599,6 +599,24 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
             _dry_identity(bn.BenchRunCfg(auto_plot=True), **decl, plot_callbacks=False),
         )
 
+    def check_execution_metadata(self) -> None:
+        decl = {"input_vars": ["theta"], "result_vars": ["out_sin"]}
+        self._assert_no_key_moves(
+            _dry_identity(**decl),
+            _dry_identity(
+                bn.BenchRunCfg(
+                    uuid_events=True,
+                    history_namespace="other-machine",
+                    time_event_metadata={"executed_at": "2026-01-01T00:00:00Z"},
+                ),
+                **decl,
+            ),
+        )
+        cfg = bn.BenchCfg()
+        original = bn.identity_of(cfg)
+        cfg.execution = bn.Execution.start(source_revision="example")
+        self._assert_no_key_moves(original, bn.identity_of(cfg))
+
     def _checks(self) -> dict:
         return {
             "CACHE_VERSION": self.check_cache_version,
@@ -616,6 +634,7 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
             "series_id (names the trend, not the configuration)": self.check_series_id,
             "catch / fail_on_sample_error": self.check_fault_tolerance,
             "plot_callbacks / auto_plot": self.check_plotting,
+            "execution / uuid_events / time_event_metadata / history_namespace": self.check_execution_metadata,
         }
 
     def test_every_documented_field_has_a_check(self) -> None:
