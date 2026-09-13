@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import inspect
 import logging
+import os
 import warnings
 import webbrowser
 from collections.abc import Callable
 from copy import deepcopy
 from datetime import datetime
+from pathlib import Path
 from typing import Protocol, cast, runtime_checkable
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, ShowMode, normalize_show
 from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
 from bencher.bencher import Bench
+from bencher.execution import execution_scope
 from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
@@ -262,8 +265,7 @@ class BenchRunner:
             return
         if target.bench_name is None:
             target.bench_name = source.bench_name
-        for pane in list(source.pane):
-            target.pane.append(pane)
+        target.extend_report(source)
 
     def _execute_bench_fn(
         self,
@@ -299,6 +301,7 @@ class BenchRunner:
 
         return result, result_report
 
+    @execution_scope()
     def run(
         self,
         # New unified parameters (subsampling_divisions and repeats are starting values)
@@ -319,9 +322,13 @@ class BenchRunner:
         cache_samples: bool | None = None,
         over_time: bool | None = None,
         backend: str | None = None,
+        report_directory: str | Path | None = None,
         **kwargs,
     ) -> list[BenchCfg]:
         """Unified interface for running benchmarks.
+
+        ``report_directory`` (or ``BENCHER_REPORT_DIR``) exports every requested
+        sweep together as one complete, frozen execution report.
 
         This function provides a single entry point for benchmark runs:
         - Single runs: Use subsampling_divisions and repeats parameters only
@@ -427,6 +434,8 @@ class BenchRunner:
         if backend is not None:
             run_cfg.backend = backend
 
+        report_directory = report_directory or os.environ.get("BENCHER_REPORT_DIR")
+        complete_report = BenchReport(self.name) if report_directory is not None else None
         for r in range(min_repeats, final_max_repeats + 1):
             for lvl in range(min_subsampling_divisions, final_max_subsampling_divisions + 1):
                 report_level = None
@@ -471,11 +480,17 @@ class BenchRunner:
                         else:
                             new_name = f"{bench_fn_name}{tag_suffix}"
                             report_to_publish.bench_name = new_name
+                        if complete_report is not None:
+                            complete_report.extend_report(report_to_publish)
                         self.show_publish(report_to_publish, show, publish, save, debug)
                     self.results.append(res)
                 if grouped:
                     assert report_level is not None
+                    if complete_report is not None:
+                        complete_report.extend_report(report_level)
                     self.show_publish(report_level, show, publish, save, debug)
+        if complete_report is not None:
+            complete_report.save_report(report_directory)
         return self.results
 
     def show_publish(

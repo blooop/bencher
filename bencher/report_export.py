@@ -47,6 +47,9 @@ def _provenance(bench_res: BenchResult) -> dict:
     """Best-effort provenance for a result (time-event label if recorded)."""
     cfg = bench_res.bench_cfg
     prov: dict = {}
+    execution = getattr(cfg, "execution", None)
+    if execution is not None:
+        prov.update(execution.to_dict())
     time_event = getattr(cfg, "time_event", None)
     if time_event:
         prov["time_event"] = time_event
@@ -155,7 +158,7 @@ def result_to_dict(bench_res: BenchResult, *, include_series: bool = False) -> d
 
     return {
         "schema_version": SCHEMA_VERSION,
-        "bench_name": cfg.bench_name,
+        "bench_name": bench_res.identity.bench_name,
         "provenance": _provenance(bench_res),
         "input_vars": [
             {"name": iv.name, "units": getattr(iv, "units", None)} for iv in cfg.input_vars

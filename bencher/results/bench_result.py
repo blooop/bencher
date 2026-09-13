@@ -144,6 +144,8 @@ class BenchResult(
         # answer: the former grows once over_time history is merged in, and the
         # latter counts cache hits that never reached the worker.
         self.n_attempted: int = 0
+        self.collected_identity: SweepIdentity | None = None
+        self.collected_series: str | None = None
 
     @property
     def n_failed(self) -> int:
@@ -211,7 +213,7 @@ class BenchResult(
         """
         from bencher.identity import identity_of
 
-        return identity_of(self.bench_cfg)
+        return getattr(self, "collected_identity", None) or identity_of(self.bench_cfg)
 
     @classmethod
     def from_existing(cls, original: BenchResult) -> BenchResult:
@@ -220,6 +222,8 @@ class BenchResult(
         new_instance.bench_cfg = original.bench_cfg
         new_instance.plt_cnt_cfg = original.plt_cnt_cfg
         new_instance.regression_report = original.regression_report
+        new_instance.collected_identity = getattr(original, "collected_identity", None)
+        new_instance.collected_series = getattr(original, "collected_series", None)
         # A render-time cache dir override has to reach whatever object actually
         # renders the cells, and that is this one, not the original.
         new_instance.blob_cache_dir = getattr(original, "blob_cache_dir", None)

@@ -26,6 +26,7 @@ from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
 from bencher.blob_store import collect_cache_dir, record_blob_cache_dir
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
+from bencher.execution import current_execution
 from bencher.history import OnHistoryReset
 from bencher.history import config_summary as history_config_summary
 from bencher.job import (
@@ -934,9 +935,19 @@ class Bench(BenchPlotServer):
             bench_cfg.time_event = time_src
 
         if calculate_results:
+            bench_cfg.execution = current_execution()
+            bench_cfg.time_event_metadata = {
+                **(run_cfg.time_event_metadata or {}),
+                **bench_cfg.execution.to_dict(),
+            }
+            if run_cfg.uuid_events and time_src is None:
+                time_src = bench_cfg.execution.uuid
+                bench_cfg.time_event = time_src
             bench_res = self.calculate_benchmark_results(
                 bench_cfg, time_src, bench_cfg_sample_hash, run_cfg, sample_order, timings
             )
+            bench_res.collected_identity = bench_res.identity
+            bench_res.collected_series = bench_cfg.series
 
             # use the hash of the inputs to look up historical values in the cache
             if run_cfg.over_time:
@@ -953,7 +964,7 @@ class Bench(BenchPlotServer):
                         tag=bench_cfg.tag,
                         config_summary=history_config_summary(bench_cfg),
                         namespace=run_cfg.history_namespace,
-                        event_metadata=run_cfg.time_event_metadata,
+                        event_metadata=bench_cfg.time_event_metadata,
                     )
                     # sync the over_time meta variable with the actual accumulated values
                     if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
@@ -1003,6 +1014,8 @@ class Bench(BenchPlotServer):
             with phase_timer() as elapsed:
                 self._append_to_report(bench_res)
             timings.render_ms = elapsed()
+        else:
+            self.report.record_result(bench_res)
 
         timings.total_ms = timings.compute_total()
         bench_res.timings = timings

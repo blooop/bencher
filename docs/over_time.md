@@ -220,3 +220,15 @@ deliberately and check the resulting HTML size.
 - [Feature Guide](intro.md) — the over-time feature in the context of the rest of bencher
 - [Caching](caching.md) — the history cache and why `clear_cache` matters in a snapshot loop
 - [Getting Started](how_to_use_bencher.md) — run configuration reference
+## Execution identity
+
+`BenchRunCfg(uuid_events=True)` uses a new execution UUID as the native history
+event, unless `time_event` was explicitly supplied. Reusing a run configuration
+does not reuse its execution ID. Use `bn.execution_context(...)` to group multiple
+sweeps into one execution, and pass launcher-resolved source revision, workflow,
+workflow run, lane and attempt separately. Collection records UTC measurement
+time and a display label in event metadata; these fields never affect persistent
+configuration keys. UUIDs are not wrapped or reformatted for display.
+
+Complete reports preserve this provenance through serialization and rendering;
+see [complete execution reports](how_to_use_bencher.md#complete-execution-reports).

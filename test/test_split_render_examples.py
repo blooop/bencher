@@ -76,7 +76,8 @@ def _run_example(example_path: Path) -> bn.Bench:
     _result_examples,
     ids=lambda p: str(p.relative_to(RESULT_TYPES_DIR)),
 )
-def test_split_render_roundtrip(example_path, tmp_path):
+@pytest.mark.parametrize("complete", [False, True], ids=["legacy", "complete"])
+def test_split_render_roundtrip(example_path, tmp_path, complete):
     """Every result type survives save -> load -> render to non-empty HTML."""
     bench = _run_example(example_path)
     res = bench.results[-1]
@@ -84,9 +85,11 @@ def test_split_render_roundtrip(example_path, tmp_path):
     path = save_result(res, tmp_path / "result.pkl")
     assert path.exists()
 
-    out = render_report(path, tmp_path / "report")
+    out = render_report(path, tmp_path / "report", complete=complete)
     assert Path(out).exists()
     assert Path(out).stat().st_size > 0
+    if complete:
+        bn.verify_report(Path(out).parent)
 
 
 def _first_example_under(name: str) -> Path | None:

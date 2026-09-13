@@ -151,6 +151,7 @@ class BenchReport(BenchPlotServer):
         # representation — two parallel lists correlated by index — silently
         # misrouted once a None plot desynced them.
         self._result_tabs: list[tuple[BenchResult, pn.Column | None]] = []
+        self._saved_pages: dict[int, str] = {}
 
     @property
     def bench_results(self) -> tuple[BenchResult, ...]:
@@ -169,6 +170,13 @@ class BenchReport(BenchPlotServer):
         """
         self.pane.clear()
         self._result_tabs.clear()
+
+    def extend_report(self, other: BenchReport) -> None:
+        """Append another report's tabs together with their result identities."""
+        if other is self:
+            return
+        self.pane.extend(list(other.pane))
+        self._result_tabs.extend(other._result_tabs)  # pylint: disable=protected-access
 
     def append_title(self, title: str, new_tab: bool = True):
         if new_tab:
@@ -202,6 +210,9 @@ class BenchReport(BenchPlotServer):
     @staticmethod
     def _time_event_label(bench_res: BenchResult) -> str | None:
         """Extract a human-readable label for the latest time event from a result."""
+        execution = getattr(bench_res.bench_cfg, "execution", None)
+        if execution and bench_res.bench_cfg.time_event == execution.uuid:
+            return execution.display_label
         if not bench_res.bench_cfg.over_time or "over_time" not in bench_res.ds.coords:
             return None
         time_vals = bench_res.ds.coords["over_time"].values
@@ -226,7 +237,25 @@ class BenchReport(BenchPlotServer):
         # by the BENCHER_FORCE_SPLIT_RENDER path to render from a deserialized
         # copy without breaking routing. Defaults to bench_res (normal path).
         tab = self.append_tab((render_from or bench_res).plot(), title)
+        for index, (recorded, existing) in enumerate(self._result_tabs):
+            if recorded is bench_res and existing is None:
+                self._result_tabs[index] = (bench_res, tab)
+                return
         self._result_tabs.append((bench_res, tab))
+
+    def record_result(self, bench_res: BenchResult) -> None:
+        """Keep a collected result for complete export without building plot objects."""
+        self._result_tabs.append((bench_res, None))
+
+    def render_pending(self) -> None:
+        """Build tabs for results registered by collection alone."""
+        for result, tab in tuple(self._result_tabs):
+            if tab is None:
+                self.append_result(result)
+
+    def saved_page_for(self, result: BenchResult) -> str:
+        """Return the page containing a result from the last save."""
+        return self._saved_pages[id(result)]
 
     def _tab_for_result(self, bench_res: BenchResult) -> pn.Column | None:
         """The tab created for *bench_res*, or None when untracked / plot() was None."""
@@ -311,6 +340,18 @@ class BenchReport(BenchPlotServer):
         """
         return self.save(directory, filename, False)
 
+    def save_report(self, directory: str | Path = "reports") -> Path:
+        """Freeze a complete execution below ``directory/<uuid>/`` and return its entry page.
+
+        Includes tabs, summaries and referenced local assets. An existing execution
+        is verified and reused without rendering again. Missing provenance or assets,
+        altered frozen bytes and mixed executions raise; incomplete renders never
+        acquire the final UUID directory. ``save()`` retains its existing layout.
+        """
+        from bencher.complete_report import save_complete_report
+
+        return save_complete_report(self, directory)
+
     def save(
         self,
         directory: str | Path = DEFAULT_CACHE_DIR,
@@ -318,6 +359,7 @@ class BenchReport(BenchPlotServer):
         in_html_folder: bool = True,
         portable: bool = False,
         emit_json: bool | str = False,
+        _process_rrd: bool = True,
         **kwargs,
     ) -> Path:
         """Save the result to a html file.
@@ -359,6 +401,7 @@ class BenchReport(BenchPlotServer):
             os.makedirs(base_path.absolute(), exist_ok=True)
 
             index_path = base_path / filename
+            self._saved_pages = {id(result): filename for result in self.bench_results}
 
             if emit_json:
                 self._emit_json(base_path, emit_json)
@@ -368,7 +411,8 @@ class BenchReport(BenchPlotServer):
                 # Save inner content directly so the Tabs sidebar is not rendered
                 content = self.pane[0] if len(self.pane) == 1 else self.pane
                 content.save(filename=index_path, progress=True, embed=True, **kwargs)
-                _inline_rrd(index_path, portable=portable)
+                if _process_rrd:
+                    _inline_rrd(index_path, portable=portable)
                 _inject_embed_script(index_path)
                 return index_path
 
@@ -385,9 +429,13 @@ class BenchReport(BenchPlotServer):
                 seen_names.add(safe_name)
                 tab_file = f"{safe_name}.html"
                 tab_path = tab_dir / tab_file
+                for result, result_tab in self._result_tabs:
+                    if result_tab is tab:
+                        self._saved_pages[id(result)] = f"_tabs/{tab_file}"
                 logger.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
                 pn.Column(tab).save(filename=tab_path, progress=True, embed=True, **kwargs)
-                _inline_rrd(tab_path, rrd_base=base_path, portable=portable)
+                if _process_rrd:
+                    _inline_rrd(tab_path, rrd_base=base_path, portable=portable)
                 _inject_embed_script(tab_path)
                 tab_files.append((tab_name, f"_tabs/{tab_file}"))
 

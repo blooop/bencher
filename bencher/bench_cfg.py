@@ -13,6 +13,7 @@ import param
 from strenum import LowercaseStrEnum
 
 from bencher.cache_management import CACHE_VERSION
+from bencher.execution import Execution
 from bencher.history import OnHistoryReset
 from bencher.job import Executors
 from bencher.results.composable_container.composable_container_base import PaneLayout
@@ -418,6 +419,9 @@ class BenchRunCfg(BenchPlotSrvCfg):
         default=None,
         allow_None=True,
         doc="Provenance of this execution, including an ISO-8601 executed_at for ordered history transfers.",
+    )
+    uuid_events: bool = param.Boolean(
+        False, doc="Use execution UUIDs for history unless a time event was explicitly supplied."
     )
 
     on_history_reset: str = param.Selector(
@@ -832,6 +836,10 @@ class BenchCfg(BenchRunCfg):
     )
 
     result_hmaps = param.List(default=[], doc="a list of holomap results")
+
+    execution = param.ClassSelector(
+        class_=Execution, default=None, doc="Collection-time identity; excluded from cache keys."
+    )
 
     meta_vars = param.List(
         default=[],

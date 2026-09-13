@@ -213,6 +213,8 @@ class BenchResultBase:
         Returns:
             BenchCfg: updated config with wrapped labels
         """
+        if bench_cfg.uuid_events:
+            return bench_cfg
         if bench_cfg.over_time and "over_time" in self.ds.coords:
             if bench_cfg.time_event is not None:
                 self.ds.coords["over_time"] = [

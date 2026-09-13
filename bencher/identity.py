@@ -42,6 +42,7 @@ IDENTITY_FIELDS = (
 )
 
 EXCLUDED_FIELDS = (
+    "execution / uuid_events / time_event_metadata / history_namespace",
     "title",
     "description / post_description",
     "series_id (names the trend, not the configuration)",

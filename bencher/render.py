@@ -33,9 +33,12 @@ import argparse
 import logging
 import pickle
 import sys
+from collections.abc import Sequence
+from contextlib import ExitStack
 from pathlib import Path
 
 from bencher.bench_report import BenchReport
+from bencher.complete_report import execution_for_results
 from bencher.results.bench_result import BenchResult
 
 logger = logging.getLogger(__name__)
@@ -75,8 +78,27 @@ def load_result(path: str | Path) -> BenchResult:
         return pickle.load(fh)
 
 
+def save_results(results: Sequence[BenchResult], path: str | Path) -> Path:
+    """Persist one execution's collected results, without a live Bench or its worker.
+
+    Pickles are a trusted-input format, as for ``save_result``. Object indexes
+    are restored even if serialization fails.
+    """
+    results = tuple(results)
+    execution_for_results(results)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with ExitStack() as stack:
+        for result in results:
+            stack.callback(setattr, result, "object_index", result.object_index)
+            result.object_index = []
+        with path.open("wb") as stream:
+            pickle.dump(results, stream, protocol=pickle.HIGHEST_PROTOCOL)
+    return path
+
+
 def render_report(
-    result_or_path: BenchResult | str | Path,
+    result_or_path: BenchResult | Sequence[BenchResult] | str | Path,
     output_dir: str | Path,
     *,
     report: BenchReport | None = None,
@@ -85,6 +107,7 @@ def render_report(
     portable: bool = False,
     emit_json: bool | str = False,
     cache_dir: str | Path | None = None,
+    complete: bool = False,
 ) -> Path:
     """Render a collected result to an HTML report.
 
@@ -98,7 +121,8 @@ def render_report(
     collection), so no sweep re-execution happens here.
 
     Args:
-        result_or_path: A :class:`BenchResult`, or a path to a saved one.
+        result_or_path: A result or saved result path. Complete mode also accepts
+            a sequence or a bundle written by :func:`save_results`.
         output_dir: Directory to write the report into.
         report: An existing :class:`BenchReport` to append to. A new one is
             created (named after the benchmark) when omitted.
@@ -114,10 +138,30 @@ def render_report(
             cache dir restored to a new path *and* rendered from somewhere else
             again, such as an offline cull working on a downloaded tarball.
             Without it those cells render as placeholders.
+        complete: Export a frozen execution directory with a manifest, per-result
+            summaries and local assets. Requires collection-time provenance.
 
     Returns:
         The path to the saved report.
     """
+    if complete:
+        loaded = (
+            load_result(result_or_path)
+            if isinstance(result_or_path, (str, Path))
+            else result_or_path
+        )
+        results = (loaded,) if isinstance(loaded, BenchResult) else tuple(loaded)
+        execution_for_results(results)
+        if filename is not None or emit_json or portable or in_html_folder:
+            raise ValueError("complete reports use a fixed layout and inventoried sidecar assets")
+        if report is None:
+            report = BenchReport(results[0].bench_cfg.bench_name)
+        for result in results:
+            result.blob_cache_dir = cache_dir
+            result.post_setup()
+            report.record_result(result)
+        return report.save_report(output_dir)
+
     bench_res = (
         result_or_path if isinstance(result_or_path, BenchResult) else load_result(result_or_path)
     )
@@ -164,6 +208,9 @@ def _render_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("result_path", nargs="?", help="Path to a saved .pkl result")
     parser.add_argument("output_dir", nargs="?", help="Directory to write the report into")
+    parser.add_argument(
+        "--report", action="store_true", help="Export a complete frozen execution bundle"
+    )
     parser.add_argument(
         "--json",
         dest="json_path",
@@ -265,7 +312,11 @@ def main(argv: list[str] | None = None) -> int:
     if bench_res is None:
         return code
     try:
-        out = render_report(bench_res, args.output_dir, cache_dir=args.cache_dir)
+        if args.report and args.json_path:
+            raise ValueError("--report includes summaries; --json is only for legacy rendering")
+        out = render_report(
+            bench_res, args.output_dir, cache_dir=args.cache_dir, complete=args.report
+        )
         if args.json_path:
             from bencher.report_export import result_to_json
 

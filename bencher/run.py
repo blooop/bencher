@@ -83,9 +83,14 @@ def run(
     backend: str | None = None,
     optimise: int | bool = 0,
     sampling_context: AbstractContextManager[Any] | None = None,
+    report_directory: str | None = None,
     **kwargs,
 ) -> list[BenchCfg]:
     """Run a benchmark target with sensible defaults.
+
+    ``report_directory`` opts into complete execution export below that root;
+    ``BENCHER_REPORT_DIR`` is its environment equivalent. Ordinary ``save=True``
+    retains its existing layout.
 
     Handles three cases:
     1. Callable (e.g. ``bn.run(example_fn)``) — wraps in BenchRunner.
@@ -219,6 +224,7 @@ def run(
         "cache_samples": cache_samples,
         "over_time": over_time,
         "backend": backend,
+        "report_directory": report_directory,
     }
 
     try:

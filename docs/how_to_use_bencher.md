@@ -657,6 +657,55 @@ python -m bencher.render compare baseline.pkl candidate.pkl --json comparison.js
 contained result (opt-in; default off). All JSON output is strict — non-finite values (e.g. a
 zero-baseline percent change) are emitted as `null`.
 
+## Complete execution reports
+
+`BenchReport.save_report(root)` freezes a complete execution under
+`root/<execution-uuid>/index.html`. It includes tabs, collision-free per-result
+summaries, referenced local media, and a versioned `report.json` inventory of
+relative paths, byte sizes and SHA-256 digests. Use `bn.verify_report(directory)`
+before transferring the directory. Serve it over HTTP; CDN libraries still need
+network access. Moving the directory does not require its original cache.
+
+For multiple collected sweeps, establish one identity before measurement starts:
+
+```python
+# Resolve revision in your launcher, before starting ROS or other foreign threads.
+with bn.execution_context(source_revision=revision, workflow_run=run_id, lane=machine):
+    results = [bench.collect(...), bench.collect(...)]
+bn.save_results(results, "execution.pkl")
+```
+
+Render that bundle in one clean process:
+
+```bash
+bencher execution.pkl reports/my-benchmark --report --cachedir cachedir
+```
+
+Only load pickles from trusted producers. Serialization includes collected
+results, not a live `Bench` or its worker. Missing execution provenance and
+mixed-execution bundles are errors; old results are never stamped with the
+renderer machine's time or checkout revision. Use the existing single-result
+renderer for legacy pickles without execution metadata.
+
+`bn.run(..., report_directory="reports/my-benchmark", show=False)` enables the
+same complete export in the shared runner, including every requested refinement
+and grouped result. `BENCHER_REPORT_DIR` is the equivalent environment opt-in.
+Each runner invocation gets a new execution unless the launcher has explicitly
+grouped it in `execution_context`. Plain `run(save=True)`, `save()`, positional
+rendering, `compare`, and `--cachedir` keep their existing behavior.
+
+Retries verify and reuse the frozen files without saving HTML again. A missing
+asset or failed render does not finalize the UUID directory. Changes to frozen
+bytes or result summaries fail verification; start a new execution for new
+measurements. Keep collected pickle bundles and regression diagnostics until
+rendering and publication have succeeded. A manifest proves local completeness,
+not successful remote publication.
+
+Summaries are snapshots of the history available during collection. They do not
+claim to describe later merges of concurrent history writers. Each manifest
+result records the actual history namespace, series and collection configuration
+key, even if the runner subsequently changes the displayed report name.
+
 ## Common Mistakes
 
 | Mistake | Fix |
