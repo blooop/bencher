@@ -785,6 +785,111 @@ is how "works on my machine" bugs and spurious lint failures get in. This applie
 developing bencher; users who installed `holobench` from PyPI run their own benchmarks
 normally.
 
+## Publishing frozen reports
+
+Publish a complete execution directory without rendering it again:
+
+```bash
+bencher publish reports/my-benchmark/EXECUTION_UUID \
+  --store gs://my-reports-bucket --prefix reports/my-benchmark \
+  --http-base https://reports.example/benchmarks/my-benchmark \
+  --receipt published.json --pointer latest/my-benchmark/index.html
+```
+
+The storage prefix and HTTP base are independent: both get the execution UUID,
+but the serving route need not match the bucket path. `--store /tmp/report-store`
+uses a local SQLite object database for testing; it is **not** a static HTTP
+directory. The CLI prints a JSON publication receipt and optionally persists it
+atomically. It preserves that receipt if the separate pointer update fails.
+Expected storage failures exit nonzero. Adapters decide whether that failure
+should gate a benchmark job; measurements and diagnostics remain on disk.
+The legacy render positional command, `--cachedir`, and `compare` are unchanged.
+
+The publisher creates assets and `report.json` before the entry page, which is
+the commit object. It reads back and verifies all inventory bytes before
+returning a URL. An interrupted upload can resume from the frozen directory;
+matching objects are reused, while different bytes under the same UUID fail.
+A matching committed retry performs **no writes**, including no age renewal.
+A missing dependency in a committed report is an explicit failure, not implicit
+repair. A manifest alone does not establish a committed report.
+
+For Python integrations, import `Publisher` from `bencher.publishing` and stores
+from `bencher.object_store` (`LocalStore`) or `bencher.gcloud_store` (`GcloudStore`).
+`publish(directory)` returns `Published(url, receipt)` or `PublishFailed`.
+Restore a JSON handoff with `PublicationReceipt.from_dict(json.loads(...))`;
+`publisher.verify(receipt)` checks its manifest, storage location and every
+dependency before downstream consumers trust it.
+`publisher.point(receipt, key)` re-verifies the report before updating a pointer.
+Default ordering uses measurement time and UUID, not upload time. Deployment
+callers may supply a `PointerCandidate` from `bencher.publication_pointers` with
+a named ordering policy and comparable integer/string rank components, for
+example `(source_revision_rank, attempt, execution_time, uuid)`. Rank source
+revisions **before** rerun time so an old checkout cannot displace a newer one.
+The caller owns positive write eligibility, revision ordering and lane mapping;
+bencher knows nothing about GitHub workflows, branch names or machines.
+
+Pointers embed their target and ordering state in the same redirect HTML object.
+CAS conflicts cause reread, reordering and bounded retries. An unknown existing
+HTML format fails closed: migrate old aliases explicitly rather than overwriting
+their contents. The lower-level `update_pointer` accepts a `verify_target` callback
+for non-report dependencies; use `Publisher.point` for report targets.
+
+### Remote storage and renewal contract
+
+`read(key)` returns `Present(data, version, metadata, created_at, expires_at)`,
+`Absent`, or `ReadFailed`. `write(key, data, CreateOnly() | Match(version))` returns
+`Written`, `Conflict`, or `WriteFailed(reason, outcome_unknown)`. Never infer
+absence from a failed read, or success from a timeout. Versions are opaque and
+only valid for the object/store that issued them. A successful write is not a
+directory-wide transaction. GcloudStore obtains credentials through gcloud and
+uses the JSON API for structured HTTP errors, generation-pinned downloads and
+generation/metageneration preconditions; its environment, timeout and transport
+are injectable. The byte-oriented interface holds one object in memory.
+
+`list(prefix, token=..., limit=...)` returns `Listed(items, next_token)` or
+`ListFailed`; `complete` is true only without a continuation token. Continue even
+after an empty page with a token. Listings are not snapshots: concurrently added
+objects before a cursor may require another pass. A partial listing cannot prove
+that an object is unreferenced or that a benchmark never ran.
+
+`renew(key, expected_version)` conditionally rewrites the observed bytes and
+serving metadata, returning `Renewed(version, created_at, expires_at)`, `Conflict`,
+`Absent`, `Unsupported`, or `WriteFailed`. Reread and reevaluate conflicts instead
+of replaying stale mutable content. GCS renewal uploads the same bytes, then
+checks the new version and creation time; a metadata-only touch or equal bytes
+after a timeout do not prove renewal. The host UTC clock must be accurate: a
+creation time preceding the attempt fails verification conservatively.
+
+Renewal requires explicit `expiry_seconds` describing the verified backend
+age-based policy. GCS expiry is **eligibility**, not confirmation of deletion;
+bucket rules and lifecycle lag remain external. No policy is inferred or changed.
+For LocalStore this is an explicit fake expiry model: expired rows become absent
+to reads/listings, but the filesystem does not independently delete them.
+No configured policy means unsupported renewal.
+
+Set `Publisher(..., minimum_remaining_seconds=...)` (CLI
+`--minimum-remaining-days` with `--expiry-days`) to require verified dependency
+lifetime before new references. Publication never extends that lifetime itself;
+run explicit maintenance first. A zero minimum promises no retention window.
+Scheduling, graph traversal, retention roots and renewal receipts are separate
+maintenance integration, not implemented by ordinary publication.
+
+The opt-in GCS contract test creates a fresh UUID prefix and small objects:
+
+```bash
+BENCHER_GCS_CONTRACT_ROOT=gs://YOUR_BUCKET/DISPOSABLE_PREFIX \
+  pixi run pytest test/test_gcloud_store.py::test_gcloud_live_disposable_contract -s
+```
+
+It exercises create conflicts, stale generations, competing writers, pagination,
+and byte/metadata-preserving renewal with verified creation-time reset. Use a
+disposable prefix with a verified seven-day Age Delete policy; the test leaves
+its objects for that lifecycle rule. The test does not establish rule coverage.
+GCS contracts follow the official [preconditions](https://docs.cloud.google.com/storage/docs/request-preconditions),
+[uploads](https://docs.cloud.google.com/storage/docs/json_api/v1/objects/insert),
+[listing](https://docs.cloud.google.com/storage/docs/json_api/v1/objects/list), and
+[lifecycle](https://docs.cloud.google.com/storage/docs/lifecycle) documentation.
+
 ## Transferring history
 
 Set `BenchRunCfg(history_namespace="machine-name")` to isolate a machine's

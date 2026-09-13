@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.132.0] - 2026-09-13
+
+### Added
+- Conditional remote object operations, paginated listing and explicit renewal
+  outcomes via `LocalStore` and `GcloudStore`. GCS reads bind bytes to generation
+  and metadata version; renewal verifies rewritten bytes, metadata and storage age.
+- Immutable complete-report publication with entry-page-last commit, verified
+  create-only retries and stable JSON receipts, exposed through `bencher publish`.
+- Single-object HTML pointers with bounded CAS retries, execution-time ordering
+  and caller-supplied deployment ordering and eligibility.
+
 ## [1.131.0] - 2026-09-13
 
 ### Added

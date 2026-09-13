@@ -232,3 +232,15 @@ configuration keys. UUIDs are not wrapped or reformatted for display.
 
 Complete reports preserve this provenance through serialization and rendering;
 see [complete execution reports](how_to_use_bencher.md#complete-execution-reports).
+
+## Publication is separate from native history
+
+An immutable report describes the history available at measurement time. Its
+successful publication does not establish a canonical merged trend or a valid
+baseline. The conditional stores described in
+[publishing frozen reports](how_to_use_bencher.md#publishing-frozen-reports) provide
+the read/version/write and renewal primitives for native snapshot transfer;
+they do not automatically merge history, move reachable media, or authorize a
+trunk writer. Keep those operations explicit and retain a failed candidate for
+recovery. Report pointers order by execution time, independently of history
+transfer success.
