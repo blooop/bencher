@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   create-only retries and stable JSON receipts, exposed through `bencher publish`.
 - Single-object HTML pointers with bounded CAS retries, execution-time ordering
   and caller-supplied deployment ordering and eligibility.
+- Manifest-aware local scorecard discovery with explicit frozen-page links,
+  separate configuration and lane records, and labeled report-time trends.
 
 ## [1.131.0] - 2026-09-13
 

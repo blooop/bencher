@@ -19,6 +19,7 @@ from bencher.scorecard.discover import (
     discover_summaries,
     tag_to_name,
 )
+from bencher.scorecard.executions import discover_complete_reports
 from bencher.scorecard.model import (
     build_cell,
     cell_verdict,
@@ -38,6 +39,7 @@ __all__ = [
     "build_cell",
     "cell_verdict",
     "column_units",
+    "discover_complete_reports",
     "discover_report_links",
     "discover_summaries",
     "fmt_change",
