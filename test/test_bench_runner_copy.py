@@ -31,6 +31,8 @@ MUTABLE_PARAM_TYPES = (param.List, param.Dict, param.ClassSelector, param.Tuple)
 REVIEWED_MUTABLE_FIELDS = {
     # dict[str, float | dict[str, float]]; see test_regression_overrides_dict_is_isolated_by_copy
     "regression_overrides",
+    # All three BenchRunner copy sites deepcopy; the test below checks nested provenance.
+    "time_event_metadata",
 }
 
 
@@ -132,6 +134,12 @@ class TestSetupRunCfg(unittest.TestCase):
 
 class TestCopyStrategyGuards(unittest.TestCase):
     """Guard tests to catch future changes that would break copy assumptions."""
+
+    def test_execution_provenance_is_isolated_by_copy(self):
+        original = bn.BenchRunCfg(time_event_metadata={"code": {"commit": "abc"}})
+        copied = BenchRunner.setup_run_cfg(original)
+        copied.time_event_metadata["code"]["commit"] = "def"
+        self.assertEqual(original.time_event_metadata, {"code": {"commit": "abc"}})
 
     def test_benchruncfg_has_no_mutable_param_fields(self):
         """Guard: BenchRunCfg must only have primitive/immutable param fields.

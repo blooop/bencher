@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,15 @@ from bencher.scorecard import (
     metric_columns,
     unify_metric_names,
 )
+
+
+def test_explicit_generation_time_makes_retries_reproducible(tmp_path):
+    timestamp = datetime(2026, 9, 11, 12, 0, tzinfo=UTC)
+    first = generate_scorecard(tmp_path, generated_at=timestamp).read_bytes()
+    second = generate_scorecard(tmp_path, generated_at=timestamp).read_bytes()
+    assert first == second
+    assert b"2026-09-11 12:00 UTC" in first
+
 
 # A generic project config: two Performance benchmarks that share a metric core,
 # a Startup benchmark using an aliased metric name, plus fallback/metric-less

@@ -10,6 +10,7 @@ import logging
 import math
 import os
 import warnings
+from collections.abc import MutableMapping
 from contextlib import suppress
 from datetime import datetime
 from itertools import product
@@ -39,6 +40,7 @@ from bencher.history import (
     project,
     reconcile,
 )
+from bencher.history_transfer import NamespacedHistory
 from bencher.job import (
     JobFuture,
     SampleFailure,
@@ -612,7 +614,7 @@ class ResultCollector:
         c[bench_res.bench_cfg.bench_name] = bench_cfg_hashes
 
     def _read_last_seen(
-        self, cache: Cache, series_id: str, bench_name: str | None, tag: str | None
+        self, cache: MutableMapping, series_id: str, bench_name: str | None, tag: str | None
     ) -> dict | None:
         """The last-seen index entry for *series_id*, falling back to the legacy key.
 
@@ -630,7 +632,7 @@ class ResultCollector:
 
     def _adopt_or_report_reset(
         self,
-        cache: Cache,
+        cache: MutableMapping,
         bench_cfg_hash: str,
         *,
         series_id: str,
@@ -695,7 +697,7 @@ class ResultCollector:
         events.append(HistoryEvent(HistoryEventKind.FULL_RESET, detail))
         return None
 
-    def _load_history_record(self, cache: Cache, bench_cfg_hash: str) -> dict | None:
+    def _load_history_record(self, cache: MutableMapping, bench_cfg_hash: str) -> dict | None:
         """Fetch and normalize one history record, or None when absent/unreadable.
 
         Bare ``xr.Dataset`` values (hand-seeded or pre-record entries) are
@@ -742,6 +744,8 @@ class ResultCollector:
         tag: str | None = None,
         series_id: str | None = None,
         config_summary: dict | None = None,
+        namespace: str = "",
+        event_metadata: dict | None = None,
     ) -> xr.Dataset:
         """Load, reconcile, and persist historical benchmark data.
 
@@ -787,7 +791,7 @@ class ResultCollector:
         # boundary), so an unknown value must raise here — before any cache
         # read or write — instead of silently meaning "ignore" as it used to.
         policy = OnHistoryReset(on_history_reset)
-        c = self.get_history_cache()
+        c = NamespacedHistory(self.get_history_cache(), namespace)
         # An explicit series_id wins; otherwise the series is bench_name:tag, which
         # is what the index was keyed on before series_id existed. Deriving it here
         # rather than requiring it keeps every existing caller's reset detection.
@@ -800,6 +804,7 @@ class ResultCollector:
         birth_val = current_time_value(dataset)
         columns_meta = {name: column_meta(rv, name, birth_val) for name, rv in current_cols.items()}
         retired: dict = {}
+        execution_metadata: dict = {}
 
         if clear_history:
             logger.info("clearing history")
@@ -821,6 +826,7 @@ class ResultCollector:
             else:
                 logger.info("loading historical data from cache")
                 ds_old = record["dataset"]
+                execution_metadata = dict(record.get("event_metadata", {}))
                 incompatible = incompatible_reason(ds_old, dataset)
                 if incompatible:
                     events.append(
@@ -863,11 +869,23 @@ class ResultCollector:
                     pending_deletes.extend(_null_old_entries(merged, rv, var_limit))
 
         logger.info("saving data to history cache")
+        if event_metadata:
+            execution_metadata[str(birth_val)] = dict(event_metadata)
+        retained_events = (
+            {str(value) for value in merged.over_time.values}
+            if "over_time" in merged.coords
+            else set()
+        )
+        execution_metadata = {
+            key: value for key, value in execution_metadata.items() if key in retained_events
+        }
         c[bench_cfg_hash] = {
             "format": HISTORY_FORMAT,
             "dataset": merged,
             "columns": columns_meta,
             "retired": retired,
+            "event_metadata": execution_metadata,
+            "max_time_events": max_time_events,
         }
         if series is not None:
             c[last_seen_key(series)] = {

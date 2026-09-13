@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.130.0] - 2026-09-11
+
+### Added
+- `HistorySnapshot` exports, merges and transactionally restores native history
+  records for trusted transfers. Concurrent snapshots retain distinct executions;
+  conflicting data and incompatible machines or configurations raise.
+- `BenchRunCfg.history_namespace` isolates machine baselines without changing
+  configuration keys. `time_event_metadata` records execution provenance and
+  timestamps independently of categorical event IDs such as UUIDs.
+- Scorecards accept an explicit `generated_at` timestamp for reproducible
+  publication retries.
+
 ## [1.129.0] - 2026-09-11
 
 ### Changed

@@ -191,6 +191,7 @@ def column_meta(rv: Any, col_name: str, birth: Any) -> dict:
         "meaning_version": getattr(rv, "meaning_version", None),
         "birth": birth,
         "dormant": False,
+        "max_time_events": getattr(rv, "max_time_events", None),
     }
 
 

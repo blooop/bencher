@@ -410,6 +410,16 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     clear_history: bool = param.Boolean(False, doc="Clear historical results")
 
+    history_namespace: str = param.String(
+        "",
+        doc="Independent history namespace, for example a machine identity. Empty preserves legacy keys.",
+    )
+    time_event_metadata: dict | None = param.Dict(
+        default=None,
+        allow_None=True,
+        doc="Provenance of this execution, including an ISO-8601 executed_at for ordered history transfers.",
+    )
+
     on_history_reset: str = param.Selector(
         default=OnHistoryReset.WARN,
         objects=list(OnHistoryReset),
