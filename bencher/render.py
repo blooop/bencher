@@ -299,6 +299,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if argv and argv[0] == "compare":
         return _run_compare(argv[1:])
+    if argv and argv[0] == "publish":
+        from bencher.publishing_cli import main as publish_main
+
+        return publish_main(argv[1:])
 
     args = _render_parser().parse_args(argv)
 

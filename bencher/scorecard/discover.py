@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 from bencher.scorecard.config import ScorecardConfig
+from bencher.scorecard.executions import discover_complete_reports
 from bencher.scorecard.model import unify_metric_names
 
 
@@ -47,10 +48,38 @@ def discover_summaries(reports_dir: Path, config: ScorecardConfig) -> list[dict]
         return []
 
     records: list[dict] = []
+    complete = discover_complete_reports(reports_dir, config.layout.root)
+    complete_tags = {record["tag"] for record in complete}
+    for report in complete:
+        data, entry = report["summary"], report["entry"]
+        metrics = {m["variable"]: m for m in data.get("metrics", [])}
+        if not metrics:
+            continue
+        regressions = {r["variable"]: r for r in data.get("regressions", {}).get("results", [])}
+        metrics, regressions = unify_metric_names(metrics, regressions, dict(config.aliases))
+        category, name = _resolve(report["tag"], config)
+        records.append(
+            {
+                "tag": report["tag"],
+                "name": f"{name} [{entry['configuration_key'][:8]}]",
+                "category": category,
+                "bench_name": entry["benchmark"],
+                "link": report["link"],
+                "metrics": metrics,
+                "regressions": regressions,
+                "time_event": report["execution"]["uuid"],
+                "configuration_key": entry["configuration_key"],
+                "history_namespace": entry["history_namespace"],
+                "lane": report["execution"].get("lane") or "",
+                "trend_source": "report-time snapshot",
+            }
+        )
     for tag_dir in sorted(root.iterdir()):
         if not tag_dir.is_dir():
             continue
         tag = tag_dir.name
+        if tag in complete_tags:
+            continue
         category, name = _resolve(tag, config)
         for summary_file in sorted(tag_dir.glob("*.summary.json")):
             try:
@@ -88,8 +117,24 @@ def _discover_html_reports(reports_dir: Path, config: ScorecardConfig) -> list[d
     if not root.is_dir():
         return []
     results: list[dict] = []
+    complete = discover_complete_reports(reports_dir, config.layout.root)
+    complete_tags = {record["tag"] for record in complete}
+    for report in complete:
+        category, name = _resolve(report["tag"], config)
+        results.append(
+            {
+                "tag": report["tag"],
+                "name": name,
+                "category": category,
+                "link": report["link"],
+                "complete": True,
+                "has_metrics": bool(report["summary"].get("metrics")),
+            }
+        )
     for tag_dir in sorted(root.iterdir()):
         if not tag_dir.is_dir():
+            continue
+        if tag_dir.name in complete_tags:
             continue
         html_files = sorted(f for f in tag_dir.iterdir() if f.suffix == ".html" and f.is_file())
         if not html_files:
@@ -112,7 +157,7 @@ def discover_report_links(
     """
     sections: dict[str, list[dict]] = {}
     for bench in _discover_html_reports(reports_dir, config):
-        if bench["tag"] in exclude_tags:
+        if bench.get("has_metrics") or (not bench.get("complete") and bench["tag"] in exclude_tags):
             continue
         sections.setdefault(bench["category"], []).append(
             {"name": bench["name"], "link": bench["link"]}

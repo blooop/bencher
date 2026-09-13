@@ -67,6 +67,20 @@ bn.result_to_json(
 
 ## Rendering the page
 
+Complete exports under `<root>/<tag>/<uuid>/report.json` are discovered too.
+The scorecard verifies the full inventory, including the entry page, before
+using a result. It selects the newest execution separately for each benchmark,
+configuration, history namespace, series and lane. Execution UUID breaks time
+ties. Links come from the manifest rather than the legacy filename pattern.
+Metric-free results remain in the report links section.
+
+These trends are labeled `report-time snapshot`. They describe the history
+available when the report was rendered, not a later merged native history.
+This local scan is not a remote retained-report index. Call
+`discover_complete_reports(reports_dir, root)` to reuse the verified selection
+in another local listing. A tag with verified complete results takes precedence
+over that tag's legacy flat summaries and HTML files.
+
 Everything project-specific is injected via
 {class}`~bencher.scorecard.ScorecardConfig`, and every field defaults — so the
 zero-config path still produces a page:

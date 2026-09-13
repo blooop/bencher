@@ -65,6 +65,8 @@ def _group(records: list[dict], columns: list[str], config: ScorecardConfig) -> 
                 "tag": rec["tag"],
                 "link": rec["link"],
                 "time_event": rec["time_event"],
+                "trend_source": rec.get("trend_source", ""),
+                "lane": rec.get("lane", ""),
                 "cells": [
                     build_cell(rec, var, config, units_in_header=bool(units[var]))
                     for var in columns

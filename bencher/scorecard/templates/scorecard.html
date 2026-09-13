@@ -221,7 +221,9 @@
   {% endmacro %}
   {% macro bench_label(bench) %}
     <a href="{{ bench.link }}">{{ bench.name }}</a>
+    {% if bench.lane %}<span class="when">{{ bench.lane }}</span>{% endif %}
     {% if bench.time_event %}<span class="when">{{ bench.time_event }}</span>{% endif %}
+    {% if bench.trend_source %}<span class="when">{{ bench.trend_source }}</span>{% endif %}
   {% endmacro %}
   {# Both orientations of one column group; --cols is its count in each. #}
   {% macro group_tables(group) %}
