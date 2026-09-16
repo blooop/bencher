@@ -56,7 +56,13 @@ _TZ_AWARE_HISTORY_WARNING = (
 
 
 class TimeBase(SweepBase, Selector):
-    """A class to capture a time snapshot of benchmark values.  Time is represent as a continuous value i.e a datetime which is converted into a np.datetime64.  To represent time as a discrete value use the TimeEvent class. The distinction is because holoview and plotly code makes different assumptions about discrete vs continuous variables"""
+    """Base class for time-valued sweep variables.
+
+    Time is represented as a continuous value, i.e. a datetime; see TimeSnapshot for
+    what that datetime becomes as a coordinate. To represent time as a discrete value
+    use the TimeEvent class. The distinction is because holoviews and plotly code makes
+    different assumptions about discrete vs continuous variables.
+    """
 
     def __init__(
         self,
@@ -88,7 +94,15 @@ class TimeBase(SweepBase, Selector):
 
 
 class TimeSnapshot(TimeBase):
-    """A class to capture a time snapshot of benchmark values.  Time is represent as a continuous value i.e a datetime which is converted into a np.datetime64.  To represent time as a discrete value use the TimeEvent class. The distinction is because holoview and plotly code makes different assumptions about discrete vs continuous variables"""
+    """A class to capture a time snapshot of benchmark values as a continuous value.
+
+    A naive datetime becomes a datetime64[us] coordinate. A timezone-aware one is kept
+    as a tz-aware Timestamp, because xarray has no tz-aware datetime64, so the
+    coordinate is dtype object instead; as the over_time axis, that dtype difference is
+    what the history guard rejects. To represent time as a discrete value use the
+    TimeEvent class. The distinction is because holoviews and plotly code makes
+    different assumptions about discrete vs continuous variables.
+    """
 
     __slots__ = shared_slots
 
