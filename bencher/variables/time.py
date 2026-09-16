@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+import os
 import warnings
 from datetime import datetime
 
@@ -7,6 +9,33 @@ from pandas import Timestamp
 from param import Selector
 
 from bencher.variables.sweep_base import SweepBase, shared_slots
+
+# The package directory, not its parent: every frame under it is bencher's own,
+# so the first frame outside it is the caller whose time_src caused the warning.
+_BENCHER_PACKAGE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep
+
+
+def _caller_stacklevel() -> int:
+    """Return the stacklevel, from our caller's warn site, of the first non-bencher frame.
+
+    TimeSnapshot is constructed several frames below the public API that accepts
+    ``time_src``, and that depth is free to change, so the level is measured rather
+    than hardcoded.
+    """
+    frame = inspect.currentframe()
+    for _ in range(2):
+        if frame is None:
+            return 2
+        frame = frame.f_back
+    level = 2
+    while (
+        frame is not None
+        and frame.f_back is not None
+        and os.path.abspath(frame.f_code.co_filename).startswith(_BENCHER_PACKAGE_DIR)
+    ):
+        frame = frame.f_back
+        level += 1
+    return level
 
 
 class TimeBase(SweepBase, Selector):
@@ -67,7 +96,7 @@ class TimeSnapshot(TimeBase):
                     "series restarts from that run. Whichever kind your existing "
                     "history was recorded with, keep passing that kind.",
                     UserWarning,
-                    stacklevel=2,
+                    stacklevel=_caller_stacklevel(),
                 )
             TimeBase.__init__(
                 self,

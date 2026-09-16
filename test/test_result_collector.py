@@ -1,5 +1,6 @@
 """Tests for ResultCollector extracted from Bench."""
 
+import inspect
 import shutil
 import tempfile
 import unittest
@@ -15,6 +16,7 @@ import xarray as xr
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+import bencher as bn
 from bencher.bench_cfg import BenchCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.result_collector import ResultCollector, set_xarray_multidim
@@ -192,6 +194,44 @@ class TestResultCollector(unittest.TestCase):
             warnings.simplefilter("always")
             TimeSnapshot(datetime(2024, 1, 1))
         self.assertEqual([w for w in caught if issubclass(w.category, UserWarning)], [])
+
+    def test_aware_time_src_warning_is_attributed_to_the_users_call(self):
+        """The warning names the caller's plot_sweep line, not a file under bencher/.
+
+        TimeSnapshot is built about five frames below the public API, so a fixed
+        stacklevel pins the warning to bencher's own source: the user cannot find
+        the time_src they have to change, ``once`` de-duplicates every sweep in
+        the process against that one internal line, and a ``module=`` filter has
+        to name bencher rather than the caller.
+        """
+        bench = bn.Bench("tz-attribution", ExampleBenchCfg())
+        run_cfg = bn.BenchRunCfg(
+            over_time=True, repeats=1, cache_results=False, cache_samples=False, auto_plot=False
+        )
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            expected_line = inspect.currentframe().f_lineno + 1
+            bench.plot_sweep(
+                input_vars=[ExampleBenchCfg.param.theta],
+                result_vars=[ExampleBenchCfg.param.out_sin],
+                run_cfg=run_cfg,
+                time_src=datetime(2024, 1, 1, tzinfo=UTC),
+            )
+        tz = [w for w in caught if "timezone-aware" in str(w.message)]
+        self.assertEqual(len(tz), 1, "one bad time_src must produce exactly one warning")
+        self.assertEqual(Path(tz[0].filename).resolve(), Path(__file__).resolve())
+        self.assertEqual(tz[0].lineno, expected_line)
+
+    def test_direct_time_snapshot_warning_is_attributed_to_the_caller(self):
+        """Constructing TimeSnapshot directly still points at the construction site."""
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            expected_line = inspect.currentframe().f_lineno + 1
+            TimeSnapshot(datetime(2024, 1, 1, tzinfo=UTC))
+        tz = [w for w in caught if "timezone-aware" in str(w.message)]
+        self.assertEqual(len(tz), 1)
+        self.assertEqual(Path(tz[0].filename).resolve(), Path(__file__).resolve())
+        self.assertEqual(tz[0].lineno, expected_line)
 
     def test_report_results_no_print(self):
         """Test report_results with printing disabled."""
