@@ -25,6 +25,7 @@ class PaneResult(BenchResultBase):
         target_dimension: int = 0,
         container=None,
         subsampling_divisions: int | None = None,
+        repeat_subsampling_divisions: int | None = None,
         **kwargs,
     ) -> pn.pane.panel | None:
         return self.map_sample_panes(
@@ -34,5 +35,6 @@ class PaneResult(BenchResultBase):
             hv_dataset=hv_dataset,
             target_dimension=target_dimension,
             subsampling_divisions=subsampling_divisions,
+            repeat_subsampling_divisions=repeat_subsampling_divisions,
             **kwargs,
         )

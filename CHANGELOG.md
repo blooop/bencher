@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `pane_repeat_subsampling_divisions` on `BenchRunCfg`, and a
+  `repeat_subsampling_divisions` argument on `to_dataset`, `to_hv_dataset`,
+  `map_sample_panes`, `to_panes` and `select_subsampling_divisions`. Display-side
+  subsampling skipped the `repeat` dimension unconditionally, so a sweep that
+  measured five repeats per cell had to render five panes per cell — there was no
+  way to ask for fewer without dropping cells from the sweep or repeats from the
+  statistics. The new resolution is independent of `subsampling_divisions`: every
+  repeat is still sampled and still counted by the summary statistics, and only the
+  panes are thinned. Defaults to None, which keeps a pane per repeat as before.
+
 ## [1.132.0] - 2026-09-13
 
 ### Added

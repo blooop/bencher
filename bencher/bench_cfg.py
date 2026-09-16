@@ -394,6 +394,15 @@ class BenchRunCfg(BenchPlotSrvCfg):
         "'tabs_and_grid' uses tabs for the outermost dimension and grid for inner ones.",
     )
 
+    pane_repeat_subsampling_divisions: int | None = param.Integer(
+        default=None,
+        bounds=(1, None),
+        doc="Resolution the 'repeat' dimension is subsampled to in sample panes. "
+        "Display-side only: every repeat is still sampled and still counted by the "
+        "summary statistics, so a sweep can measure 5 repeats per cell and put 2 of "
+        "them on screen. Defaults to None (every repeat gets a pane).",
+    )
+
     backend = param.Selector(
         default="panel",
         objects=["panel", "rerun"],
