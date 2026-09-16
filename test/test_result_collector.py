@@ -166,11 +166,48 @@ class TestResultCollector(unittest.TestCase):
             ds = self._over_time_dataset(datetime(2024, 1, 1, tzinfo=UTC))
         self.assertEqual(ds["over_time"].dtype, object)
 
+    def _aware_over_time_warning(self):
+        """Run the over_time integration point with an aware time_src, return its warning."""
+        bench_cfg = BenchCfg(
+            input_vars=[],
+            result_vars=[],
+            const_vars=[],
+            bench_name="test",
+            title="test",
+            repeats=1,
+            over_time=True,
+        )
+        with self.assertWarns(UserWarning) as caught:
+            self.collector.define_extra_vars(bench_cfg, 1, datetime(2024, 1, 1, tzinfo=UTC))
+        return str(caught.warning)
+
     def test_time_snapshot_warns_on_aware_datetime(self):
-        """A tz-aware datetime warns, naming the dtype change and the history loss."""
+        """A tz-aware datetime warns, naming the coordinate dtype it degrades to."""
         with self.assertWarns(UserWarning) as caught:
             TimeSnapshot(datetime(2024, 1, 1, tzinfo=UTC))
         message = str(caught.warning)
+        self.assertIn("timezone-aware", message)
+        self.assertIn("object", message)
+
+    def test_plain_input_var_warning_does_not_claim_history_loss(self):
+        """An aware TimeSnapshot that is not the history axis must not claim history loss.
+
+        TimeSnapshot is a supported input-var type in its own right -- PltCntCfg
+        classifies it as a float axis and sets has_time from input_vars alone --
+        and history is loaded and reconciled only under over_time=True. The
+        object coordinate is real either way; the discarded-history consequence
+        is not, so claiming it here is a false alarm for a sweep that has no
+        history to lose.
+        """
+        with self.assertWarns(UserWarning) as caught:
+            TimeSnapshot(datetime(2024, 1, 1, tzinfo=UTC))
+        message = str(caught.warning)
+        self.assertIn("object", message)
+        self.assertNotIn("history", message)
+
+    def test_over_time_snapshot_warning_names_the_history_loss(self):
+        """The over_time axis is the one place history is at stake, so that is where it is said."""
+        message = self._aware_over_time_warning()
         self.assertIn("timezone-aware", message)
         self.assertIn("object", message)
         self.assertIn("history", message)
@@ -183,9 +220,7 @@ class TestResultCollector(unittest.TestCase):
         TestOverTimeDtypeGuard in test/test_history_reconciliation.py for both
         transitions.
         """
-        with self.assertWarns(UserWarning) as caught:
-            TimeSnapshot(datetime(2024, 1, 1, tzinfo=UTC))
-        message = str(caught.warning)
+        message = self._aware_over_time_warning()
         self.assertIn("either direction", message)
         self.assertNotIn("Pass a naive datetime", message)
 

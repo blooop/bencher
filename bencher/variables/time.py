@@ -35,6 +35,26 @@ def _caller_stacklevel() -> int:
     return max(level, 2)
 
 
+# Split because only the first half is unconditionally true. The object coordinate
+# happens to every tz-aware TimeSnapshot; losing history happens only to the one
+# that is the over_time axis, because that is the only dataset a stored series is
+# reconciled against (see Bench.plot_sweep, which gates load_history_cache on
+# run_cfg.over_time).
+_TZ_AWARE_COORD_WARNING = (
+    "TimeSnapshot was given a timezone-aware datetime. xarray cannot store "
+    "tz-aware timestamps as datetime64, so its sweep coordinate becomes dtype "
+    "object instead of datetime64[us]."
+)
+
+_TZ_AWARE_HISTORY_WARNING = (
+    " The history dtype guard compares those dtypes, so switching between naive "
+    "and tz-aware timestamps in either direction discards the stored history "
+    "(and makes history transfer fail outright); the series restarts from that "
+    "run. Whichever kind your existing history was recorded with, keep passing "
+    "that kind."
+)
+
+
 class TimeBase(SweepBase, Selector):
     """A class to capture a time snapshot of benchmark values.  Time is represent as a continuous value i.e a datetime which is converted into a np.datetime64.  To represent time as a discrete value use the TimeEvent class. The distinction is because holoview and plotly code makes different assumptions about discrete vs continuous variables"""
 
@@ -77,24 +97,28 @@ class TimeSnapshot(TimeBase):
         datetime_src: datetime | str,
         units: str = "time",
         samples: int | None = None,
+        *,
+        history_axis: bool = False,
         **params,
     ):
+        """Build a single-timestamp sweep variable.
+
+        Args:
+            datetime_src: The timestamp, or a string event name.
+            units: Axis units label.
+            samples: Sample count; defaults to the number of objects.
+            history_axis: True when this snapshot is the ``over_time`` axis a
+                stored history series is reconciled against, which is the only
+                case where a tz-aware timestamp can cost you that history.
+        """
         if isinstance(datetime_src, str):
             TimeBase.__init__(self, [datetime_src], instantiate=True, **params)
         else:
             if isinstance(datetime_src, datetime) and datetime_src.tzinfo is not None:
-                warnings.warn(
-                    "TimeSnapshot was given a timezone-aware datetime. xarray cannot "
-                    "store tz-aware timestamps as datetime64, so the over_time "
-                    "coordinate becomes dtype object instead of datetime64[us]. The "
-                    "history dtype guard compares those dtypes, so switching between "
-                    "naive and tz-aware timestamps in either direction discards the "
-                    "stored history (and makes history transfer fail outright); the "
-                    "series restarts from that run. Whichever kind your existing "
-                    "history was recorded with, keep passing that kind.",
-                    UserWarning,
-                    stacklevel=_caller_stacklevel(),
-                )
+                message = _TZ_AWARE_COORD_WARNING
+                if history_axis:
+                    message += _TZ_AWARE_HISTORY_WARNING
+                warnings.warn(message, UserWarning, stacklevel=_caller_stacklevel())
             TimeBase.__init__(
                 self,
                 objects=[Timestamp(datetime_src)],
