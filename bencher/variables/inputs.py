@@ -843,11 +843,40 @@ def with_subsampling_divisions(arr: list, subsampling_divisions: int) -> list:
     Returns:
         list: The subsampling_divisions-sampled values
     """
+    return SweepBase.indices_to_samples(
+        None, subsampling_divisions_samples(subsampling_divisions), list(arr)
+    )
+
+
+def subsampling_divisions_samples(subsampling_divisions: int) -> int:
+    """How many samples *subsampling_divisions* asks for, clamped to the table.
+
+    Raises:
+        ValueError: if *subsampling_divisions* is below 1.
+    """
     if subsampling_divisions < 1:
         raise ValueError(f"subsampling_divisions must be >= 1, got {subsampling_divisions}")
     max_index = len(SUBSAMPLING_DIVISIONS_SAMPLES) - 1
-    n = SUBSAMPLING_DIVISIONS_SAMPLES[min(max_index, subsampling_divisions)]
-    return SweepBase.indices_to_samples(None, n, list(arr))
+    return SUBSAMPLING_DIVISIONS_SAMPLES[min(max_index, subsampling_divisions)]
+
+
+def leading_subsampling_divisions(arr: list, subsampling_divisions: int) -> list:
+    """The *first* values of *arr* at the sample count *subsampling_divisions* asks for.
+
+    The counterpart to :func:`with_subsampling_divisions` for a dimension whose values
+    are interchangeable rather than spanning a range. Spreading the picks over the
+    whole extent is what a swept variable wants, because its endpoints mean something;
+    for repeats it only ties the render to the last repeat measured, when the leading
+    ones are the ones a partial or resumed sweep already has.
+
+    Args:
+        arr (list): list of values to take from
+        subsampling_divisions (int): The sampling subsampling_divisions to apply
+
+    Returns:
+        list: the leading values of *arr*
+    """
+    return list(arr)[: subsampling_divisions_samples(subsampling_divisions)]
 
 
 def with_level(arr: list, level: int) -> list:

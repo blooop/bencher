@@ -126,9 +126,15 @@ display-side only: every repeat is still measured and still counted by the stati
 but only the resolution you ask for gets a pane.
 
 ```python
-# Five repeats per cell for the statistics, two of them on screen.
+# Five repeats per cell for the statistics, the first two on screen.
 bn.run(example_benchmark, run_cfg=bn.BenchRunCfg(repeats=5, pane_repeat_subsampling_divisions=2))
 ```
+
+It takes the *leading* repeats rather than spreading the picks across the range, which
+is the opposite of what `subsampling_divisions` does to a swept variable. A swept
+variable's endpoints mean something, so spanning the extent is the right sample; repeats
+are interchangeable draws, so spanning it only ties the report to the last repeat
+measured when the leading ones are already cached.
 
 The two resolutions are separate knobs because a report usually wants them to disagree:
 a sweep over three planners with five recordings each has fifteen panes, and cutting that

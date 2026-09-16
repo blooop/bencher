@@ -37,7 +37,10 @@ from bencher.utils import (
     listify,
     normalize_agg_fn,
 )
-from bencher.variables.inputs import with_subsampling_divisions
+from bencher.variables.inputs import (
+    leading_subsampling_divisions,
+    with_subsampling_divisions,
+)
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import (
     PANEL_TYPES,
@@ -538,10 +541,15 @@ class BenchResultBase:
                 # The two resolutions are separate because the dimensions are: the
                 # input vars say what was swept, `repeat` says how many times each
                 # cell was measured, and a report routinely wants every cell but
-                # only a couple of its repeats on screen.
-                divisions = repeat_subsampling_divisions if c == "repeat" else subsampling_divisions
-                if divisions is not None:
-                    selection[c] = with_subsampling_divisions(v.to_numpy(), divisions)
+                # only a couple of its repeats on screen. They pick differently for
+                # the same reason -- see leading_subsampling_divisions.
+                if c == "repeat":
+                    if repeat_subsampling_divisions is not None:
+                        selection[c] = leading_subsampling_divisions(
+                            v.to_numpy(), repeat_subsampling_divisions
+                        )
+                elif subsampling_divisions is not None:
+                    selection[c] = with_subsampling_divisions(v.to_numpy(), subsampling_divisions)
             ds_out = ds_out.sel(selection)
         self._to_dataset_cache[cache_key] = ds_out
         return ds_out.copy(deep=True) if deep else ds_out
@@ -1527,6 +1535,8 @@ class BenchResultBase:
         thinning it silently would change what a mean or a standard deviation is taken
         over. *repeat_subsampling_divisions* asks for it explicitly, which is what a
         report needs to show two of five recordings per cell without dropping a cell.
+        It takes the *leading* repeats rather than spreading the picks, so the render
+        never waits on the last repeat -- see `leading_subsampling_divisions`.
 
         see test_bench_result_base.py -> test_select_subsampling_divisions()
         """
@@ -1543,7 +1553,7 @@ class BenchResultBase:
                 # Asked for by its own resolution or not at all: the type and name
                 # filters describe swept variables, and repeat is not one.
                 if repeat_subsampling_divisions is not None:
-                    selection[c] = with_subsampling_divisions(vals, repeat_subsampling_divisions)
+                    selection[c] = leading_subsampling_divisions(vals, repeat_subsampling_divisions)
                 continue
             include = True
             if allowed_dtypes is not None and vals.dtype not in allowed_dtypes:

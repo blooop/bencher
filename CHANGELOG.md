@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   statistics. The new resolution is independent of `subsampling_divisions`: every
   repeat is still sampled and still counted by the summary statistics, and only the
   panes are thinned. Defaults to None, which keeps a pane per repeat as before.
+  The repeats are taken leading rather than spread across the range -- a swept
+  variable's endpoints mean something, an interchangeable draw's do not -- via the new
+  `leading_subsampling_divisions`, beside the existing `with_subsampling_divisions`.
 
 ## [1.132.0] - 2026-09-13
 

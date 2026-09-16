@@ -496,7 +496,7 @@ class TestBenchResultBase(unittest.TestCase):
         np.testing.assert_array_equal(
             ds_rep.coords["cat_var"].to_numpy(), ["a", "b", "c", "d", "e"]
         )
-        np.testing.assert_array_equal(ds_rep.coords["repeat"].to_numpy(), [1, 5])
+        np.testing.assert_array_equal(ds_rep.coords["repeat"].to_numpy(), [1, 2])
 
     def test_to_dataset_repeat_subsampling_divisions(self):
         """The same split through to_dataset, which is what the pane path calls."""
@@ -514,7 +514,12 @@ class TestBenchResultBase(unittest.TestCase):
         )
 
         ds_two = res.to_dataset(bn.ReduceType.SQUEEZE, repeat_subsampling_divisions=2)
-        np.testing.assert_array_equal(ds_two.coords["repeat"].to_numpy(), [1, 5])
+        np.testing.assert_array_equal(ds_two.coords["repeat"].to_numpy(), [1, 2])
+
+        # Leading, not spread: a swept variable wants its endpoints, a repeat axis
+        # wants the draws that already exist.
+        ds_three = res.to_dataset(bn.ReduceType.SQUEEZE, repeat_subsampling_divisions=3)
+        np.testing.assert_array_equal(ds_three.coords["repeat"].to_numpy(), [1, 2, 3])
         np.testing.assert_array_equal(
             ds_two.coords["cat_var"].to_numpy(), ["a", "b", "c", "d", "e"]
         )
