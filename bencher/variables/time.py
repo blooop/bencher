@@ -20,22 +20,19 @@ def _caller_stacklevel() -> int:
 
     TimeSnapshot is constructed several frames below the public API that accepts
     ``time_src``, and that depth is free to change, so the level is measured rather
-    than hardcoded.
+    than hardcoded. Level 1 is our caller, so the search starts at 2; an example run
+    from under ``bencher/`` has no non-bencher frame at all, so the walk also stops
+    at the outermost frame.
     """
     frame = inspect.currentframe()
-    for _ in range(2):
-        if frame is None:
-            return 2
-        frame = frame.f_back
-    level = 2
-    while (
-        frame is not None
-        and frame.f_back is not None
-        and os.path.abspath(frame.f_code.co_filename).startswith(_BENCHER_PACKAGE_DIR)
-    ):
+    level = 0
+    while frame is not None and frame.f_back is not None:
         frame = frame.f_back
         level += 1
-    return level
+        filename = os.path.abspath(frame.f_code.co_filename)
+        if level >= 2 and not filename.startswith(_BENCHER_PACKAGE_DIR):
+            break
+    return max(level, 2)
 
 
 class TimeBase(SweepBase, Selector):
