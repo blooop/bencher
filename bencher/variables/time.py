@@ -61,10 +61,11 @@ class TimeSnapshot(TimeBase):
                     "TimeSnapshot was given a timezone-aware datetime. xarray cannot "
                     "store tz-aware timestamps as datetime64, so the over_time "
                     "coordinate becomes dtype object instead of datetime64[us]. The "
-                    "first tz-aware run after a run with naive timestamps trips the "
-                    "history dtype guard and discards the stored history, so the series "
-                    "restarts from that run. Pass a naive datetime to keep the existing "
-                    "history.",
+                    "history dtype guard compares those dtypes, so switching between "
+                    "naive and tz-aware timestamps in either direction discards the "
+                    "stored history (and makes history transfer fail outright); the "
+                    "series restarts from that run. Whichever kind your existing "
+                    "history was recorded with, keep passing that kind.",
                     UserWarning,
                     stacklevel=2,
                 )

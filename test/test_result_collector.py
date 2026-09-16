@@ -172,6 +172,20 @@ class TestResultCollector(unittest.TestCase):
         self.assertIn("object", message)
         self.assertIn("history", message)
 
+    def test_time_snapshot_warning_does_not_prescribe_switching_to_naive(self):
+        """The warning must not tell an aware-history caller to do the destructive thing.
+
+        Always-aware history is object dtype throughout and merges fine; the one
+        naive run that "fixes" the warning is what trips the guard. See
+        TestOverTimeDtypeGuard in test/test_history_reconciliation.py for both
+        transitions.
+        """
+        with self.assertWarns(UserWarning) as caught:
+            TimeSnapshot(datetime(2024, 1, 1, tzinfo=UTC))
+        message = str(caught.warning)
+        self.assertIn("either direction", message)
+        self.assertNotIn("Pass a naive datetime", message)
+
     def test_time_snapshot_does_not_warn_on_naive_datetime(self):
         """The ordinary naive case stays quiet."""
         with warnings.catch_warnings(record=True) as caught:

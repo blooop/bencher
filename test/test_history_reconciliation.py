@@ -733,6 +733,20 @@ class TestOverTimeDtypeGuard(unittest.TestCase):
         second = self._over_time_dataset(datetime(2000, 1, 1, 0, 0, 1))
         self.assertIsNone(incompatible_reason(first, second))
 
+    def test_aware_to_aware_over_time_is_compatible(self):
+        """An always-tz-aware caller has a mergeable history: object matches object."""
+        first = self._over_time_dataset(datetime(2000, 1, 1, tzinfo=UTC))
+        second = self._over_time_dataset(datetime(2000, 1, 1, 0, 0, 1, tzinfo=UTC))
+        self.assertIsNone(incompatible_reason(first, second))
+
+    def test_aware_to_naive_over_time_is_incompatible(self):
+        """...and one naive run destroys it, which is why the warning must not ask for one."""
+        aware = self._over_time_dataset(datetime(2000, 1, 1, tzinfo=UTC))
+        naive = self._over_time_dataset(datetime(2000, 1, 1, 0, 0, 1))
+        reason = incompatible_reason(aware, naive)
+        self.assertIsNotNone(reason)
+        self.assertIn("over_time dtype changed", reason)
+
 
 class TestDataVarColumns(unittest.TestCase):
     def test_result_vec_expands(self):
