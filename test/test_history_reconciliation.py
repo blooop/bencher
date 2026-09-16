@@ -11,6 +11,8 @@ import shutil
 import tempfile
 import unittest
 import uuid
+import warnings
+from datetime import UTC, datetime
 from typing import ClassVar
 
 import numpy as np
@@ -18,6 +20,7 @@ import xarray as xr
 
 import bencher as bn
 from bencher.bench_cfg import BenchCfg, BenchRunCfg
+from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.history import (
     BIRTH_ATTR,
     HistoryEvent,
@@ -27,6 +30,7 @@ from bencher.history import (
     apply_policy,
     column_identity,
     data_var_columns,
+    incompatible_reason,
     legacy_last_seen_key,
 )
 from bencher.regression import detect_regressions
@@ -679,6 +683,55 @@ class TestYoungBaselineGating(unittest.TestCase):
         mature = self._detect([1.0, 1.0, 10.0], min_history=1)
         exported = [r.to_dict() for r in mature.regressed_variables]
         self.assertTrue(all("young_baseline" not in entry for entry in exported))
+
+
+class TestOverTimeDtypeGuard(unittest.TestCase):
+    """Pin the naive-to-tz-aware transition as incompatible history.
+
+    A tz-aware time_src makes the over_time coordinate dtype ``object`` rather
+    than ``datetime64[us]``, because xarray has nowhere to put the tzinfo. That
+    dtype difference is the only signal incompatible_reason has, and it is what
+    makes the first tz-aware run throw away the naive history instead of
+    merging with it.
+
+    Do not "fix" the object dtype by normalising aware datetimes to UTC inside
+    TimeSnapshot. Matching the dtypes silences this guard, and old history
+    recorded against a local wall clock then concatenates with new UTC history
+    at a fixed offset with nothing to flag it. Measured under
+    TZ=America/New_York, the normalising version produced a merged coordinate
+    of ['2000-01-01T00:00:00', '2000-01-01T05:00:01'] and no reason string at
+    all. Dropping the history loudly beats merging it wrong quietly, so the
+    object dtype stays put until someone versions the history format.
+    """
+
+    def _over_time_dataset(self, time_src):
+        instance = ExampleBenchCfg()
+        bench_cfg = BenchCfg(
+            input_vars=[instance.param.theta],
+            result_vars=[instance.param.out_sin],
+            const_vars=[],
+            bench_name="tz",
+            title="tz",
+            repeats=1,
+            over_time=True,
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            bench_res, _, _, _ = ResultCollector().setup_dataset(bench_cfg, time_src)
+        return bench_res.ds
+
+    def test_naive_to_aware_over_time_is_incompatible(self):
+        naive = self._over_time_dataset(datetime(2000, 1, 1))
+        aware = self._over_time_dataset(datetime(2000, 1, 1, 0, 0, 1, tzinfo=UTC))
+        reason = incompatible_reason(naive, aware)
+        self.assertIsNotNone(reason)
+        self.assertIn("over_time dtype changed", reason)
+
+    def test_naive_to_naive_over_time_is_compatible(self):
+        """Control: two naive runs still merge, so the guard is not firing on everything."""
+        first = self._over_time_dataset(datetime(2000, 1, 1))
+        second = self._over_time_dataset(datetime(2000, 1, 1, 0, 0, 1))
+        self.assertIsNone(incompatible_reason(first, second))
 
 
 class TestDataVarColumns(unittest.TestCase):

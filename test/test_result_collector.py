@@ -4,7 +4,8 @@ import shutil
 import tempfile
 import unittest
 import uuid
-from datetime import datetime
+import warnings
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest import mock
 
@@ -17,6 +18,7 @@ from hypothesis import strategies as st
 from bencher.bench_cfg import BenchCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.result_collector import ResultCollector, set_xarray_multidim
+from bencher.variables.time import TimeSnapshot
 
 
 class TestResultCollector(unittest.TestCase):
@@ -127,6 +129,55 @@ class TestResultCollector(unittest.TestCase):
 
         self.assertEqual(len(extra_vars), 2)
         self.assertEqual(extra_vars[1].name, "over_time")
+
+    def _over_time_dataset(self, time_src):
+        """Build an over_time dataset from a time source, and return it."""
+        instance = ExampleBenchCfg()
+        bench_cfg = BenchCfg(
+            input_vars=[instance.param.theta],
+            result_vars=[instance.param.out_sin],
+            const_vars=[],
+            bench_name="test",
+            title="test",
+            repeats=1,
+            over_time=True,
+        )
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, time_src)
+        return bench_res.ds
+
+    def test_over_time_coord_naive_datetime_is_datetime64(self):
+        """A naive time_src gives a real datetime64 over_time coordinate."""
+        ds = self._over_time_dataset(datetime(2024, 1, 1))
+        self.assertTrue(np.issubdtype(ds["over_time"].dtype, np.datetime64))
+
+    def test_over_time_coord_aware_datetime_is_object(self):
+        """A tz-aware time_src degrades over_time to an object coordinate.
+
+        xarray has no datetime64 representation for a tz-aware timestamp, so
+        the coordinate falls back to object. That degradation is deliberate,
+        not an oversight: see TestOverTimeDtypeGuard in
+        test/test_history_reconciliation.py before changing it.
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            ds = self._over_time_dataset(datetime(2024, 1, 1, tzinfo=UTC))
+        self.assertEqual(ds["over_time"].dtype, object)
+
+    def test_time_snapshot_warns_on_aware_datetime(self):
+        """A tz-aware datetime warns, naming the dtype change and the history loss."""
+        with self.assertWarns(UserWarning) as caught:
+            TimeSnapshot(datetime(2024, 1, 1, tzinfo=UTC))
+        message = str(caught.warning)
+        self.assertIn("timezone-aware", message)
+        self.assertIn("object", message)
+        self.assertIn("history", message)
+
+    def test_time_snapshot_does_not_warn_on_naive_datetime(self):
+        """The ordinary naive case stays quiet."""
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            TimeSnapshot(datetime(2024, 1, 1))
+        self.assertEqual([w for w in caught if issubclass(w.category, UserWarning)], [])
 
     def test_report_results_no_print(self):
         """Test report_results with printing disabled."""

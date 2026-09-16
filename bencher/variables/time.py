@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from datetime import datetime
 
 from pandas import Timestamp
@@ -55,6 +56,18 @@ class TimeSnapshot(TimeBase):
         if isinstance(datetime_src, str):
             TimeBase.__init__(self, [datetime_src], instantiate=True, **params)
         else:
+            if isinstance(datetime_src, datetime) and datetime_src.tzinfo is not None:
+                warnings.warn(
+                    "TimeSnapshot was given a timezone-aware datetime. xarray cannot "
+                    "store tz-aware timestamps as datetime64, so the over_time "
+                    "coordinate becomes dtype object instead of datetime64[us]. The "
+                    "first tz-aware run after a run with naive timestamps trips the "
+                    "history dtype guard and discards the stored history, so the series "
+                    "restarts from that run. Pass a naive datetime to keep the existing "
+                    "history.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             TimeBase.__init__(
                 self,
                 objects=[Timestamp(datetime_src)],
