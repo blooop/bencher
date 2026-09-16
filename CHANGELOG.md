@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.133.0] - 2026-09-16
+
 ### Added
 - `pane_repeat_subsampling_divisions` on `BenchRunCfg`, and a
   `repeat_subsampling_divisions` argument on `to_dataset`, `to_hv_dataset`,
