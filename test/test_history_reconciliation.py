@@ -706,15 +706,7 @@ class TestOverTimeDtypeGuard(unittest.TestCase):
 
     def _over_time_dataset(self, time_src):
         instance = ExampleBenchCfg()
-        bench_cfg = BenchCfg(
-            input_vars=[instance.param.theta],
-            result_vars=[instance.param.out_sin],
-            const_vars=[],
-            bench_name="tz",
-            title="tz",
-            repeats=1,
-            over_time=True,
-        )
+        bench_cfg = _bench_cfg([instance.param.out_sin], input_vars=[instance.param.theta])
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             bench_res, _, _, _ = ResultCollector().setup_dataset(bench_cfg, time_src)

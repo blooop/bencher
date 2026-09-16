@@ -21,6 +21,7 @@ from bencher.bench_cfg import BenchCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.result_collector import ResultCollector, set_xarray_multidim
 from bencher.variables.time import TimeSnapshot
+from test.helpers import run_cfg_with
 
 
 class TestResultCollector(unittest.TestCase):
@@ -205,9 +206,7 @@ class TestResultCollector(unittest.TestCase):
         to name bencher rather than the caller.
         """
         bench = bn.Bench("tz-attribution", ExampleBenchCfg())
-        run_cfg = bn.BenchRunCfg(
-            over_time=True, repeats=1, cache_results=False, cache_samples=False, auto_plot=False
-        )
+        run_cfg = run_cfg_with(1, over_time=True)
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             expected_line = inspect.currentframe().f_lineno + 1
