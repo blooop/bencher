@@ -1,10 +1,12 @@
 """Tests for ResultCollector extracted from Bench."""
 
+import inspect
 import shutil
 import tempfile
 import unittest
 import uuid
-from datetime import datetime
+import warnings
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest import mock
 
@@ -14,9 +16,12 @@ import xarray as xr
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+import bencher as bn
 from bencher.bench_cfg import BenchCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.result_collector import ResultCollector, set_xarray_multidim
+from bencher.variables.time import TimeSnapshot
+from test.helpers import run_cfg_with
 
 
 class TestResultCollector(unittest.TestCase):
@@ -127,6 +132,141 @@ class TestResultCollector(unittest.TestCase):
 
         self.assertEqual(len(extra_vars), 2)
         self.assertEqual(extra_vars[1].name, "over_time")
+
+    def _over_time_dataset(self, time_src):
+        """Build an over_time dataset from a time source, and return it."""
+        instance = ExampleBenchCfg()
+        bench_cfg = BenchCfg(
+            input_vars=[instance.param.theta],
+            result_vars=[instance.param.out_sin],
+            const_vars=[],
+            bench_name="test",
+            title="test",
+            repeats=1,
+            over_time=True,
+        )
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, time_src)
+        return bench_res.ds
+
+    def test_over_time_coord_naive_datetime_is_datetime64(self):
+        """A naive time_src gives a real datetime64 over_time coordinate."""
+        ds = self._over_time_dataset(datetime(2024, 1, 1))
+        self.assertTrue(np.issubdtype(ds["over_time"].dtype, np.datetime64))
+
+    def test_over_time_coord_aware_datetime_is_object(self):
+        """A tz-aware time_src degrades over_time to an object coordinate.
+
+        xarray has no datetime64 representation for a tz-aware timestamp, so
+        the coordinate falls back to object. That degradation is deliberate,
+        not an oversight: see TestOverTimeDtypeGuard in
+        test/test_history_reconciliation.py before changing it.
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            ds = self._over_time_dataset(datetime(2024, 1, 1, tzinfo=UTC))
+        self.assertEqual(ds["over_time"].dtype, object)
+
+    def _aware_over_time_warning(self):
+        """Run the over_time integration point with an aware time_src, return its warning."""
+        bench_cfg = BenchCfg(
+            input_vars=[],
+            result_vars=[],
+            const_vars=[],
+            bench_name="test",
+            title="test",
+            repeats=1,
+            over_time=True,
+        )
+        with self.assertWarns(UserWarning) as caught:
+            self.collector.define_extra_vars(bench_cfg, 1, datetime(2024, 1, 1, tzinfo=UTC))
+        return str(caught.warning)
+
+    def test_time_snapshot_warns_on_aware_datetime(self):
+        """A tz-aware datetime warns, naming the coordinate dtype it degrades to."""
+        with self.assertWarns(UserWarning) as caught:
+            TimeSnapshot(datetime(2024, 1, 1, tzinfo=UTC))
+        message = str(caught.warning)
+        self.assertIn("timezone-aware", message)
+        self.assertIn("object", message)
+
+    def test_plain_input_var_warning_does_not_claim_history_loss(self):
+        """An aware TimeSnapshot that is not the history axis must not claim history loss.
+
+        TimeSnapshot is a supported input-var type in its own right -- PltCntCfg
+        classifies it as a float axis and sets has_time from input_vars alone --
+        and history is loaded and reconciled only under over_time=True. The
+        object coordinate is real either way; the discarded-history consequence
+        is not, so claiming it here is a false alarm for a sweep that has no
+        history to lose.
+        """
+        with self.assertWarns(UserWarning) as caught:
+            TimeSnapshot(datetime(2024, 1, 1, tzinfo=UTC))
+        message = str(caught.warning)
+        self.assertIn("object", message)
+        self.assertNotIn("history", message)
+
+    def test_over_time_snapshot_warning_names_the_history_loss(self):
+        """The over_time axis is the one place history is at stake, so that is where it is said."""
+        message = self._aware_over_time_warning()
+        self.assertIn("timezone-aware", message)
+        self.assertIn("object", message)
+        self.assertIn("history", message)
+
+    def test_time_snapshot_warning_does_not_prescribe_switching_to_naive(self):
+        """The warning must not tell an aware-history caller to do the destructive thing.
+
+        Always-aware history is object dtype throughout and merges fine; the one
+        naive run that "fixes" the warning is what trips the guard. See
+        TestOverTimeDtypeGuard in test/test_history_reconciliation.py for both
+        transitions.
+        """
+        message = self._aware_over_time_warning()
+        self.assertIn("either direction", message)
+        self.assertNotIn("Pass a naive datetime", message)
+
+    def test_time_snapshot_does_not_warn_on_naive_datetime(self):
+        """The ordinary naive case stays quiet."""
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            TimeSnapshot(datetime(2024, 1, 1))
+        self.assertEqual([w for w in caught if issubclass(w.category, UserWarning)], [])
+
+    def _assert_tz_warning_at(self, caught, expected_line):
+        """Assert the one tz warning blames this file's expected_line, not a bencher frame."""
+        tz = [w for w in caught if "timezone-aware" in str(w.message)]
+        self.assertEqual(len(tz), 1, "one bad time_src must produce exactly one warning")
+        self.assertEqual(Path(tz[0].filename).resolve(), Path(__file__).resolve())
+        self.assertEqual(tz[0].lineno, expected_line)
+
+    def test_aware_time_src_warning_is_attributed_to_the_users_call(self):
+        """The warning names the caller's plot_sweep line, not a file under bencher/.
+
+        TimeSnapshot is built about five frames below the public API, so a fixed
+        stacklevel pins the warning to bencher's own source: the user cannot find
+        the time_src they have to change, ``once`` de-duplicates every sweep in
+        the process against that one internal line, and a ``module=`` filter has
+        to name bencher rather than the caller.
+        """
+        bench = bn.Bench("tz-attribution", ExampleBenchCfg())
+        run_cfg = run_cfg_with(1, over_time=True)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            expected_line = inspect.currentframe().f_lineno + 1
+            bench.plot_sweep(
+                input_vars=[ExampleBenchCfg.param.theta],
+                result_vars=[ExampleBenchCfg.param.out_sin],
+                run_cfg=run_cfg,
+                time_src=datetime(2024, 1, 1, tzinfo=UTC),
+            )
+        self._assert_tz_warning_at(caught, expected_line)
+
+    def test_direct_time_snapshot_warning_is_attributed_to_the_caller(self):
+        """Constructing TimeSnapshot directly still points at the construction site."""
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            expected_line = inspect.currentframe().f_lineno + 1
+            TimeSnapshot(datetime(2024, 1, 1, tzinfo=UTC))
+        self._assert_tz_warning_at(caught, expected_line)
 
     def test_report_results_no_print(self):
         """Test report_results with printing disabled."""
