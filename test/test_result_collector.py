@@ -196,6 +196,13 @@ class TestResultCollector(unittest.TestCase):
             TimeSnapshot(datetime(2024, 1, 1))
         self.assertEqual([w for w in caught if issubclass(w.category, UserWarning)], [])
 
+    def _assert_tz_warning_at(self, caught, expected_line):
+        """Assert the one tz warning blames this file's expected_line, not a bencher frame."""
+        tz = [w for w in caught if "timezone-aware" in str(w.message)]
+        self.assertEqual(len(tz), 1, "one bad time_src must produce exactly one warning")
+        self.assertEqual(Path(tz[0].filename).resolve(), Path(__file__).resolve())
+        self.assertEqual(tz[0].lineno, expected_line)
+
     def test_aware_time_src_warning_is_attributed_to_the_users_call(self):
         """The warning names the caller's plot_sweep line, not a file under bencher/.
 
@@ -216,10 +223,7 @@ class TestResultCollector(unittest.TestCase):
                 run_cfg=run_cfg,
                 time_src=datetime(2024, 1, 1, tzinfo=UTC),
             )
-        tz = [w for w in caught if "timezone-aware" in str(w.message)]
-        self.assertEqual(len(tz), 1, "one bad time_src must produce exactly one warning")
-        self.assertEqual(Path(tz[0].filename).resolve(), Path(__file__).resolve())
-        self.assertEqual(tz[0].lineno, expected_line)
+        self._assert_tz_warning_at(caught, expected_line)
 
     def test_direct_time_snapshot_warning_is_attributed_to_the_caller(self):
         """Constructing TimeSnapshot directly still points at the construction site."""
@@ -227,10 +231,7 @@ class TestResultCollector(unittest.TestCase):
             warnings.simplefilter("always")
             expected_line = inspect.currentframe().f_lineno + 1
             TimeSnapshot(datetime(2024, 1, 1, tzinfo=UTC))
-        tz = [w for w in caught if "timezone-aware" in str(w.message)]
-        self.assertEqual(len(tz), 1)
-        self.assertEqual(Path(tz[0].filename).resolve(), Path(__file__).resolve())
-        self.assertEqual(tz[0].lineno, expected_line)
+        self._assert_tz_warning_at(caught, expected_line)
 
     def test_report_results_no_print(self):
         """Test report_results with printing disabled."""
