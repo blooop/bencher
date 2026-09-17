@@ -352,7 +352,7 @@ class ResultCollector:
             if isinstance(time_src, str):
                 iv_over_time = TimeEvent(time_src)
             else:
-                iv_over_time = TimeSnapshot(time_src)
+                iv_over_time = TimeSnapshot(time_src, history_axis=True)
             iv_over_time.name = "over_time"
             extra_vars.append(iv_over_time)
             bench_cfg.iv_time = [iv_over_time]

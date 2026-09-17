@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.133.0] - 2026-09-16
+## [1.133.0] - 2026-09-17
 
 ### Added
 - `pane_repeat_subsampling_divisions` on `BenchRunCfg`, and a
@@ -22,6 +22,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The repeats are taken leading rather than spread across the range -- a swept
   variable's endpoints mean something, an interchangeable draw's do not -- via the new
   `leading_subsampling_divisions`, beside the existing `with_subsampling_divisions`.
+
+### Changed
+- **The rerun window moves up a minor at each end, to 0.37 and 0.38: `rerun-sdk` and
+  `rerun-notebook` are `>=0.37.0,<0.39`.** The default environment resolves the newest
+  release in it (0.38.1) and `rerun-floor` now pins 0.37 (0.37.2), so both jobs move
+  together and 0.36 is no longer claimed. What bencher touches of the alpha surface —
+  `RrdReader.recordings/stream`, `Chunk.to_record_batch/with_entity_path`, the blueprint
+  types the timeline builds — is unchanged between the two, so they stay interchangeable
+  here; `pixi run test-rerun` passes in both environments.
+- **`Chunk` and `RrdReader` are imported from `rerun.chunk` when the installed rerun has
+  it.** 0.38 moved both out of `rerun.experimental` and left aliases that warn on every
+  access and are scheduled for removal; 0.37 has no `rerun.chunk` at all, so neither path
+  alone spans the window. `bencher.utils_rerun.rerun_chunk_api()` asks the installed
+  rerun which one it is and every caller goes through it — the rerun suite dropped from
+  ~2770 warnings to 6, and the next minor bump is a one-line deletion rather than a hunt
+  through five import sites.
+- The no-metadata viewer fallback follows the floor up to 0.37.0. It only fires with no
+  `rerun-sdk` installed to read a version off, where the window's floor is still the best
+  guess available.
 
 ## [1.132.0] - 2026-09-13
 

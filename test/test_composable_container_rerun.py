@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 import rerun as rr
 from rerun.blueprint.components import ContainerKind
-from rerun.experimental import RrdReader
 
 import bencher as bn
 from bencher.result_collector import _materialize_result_value
@@ -17,7 +16,10 @@ from bencher.results.composable_container.composable_container_rerun import (
     _SharedViewLayout,
     _StackedViewLayout,
 )
+from bencher.utils_rerun import rerun_chunk_api
 from bencher.variables.results import ResultRerun
+
+RrdReader = rerun_chunk_api().RrdReader
 
 
 def _write_recording(tmp_path: Path, name: str, *archetypes) -> Path:

@@ -16,12 +16,14 @@ from pathlib import Path
 import panel as pn
 import pytest
 import rerun as rr
-from rerun.experimental import RrdReader
 
 import bencher as bn
 from bencher.plugins.registry import get_registry
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.rerun_result import RerunResult
+from bencher.utils_rerun import rerun_chunk_api
+
+RrdReader = rerun_chunk_api().RrdReader
 
 LOGGER = "bencher.results.rerun_result"
 
