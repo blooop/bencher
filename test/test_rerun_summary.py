@@ -8,7 +8,6 @@ from pathlib import Path
 
 import panel as pn
 import rerun as rr
-from rerun.experimental import RrdReader
 
 import bencher as bn
 from bencher.results.bench_result_base import ReduceType
@@ -16,6 +15,9 @@ from bencher.results.composable_container.composable_container_base import (
     ComposeType,
     compose_method_list_for_dims,
 )
+from bencher.utils_rerun import rerun_chunk_api
+
+RrdReader = rerun_chunk_api().RrdReader
 
 
 class RerunSweep(bn.ParametrizedSweep):
