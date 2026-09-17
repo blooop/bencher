@@ -117,6 +117,31 @@ See [Concepts: The Subsampling Divisions System](concepts.md#the-subsampling-div
 and theory, and the [Subsampling Divisions System gallery](reference/meta/levels/index) for an interactive
 demo.
 
+### Subsampling the repeats
+
+`subsampling_divisions` thins the swept variables and never touches `repeat`, because
+thinning it would change what the mean and standard deviation are taken over.
+`pane_repeat_subsampling_divisions` is its counterpart for the repeats, and it is
+display-side only: every repeat is still measured and still counted by the statistics,
+but only the resolution you ask for gets a pane.
+
+```python
+# Five repeats per cell for the statistics, the first two on screen.
+bn.run(example_benchmark, run_cfg=bn.BenchRunCfg(repeats=5, pane_repeat_subsampling_divisions=2))
+```
+
+It takes the *leading* repeats rather than spreading the picks across the range, which
+is the opposite of what `subsampling_divisions` does to a swept variable. A swept
+variable's endpoints mean something, so spanning the extent is the right sample; repeats
+are interchangeable draws, so spanning it only ties the report to the last repeat
+measured when the leading ones are already cached.
+
+The two resolutions are separate knobs because a report usually wants them to disagree:
+a sweep over three planners with five recordings each has fifteen panes, and cutting that
+down by dropping a planner asks a different question than the sweep did. Reach for this
+whenever the per-sample payload is heavy — recordings, videos, large images — and the page
+is slower or larger than the comparison needs.
+
 ## Result Types
 
 ### Choosing a result type
@@ -518,6 +543,7 @@ the duplicate; the key then matches what a correct declaration would have produc
 |---|---|---|
 | `subsampling_divisions` | 0 | Sampling density per dimension (see Subsampling Divisions System above) |
 | `repeats` | 1 | How many times to evaluate each combination |
+| `pane_repeat_subsampling_divisions` | None | Resolution the repeats are shown at in sample panes (display only) |
 | `cache_samples` | False | Cache individual results across runs (resume interrupted sweeps) |
 | `cache_results` | False | Cache the entire sweep result (skip re-runs with same inputs) |
 | `over_time` | False | Track results across multiple runs for time-series analysis |

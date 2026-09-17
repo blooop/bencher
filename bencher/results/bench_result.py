@@ -634,6 +634,14 @@ class BenchResult(
             if k not in ("plot_list", "remove_plots", "numeric_only")
         }
         pane_kwargs.setdefault("pane_layout", self.bench_cfg.pane_layout)
+        # Set here rather than beside pane_layout on the grid's to_auto, because this
+        # is the only call restricted to the pane group: the chart renderers below
+        # take **kwargs and forward what they do not recognise into holoviews opts.
+        if self.bench_cfg.pane_repeat_subsampling_divisions is not None:
+            pane_kwargs.setdefault(
+                "repeat_subsampling_divisions",
+                self.bench_cfg.pane_repeat_subsampling_divisions,
+            )
         # Resolved exactly as the final to_auto call does: with backend=None the panel
         # tiling outranks the rerun timeline and the viewer degrades to per-sample tiles.
         pane_kwargs.setdefault("backend", self.bench_cfg.backend)

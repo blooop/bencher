@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.133.0] - 2026-09-17
+
+### Added
+- `pane_repeat_subsampling_divisions` on `BenchRunCfg`, and a
+  `repeat_subsampling_divisions` argument on `to_dataset`, `to_hv_dataset`,
+  `map_sample_panes`, `to_panes` and `select_subsampling_divisions`. Display-side
+  subsampling skipped the `repeat` dimension unconditionally, so a sweep that
+  measured five repeats per cell had to render five panes per cell — there was no
+  way to ask for fewer without dropping cells from the sweep or repeats from the
+  statistics. The new resolution is independent of `subsampling_divisions`: every
+  repeat is still sampled and still counted by the summary statistics, and only the
+  panes are thinned. Defaults to None, which keeps a pane per repeat as before.
+  The repeats are taken leading rather than spread across the range -- a swept
+  variable's endpoints mean something, an interchangeable draw's do not -- via the new
+  `leading_subsampling_divisions`, beside the existing `with_subsampling_divisions`.
+
 ### Changed
 - **The rerun window moves up a minor at each end, to 0.37 and 0.38: `rerun-sdk` and
   `rerun-notebook` are `>=0.37.0,<0.39`.** The default environment resolves the newest

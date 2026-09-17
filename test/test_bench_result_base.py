@@ -472,6 +472,68 @@ class TestBenchResultBase(unittest.TestCase):
         ds_filtered_names = res.select_subsampling_divisions(ds_raw, 2, exclude_names="cat_var")
         asserts(ds_filtered_names, [0, 4], ["a", "b", "c", "d", "e"])
 
+    def test_select_subsampling_divisions_repeat(self):
+        """`repeat` is filtered only when asked for, and independently of the sweep."""
+        bench = TstBench().to_bench()
+        res = bench.plot_sweep(
+            input_vars=["cat_var"],
+            run_cfg=bn.BenchRunCfg(subsampling_divisions=4, repeats=5),
+            plot_callbacks=False,
+        )
+        ds_raw = res.to_dataset(bn.ReduceType.SQUEEZE)
+        np.testing.assert_array_equal(ds_raw.coords["repeat"].to_numpy(), [1, 2, 3, 4, 5])
+
+        # The resolution that thins the swept variables leaves every repeat alone.
+        ds_cat = res.select_subsampling_divisions(ds_raw, 2)
+        np.testing.assert_array_equal(ds_cat.coords["cat_var"].to_numpy(), ["a", "e"])
+        np.testing.assert_array_equal(ds_cat.coords["repeat"].to_numpy(), [1, 2, 3, 4, 5])
+
+        # Asking for the repeats does not cost a cell, which is the point: a report
+        # shows two recordings per cell without dropping three of the five cells.
+        ds_rep = res.select_subsampling_divisions(
+            ds_raw, 2, exclude_names=["cat_var"], repeat_subsampling_divisions=2
+        )
+        np.testing.assert_array_equal(
+            ds_rep.coords["cat_var"].to_numpy(), ["a", "b", "c", "d", "e"]
+        )
+        np.testing.assert_array_equal(ds_rep.coords["repeat"].to_numpy(), [1, 2])
+
+    def test_to_dataset_repeat_subsampling_divisions(self):
+        """The same split through to_dataset, which is what the pane path calls."""
+        bench = TstBench().to_bench()
+        res = bench.plot_sweep(
+            input_vars=["cat_var"],
+            run_cfg=bn.BenchRunCfg(subsampling_divisions=4, repeats=5),
+            plot_callbacks=False,
+        )
+
+        ds_all = res.to_dataset(bn.ReduceType.SQUEEZE)
+        np.testing.assert_array_equal(ds_all.coords["repeat"].to_numpy(), [1, 2, 3, 4, 5])
+        np.testing.assert_array_equal(
+            ds_all.coords["cat_var"].to_numpy(), ["a", "b", "c", "d", "e"]
+        )
+
+        ds_two = res.to_dataset(bn.ReduceType.SQUEEZE, repeat_subsampling_divisions=2)
+        np.testing.assert_array_equal(ds_two.coords["repeat"].to_numpy(), [1, 2])
+
+        # Leading, not spread: a swept variable wants its endpoints, a repeat axis
+        # wants the draws that already exist.
+        ds_three = res.to_dataset(bn.ReduceType.SQUEEZE, repeat_subsampling_divisions=3)
+        np.testing.assert_array_equal(ds_three.coords["repeat"].to_numpy(), [1, 2, 3])
+        np.testing.assert_array_equal(
+            ds_two.coords["cat_var"].to_numpy(), ["a", "b", "c", "d", "e"]
+        )
+
+        # Cached per argument set, so the unfiltered dataset is still unfiltered
+        # after the filtered one has been asked for.
+        np.testing.assert_array_equal(
+            res.to_dataset(bn.ReduceType.SQUEEZE).coords["repeat"].to_numpy(), [1, 2, 3, 4, 5]
+        )
+
+        # The statistics keep every repeat: this is a display resolution, and a
+        # reduced dataset has no repeat dimension left to thin.
+        self.assertNotIn("repeat", res.to_dataset(bn.ReduceType.REDUCE).dims)
+
     def _make_1d_result(self, repeats=1):
         bench = BenchableObject().to_bench(bn.BenchRunCfg(repeats=repeats))
         return bench.plot_sweep(

@@ -37,7 +37,10 @@ from bencher.utils import (
     listify,
     normalize_agg_fn,
 )
-from bencher.variables.inputs import with_subsampling_divisions
+from bencher.variables.inputs import (
+    leading_subsampling_divisions,
+    with_subsampling_divisions,
+)
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import (
     PANEL_TYPES,
@@ -266,6 +269,7 @@ class BenchResultBase:
         subsampling_divisions: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: AggFn | str | None = None,
+        repeat_subsampling_divisions: int | None = None,
     ) -> hv.Dataset:
         """Generate a holoviews dataset from the xarray dataset.
 
@@ -284,6 +288,7 @@ class BenchResultBase:
                 agg_over_dims=agg_over_dims,
                 agg_fn=agg_fn,
                 deep=False,
+                repeat_subsampling_divisions=repeat_subsampling_divisions,
             )
             # Filter kdims to only those that survived aggregation
             kdims = [i.name for i in self.bench_cfg.all_vars if i.name in ds_out.dims]
@@ -296,6 +301,7 @@ class BenchResultBase:
                 agg_over_dims=agg_over_dims,
                 agg_fn=agg_fn,
                 deep=False,
+                repeat_subsampling_divisions=repeat_subsampling_divisions,
             )
         )
 
@@ -328,6 +334,7 @@ class BenchResultBase:
         subsampling_divisions: int | None,
         agg_over_dims: list[str] | None,
         agg_fn: AggFn | str | None,
+        repeat_subsampling_divisions: int | None = None,
     ) -> tuple:
         """Build a hashable cache key from normalized to_dataset() arguments.
 
@@ -350,7 +357,14 @@ class BenchResultBase:
         # remove. normalize_agg_fn is cheap, idempotent and total (None -> MEAN).
         fn = normalize_agg_fn(agg_fn)
         fn_key = fn if agg_over_dims else None
-        return (reduce, rv_key, subsampling_divisions, dims_key, fn_key)
+        return (
+            reduce,
+            rv_key,
+            subsampling_divisions,
+            dims_key,
+            fn_key,
+            repeat_subsampling_divisions,
+        )
 
     def to_dataset(
         self,
@@ -360,6 +374,7 @@ class BenchResultBase:
         agg_over_dims: list[str] | None = None,
         agg_fn: AggFn | str | None = None,
         deep: bool = True,
+        repeat_subsampling_divisions: int | None = None,
     ) -> xr.Dataset:
         """Generate a summarised xarray dataset.
 
@@ -368,6 +383,12 @@ class BenchResultBase:
             deep (bool, optional): If True (default), return a deep copy that is safe
                 to mutate. Pass False to get the cached object directly for read-only
                 use (avoids the copy cost).
+            repeat_subsampling_divisions (int, optional): Subsample the ``repeat``
+                dimension to this resolution, which ``subsampling_divisions`` never
+                does. Independent of it so a sweep can thin its repeats without
+                also dropping input-var cells. Meaningful only when ``repeat``
+                survives *reduce* — under ``ReduceType.REDUCE`` it is already
+                aggregated away. Defaults to None (every repeat kept).
 
         Returns:
             xr.Dataset: results in the form of an xarray dataset
@@ -382,7 +403,12 @@ class BenchResultBase:
         # hit we return two lines below and never reach the match, so this is the
         # *only* validation on the warm-cache path. Do not "optimize" it away.
         cache_key = self._to_dataset_cache_key(
-            reduce, result_var, subsampling_divisions, agg_over_dims, agg_fn
+            reduce,
+            result_var,
+            subsampling_divisions,
+            agg_over_dims,
+            agg_fn,
+            repeat_subsampling_divisions,
         )
         if cache_key in self._to_dataset_cache:
             cached = self._to_dataset_cache[cache_key]
@@ -509,14 +535,22 @@ class BenchResultBase:
                     agg_over_dims,
                     list(ds_out.dims),
                 )
-        if subsampling_divisions is not None:
-            coords_no_repeat = {}
+        if subsampling_divisions is not None or repeat_subsampling_divisions is not None:
+            selection = {}
             for c, v in ds_out.coords.items():
-                if c != "repeat":
-                    coords_no_repeat[c] = with_subsampling_divisions(
-                        v.to_numpy(), subsampling_divisions
-                    )
-            ds_out = ds_out.sel(coords_no_repeat)
+                # The two resolutions are separate because the dimensions are: the
+                # input vars say what was swept, `repeat` says how many times each
+                # cell was measured, and a report routinely wants every cell but
+                # only a couple of its repeats on screen. They pick differently for
+                # the same reason -- see leading_subsampling_divisions.
+                if c == "repeat":
+                    if repeat_subsampling_divisions is not None:
+                        selection[c] = leading_subsampling_divisions(
+                            v.to_numpy(), repeat_subsampling_divisions
+                        )
+                elif subsampling_divisions is not None:
+                    selection[c] = with_subsampling_divisions(v.to_numpy(), subsampling_divisions)
+            ds_out = ds_out.sel(selection)
         self._to_dataset_cache[cache_key] = ds_out
         return ds_out.copy(deep=True) if deep else ds_out
 
@@ -711,6 +745,7 @@ class BenchResultBase:
         hv_dataset=None,
         target_dimension: int = 0,
         subsampling_divisions: int | None = None,
+        repeat_subsampling_divisions: int | None = None,
         **kwargs,
     ) -> pn.pane.panel | None:
         """One pane per sample of every result whose type is in *result_types*.
@@ -724,7 +759,9 @@ class BenchResultBase:
         """
         if hv_dataset is None:
             hv_dataset = self.to_hv_dataset(
-                ReduceType.SQUEEZE, subsampling_divisions=subsampling_divisions
+                ReduceType.SQUEEZE,
+                subsampling_divisions=subsampling_divisions,
+                repeat_subsampling_divisions=repeat_subsampling_divisions,
             )
         elif not isinstance(hv_dataset, hv.Dataset):
             hv_dataset = hv.Dataset(hv_dataset)
@@ -1472,6 +1509,7 @@ class BenchResultBase:
         subsampling_divisions: int,
         include_types: list[type] | None = None,
         exclude_names: list[str] | None = None,
+        repeat_subsampling_divisions: int | None = None,
     ) -> xr.Dataset:
         """Given a dataset, return a reduced dataset that only contains data from a specified subsampling_divisions.  By default all types of variables are filtered at the specified subsampling_divisions.  If you only want to get a reduced subsampling_divisions for some types of data you can pass in a list of types to get filtered, You can also pass a list of variables names to exclude from getting filtered
         Args:
@@ -1479,6 +1517,9 @@ class BenchResultBase:
             subsampling_divisions (int): desired data resolution subsampling_divisions
             include_types (list[type], optional): Only filter data of these types. Defaults to None.
             exclude_names (list[str], optional): Only filter data with these variable names. Defaults to None.
+            repeat_subsampling_divisions (int, optional): Resolution for the ``repeat``
+                dimension, which *subsampling_divisions* never filters. Defaults to
+                None (every repeat kept).
 
         Returns:
             xr.Dataset: A reduced dataset at the specified subsampling_divisions
@@ -1489,6 +1530,14 @@ class BenchResultBase:
         select_subsampling_divisions(ds,2,(float)) -> [1,5] [a,b,c,d,e]
         select_subsampling_divisions(ds,2,exclude_names=["cat_var]) -> [1,5] [a,b,c,d,e]
 
+        `repeat` is the one coordinate *subsampling_divisions* leaves alone, because
+        it is not a swept dimension: it is how many times each cell was measured, and
+        thinning it silently would change what a mean or a standard deviation is taken
+        over. *repeat_subsampling_divisions* asks for it explicitly, which is what a
+        report needs to show two of five recordings per cell without dropping a cell.
+        It takes the *leading* repeats rather than spreading the picks, so the render
+        never waits on the last repeat -- see `leading_subsampling_divisions`.
+
         see test_bench_result_base.py -> test_select_subsampling_divisions()
         """
         # Hoisted out of the loop: listify() only returns None for a None input, so
@@ -1497,20 +1546,23 @@ class BenchResultBase:
         # condition through a function whose None arm is unreachable by then.
         allowed_dtypes = listify(include_types)
         excluded_coords = listify(exclude_names)
-        coords_no_repeat = {}
+        selection = {}
         for c, v in dataset.coords.items():
-            if c != "repeat":
-                vals = v.to_numpy()
-                include = True
-                if allowed_dtypes is not None and vals.dtype not in allowed_dtypes:
-                    include = False
-                if excluded_coords is not None and c in excluded_coords:
-                    include = False
-                if include:
-                    coords_no_repeat[c] = with_subsampling_divisions(
-                        v.to_numpy(), subsampling_divisions
-                    )
-        return dataset.sel(coords_no_repeat)
+            vals = v.to_numpy()
+            if c == "repeat":
+                # Asked for by its own resolution or not at all: the type and name
+                # filters describe swept variables, and repeat is not one.
+                if repeat_subsampling_divisions is not None:
+                    selection[c] = leading_subsampling_divisions(vals, repeat_subsampling_divisions)
+                continue
+            include = True
+            if allowed_dtypes is not None and vals.dtype not in allowed_dtypes:
+                include = False
+            if excluded_coords is not None and c in excluded_coords:
+                include = False
+            if include:
+                selection[c] = with_subsampling_divisions(vals, subsampling_divisions)
+        return dataset.sel(selection)
 
     @staticmethod
     def select_level(
