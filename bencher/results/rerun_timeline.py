@@ -419,7 +419,10 @@ def _rewrite_chunk(chunk, timeline: str, arrow_type=None, raw_value: int | None 
     still be scrubbed within the sweep tick it sits on.
     """
     import pyarrow as pa
-    from rerun.experimental import Chunk
+
+    from bencher.utils_rerun import rerun_chunk_api
+
+    Chunk = rerun_chunk_api().Chunk
 
     batch = chunk.to_record_batch()
     keep = [
@@ -460,7 +463,9 @@ def _forward_stage(recording, staged_path: str, timeline: str) -> None:
     own and forwarding them through one rewrite pass costs a single extra file for the
     whole composition, rather than a rewrite per sample.
     """
-    from rerun.experimental import RrdReader
+    from bencher.utils_rerun import rerun_chunk_api
+
+    RrdReader = rerun_chunk_api().RrdReader
 
     reader = RrdReader(staged_path)
     for store in reader.recordings():
@@ -477,7 +482,9 @@ def _sample_chunks(path: str):
     carries one; forwarding them would add a ``__properties`` entity to each branch
     that displays nothing, so they are not data and are not yielded.
     """
-    from rerun.experimental import RrdReader
+    from bencher.utils_rerun import rerun_chunk_api
+
+    RrdReader = rerun_chunk_api().RrdReader
 
     reader = RrdReader(path)
     for store in reader.recordings():

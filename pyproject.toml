@@ -59,8 +59,8 @@ python = "3.13.*"
 # minor would be supported on paper only — and bencher's rerun surface includes
 # `rerun.experimental` (RrdReader, Chunk), which is where an alpha API moves.
 [tool.pixi.feature.rerun-floor.pypi-dependencies]
-rerun-sdk = ">=0.36.0,<0.37"
-rerun-notebook = ">=0.36.0,<0.37"
+rerun-sdk = ">=0.37.0,<0.38"
+rerun-notebook = ">=0.37.0,<0.38"
 
 [tool.pixi.pypi-dependencies]
 holobench = { path = ".", editable = true }
@@ -104,7 +104,7 @@ docs = [
 #adds support for embedding rerun windows (alpha)
 #every minor named here is resolved by an environment and tested: the floor by
 #`rerun-floor`, the ceiling by the default env. Widen this only with a job to match.
-rerun = ["rerun-sdk>=0.36.0,<0.38", "rerun-notebook>=0.36.0,<0.38"]
+rerun = ["rerun-sdk>=0.37.0,<0.39", "rerun-notebook>=0.37.0,<0.39"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]

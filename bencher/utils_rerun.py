@@ -80,3 +80,19 @@ def capture_rerun_window(
             stacklevel=2,
         )
     return capture_rerun_rrd(recording=recording)
+
+
+def rerun_chunk_api():
+    """The module the installed rerun keeps ``Chunk`` and ``RrdReader`` in.
+
+    rerun 0.38 moved both out of ``rerun.experimental`` into ``rerun.chunk``, left the
+    old names as aliases that warn on every access, and says the aliases go away in a
+    later release. rerun 0.37 -- the floor of the window the ``rerun`` extra declares --
+    has no ``rerun.chunk`` at all, so neither path alone spans the window. Callers ask
+    here and get whichever one this interpreter has.
+    """
+    try:
+        from rerun import chunk
+    except ImportError:  # rerun < 0.38
+        from rerun import experimental as chunk
+    return chunk
