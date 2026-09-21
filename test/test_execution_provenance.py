@@ -12,7 +12,7 @@ from bencher.execution import Execution, environment_provenance
 
 
 @pytest.fixture(name="launcher_env")
-def exported_provenance(monkeypatch):
+def exported_provenance(monkeypatch) -> None:
     """What a CI job exports around the process that actually runs the benchmark."""
     monkeypatch.setenv("BENCHER_SOURCE_REVISION", "0123456789abcdef")
     monkeypatch.setenv("BENCHER_WORKFLOW", "nightly")
@@ -34,7 +34,8 @@ def collect(run_cfg=None):
         bench.close()
 
 
-def test_the_launcher_fills_every_field_it_knows(launcher_env):
+@pytest.mark.usefixtures("launcher_env")
+def test_the_launcher_fills_every_field_it_knows():
     execution = Execution.start()
     assert execution.source_revision == "0123456789abcdef"
     assert execution.workflow == "nightly"
@@ -44,7 +45,8 @@ def test_the_launcher_fills_every_field_it_knows(launcher_env):
     assert execution.display_label == "nightly #4471"
 
 
-def test_an_argument_wins_over_the_environment(launcher_env):
+@pytest.mark.usefixtures("launcher_env")
+def test_an_argument_wins_over_the_environment():
     """A launcher that already resolved the revision in-process is the better source."""
     execution = Execution.start(source_revision="in-process", attempt=1)
     assert execution.source_revision == "in-process"
@@ -52,7 +54,8 @@ def test_an_argument_wins_over_the_environment(launcher_env):
     assert execution.workflow == "nightly"
 
 
-def test_the_identity_is_never_inherited(launcher_env):
+@pytest.mark.usefixtures("launcher_env")
+def test_the_identity_is_never_inherited():
     """Only provenance crosses the boundary; each execution is still its own."""
     assert Execution.start().uuid != Execution.start().uuid
 
@@ -78,14 +81,16 @@ def test_an_explicit_environment_can_be_read_without_exporting_it():
     assert environment_provenance({}) == {}
 
 
-def test_a_collected_sweep_carries_the_exported_revision(launcher_env, tmp_path, monkeypatch):
+@pytest.mark.usefixtures("launcher_env")
+def test_a_collected_sweep_carries_the_exported_revision(tmp_path, monkeypatch):
     """The whole point: the run is a child process, and its report says so."""
     monkeypatch.chdir(tmp_path)
     result = collect()
     assert result.bench_cfg.execution.source_revision == "0123456789abcdef"
 
 
-def test_a_frozen_report_records_it_for_publication(launcher_env, tmp_path, monkeypatch):
+@pytest.mark.usefixtures("launcher_env")
+def test_a_frozen_report_records_it_for_publication(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     entry = bn.render_report(
         bn.save_results([collect()], tmp_path / "results.pkl"),
