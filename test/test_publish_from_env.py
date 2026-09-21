@@ -1,0 +1,164 @@
+"""Publishing a run's own report, configured from outside the process that runs it."""
+
+from __future__ import annotations
+
+import json
+import tempfile
+
+import pytest
+
+import bencher as bn
+from bencher.example.benchmark_data import ExampleBenchCfg
+from bencher.object_store import LocalStore, Present
+from bencher.publication_target import (
+    HTTP_BASE_ENV,
+    PREFIX_ENV,
+    RECEIPT_ENV,
+    STORE_ENV,
+    PublicationFailed,
+    PublicationTarget,
+)
+from bencher.publishing import PublishFailed
+
+HTTP_BASE = "https://reports.example.test/bench"
+
+
+def benchmark(run_cfg=None):
+    bench = bn.Bench("published", ExampleBenchCfg(), run_cfg=run_cfg)
+    bench.collect(input_vars=["theta"], result_vars=["out_sin"])
+    bench.close()
+    return bench
+
+
+@pytest.fixture(name="staging")
+def staging_root(tmp_path, monkeypatch):
+    """Where an unasked-for freeze would land. `tempfile.tempdir` rather than
+    TMPDIR: `gettempdir` caches its answer, so the variable is read once per
+    process and a later export is ignored."""
+    root = tmp_path / "tmp"
+    root.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(root))
+    return root
+
+
+@pytest.fixture(name="configured")
+def configured_publication(tmp_path, monkeypatch):
+    """What a CI job exports around the process that runs the benchmark."""
+    monkeypatch.setenv(STORE_ENV, str(tmp_path / "store"))
+    monkeypatch.setenv(PREFIX_ENV, "reports/nightly")
+    monkeypatch.setenv(HTTP_BASE_ENV, HTTP_BASE)
+    monkeypatch.setenv(RECEIPT_ENV, str(tmp_path / "receipt.json"))
+    return tmp_path
+
+
+def test_publication_is_off_unless_it_is_configured():
+    assert PublicationTarget.from_env({}) == PublicationTarget.from_env({"OTHER": "x"}) is None
+
+
+def test_a_half_configured_target_is_refused_by_name():
+    """Publishing to a store nothing serves would produce bytes no one can name,
+    and silently skipping would hide the typo until someone wanted the report."""
+    with pytest.raises(ValueError, match=HTTP_BASE_ENV):
+        PublicationTarget.from_env({STORE_ENV: "gs://bucket", PREFIX_ENV: "reports"})
+
+
+def test_lifetimes_are_read_as_days():
+    target = PublicationTarget.from_env(
+        {
+            STORE_ENV: "gs://bucket/root",
+            PREFIX_ENV: "reports",
+            HTTP_BASE_ENV: HTTP_BASE,
+            "BENCHER_PUBLISH_EXPIRY_DAYS": "30",
+            "BENCHER_PUBLISH_MINIMUM_REMAINING_DAYS": "7",
+        }
+    )
+    assert target.expiry_days == 30
+    assert target.minimum_remaining_days == 7
+    assert target.publisher().minimum_remaining_seconds == 7 * 86400
+
+
+@pytest.mark.parametrize("value", ["soon", "-1"])
+def test_a_lifetime_that_is_not_days_is_refused(value):
+    with pytest.raises(ValueError, match="BENCHER_PUBLISH_EXPIRY_DAYS"):
+        PublicationTarget.from_env(
+            {
+                STORE_ENV: "gs://bucket",
+                PREFIX_ENV: "reports",
+                HTTP_BASE_ENV: HTTP_BASE,
+                "BENCHER_PUBLISH_EXPIRY_DAYS": value,
+            }
+        )
+
+
+def test_a_run_publishes_the_report_it_froze(configured, tmp_path, monkeypatch):
+    """The whole point: the launcher exported an environment, and a URL came back."""
+    monkeypatch.chdir(tmp_path)
+    with bn.execution_context(source_revision="launcher-sha") as execution:
+        bn.run(benchmark, show=False, report_directory=str(tmp_path / "out"))
+    receipt = json.loads((tmp_path / "receipt.json").read_text())
+    assert receipt["url"] == f"{HTTP_BASE}/{execution.uuid}/index.html"
+    assert receipt["execution"]["source_revision"] == "launcher-sha"
+    store = LocalStore(str(tmp_path / "store"))
+    committed = store.read(f"reports/nightly/{execution.uuid}/report.json")
+    assert isinstance(committed, Present)
+    assert json.loads(committed.data)["execution"]["uuid"] == execution.uuid
+    assert isinstance(store.read(f"reports/nightly/{execution.uuid}/index.html"), Present)
+    assert bn.verify_report(tmp_path / "out" / execution.uuid)["entry_page"] == "index.html"
+
+
+def test_publishing_needs_no_report_directory(configured, staging, tmp_path, monkeypatch):
+    """A staging freeze is not an artifact anyone asked to keep, so it does not
+    survive its own publication."""
+    monkeypatch.chdir(tmp_path)
+    with bn.execution_context() as execution:
+        bn.run(benchmark, show=False)
+    assert json.loads((tmp_path / "receipt.json").read_text())["url"].endswith(
+        f"/{execution.uuid}/index.html"
+    )
+    store = LocalStore(str(tmp_path / "store"))
+    assert isinstance(store.read(f"reports/nightly/{execution.uuid}/index.html"), Present)
+    assert list(staging.iterdir()) == []
+
+
+def test_a_failed_publication_keeps_what_it_could_not_commit(
+    configured, staging, tmp_path, monkeypatch
+):
+    """The render is cheap; the measurements behind it are not. A store that
+    refuses the write is exactly when the frozen bytes matter, and the error
+    names the directory `bencher publish` can be pointed at."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "bencher.publication_target.publish_frozen_report",
+        lambda directory, target, publisher=None: PublishFailed("store refused the write"),
+    )
+    with pytest.raises(PublicationFailed) as failure:
+        bn.run(benchmark, show=False)
+    kept = [path for path in staging.iterdir() if path.is_dir()]
+    assert len(kept) == 1
+    frozen = next(path for path in kept[0].iterdir() if path.is_dir())
+    assert str(frozen) in str(failure.value)
+    assert bn.verify_report(frozen)["schema_version"] == 1
+
+
+def test_an_argument_publishes_without_any_environment(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    target = PublicationTarget(
+        store=str(tmp_path / "store"),
+        prefix="reports",
+        http_base=HTTP_BASE,
+        receipt=tmp_path / "receipt.json",
+    )
+    runner = bn.BenchRunner("explicit", run_cfg=bn.BenchRunCfg())
+    runner.add(benchmark)
+    runner.run(show=False, publication=target)
+    assert runner.publication.url.startswith(f"{HTTP_BASE}/")
+    assert json.loads((tmp_path / "receipt.json").read_text())["url"] == runner.publication.url
+
+
+def test_an_unconfigured_run_freezes_nothing(tmp_path, monkeypatch):
+    """Publication is the only thing that makes a complete report unasked for."""
+    monkeypatch.chdir(tmp_path)
+    runner = bn.BenchRunner("plain", run_cfg=bn.BenchRunCfg())
+    runner.add(benchmark)
+    runner.run(show=False)
+    assert runner.publication is None
