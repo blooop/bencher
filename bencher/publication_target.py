@@ -36,7 +36,7 @@ def _days(value: str, name: str) -> float:
         days = float(value)
     except ValueError:
         days = -1.0
-    if math.isnan(days) or days < 0:
+    if not math.isfinite(days) or days < 0:
         raise ValueError(f"{name} must be a number of days, not {value!r}")
     return days
 
@@ -58,6 +58,26 @@ class PublicationTarget:
     receipt: Path | None = None
     expiry_days: float | None = None
     minimum_remaining_days: float = 0
+
+    def __post_init__(self) -> None:
+        """Reject what no store can honour, however the target was built.
+
+        Raises:
+            ValueError: If a location is empty or a lifetime is not a usable
+                number of days. Both stores reject an expiry that is not
+                positive by testing ``<= 0``, which ``nan`` passes.
+        """
+        for name in ("store", "prefix", "http_base"):
+            if not getattr(self, name):
+                raise ValueError(f"{name} must not be empty")
+        if self.expiry_days is not None and not (
+            math.isfinite(self.expiry_days) and self.expiry_days > 0
+        ):
+            raise ValueError(f"expiry_days must be positive, not {self.expiry_days!r}")
+        if not (math.isfinite(self.minimum_remaining_days) and self.minimum_remaining_days >= 0):
+            raise ValueError(
+                f"minimum_remaining_days must be nonnegative, not {self.minimum_remaining_days!r}"
+            )
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> PublicationTarget | None:

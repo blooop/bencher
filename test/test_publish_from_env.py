@@ -163,3 +163,82 @@ def test_an_unconfigured_run_freezes_nothing(tmp_path, monkeypatch):
     runner.add(benchmark)
     runner.run(show=False)
     assert runner.publication is None
+
+
+@pytest.mark.usefixtures("configured", "staging")
+def test_a_later_run_does_not_report_the_previous_run_s_receipt(tmp_path, monkeypatch):
+    """A reused runner publishing nothing must not still name the last URL."""
+    monkeypatch.chdir(tmp_path)
+    runner = bn.BenchRunner("reused", run_cfg=bn.BenchRunCfg())
+    runner.add(benchmark)
+    runner.run(show=False)
+    assert runner.publication is not None
+    for name in (STORE_ENV, PREFIX_ENV, HTTP_BASE_ENV, RECEIPT_ENV):
+        monkeypatch.delenv(name)
+    runner.run(show=False)
+    assert runner.publication is None
+
+
+@pytest.mark.usefixtures("configured")
+def test_a_target_no_publisher_accepts_is_refused_before_the_sweep(staging, tmp_path, monkeypatch):
+    """A prefix the key layout rejects costs the whole run and leaves a frozen
+    report nothing names, so the target is built before any measurement is."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(PREFIX_ENV, "../escape")
+    runner = bn.BenchRunner("rejected", run_cfg=bn.BenchRunCfg())
+    runner.add(benchmark)
+    with pytest.raises(ValueError, match="unsafe inventory path"):
+        runner.run(show=False)
+    assert runner.results == []
+    assert list(staging.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("expiry_days", float("nan")),
+        ("expiry_days", float("inf")),
+        ("expiry_days", 0),
+        ("expiry_days", -1),
+        ("minimum_remaining_days", float("nan")),
+        ("minimum_remaining_days", float("inf")),
+        ("minimum_remaining_days", -1),
+    ],
+)
+def test_a_lifetime_the_stores_cannot_honour_is_refused_at_construction(field, value):
+    """`nan` is neither positive nor negative, so every `<= 0` guard downstream
+    waves it through and the lifetime a publication requires is never checked."""
+    with pytest.raises(ValueError, match=field):
+        PublicationTarget(
+            store="/store", prefix="reports", http_base=HTTP_BASE, **{field: value}
+        )
+
+
+@pytest.mark.parametrize("field", ["store", "prefix", "http_base"])
+def test_an_empty_location_is_refused_at_construction(field):
+    """An empty store is the working directory, which is nobody's object store."""
+    fields = {"store": "/store", "prefix": "reports", "http_base": HTTP_BASE, field: ""}
+    with pytest.raises(ValueError, match=field):
+        PublicationTarget(**fields)
+
+
+def test_the_cli_refuses_a_lifetime_it_cannot_honour(tmp_path, capsys):
+    """argparse takes `nan` as a float; nothing downstream rejects it."""
+    from bencher.publishing_cli import main
+
+    code = main(
+        [
+            str(tmp_path / "frozen"),
+            "--store",
+            str(tmp_path / "store"),
+            "--prefix",
+            "reports",
+            "--http-base",
+            HTTP_BASE,
+            "--expiry-days",
+            "nan",
+        ]
+    )
+    assert code == 1
+    assert "expiry_days" in capsys.readouterr().err
+    assert not (tmp_path / "store").exists()
