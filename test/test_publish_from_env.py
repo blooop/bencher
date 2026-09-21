@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from types import SimpleNamespace
 
 import pytest
 
@@ -17,6 +18,7 @@ from bencher.publication_target import (
     STORE_ENV,
     PublicationFailed,
     PublicationTarget,
+    publish_frozen_report,
 )
 from bencher.publishing import PublishFailed
 
@@ -240,3 +242,33 @@ def test_the_cli_refuses_a_lifetime_it_cannot_honour(tmp_path, capsys):
     assert code == 1
     assert "expiry_days" in capsys.readouterr().err
     assert not (tmp_path / "store").exists()
+
+
+@pytest.mark.usefixtures("configured")
+def test_a_failed_publication_leaves_an_asked_for_report_directory_alone(tmp_path, monkeypatch):
+    """A directory the launcher asked to keep is not staging, so the failure
+    names where the report already is rather than moving or removing it."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "bencher.publication_target.publish_frozen_report",
+        lambda directory, target, publisher=None: PublishFailed("store refused the write"),
+    )
+    with pytest.raises(PublicationFailed) as failure:
+        bn.run(benchmark, show=False, report_directory=str(tmp_path / "out"))
+    frozen = next(path for path in (tmp_path / "out").iterdir() if path.is_dir())
+    assert str(frozen) in str(failure.value)
+    assert bn.verify_report(frozen)["schema_version"] == 1
+
+
+def test_an_unpublished_url_is_never_written_to_the_receipt(tmp_path):
+    """The receipt names a URL as served; a refused publication has none."""
+    receipt = tmp_path / "receipt.json"
+    target = PublicationTarget(
+        store=str(tmp_path / "store"),
+        prefix="reports",
+        http_base=HTTP_BASE,
+        receipt=receipt,
+    )
+    refusing = SimpleNamespace(publish=lambda directory: PublishFailed("store refused the write"))
+    assert isinstance(publish_frozen_report(tmp_path, target, refusing), PublishFailed)
+    assert not receipt.exists()
