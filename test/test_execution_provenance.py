@@ -76,6 +76,16 @@ def test_an_unusable_attempt_is_refused_by_name(monkeypatch, value):
         Execution.start()
 
 
+@pytest.mark.parametrize("value", ["first", "0", "-1", "1.5"])
+def test_an_argument_wins_over_an_unusable_variable(monkeypatch, value):
+    """The refusal guards against a misattributed retry, and a caller that named
+    the attempt cannot be misattributed by a variable nothing reads."""
+    monkeypatch.setenv("BENCHER_ATTEMPT", value)
+    assert Execution.start(attempt=3).attempt == 3
+    with bn.execution_context(attempt=3) as execution:
+        assert execution.attempt == 3
+
+
 def test_an_explicit_environment_can_be_read_without_exporting_it():
     assert environment_provenance({"BENCHER_LANE": "gpu-02"}) == {"lane": "gpu-02"}
     assert environment_provenance({}) == {}

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator, Mapping
+from collections.abc import Collection, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass
@@ -24,7 +24,9 @@ PROVENANCE_ENV = {
 }
 
 
-def environment_provenance(env: Mapping[str, str] | None = None) -> dict:
+def environment_provenance(
+    env: Mapping[str, str] | None = None, *, supplied: Collection[str] = ()
+) -> dict:
     """Read :data:`PROVENANCE_ENV` as keyword arguments for :meth:`Execution.start`.
 
     A variable that is unset, empty or blank is absent rather than "": a job
@@ -33,13 +35,18 @@ def environment_provenance(env: Mapping[str, str] | None = None) -> dict:
     revision that no longer matches the checkout is the launcher's mistake to
     avoid, and is why a long-lived shell should not export these.
 
+    A field named in *supplied* is not read at all, because the caller has
+    already answered it.
+
     Raises:
-        ValueError: If the attempt variable does not hold a positive integer.
-            A misattributed retry is worse than a failed run.
+        ValueError: If the attempt variable is read and does not hold a positive
+            integer. A misattributed retry is worse than a failed run.
     """
     source = os.environ if env is None else env
     provenance: dict = {}
     for field, name in PROVENANCE_ENV.items():
+        if field in supplied:
+            continue
         value = source.get(name, "").strip()
         if not value:
             continue
@@ -89,10 +96,11 @@ class Execution:
         Resolve git metadata in the launcher before starting foreign threads;
         this function does not run subprocesses or infer a checkout revision.
         A launcher in another process supplies the same fields through
-        :data:`PROVENANCE_ENV`; anything passed here wins over the environment.
+        :data:`PROVENANCE_ENV`; a field passed here leaves its variable unread,
+        so an argument wins over an unusable value as well as a usable one.
         """
         timestamp = datetime.now(UTC)
-        provenance = {**environment_provenance(), **provenance}
+        provenance = {**environment_provenance(supplied=provenance.keys()), **provenance}
         return cls(
             uuid=str(uuid4()),
             executed_at=timestamp.isoformat(),
