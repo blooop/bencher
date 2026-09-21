@@ -449,6 +449,7 @@ class BenchRunner:
 
         report_directory = report_directory or os.environ.get("BENCHER_REPORT_DIR")
         publication = PublicationTarget.from_env() if publication is None else publication
+        self.publication = None
         # Built before the first measurement: a prefix or serving root the
         # publisher refuses would otherwise cost the whole sweep to discover.
         report_publisher = None if publication is None else publication.publisher()
