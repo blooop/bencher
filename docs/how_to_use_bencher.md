@@ -701,6 +701,22 @@ with bn.execution_context(source_revision=revision, workflow_run=run_id, lane=ma
 bn.save_results(results, "execution.pkl")
 ```
 
+When the launcher is a *different process* — a CI job, or a wrapper script that
+starts the benchmark — export the same provenance instead:
+
+```bash
+export BENCHER_SOURCE_REVISION=$(git rev-parse HEAD)
+export BENCHER_WORKFLOW=nightly BENCHER_WORKFLOW_RUN=$CI_RUN_ID
+export BENCHER_LANE=$RUNNER_NAME BENCHER_ATTEMPT=$CI_ATTEMPT
+```
+
+Every execution started in that environment carries those fields, so the frozen
+`report.json` and the publication receipt say which revision they describe. An
+argument to `execution_context` wins over the environment, an empty variable is
+the same as an unset one, and `BENCHER_ATTEMPT` must be a positive integer.
+Bencher reports these and never checks them: export them per job, not from a
+long-lived shell, where they would outlive the checkout they name.
+
 Render that bundle in one clean process:
 
 ```bash
