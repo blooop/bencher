@@ -41,10 +41,12 @@ from bencher.object_store import (
     validate_listing,
 )
 
-# gcloud ships its own interpreter, so an inherited PYTHONPATH or PYTHONHOME makes
-# it import a foreign standard library. It then prints no access token at all,
-# which looks like an authentication problem rather than the leaked environment
-# it is; neither is ever right for a subprocess that is not this Python.
+# gcloud ships its own interpreter, and an inherited PYTHONPATH puts a foreign
+# standard library ahead of its own: gcloud then prints no access token at all,
+# which reads as an authentication problem rather than the leaked environment it
+# is. Its POSIX wrapper already unsets PYTHONHOME, but nothing guarantees that of
+# every entry point, and neither is ever right for a subprocess that is not this
+# Python.
 _FOREIGN_INTERPRETER_VARS = ("PYTHONPATH", "PYTHONHOME")
 
 
