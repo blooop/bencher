@@ -76,9 +76,9 @@ def _digest(data: bytes) -> str:
 class CompleteReportPublisher:
     """Commits a frozen complete report directory to an object store, immutably.
 
-    Distinct from :class:`bencher.bench_report.Publisher`, the protocol a run
-    hands to ``bn.run(publisher=...)``: that one is called in-process with a live
-    report and may do whatever a downstream project wants with it. This one takes
+    Distinct from :class:`bencher.bench_report.Publisher`, the protocol handed to
+    ``bn.run(publisher=...)``: a run calls that one in-process with a live report,
+    and it may do whatever a downstream project wants with it. This one takes
     a directory ``save_report`` already froze, writes every object create-only
     and reads it back, so the URL it returns names bytes that cannot change.
 
