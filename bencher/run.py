@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bencher.bench_report import GithubPagesCfg, Publisher
     from bencher.bencher import Bench
+    from bencher.publication_target import PublicationTarget
 
 # Keep references to BenchRunners with active servers so that __del__ doesn't
 # kill the panel servers while the process is still running.
@@ -84,13 +85,18 @@ def run(
     optimise: int | bool = 0,
     sampling_context: AbstractContextManager[Any] | None = None,
     report_directory: str | None = None,
+    publication: PublicationTarget | None = None,
     **kwargs,
 ) -> list[BenchCfg]:
     """Run a benchmark target with sensible defaults.
 
     ``report_directory`` opts into complete execution export below that root;
     ``BENCHER_REPORT_DIR`` is its environment equivalent. Ordinary ``save=True``
-    retains its existing layout.
+    retains its existing layout. ``publication`` commits that frozen report to an
+    object store, freezing to a temporary directory when no ``report_directory``
+    asked to keep one; ``BENCHER_PUBLISH_STORE`` and its siblings are its
+    environment equivalent. It is unrelated to ``publish``/``publisher``, which
+    are the in-process seam.
 
     Handles three cases:
     1. Callable (e.g. ``bn.run(example_fn)``) — wraps in BenchRunner.
@@ -225,6 +231,7 @@ def run(
         "over_time": over_time,
         "backend": backend,
         "report_directory": report_directory,
+        "publication": publication,
     }
 
     try:

@@ -57,6 +57,7 @@ from .job import (
     WorkerContractWarning,
     WorkerReturnedNothingError,
 )
+from .publication_target import PublicationFailed, PublicationTarget
 from .render import load_result, render_report, save_result, save_results
 from .report_export import (
     compare_results,

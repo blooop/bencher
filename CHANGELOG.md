@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **A run can publish its own frozen report.** `BENCHER_REPORT_DIR` let a launcher
+  outside the process ask for a complete report, but nothing let it ask for that report
+  to be *published*: `publish=True` calls the in-process `Publisher` protocol, which only
+  a benchmark's own source can wire up, so every out-of-process launcher had to find the
+  frozen directory afterwards and run `bencher publish` against it. `BENCHER_PUBLISH_STORE`,
+  `BENCHER_PUBLISH_PREFIX`, `BENCHER_PUBLISH_HTTP_BASE` and the optional
+  `BENCHER_PUBLISH_RECEIPT`, `BENCHER_PUBLISH_EXPIRY_DAYS` and
+  `BENCHER_PUBLISH_MINIMUM_REMAINING_DAYS` configure the same target the CLI takes, and
+  `bn.run(..., publication=PublicationTarget(...))` is the in-process form. Publication
+  enables the complete export by itself, freezing to a temporary directory that is removed
+  on success and kept, named in the raised `PublicationFailed`, on failure. A partially
+  configured environment is an error rather than a silent skip.
 - **Execution provenance can come from the environment.** `Execution` has carried
   `source_revision`, `workflow`, `workflow_run`, `lane` and `attempt` since complete
   reports existed, and `Execution.start` documents that the launcher is the thing that

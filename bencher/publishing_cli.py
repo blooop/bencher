@@ -1,45 +1,12 @@
 """Explicit publication command, separate from legacy render positional arguments."""
 
 import argparse
-import json
-import os
 import sys
-import tempfile
 from pathlib import Path
-from urllib.parse import urlsplit
 
-from bencher.gcloud_store import GcloudStore
-from bencher.object_store import LocalStore
 from bencher.publication_pointers import PointerFailed
-from bencher.publishing import CompleteReportPublisher, Published, PublishFailed
-
-
-def _store(location: str, expiry_days: float | None):
-    expiry = expiry_days * 86400 if expiry_days is not None else None
-    if location.startswith("gs://"):
-        parts = urlsplit(location)
-        if parts.query or parts.fragment:
-            raise ValueError("GCS store URL must not contain a query or fragment")
-        return GcloudStore(parts.netloc, prefix=parts.path.strip("/"), expiry_seconds=expiry)
-    if "://" in location:
-        raise ValueError("store must be a local directory or gs:// URL")
-    return LocalStore(location, expiry_seconds=expiry)
-
-
-def _save_receipt(path: Path, data: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}-", delete=False
-    ) as stream:
-        temporary = Path(stream.name)
-        try:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-            stream.close()
-            temporary.replace(path)
-        finally:
-            temporary.unlink(missing_ok=True)
+from bencher.publication_target import PublicationTarget, publish_frozen_report, receipt_json
+from bencher.publishing import Published, PublishFailed
 
 
 def main(argv: list[str]) -> int:
@@ -65,13 +32,17 @@ def main(argv: list[str]) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        publisher = CompleteReportPublisher(
-            _store(args.store, args.expiry_days),
-            args.prefix,
-            args.http_base,
-            minimum_remaining_seconds=args.minimum_remaining_days * 86400,
+        target = PublicationTarget(
+            store=args.store,
+            prefix=args.prefix,
+            http_base=args.http_base,
+            receipt=args.receipt,
+            expiry_days=args.expiry_days,
+            minimum_remaining_days=args.minimum_remaining_days,
         )
-        outcome = publisher.publish(args.directory)
+        publisher = target.publisher()
+        # Persists the committed report's receipt before its separate pointer update.
+        outcome = publish_frozen_report(args.directory, target, publisher)
         if isinstance(outcome, PublishFailed):
             print(
                 f"publish failed: {outcome.reason} ({outcome.key or args.directory})",
@@ -79,11 +50,7 @@ def main(argv: list[str]) -> int:
             )
             return 1
         assert isinstance(outcome, Published)
-        data = json.dumps(outcome.receipt.to_dict(), indent=2, allow_nan=False)
-        # Persist the committed report's receipt even if its separate pointer update fails.
-        if args.receipt:
-            _save_receipt(args.receipt, data)
-        print(data)
+        print(receipt_json(outcome.receipt))
         if args.pointer:
             pointed = publisher.point(outcome.receipt, args.pointer)
             if isinstance(pointed, PointerFailed):

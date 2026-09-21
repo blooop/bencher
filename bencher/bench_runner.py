@@ -3,20 +3,26 @@ from __future__ import annotations
 import inspect
 import logging
 import os
+import shutil
+import tempfile
 import warnings
 import webbrowser
 from collections.abc import Callable
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Protocol, cast, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, ShowMode, normalize_show
 from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
 from bencher.bencher import Bench
 from bencher.execution import execution_scope
+from bencher.publication_target import PublicationTarget, commit_frozen_report
 from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
+
+if TYPE_CHECKING:
+    from bencher.publishing import CompleteReportPublisher, Published
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +122,9 @@ class BenchRunner:
             self.add_bench(bench_class)
         self.results = []
         self.servers = []
+        # The receipt of the last inline publication, for a caller that wants the
+        # URL rather than the file the target may have been told to write it to.
+        self.publication: Published | None = None
 
     def _generate_name(self) -> str:
         """Generate a unique name for the BenchRunner instance.
@@ -323,12 +332,16 @@ class BenchRunner:
         over_time: bool | None = None,
         backend: str | None = None,
         report_directory: str | Path | None = None,
+        publication: PublicationTarget | None = None,
         **kwargs,
     ) -> list[BenchCfg]:
         """Unified interface for running benchmarks.
 
         ``report_directory`` (or ``BENCHER_REPORT_DIR``) exports every requested
-        sweep together as one complete, frozen execution report.
+        sweep together as one complete, frozen execution report. ``publication``
+        (or ``BENCHER_PUBLISH_STORE`` and its siblings) commits that report to an
+        object store and leaves its URL on ``self.publication``; it is unrelated
+        to ``publish``, which calls the in-process publisher during the run.
 
         This function provides a single entry point for benchmark runs:
         - Single runs: Use subsampling_divisions and repeats parameters only
@@ -435,7 +448,16 @@ class BenchRunner:
             run_cfg.backend = backend
 
         report_directory = report_directory or os.environ.get("BENCHER_REPORT_DIR")
-        complete_report = BenchReport(self.name) if report_directory is not None else None
+        publication = PublicationTarget.from_env() if publication is None else publication
+        self.publication = None
+        # Built before the first measurement: a prefix or serving root the
+        # publisher refuses would otherwise cost the whole sweep to discover.
+        report_publisher = None if publication is None else publication.publisher()
+        complete_report = (
+            BenchReport(self.name)
+            if report_directory is not None or publication is not None
+            else None
+        )
         for r in range(min_repeats, final_max_repeats + 1):
             for lvl in range(min_subsampling_divisions, final_max_subsampling_divisions + 1):
                 report_level = None
@@ -490,8 +512,49 @@ class BenchRunner:
                         complete_report.extend_report(report_level)
                     self.show_publish(report_level, show, publish, save, debug)
         if complete_report is not None:
-            complete_report.save_report(report_directory)
+            self._export(complete_report, report_directory, publication, report_publisher)
         return self.results
+
+    def _export(
+        self,
+        report: BenchReport,
+        directory: str | Path | None,
+        publication: PublicationTarget | None,
+        publisher: CompleteReportPublisher | None = None,
+    ) -> None:
+        """Freeze the run's complete report, and publish it if a target is configured.
+
+        Without a report directory the freeze exists only to be published, so it
+        is staging: removed once the report is committed, and kept when it is
+        not. Rendering is cheap next to the measurements it describes, but the
+        measurements are gone either way, so nothing kept goes unnamed.
+        """
+        if directory is not None:
+            entry = report.save_report(directory)
+            if publication is not None:
+                self._publish(entry.parent, publication, publisher)
+            return
+        assert publication is not None
+        staging = Path(tempfile.mkdtemp(prefix="bencher-publication-"))
+        published = False
+        try:
+            self._publish(report.save_report(staging).parent, publication, publisher)
+            published = True
+        finally:
+            if published:
+                shutil.rmtree(staging, ignore_errors=True)
+            else:
+                logger.error("keeping the report that was not published in %s", staging)
+
+    def _publish(
+        self,
+        directory: Path,
+        publication: PublicationTarget,
+        publisher: CompleteReportPublisher | None = None,
+    ) -> None:
+        """Commit one frozen execution directory, recording its receipt."""
+        self.publication = commit_frozen_report(directory, publication, publisher)
+        logger.info("Benchmark report published at %s", self.publication.url)
 
     def show_publish(
         self,

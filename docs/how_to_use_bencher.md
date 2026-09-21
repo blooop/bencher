@@ -860,6 +860,35 @@ Expected storage failures exit nonzero. Adapters decide whether that failure
 should gate a benchmark job; measurements and diagnostics remain on disk.
 The legacy render positional command, `--cachedir`, and `compare` are unchanged.
 
+### Publishing from the run itself
+
+A launcher that only wants a URL does not have to find the frozen directory and
+run a second command. Configure the same target in the environment and the run
+publishes what it froze:
+
+```bash
+export BENCHER_PUBLISH_STORE=gs://my-reports-bucket
+export BENCHER_PUBLISH_PREFIX=reports/my-benchmark
+export BENCHER_PUBLISH_HTTP_BASE=https://reports.example/benchmarks/my-benchmark
+export BENCHER_PUBLISH_RECEIPT=published.json   # optional
+python my_benchmark.py                          # calls bn.run(...)
+```
+
+`BENCHER_PUBLISH_EXPIRY_DAYS` and `BENCHER_PUBLISH_MINIMUM_REMAINING_DAYS` are
+the remaining CLI options. `bn.run(..., publication=bn.PublicationTarget(...))`
+is the in-process equivalent, and `BenchRunner.publication` holds the receipt
+afterwards. Read the URL from the receipt file rather than from stdout, which a
+benchmark shares with everything else it prints.
+
+Configuring publication enables the complete export on its own: without
+`BENCHER_REPORT_DIR` the report is frozen into a temporary directory that is
+removed once it is committed — and **kept** when publication fails, with its path
+in the raised `PublicationFailed`, so `bencher publish` can be pointed at it
+rather than the sweep being run again. A partially configured environment (a
+store with no serving root) is an error, not a silent skip. This is unrelated to
+`bn.run(publish=True, publisher=...)`, which calls the in-process `Publisher`
+protocol during the run.
+
 The publisher creates assets and `report.json` before the entry page, which is
 the commit object. It reads back and verifies all inventory bytes before
 returning a URL. An interrupted upload can resume from the frozen directory;
