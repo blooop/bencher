@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`GcloudStore` authenticated under whatever interpreter the caller had.** `env`
+  defaulted to a copy of `os.environ`, which `_auth` passed to
+  `gcloud auth print-access-token`. gcloud ships its own interpreter, so an inherited
+  `PYTHONPATH` — a sourced ROS 2 workspace, a venv — put a foreign standard library
+  ahead of its own and it failed to start, and the store reported "gcloud
+  authentication failed", pointing at credentials that were fine. `PYTHONHOME` is
+  dropped alongside it: gcloud's POSIX wrapper unsets that one itself, but neither
+  variable is ever right for a subprocess that is not this Python.
+
 ## [1.133.0] - 2026-09-17
 
 ### Added
