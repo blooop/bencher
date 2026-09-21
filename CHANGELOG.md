@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Execution provenance can come from the environment.** `Execution` has carried
+  `source_revision`, `workflow`, `workflow_run`, `lane` and `attempt` since complete
+  reports existed, and `Execution.start` documents that the launcher is the thing that
+  resolves them — but the only way to supply them was `execution_context(...)`, inside
+  the benchmark process. A launcher that is a *different* process (a CI job, or a
+  wrapper that runs `python bench.py`) knows the revision and had no way to say so, so
+  every out-of-process run froze a `report.json` whose provenance was entirely `null`.
+  `BENCHER_SOURCE_REVISION`, `BENCHER_WORKFLOW`, `BENCHER_WORKFLOW_RUN`,
+  `BENCHER_LANE`, `BENCHER_ATTEMPT` and `BENCHER_DISPLAY_LABEL` fill exactly those
+  fields. An explicit argument still wins, an empty variable is an absent one, and
+  bencher still runs no subprocess and infers no revision of its own.
+
 ### Changed
 - **`bencher.publishing.Publisher` is now `CompleteReportPublisher`.** Two public
   classes were called `Publisher`: the protocol in `bencher.bench_report`, exported as

@@ -2,12 +2,65 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import os
+from collections.abc import Collection, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
+
+# The launcher is often not this process: a CI job or a wrapper script starts the
+# benchmark and is the only thing that knows which revision it checked out. These
+# name the same fields a caller passes to `Execution.start`, so provenance can
+# cross a process boundary without bencher inferring any of it.
+PROVENANCE_ENV = {
+    "display_label": "BENCHER_DISPLAY_LABEL",
+    "source_revision": "BENCHER_SOURCE_REVISION",
+    "workflow": "BENCHER_WORKFLOW",
+    "workflow_run": "BENCHER_WORKFLOW_RUN",
+    "lane": "BENCHER_LANE",
+    "attempt": "BENCHER_ATTEMPT",
+}
+
+
+def environment_provenance(
+    env: Mapping[str, str] | None = None, *, supplied: Collection[str] = ()
+) -> dict:
+    """Read :data:`PROVENANCE_ENV` as keyword arguments for :meth:`Execution.start`.
+
+    A variable that is unset, empty or blank is absent rather than "": a job
+    template that exports a value it does not have must not attribute the
+    execution to one. Provenance is reported, never checked -- an exported
+    revision that no longer matches the checkout is the launcher's mistake to
+    avoid, and is why a long-lived shell should not export these.
+
+    A field named in *supplied* is not read at all, because the caller has
+    already answered it.
+
+    Raises:
+        ValueError: If the attempt variable is read and does not hold a positive
+            integer. A misattributed retry is worse than a failed run.
+    """
+    source = os.environ if env is None else env
+    provenance: dict = {}
+    for field, name in PROVENANCE_ENV.items():
+        if field in supplied:
+            continue
+        value = source.get(name, "").strip()
+        if not value:
+            continue
+        if field != "attempt":
+            provenance[field] = value
+            continue
+        try:
+            attempt = int(value)
+        except ValueError:
+            attempt = 0
+        if attempt < 1:
+            raise ValueError(f"{name} must be a positive integer, not {value!r}")
+        provenance[field] = attempt
+    return provenance
 
 
 @dataclass(frozen=True)
@@ -42,8 +95,12 @@ class Execution:
 
         Resolve git metadata in the launcher before starting foreign threads;
         this function does not run subprocesses or infer a checkout revision.
+        A launcher in another process supplies the same fields through
+        :data:`PROVENANCE_ENV`; a field passed here leaves its variable unread,
+        so an argument wins over an unusable value as well as a usable one.
         """
         timestamp = datetime.now(UTC)
+        provenance = {**environment_provenance(supplied=provenance.keys()), **provenance}
         return cls(
             uuid=str(uuid4()),
             executed_at=timestamp.isoformat(),
