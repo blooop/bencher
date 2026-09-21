@@ -20,6 +20,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   enables the complete export by itself, freezing to a temporary directory that is removed
   on success and kept, named in the raised `PublicationFailed`, on failure. A partially
   configured environment is an error rather than a silent skip.
+- **Execution provenance can come from the environment.** `Execution` has carried
+  `source_revision`, `workflow`, `workflow_run`, `lane` and `attempt` since complete
+  reports existed, and `Execution.start` documents that the launcher is the thing that
+  resolves them — but the only way to supply them was `execution_context(...)`, inside
+  the benchmark process. A launcher that is a *different* process (a CI job, or a
+  wrapper that runs `python bench.py`) knows the revision and had no way to say so, so
+  every out-of-process run froze a `report.json` whose provenance was entirely `null`.
+  `BENCHER_SOURCE_REVISION`, `BENCHER_WORKFLOW`, `BENCHER_WORKFLOW_RUN`,
+  `BENCHER_LANE`, `BENCHER_ATTEMPT` and `BENCHER_DISPLAY_LABEL` fill exactly those
+  fields. An explicit argument still wins, an empty variable is an absent one, and
+  bencher still runs no subprocess and infers no revision of its own.
+
+### Changed
+- **`bencher.publishing.Publisher` is now `CompleteReportPublisher`.** Two public
+  classes were called `Publisher`: the protocol in `bencher.bench_report`, exported as
+  `bn.Publisher`, which a run calls in-process with a live report, and the concrete
+  class that commits an already-frozen report directory to an object store. The two do
+  different jobs at different seams, and sharing a name made every discussion of "the
+  publisher" ambiguous and every `grep` useless. The protocol keeps its name, since it
+  is the one downstream projects implement; the concrete class is renamed, with no
+  alias left behind — a name that still resolves is a collision that still exists.
+
+### Fixed
+- **`GcloudStore` authenticated under whatever interpreter the caller had.** `env`
+  defaulted to a copy of `os.environ`, which `_auth` passed to
+  `gcloud auth print-access-token`. gcloud ships its own interpreter, so an inherited
+  `PYTHONPATH` — a sourced ROS 2 workspace, a venv — put a foreign standard library
+  ahead of its own and it failed to start, and the store reported "gcloud
+  authentication failed", pointing at credentials that were fine. `PYTHONHOME` is
+  dropped alongside it: gcloud's POSIX wrapper unsets that one itself, but neither
+  variable is ever right for a subprocess that is not this Python.
 
 ## [1.133.0] - 2026-09-17
 

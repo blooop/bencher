@@ -114,9 +114,9 @@ class PublicationTarget:
 
     def publisher(self):
         """Build the publisher this target describes."""
-        from bencher.publishing import Publisher
+        from bencher.publishing import CompleteReportPublisher
 
-        return Publisher(
+        return CompleteReportPublisher(
             self.open_store(),
             self.prefix,
             self.http_base,

@@ -701,6 +701,35 @@ with bn.execution_context(source_revision=revision, workflow_run=run_id, lane=ma
 bn.save_results(results, "execution.pkl")
 ```
 
+When the launcher is a *different process* — a CI job, or a wrapper script that
+starts the benchmark — export the same provenance instead:
+
+```bash
+export BENCHER_SOURCE_REVISION=$(git rev-parse HEAD)
+export BENCHER_WORKFLOW=nightly BENCHER_WORKFLOW_RUN=$CI_RUN_ID
+export BENCHER_LANE=$RUNNER_NAME
+export BENCHER_ATTEMPT=$GITHUB_RUN_ATTEMPT   # 1 on the first run, not 0
+```
+
+Every execution started in that environment carries those fields, so the frozen
+`report.json` and the publication receipt say which revision they describe. An
+argument to `execution_context` wins over the environment — a field the caller
+supplied is not read from it at all — and an empty variable is the same as an
+unset one.
+
+`BENCHER_ATTEMPT` counts attempts from 1, the same as `Execution.attempt`, and a
+value that is not a positive integer fails the run instead of misattributing the
+retry. A retry counter that starts at 0, such as Buildkite's
+`BUILDKITE_RETRY_COUNT`, therefore needs converting rather than exporting
+directly:
+
+```bash
+export BENCHER_ATTEMPT=$((BUILDKITE_RETRY_COUNT + 1))
+```
+
+Bencher reports all of these and never checks them: export them per job, not from
+a long-lived shell, where they would outlive the checkout they name.
+
 Render that bundle in one clean process:
 
 ```bash
@@ -868,8 +897,11 @@ A matching committed retry performs **no writes**, including no age renewal.
 A missing dependency in a committed report is an explicit failure, not implicit
 repair. A manifest alone does not establish a committed report.
 
-For Python integrations, import `Publisher` from `bencher.publishing` and stores
-from `bencher.object_store` (`LocalStore`) or `bencher.gcloud_store` (`GcloudStore`).
+For Python integrations, import `CompleteReportPublisher` from `bencher.publishing`
+and stores from `bencher.object_store` (`LocalStore`) or `bencher.gcloud_store`
+(`GcloudStore`). It is not the `Publisher` protocol in `bencher.bench_report` that
+`bn.run(publisher=...)` calls during a run — this one publishes a directory that
+`save_report` already froze.
 `publish(directory)` returns `Published(url, receipt)` or `PublishFailed`.
 Restore a JSON handoff with `PublicationReceipt.from_dict(json.loads(...))`;
 `publisher.verify(receipt)` checks its manifest, storage location and every
@@ -887,7 +919,7 @@ Pointers embed their target and ordering state in the same redirect HTML object.
 CAS conflicts cause reread, reordering and bounded retries. An unknown existing
 HTML format fails closed: migrate old aliases explicitly rather than overwriting
 their contents. The lower-level `update_pointer` accepts a `verify_target` callback
-for non-report dependencies; use `Publisher.point` for report targets.
+for non-report dependencies; use `CompleteReportPublisher.point` for report targets.
 
 ### Remote storage and renewal contract
 
@@ -922,7 +954,7 @@ For LocalStore this is an explicit fake expiry model: expired rows become absent
 to reads/listings, but the filesystem does not independently delete them.
 No configured policy means unsupported renewal.
 
-Set `Publisher(..., minimum_remaining_seconds=...)` (CLI
+Set `CompleteReportPublisher(..., minimum_remaining_seconds=...)` (CLI
 `--minimum-remaining-days` with `--expiry-days`) to require verified dependency
 lifetime before new references. Publication never extends that lifetime itself;
 run explicit maintenance first. A zero minimum promises no retention window.

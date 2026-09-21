@@ -134,6 +134,44 @@ def test_gcloud_auth_timeout_is_not_a_submitted_write():
     assert isinstance(result, WriteFailed) and not result.outcome_unknown
 
 
+def test_gcloud_never_authenticates_under_a_foreign_interpreter():
+    """gcloud runs its own Python, so an inherited PYTHONPATH makes it import a
+    standard library that is not its own -- reported as a failed token, not as the
+    leaked environment it is."""
+    seen = {}
+
+    def runner(_command, **kwargs):
+        seen.update(kwargs["env"])
+        raise OSError("gcloud not run")
+
+    store = GcloudStore(
+        "bucket",
+        env={
+            "PYTHONPATH": "/opt/other/site-packages",
+            "PYTHONHOME": "/opt/other",
+            "CLOUDSDK_CONFIG": "/isolated",
+        },
+        runner=runner,
+    )
+    store.write("key", b"abc", CreateOnly())
+    assert seen == {"CLOUDSDK_CONFIG": "/isolated"}
+
+
+def test_the_default_environment_is_stripped_too(monkeypatch):
+    """The default is the process environment, which is where these leak from."""
+    monkeypatch.setenv("PYTHONPATH", "/opt/other/site-packages")
+    monkeypatch.setenv("BENCHER_TEST_MARKER", "kept")
+    seen = {}
+
+    def runner(_command, **kwargs):
+        seen.update(kwargs["env"])
+        raise OSError("gcloud not run")
+
+    GcloudStore("bucket", runner=runner).write("key", b"abc", CreateOnly())
+    assert "PYTHONPATH" not in seen
+    assert seen["BENCHER_TEST_MARKER"] == "kept"
+
+
 def test_listing_preserves_server_continuation_even_on_empty_page():
     store, transport = store_with(
         response({"nextPageToken": "server-token"}), response({"items": [metadata()]})
@@ -248,9 +286,9 @@ def test_gcloud_live_disposable_contract(report):
     assert isinstance(second, Listed) and second.complete, second
     assert {item.key for page in [first, second] for item in page.items} == {"key", "race"}
     from bencher.publication_pointers import PointerUpdated
-    from bencher.publishing import Published, Publisher
+    from bencher.publishing import CompleteReportPublisher, Published
 
-    publisher = Publisher(
+    publisher = CompleteReportPublisher(
         store, "reports", "https://example.test/contract", minimum_remaining_seconds=86400
     )
     published = publisher.publish(report)
