@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+from dataclasses import fields
 
 import pytest
 
 import bencher as bn
 from bencher.example.benchmark_data import ExampleBenchCfg
-from bencher.execution import Execution, environment_provenance
+from bencher.execution import PROVENANCE_ENV, Execution, environment_provenance
 
 
 @pytest.fixture(name="launcher_env")
@@ -52,6 +53,13 @@ def test_an_argument_wins_over_the_environment():
     assert execution.source_revision == "in-process"
     assert execution.attempt == 1
     assert execution.workflow == "nightly"
+
+
+def test_the_table_names_only_provenance_fields_an_execution_has():
+    """A key that is no field turns every Execution.start() into a TypeError, and
+    identity is not provenance a launcher may export."""
+    fillable = {field.name for field in fields(Execution)} - {"uuid", "executed_at"}
+    assert set(PROVENANCE_ENV) <= fillable
 
 
 @pytest.mark.usefixtures("launcher_env")
