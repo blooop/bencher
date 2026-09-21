@@ -42,17 +42,17 @@ def staging_root(tmp_path, monkeypatch):
 
 
 @pytest.fixture(name="configured")
-def configured_publication(tmp_path, monkeypatch):
+def configured_publication(tmp_path, monkeypatch) -> None:
     """What a CI job exports around the process that runs the benchmark."""
     monkeypatch.setenv(STORE_ENV, str(tmp_path / "store"))
     monkeypatch.setenv(PREFIX_ENV, "reports/nightly")
     monkeypatch.setenv(HTTP_BASE_ENV, HTTP_BASE)
     monkeypatch.setenv(RECEIPT_ENV, str(tmp_path / "receipt.json"))
-    return tmp_path
 
 
 def test_publication_is_off_unless_it_is_configured():
-    assert PublicationTarget.from_env({}) == PublicationTarget.from_env({"OTHER": "x"}) is None
+    assert PublicationTarget.from_env({}) is None
+    assert PublicationTarget.from_env({"OTHER": "x"}) is None
 
 
 def test_a_half_configured_target_is_refused_by_name():
@@ -90,7 +90,8 @@ def test_a_lifetime_that_is_not_days_is_refused(value):
         )
 
 
-def test_a_run_publishes_the_report_it_froze(configured, tmp_path, monkeypatch):
+@pytest.mark.usefixtures("configured")
+def test_a_run_publishes_the_report_it_froze(tmp_path, monkeypatch):
     """The whole point: the launcher exported an environment, and a URL came back."""
     monkeypatch.chdir(tmp_path)
     with bn.execution_context(source_revision="launcher-sha") as execution:
@@ -106,7 +107,8 @@ def test_a_run_publishes_the_report_it_froze(configured, tmp_path, monkeypatch):
     assert bn.verify_report(tmp_path / "out" / execution.uuid)["entry_page"] == "index.html"
 
 
-def test_publishing_needs_no_report_directory(configured, staging, tmp_path, monkeypatch):
+@pytest.mark.usefixtures("configured")
+def test_publishing_needs_no_report_directory(staging, tmp_path, monkeypatch):
     """A staging freeze is not an artifact anyone asked to keep, so it does not
     survive its own publication."""
     monkeypatch.chdir(tmp_path)
@@ -120,9 +122,8 @@ def test_publishing_needs_no_report_directory(configured, staging, tmp_path, mon
     assert list(staging.iterdir()) == []
 
 
-def test_a_failed_publication_keeps_what_it_could_not_commit(
-    configured, staging, tmp_path, monkeypatch
-):
+@pytest.mark.usefixtures("configured")
+def test_a_failed_publication_keeps_what_it_could_not_commit(staging, tmp_path, monkeypatch):
     """The render is cheap; the measurements behind it are not. A store that
     refuses the write is exactly when the frozen bytes matter, and the error
     names the directory `bencher publish` can be pointed at."""
