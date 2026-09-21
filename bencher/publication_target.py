@@ -186,13 +186,22 @@ def publish_frozen_report(
     Returns:
         ``Published`` or ``PublishFailed`` -- the receipt is only persisted for
         the former, because an unpublished URL must not be left on disk.
+
+    Raises:
+        OSError: If the receipt could not be written. The message carries the
+            URL of the report, which was published regardless.
     """
     from bencher.publishing import Published
 
     publisher = target.publisher() if publisher is None else publisher
     outcome = publisher.publish(directory)
     if isinstance(outcome, Published) and target.receipt is not None:
-        save_receipt(target.receipt, receipt_json(outcome.receipt))
+        try:
+            save_receipt(target.receipt, receipt_json(outcome.receipt))
+        except OSError as failure:
+            # The bytes are committed and immutable by now, and this is the only
+            # place the URL has been named.
+            raise OSError(f"{outcome.url} was published, but {failure}") from failure
     return outcome
 
 

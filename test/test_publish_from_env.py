@@ -20,7 +20,7 @@ from bencher.publication_target import (
     PublicationTarget,
     publish_frozen_report,
 )
-from bencher.publishing import PublishFailed
+from bencher.publishing import PublicationReceipt, Published, PublishFailed
 
 HTTP_BASE = "https://reports.example.test/bench"
 
@@ -272,3 +272,21 @@ def test_an_unpublished_url_is_never_written_to_the_receipt(tmp_path):
     refusing = SimpleNamespace(publish=lambda directory: PublishFailed("store refused the write"))
     assert isinstance(publish_frozen_report(tmp_path, target, refusing), PublishFailed)
     assert not receipt.exists()
+
+
+def test_a_receipt_that_cannot_be_written_still_names_the_published_url(tmp_path):
+    """The bytes are committed and immutable by the time the receipt is written,
+    so a failure there must not take the URL down with it: the run is not
+    repeatable, and nothing else in the process has seen it."""
+    url = f"{HTTP_BASE}/0123/index.html"
+    receipt = PublicationReceipt(
+        prefix="reports/0123", url=url, manifest_sha256="0" * 64, execution={}, results=()
+    )
+    occupied = tmp_path / "receipt.json"
+    occupied.mkdir()
+    target = PublicationTarget(
+        store=str(tmp_path / "store"), prefix="reports", http_base=HTTP_BASE, receipt=occupied
+    )
+    publisher = SimpleNamespace(publish=lambda directory: Published(url=url, receipt=receipt))
+    with pytest.raises(OSError, match=url):
+        publish_frozen_report(tmp_path, target, publisher)
