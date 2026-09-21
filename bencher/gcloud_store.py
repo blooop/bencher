@@ -41,6 +41,17 @@ from bencher.object_store import (
     validate_listing,
 )
 
+# gcloud ships its own interpreter, so an inherited PYTHONPATH or PYTHONHOME makes
+# it import a foreign standard library. The failure surfaces as an unparseable
+# access token, which reads as an authentication problem rather than a leaked
+# environment; these are never right for a subprocess that is not this Python.
+_FOREIGN_INTERPRETER_VARS = ("PYTHONPATH", "PYTHONHOME")
+
+
+def gcloud_env(env: Mapping[str, str]) -> dict[str, str]:
+    """Return *env* as the gcloud CLI should see it: without this interpreter's."""
+    return {name: value for name, value in env.items() if name not in _FOREIGN_INTERPRETER_VARS}
+
 
 @dataclass(frozen=True)
 class Response:
@@ -81,10 +92,13 @@ _SERVING_FIELDS = (
 class GcloudStore:
     """A bucket-scoped object adapter; ``prefix`` confines every operation.
 
-    ``expiry_seconds`` describes caller-verified Age-based Delete eligibility,
-    not a deletion deadline. This adapter does not inspect/change bucket rules.
-    Without that explicit policy renewal is unsupported. Multipart uploads hold
-    one object's bytes in memory, consistent with the byte-oriented store API.
+    ``env`` is what gcloud authenticates in, stripped of the variables that
+    configure *this* interpreter (see :func:`gcloud_env`); it defaults to the
+    process environment. ``expiry_seconds`` describes caller-verified Age-based
+    Delete eligibility, not a deletion deadline. This adapter does not
+    inspect/change bucket rules. Without that explicit policy renewal is
+    unsupported. Multipart uploads hold one object's bytes in memory, consistent
+    with the byte-oriented store API.
     """
 
     def __init__(
@@ -107,7 +121,7 @@ class GcloudStore:
         if timeout <= 0 or (expiry_seconds is not None and expiry_seconds <= 0):
             raise ValueError("timeout and configured expiry must be positive")
         self.bucket, self.prefix = bucket, prefix
-        self.env = dict(os.environ if env is None else env)
+        self.env = gcloud_env(os.environ if env is None else env)
         self.timeout, self.transport, self.runner = timeout, transport, runner
         self.token_provider = token_provider
         self.expiry_seconds, self.clock = expiry_seconds, clock
