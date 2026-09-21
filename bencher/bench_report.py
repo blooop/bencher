@@ -121,7 +121,9 @@ class Publisher(Protocol):
 
     Any object with a ``publish(report)`` method satisfies this protocol.
     Downstream projects implement their own publishers (GCS, S3, etc.)
-    without modifying bencher.
+    without modifying bencher. This is the in-process seam: a run calls it with
+    a live report. To publish a directory :meth:`BenchReport.save_report` has
+    already frozen, see :class:`bencher.publishing.CompleteReportPublisher`.
     """
 
     def publish(self, report: BenchReport) -> str | None:

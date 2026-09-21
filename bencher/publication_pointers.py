@@ -132,7 +132,7 @@ def update_pointer(  # pylint: disable=too-many-return-statements
 ) -> PointerUpdated | PointerUnchanged | PointerFailed:
     """Reread/reorder after CAS conflicts; fail closed on unknown existing state.
 
-    Report callers should use ``Publisher.point`` to verify target dependencies.
+    Report callers should use ``CompleteReportPublisher.point`` to verify target dependencies.
     Other callers supply ``verify_target`` for their own lifetime/eligibility
     contracts. This primitive cannot infer a deployment's dependency graph.
     """

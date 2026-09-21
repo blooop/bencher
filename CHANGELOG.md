@@ -20,6 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fields. An explicit argument still wins, an empty variable is an absent one, and
   bencher still runs no subprocess and infers no revision of its own.
 
+### Changed
+- **`bencher.publishing.Publisher` is now `CompleteReportPublisher`.** Two public
+  classes were called `Publisher`: the protocol in `bencher.bench_report`, exported as
+  `bn.Publisher`, which a run calls in-process with a live report, and the concrete
+  class that commits an already-frozen report directory to an object store. The two do
+  different jobs at different seams, and sharing a name made every discussion of "the
+  publisher" ambiguous and every `grep` useless. The protocol keeps its name, since it
+  is the one downstream projects implement; the concrete class is renamed, with no
+  alias left behind — a name that still resolves is a collision that still exists.
+
 ### Fixed
 - **`GcloudStore` authenticated under whatever interpreter the caller had.** `env`
   defaulted to a copy of `os.environ`, which `_auth` passed to
