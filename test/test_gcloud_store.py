@@ -146,7 +146,11 @@ def test_gcloud_never_authenticates_under_a_foreign_interpreter():
 
     store = GcloudStore(
         "bucket",
-        env={"PYTHONPATH": "/ros", "PYTHONHOME": "/venv", "CLOUDSDK_CONFIG": "/isolated"},
+        env={
+            "PYTHONPATH": "/opt/other/site-packages",
+            "PYTHONHOME": "/opt/other",
+            "CLOUDSDK_CONFIG": "/isolated",
+        },
         runner=runner,
     )
     store.write("key", b"abc", CreateOnly())
@@ -155,7 +159,7 @@ def test_gcloud_never_authenticates_under_a_foreign_interpreter():
 
 def test_the_default_environment_is_stripped_too(monkeypatch):
     """The default is the process environment, which is where these leak from."""
-    monkeypatch.setenv("PYTHONPATH", "/ros")
+    monkeypatch.setenv("PYTHONPATH", "/opt/other/site-packages")
     monkeypatch.setenv("BENCHER_TEST_MARKER", "kept")
     seen = {}
 
