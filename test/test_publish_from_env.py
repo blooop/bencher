@@ -209,9 +209,7 @@ def test_a_lifetime_the_stores_cannot_honour_is_refused_at_construction(field, v
     """`nan` is neither positive nor negative, so every `<= 0` guard downstream
     waves it through and the lifetime a publication requires is never checked."""
     with pytest.raises(ValueError, match=field):
-        PublicationTarget(
-            store="/store", prefix="reports", http_base=HTTP_BASE, **{field: value}
-        )
+        PublicationTarget(store="/store", prefix="reports", http_base=HTTP_BASE, **{field: value})
 
 
 @pytest.mark.parametrize("field", ["store", "prefix", "http_base"])

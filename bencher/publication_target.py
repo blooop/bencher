@@ -14,7 +14,11 @@ import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
+
+if TYPE_CHECKING:
+    from bencher.publishing import CompleteReportPublisher
 
 STORE_ENV = "BENCHER_PUBLISH_STORE"
 PREFIX_ENV = "BENCHER_PUBLISH_PREFIX"
@@ -132,7 +136,7 @@ class PublicationTarget:
             raise ValueError("store must be a local directory or gs:// URL")
         return LocalStore(self.store, expiry_seconds=expiry)
 
-    def publisher(self):
+    def publisher(self) -> CompleteReportPublisher:
         """Build the publisher this target describes."""
         from bencher.publishing import CompleteReportPublisher
 
@@ -166,7 +170,11 @@ def save_receipt(path: Path, data: str) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def publish_frozen_report(directory: str | Path, target: PublicationTarget, publisher=None):
+def publish_frozen_report(
+    directory: str | Path,
+    target: PublicationTarget,
+    publisher: CompleteReportPublisher | None = None,
+):
     """Publish a frozen execution directory, persisting the receipt *target* names.
 
     Args:
@@ -188,7 +196,11 @@ def publish_frozen_report(directory: str | Path, target: PublicationTarget, publ
     return outcome
 
 
-def commit_frozen_report(directory: str | Path, target: PublicationTarget, publisher=None):
+def commit_frozen_report(
+    directory: str | Path,
+    target: PublicationTarget,
+    publisher: CompleteReportPublisher | None = None,
+):
     """Publish a frozen execution directory, or raise.
 
     Raises:

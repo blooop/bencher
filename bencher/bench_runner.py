@@ -22,7 +22,7 @@ from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 if TYPE_CHECKING:
-    from bencher.publishing import Published
+    from bencher.publishing import CompleteReportPublisher, Published
 
 logger = logging.getLogger(__name__)
 
@@ -520,7 +520,7 @@ class BenchRunner:
         report: BenchReport,
         directory: str | Path | None,
         publication: PublicationTarget | None,
-        publisher=None,
+        publisher: CompleteReportPublisher | None = None,
     ) -> None:
         """Freeze the run's complete report, and publish it if a target is configured.
 
@@ -546,7 +546,12 @@ class BenchRunner:
             else:
                 logger.error("keeping the report that was not published in %s", staging)
 
-    def _publish(self, directory: Path, publication: PublicationTarget, publisher=None) -> None:
+    def _publish(
+        self,
+        directory: Path,
+        publication: PublicationTarget,
+        publisher: CompleteReportPublisher | None = None,
+    ) -> None:
         """Commit one frozen execution directory, recording its receipt."""
         self.publication = commit_frozen_report(directory, publication, publisher)
         logger.info("Benchmark report published at %s", self.publication.url)
