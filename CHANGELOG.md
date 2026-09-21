@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`bencher.publishing.Publisher` is now `CompleteReportPublisher`.** Two public
+  classes were called `Publisher`: the protocol in `bencher.bench_report`, exported as
+  `bn.Publisher`, which a run calls in-process with a live report, and the concrete
+  class that commits an already-frozen report directory to an object store. The two do
+  different jobs at different seams, and sharing a name made every discussion of "the
+  publisher" ambiguous and every `grep` useless. The protocol keeps its name, since it
+  is the one downstream projects implement; the concrete class is renamed, with no
+  alias left behind — a name that still resolves is a collision that still exists.
+
 ## [1.133.0] - 2026-09-17
 
 ### Added

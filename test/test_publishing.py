@@ -9,7 +9,7 @@ import pytest
 
 from bencher.execution import Execution
 from bencher.object_store import CreateOnly, LocalStore, Present, ReadFailed, WriteFailed
-from bencher.publishing import Published, Publisher, PublishFailed
+from bencher.publishing import CompleteReportPublisher, Published, PublishFailed
 
 
 @pytest.fixture(name="report")
@@ -63,7 +63,7 @@ class RecordingStore(LocalStore):
 
 def test_entry_commits_last_and_retry_never_writes(report, tmp_path):
     store = RecordingStore(tmp_path / "store")
-    publisher = Publisher(store, "reports/test", "https://reports.example.test/bench")
+    publisher = CompleteReportPublisher(store, "reports/test", "https://reports.example.test/bench")
     first = publisher.publish(report)
     assert isinstance(first, Published)
     assert store.writes[-2:] == [
@@ -81,7 +81,7 @@ def test_entry_commits_last_and_retry_never_writes(report, tmp_path):
 
 def test_interruption_before_entry_has_no_success_url_and_can_resume(report, tmp_path):
     store = RecordingStore(tmp_path / "store")
-    publisher = Publisher(store, "reports", "https://example.test")
+    publisher = CompleteReportPublisher(store, "reports", "https://example.test")
     store.fail_key = "index.html"
     assert isinstance(publisher.publish(report), PublishFailed)
     store.fail_key = None
@@ -92,7 +92,7 @@ def test_lost_ack_is_resolved_by_verifying_bytes(report, tmp_path):
     store = RecordingStore(tmp_path / "store")
     store.lose_ack = True
     assert isinstance(
-        Publisher(store, "reports", "https://example.test").publish(report), Published
+        CompleteReportPublisher(store, "reports", "https://example.test").publish(report), Published
     )
 
 
@@ -101,7 +101,7 @@ def test_conflicting_bytes_never_overwrite(report, tmp_path):
     execution = json.loads((report / "report.json").read_text())["execution"]
     key = f"reports/{execution['uuid']}/nested/data.rrd"
     store.write(key, b"different", CreateOnly())
-    outcome = Publisher(store, "reports", "https://example.test").publish(report)
+    outcome = CompleteReportPublisher(store, "reports", "https://example.test").publish(report)
     assert isinstance(outcome, PublishFailed) and "conflict" in outcome.reason
     current = store.read(key)
     assert isinstance(current, Present) and current.data == b"different"
@@ -111,7 +111,7 @@ def test_conflicting_bytes_never_overwrite(report, tmp_path):
 def test_denied_read_is_not_absent(report, tmp_path, monkeypatch):
     store = RecordingStore(tmp_path / "store")
     monkeypatch.setattr(store, "read", lambda key: ReadFailed("denied"))
-    outcome = Publisher(store, "reports", "https://example.test").publish(report)
+    outcome = CompleteReportPublisher(store, "reports", "https://example.test").publish(report)
     assert isinstance(outcome, PublishFailed) and "denied" in outcome.reason
     assert not store.writes
 
@@ -124,12 +124,12 @@ def test_programming_errors_are_not_suppressed(report, tmp_path, monkeypatch):
 
     monkeypatch.setattr(store, "read", broken)
     with pytest.raises(TypeError, match="programming error"):
-        Publisher(store, "reports", "https://example.test").publish(report)
+        CompleteReportPublisher(store, "reports", "https://example.test").publish(report)
 
 
 def test_simultaneous_retries_converge_on_one_receipt(report, tmp_path):
     store = LocalStore(tmp_path / "store")
-    publisher = Publisher(store, "reports", "https://example.test")
+    publisher = CompleteReportPublisher(store, "reports", "https://example.test")
     with ThreadPoolExecutor(4) as pool:
         results = list(pool.map(lambda _: publisher.publish(report), range(4)))
     assert all(isinstance(result, Published) and result == results[0] for result in results)
@@ -142,7 +142,7 @@ def test_committed_report_with_missing_asset_is_not_silently_repaired(
     from bencher.object_store import Absent
 
     store = RecordingStore(tmp_path / "store")
-    publisher = Publisher(store, "reports", "https://example.test")
+    publisher = CompleteReportPublisher(store, "reports", "https://example.test")
     assert isinstance(publisher.publish(report), Published)
     read = store.read
     monkeypatch.setattr(
@@ -158,7 +158,7 @@ def test_new_reference_requires_verified_dependency_lifetime(report, tmp_path):
 
     now = [0.0]
     store = LocalStore(tmp_path / "store", expiry_seconds=90, clock=lambda: now[0])
-    publisher = Publisher(
+    publisher = CompleteReportPublisher(
         store, "reports", "https://example.test", minimum_remaining_seconds=30, clock=lambda: now[0]
     )
     first = publisher.publish(report)
@@ -171,7 +171,9 @@ def test_new_reference_requires_verified_dependency_lifetime(report, tmp_path):
 
 
 def test_receipt_target_cannot_diverge_from_its_manifest(report, tmp_path):
-    publisher = Publisher(LocalStore(tmp_path / "store"), "reports", "https://example.test")
+    publisher = CompleteReportPublisher(
+        LocalStore(tmp_path / "store"), "reports", "https://example.test"
+    )
     first = publisher.publish(report)
     assert isinstance(first, Published)
     wrong_url = replace(first.receipt, url="https://another.example.test/index.html")
@@ -182,9 +184,11 @@ def test_receipt_round_trip_is_verified_by_a_fresh_publisher(report, tmp_path):
     from bencher.publishing import PublicationReceipt
 
     store = LocalStore(tmp_path / "store")
-    first = Publisher(store, "reports", "https://example.test").publish(report)
+    first = CompleteReportPublisher(store, "reports", "https://example.test").publish(report)
     assert isinstance(first, Published)
     decoded = PublicationReceipt.from_dict(json.loads(json.dumps(first.receipt.to_dict())))
     assert decoded == first.receipt
-    fresh = Publisher(LocalStore(tmp_path / "store"), "reports", "https://example.test")
+    fresh = CompleteReportPublisher(
+        LocalStore(tmp_path / "store"), "reports", "https://example.test"
+    )
     assert not isinstance(fresh.verify(decoded), PublishFailed)

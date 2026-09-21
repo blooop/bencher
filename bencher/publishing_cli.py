@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 from bencher.gcloud_store import GcloudStore
 from bencher.object_store import LocalStore
 from bencher.publication_pointers import PointerFailed
-from bencher.publishing import Published, Publisher, PublishFailed
+from bencher.publishing import CompleteReportPublisher, Published, PublishFailed
 
 
 def _store(location: str, expiry_days: float | None):
@@ -65,7 +65,7 @@ def main(argv: list[str]) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        publisher = Publisher(
+        publisher = CompleteReportPublisher(
             _store(args.store, args.expiry_days),
             args.prefix,
             args.http_base,

@@ -52,9 +52,11 @@ def test_publish_cli_failure_is_nonzero_and_visible(tmp_path, capsys):
 
 def test_receipt_survives_failed_pointer_update(report, tmp_path, capsys, monkeypatch):
     from bencher.publication_pointers import PointerFailed
-    from bencher.publishing import Publisher
+    from bencher.publishing import CompleteReportPublisher
 
-    monkeypatch.setattr(Publisher, "point", lambda *args, **kwargs: PointerFailed("denied"))
+    monkeypatch.setattr(
+        CompleteReportPublisher, "point", lambda *args, **kwargs: PointerFailed("denied")
+    )
     receipt = tmp_path / "receipt.json"
     assert (
         main(

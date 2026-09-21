@@ -248,9 +248,9 @@ def test_gcloud_live_disposable_contract(report):
     assert isinstance(second, Listed) and second.complete, second
     assert {item.key for page in [first, second] for item in page.items} == {"key", "race"}
     from bencher.publication_pointers import PointerUpdated
-    from bencher.publishing import Published, Publisher
+    from bencher.publishing import CompleteReportPublisher, Published
 
-    publisher = Publisher(
+    publisher = CompleteReportPublisher(
         store, "reports", "https://example.test/contract", minimum_remaining_seconds=86400
     )
     published = publisher.publish(report)
