@@ -449,6 +449,9 @@ class BenchRunner:
 
         report_directory = report_directory or os.environ.get("BENCHER_REPORT_DIR")
         publication = PublicationTarget.from_env() if publication is None else publication
+        # Built before the first measurement: a prefix or serving root the
+        # publisher refuses would otherwise cost the whole sweep to discover.
+        report_publisher = None if publication is None else publication.publisher()
         complete_report = (
             BenchReport(self.name)
             if report_directory is not None or publication is not None
@@ -508,7 +511,7 @@ class BenchRunner:
                         complete_report.extend_report(report_level)
                     self.show_publish(report_level, show, publish, save, debug)
         if complete_report is not None:
-            self._export(complete_report, report_directory, publication)
+            self._export(complete_report, report_directory, publication, report_publisher)
         return self.results
 
     def _export(
@@ -516,32 +519,35 @@ class BenchRunner:
         report: BenchReport,
         directory: str | Path | None,
         publication: PublicationTarget | None,
+        publisher=None,
     ) -> None:
         """Freeze the run's complete report, and publish it if a target is configured.
 
         Without a report directory the freeze exists only to be published, so it
         is staging: removed once the report is committed, and kept when it is
-        not, with its path in the error. Rendering is cheap next to the
-        measurements it describes, but the measurements are gone either way.
+        not. Rendering is cheap next to the measurements it describes, but the
+        measurements are gone either way, so nothing kept goes unnamed.
         """
         if directory is not None:
             entry = report.save_report(directory)
             if publication is not None:
-                self._publish(entry.parent, publication)
+                self._publish(entry.parent, publication, publisher)
             return
         assert publication is not None
         staging = Path(tempfile.mkdtemp(prefix="bencher-publication-"))
         published = False
         try:
-            self._publish(report.save_report(staging).parent, publication)
+            self._publish(report.save_report(staging).parent, publication, publisher)
             published = True
         finally:
             if published:
                 shutil.rmtree(staging, ignore_errors=True)
+            else:
+                logger.error("keeping the report that was not published in %s", staging)
 
-    def _publish(self, directory: Path, publication: PublicationTarget) -> None:
+    def _publish(self, directory: Path, publication: PublicationTarget, publisher=None) -> None:
         """Commit one frozen execution directory, recording its receipt."""
-        self.publication = commit_frozen_report(directory, publication)
+        self.publication = commit_frozen_report(directory, publication, publisher)
         logger.info("Benchmark report published at %s", self.publication.url)
 
     def show_publish(
