@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.134.0] - 2026-09-21
+## [1.134.0] - 2026-09-22
 
 ### Added
 - **A run can publish its own frozen report.** `BENCHER_REPORT_DIR` let a launcher
