@@ -37,12 +37,12 @@ def main(argv: list[str]) -> int:
             prefix=args.prefix,
             http_base=args.http_base,
             receipt=args.receipt,
+            pointer=args.pointer,
             expiry_days=args.expiry_days,
             minimum_remaining_days=args.minimum_remaining_days,
         )
-        publisher = target.publisher()
         # Persists the committed report's receipt before its separate pointer update.
-        outcome = publish_frozen_report(args.directory, target, publisher)
+        outcome = publish_frozen_report(args.directory, target)
         if isinstance(outcome, PublishFailed):
             print(
                 f"publish failed: {outcome.reason} ({outcome.key or args.directory})",
@@ -51,11 +51,14 @@ def main(argv: list[str]) -> int:
             return 1
         assert isinstance(outcome, Published)
         print(receipt_json(outcome.receipt))
-        if args.pointer:
-            pointed = publisher.point(outcome.receipt, args.pointer)
-            if isinstance(pointed, PointerFailed):
-                print(f"report committed, pointer update failed: {pointed.reason}", file=sys.stderr)
-                return 1
+        if isinstance(outcome.pointer, PointerFailed):
+            # The report is served whatever the pointer did; the exit code says
+            # the deployment's current-report link is the one that is stale.
+            print(
+                f"report committed, pointer update failed: {outcome.pointer.reason}",
+                file=sys.stderr,
+            )
+            return 1
     except (OSError, ValueError) as exc:
         print(f"publish failed: {exc}", file=sys.stderr)
         return 1
