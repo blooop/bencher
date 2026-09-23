@@ -199,7 +199,7 @@ def publish_frozen_report(
     target: PublicationTarget,
     publisher: CompleteReportPublisher | None = None,
 ):
-    """Publish a frozen execution directory, then write the receipt and move the pointer.
+    """Publish a frozen execution directory, write the receipt, move the pointer, renew it.
 
     The report is committed and immutable before either reference is written, so
     neither can unpublish it. A pointer that did not move is therefore reported
@@ -219,12 +219,18 @@ def publish_frozen_report(
         ``Published`` or ``PublishFailed`` -- the receipt is only persisted for
         the former, because an unpublished URL must not be left on disk. Where
         the target names a pointer, ``Published.pointer`` carries the update's
-        own outcome.
+        own outcome, and ``Published.renewal`` what keeping the newly pointed-at
+        execution alive did. A pointer that did not move made nothing newly
+        current, so nothing is renewed and ``renewal`` stays None; a republished
+        execution whose objects were committed long ago is exactly the case that
+        needs it, because a matching retry writes nothing. A refused renewal is
+        reported here too and never as a failed publication.
 
     Raises:
         OSError: If the receipt could not be written. The message carries the
             URL of the report, which was published regardless.
     """
+    from bencher.publication_pointers import PointerUpdated
     from bencher.publishing import Published
 
     publisher = target.publisher() if publisher is None else publisher
@@ -242,7 +248,35 @@ def publish_frozen_report(
         return outcome
     # `point` rebuilds the execution-time candidate and reverifies the report
     # before each CAS attempt, exactly as `bencher publish --pointer` does.
-    return replace(outcome, pointer=publisher.point(outcome.receipt, target.pointer))
+    moved = publisher.point(outcome.receipt, target.pointer)
+    outcome = replace(outcome, pointer=moved)
+    if not isinstance(moved, PointerUpdated):
+        return outcome
+    return replace(outcome, renewal=publisher.renew(target.pointer))
+
+
+def renew_pointed_report(
+    target: PublicationTarget, publisher: CompleteReportPublisher | None = None
+):
+    """Extend the lifetime of the execution this target's pointer names.
+
+    This is the scheduled half of the same job ``publish_frozen_report`` does
+    when a pointer moves. A deployment whose reports expire has to run it
+    between publications too: nothing else resets the storage age of a report
+    that is current but no longer new.
+
+    Returns:
+        A ``bencher.publication_renewal`` outcome. Only ``RenewalIncomplete``
+        and ``RenewalFailed`` ask the caller to do anything.
+
+    Raises:
+        ValueError: If the target names no pointer. There is no execution to
+            keep alive without one, and guessing which is not this function's.
+    """
+    if target.pointer is None:
+        raise ValueError("this target names no pointer, so no execution is current")
+    publisher = target.publisher() if publisher is None else publisher
+    return publisher.renew(target.pointer)
 
 
 def commit_frozen_report(

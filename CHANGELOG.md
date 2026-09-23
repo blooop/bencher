@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **A pointer can no longer outlive the report it redirects to.** `PublicationTarget`
+  has described a backend Age-based Delete policy through `expiry_days` since stores
+  existed, and `minimum_remaining_days` refuses to publish a new reference without that
+  much evidenced lifetime — but nothing ever renewed anything. `ObjectStore.renew` was
+  implemented by both stores and called by nothing, so the execution a pointer named aged
+  out on the backend's schedule like any other, even while it was the current one and the
+  pointer still named it. The redirect then served a URL whose bytes were gone, and the
+  only way to get a working link back was to run the sweep again. `bencher renew` and
+  `CompleteReportPublisher.renew(pointer_key)` resolve the pointer, list the objects of
+  the execution it names and reset the storage age of every one of them, and of the
+  pointer object last, since that is under the same policy too. Publication does the same
+  for the execution it has just made current, which is what a republished older execution
+  needs, because a matching committed retry rewrites nothing; `Published.renewal` carries
+  that outcome and never turns a committed report into a failed publication. A store with
+  no expiry policy answers `RenewalUnsupported`, which is a deployment and not a failure,
+  and a renewal that extends some objects and is refused others answers
+  `RenewalIncomplete` naming both — a report page missing one asset is a broken report
+  page, so there is no such thing as a partial success here.
 - **A run's own publication can move a pointer.** `bencher publish --pointer` has moved
   the one authoritative redirect since pointers existed, but `PublicationTarget.from_env`
   read six variables and none of them named one — so the in-process publication added in

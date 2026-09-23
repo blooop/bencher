@@ -5,8 +5,38 @@ import sys
 from pathlib import Path
 
 from bencher.publication_pointers import PointerFailed
-from bencher.publication_target import PublicationTarget, publish_frozen_report, receipt_json
+from bencher.publication_renewal import (
+    ExecutionRenewed,
+    PointerMoved,
+    RenewalFailed,
+    RenewalIncomplete,
+)
+from bencher.publication_target import (
+    PublicationTarget,
+    publish_frozen_report,
+    receipt_json,
+    renew_pointed_report,
+)
 from bencher.publishing import Published, PublishFailed
+
+
+def _lifetime_diagnostic(outcome) -> str | None:
+    """Return what to tell an operator about a lifetime that was not extended."""
+    if isinstance(outcome, RenewalFailed):
+        return f"{outcome.reason} ({outcome.key})" if outcome.key else outcome.reason
+    if isinstance(outcome, RenewalIncomplete):
+        refused = ", ".join(f"{item.key}: {item.reason}" for item in outcome.refused)
+        return f"{len(outcome.renewed)} objects renewed, {len(outcome.refused)} refused: {refused}"
+    return None
+
+
+def _renewal_summary(outcome) -> str:
+    """Return what an operator should read on a renewal that asks nothing of them."""
+    if isinstance(outcome, ExecutionRenewed):
+        return f"renewed {len(outcome.keys)} objects of {outcome.target}"
+    if isinstance(outcome, PointerMoved):
+        return f"renewed {outcome.renewed}; the pointer now names {outcome.current}"
+    return f"nothing renewed: {outcome.reason}"
 
 
 def main(argv: list[str]) -> int:
@@ -59,7 +89,50 @@ def main(argv: list[str]) -> int:
                 file=sys.stderr,
             )
             return 1
+        if diagnostic := _lifetime_diagnostic(outcome.renewal):
+            # The report is committed and the pointer moved; what is wrong is
+            # that the bytes the pointer now names may be reaped under the
+            # store's age policy while the pointer still names them.
+            print(f"report committed, renewal failed: {diagnostic}", file=sys.stderr)
+            return 1
     except (OSError, ValueError) as exc:
         print(f"publish failed: {exc}", file=sys.stderr)
         return 1
+    return 0
+
+
+def renew_main(argv: list[str]) -> int:
+    """Renew the execution a pointer names, between publications.
+
+    Publication only renews what it has just made current, so a deployment whose
+    store deletes by age runs this on a schedule as well.
+    """
+    parser = argparse.ArgumentParser(prog="bencher renew", description=renew_main.__doc__)
+    parser.add_argument(
+        "--store", required=True, help="Local object database directory or gs:// URL"
+    )
+    parser.add_argument("--prefix", required=True, help="Object-key root; UUID is appended")
+    parser.add_argument(
+        "--http-base", required=True, help="Serving URL root; independent of storage"
+    )
+    parser.add_argument("--pointer", required=True, help="Pointer key naming the current report")
+    parser.add_argument("--expiry-days", type=float, help="Verified backend Age Delete policy")
+    args = parser.parse_args(argv)
+    try:
+        outcome = renew_pointed_report(
+            PublicationTarget(
+                store=args.store,
+                prefix=args.prefix,
+                http_base=args.http_base,
+                pointer=args.pointer,
+                expiry_days=args.expiry_days,
+            )
+        )
+    except (OSError, ValueError) as exc:
+        print(f"renew failed: {exc}", file=sys.stderr)
+        return 1
+    if diagnostic := _lifetime_diagnostic(outcome):
+        print(f"renew failed: {diagnostic}", file=sys.stderr)
+        return 1
+    print(_renewal_summary(outcome))
     return 0

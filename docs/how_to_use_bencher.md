@@ -934,6 +934,59 @@ HTML format fails closed: migrate old aliases explicitly rather than overwriting
 their contents. The lower-level `update_pointer` accepts a `verify_target` callback
 for non-report dependencies; use `CompleteReportPublisher.point` for report targets.
 
+### Keeping the pointed-at report alive
+
+A pointer and the execution it names are separate objects, and a backend
+Age-based Delete policy ages them independently. Being pointed at does not make
+an execution young, so under such a policy the current report is reaped while
+the redirect still names it, and the pointer starts serving a URL whose bytes
+are gone. Publication never renews old objects, so nothing else prevents this.
+
+`bencher renew` extends the lifetime of every object of the execution the
+pointer currently names, and of the pointer object itself:
+
+```bash
+bencher renew --store gs://my-reports-bucket --prefix reports/my-benchmark \
+  --http-base https://reports.example/benchmarks/my-benchmark \
+  --pointer latest/my-benchmark/index.html --expiry-days 30
+```
+
+Run it on a schedule. `publish` and the in-process publication already renew
+the execution they have just made current, and `Published.renewal` carries that
+outcome — but only when the pointer actually moved, because a pointer that did
+not move made nothing newly current. That covers a republished older execution,
+whose objects a matching retry does not rewrite, and it does not cover the far
+more common case of a report that is current for longer than the window.
+
+The Python forms are `CompleteReportPublisher.renew(pointer_key)`,
+`bencher.publication_target.renew_pointed_report(target)` for a configured
+`PublicationTarget`, and the lower-level `renew_pointed_execution(store, key,
+storage_root, http_root)` in `bencher.publication_renewal`. All of them answer
+with a value:
+
+- `ExecutionRenewed` — every object, and the pointer, has a fresh storage age.
+- `RenewalUnsupported` — the store has no expiry policy, so nothing is reaped
+  and there is nothing to keep alive. This is a deployment, not a failure.
+- `NothingPointedAt` — the pointer key names no object yet.
+- `PointerMoved` — a concurrent publication moved the pointer while the renewal
+  ran. The execution that was renewed is the one that was current when the pass
+  started; the one the pointer names now was just published, so it is the
+  youngest thing in the store and the next pass covers it.
+- `RenewalIncomplete` — some objects were renewed and at least one was refused,
+  with the reason per key. **Act on this.** A report page missing one asset is a
+  broken report page, so the execution still expires at its oldest object's age.
+- `RenewalFailed` — nothing could be renewed: the pointer is unreadable, it is
+  not a bencher pointer, it names a report served from somewhere else, or the
+  execution it names no longer has its `report.json` and is already broken.
+
+`bencher renew` exits nonzero for the last two and zero for the rest. `bencher
+publish` does the same, after printing the receipt: the report is committed and
+immutable long before anything is renewed, so a refused renewal is never
+reported as a failed publication. A conflicting object version is reread and
+renewed at the version it now has, within a bounded budget. Renewal extends the
+lifetime of what is stored; it does not prove the report is complete, which is
+what `publisher.verify(receipt)` is for.
+
 ### Remote storage and renewal contract
 
 `read(key)` returns `Present(data, version, metadata, created_at, expires_at)`,
@@ -969,10 +1022,11 @@ No configured policy means unsupported renewal.
 
 Set `CompleteReportPublisher(..., minimum_remaining_seconds=...)` (CLI
 `--minimum-remaining-days` with `--expiry-days`) to require verified dependency
-lifetime before new references. Publication never extends that lifetime itself;
-run explicit maintenance first. A zero minimum promises no retention window.
-Scheduling, graph traversal, retention roots and renewal receipts are separate
-maintenance integration, not implemented by ordinary publication.
+lifetime before new references. Committing a report never extends that lifetime
+itself; run explicit maintenance first. A zero minimum promises no retention
+window. `bencher renew` is that maintenance for the one execution a pointer
+names, and is described above. Scheduling it, traversing anything wider than a
+pointer, and retention roots and renewal receipts remain the deployment's.
 
 The opt-in GCS contract test creates a fresh UUID prefix and small objects:
 

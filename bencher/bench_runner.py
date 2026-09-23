@@ -563,6 +563,17 @@ class BenchRunner:
         logger.info("Benchmark report published at %s", self.publication.url)
         if publication.pointer is not None:
             self._log_pointer(publication.pointer, self.publication.pointer)
+            self._log_renewal(publication.pointer, self.publication.renewal)
+
+    @staticmethod
+    def _log_renewal(key: str, outcome) -> None:
+        """Say whether the newly pointed-at report will outlive an age policy."""
+        from bencher.publication_renewal import RenewalFailed, RenewalIncomplete
+
+        if isinstance(outcome, (RenewalFailed, RenewalIncomplete)):
+            logger.error("Pointer %s serves a report whose lifetime was not extended", key)
+        elif outcome is not None:
+            logger.debug("Pointer %s renewal: %s", key, type(outcome).__name__)
 
     @staticmethod
     def _log_pointer(key: str, outcome) -> None:
