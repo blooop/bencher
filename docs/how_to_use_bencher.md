@@ -956,7 +956,10 @@ the execution they have just made current, and `Published.renewal` carries that
 outcome — but only when the pointer actually moved, because a pointer that did
 not move made nothing newly current. That covers a republished older execution,
 whose objects a matching retry does not rewrite, and it does not cover the far
-more common case of a report that is current for longer than the window.
+more common case of a report that is current for longer than the window. A
+publication that did write its own objects renews bytes that are seconds old,
+which costs one rewrite per object and buys nothing; renewing whatever the
+pointer names is the rule that cannot be wrong, and report objects are small.
 
 The Python forms are `CompleteReportPublisher.renew(pointer_key)`,
 `bencher.publication_target.renew_pointed_report(target)` for a configured

@@ -197,13 +197,19 @@ def test_an_execution_whose_manifest_is_gone_is_already_broken(deployment):
     assert "manifest" in outcome.reason
 
 
-def test_a_target_served_from_somewhere_else_is_not_this_deployments_to_renew(deployment):
+@pytest.mark.parametrize(
+    "target",
+    [
+        "https://elsewhere.test/x/index.html",
+        f"{HTTP_BASE}/../elsewhere/index.html",
+        f"{HTTP_BASE}/",
+    ],
+)
+def test_a_target_served_from_somewhere_else_is_not_this_deployments_to_renew(deployment, target):
     """Storage and serving are independent namespaces, related only by the two roots."""
     from bencher.publication_pointers import update_pointer
 
-    update_pointer(
-        deployment.store, POINTER_KEY, foreign_candidate("https://elsewhere.test/x/index.html")
-    )
+    update_pointer(deployment.store, POINTER_KEY, foreign_candidate(target))
     outcome = deployment.publisher.renew(POINTER_KEY)
     assert isinstance(outcome, RenewalFailed)
     assert "not served from here" in outcome.reason
