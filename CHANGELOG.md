@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A frozen report can reach the machine that is allowed to publish it.** The
+  machine that measures is routinely not the machine that has credentials for the
+  object store: a device runs the benchmark, a host publishes it, and nothing in
+  bencher moved the frozen directory between them. What a caller reaches for is a
+  recursive copy, and that is exactly what `verify_report` was written to catch.
+  `report.json` names every file with its size and digest and accepts nothing else,
+  so a copy that filters by modification time, merges into a shared directory, or
+  simply lets something else write alongside produces a directory its own inventory
+  rightly refuses — and the refusal arrives at publication time, on the machine that
+  cannot run the benchmark again. `bencher pack <directory> <archive>` verifies the
+  directory and seals it into one file; `bencher unpack <archive> <directory>` writes
+  it back and verifies it where it landed, and `commit_frozen_report` publishes the
+  result with nothing else done to it. `pack_report` and `unpack_report` are the
+  in-process forms, answering `ReportPacked` and `ReportUnpacked`. The archive is a
+  gzip tar whose members are normalised — sorted by path, mode 0644, mtime 0, no
+  owner, no directory entries — and whose gzip header records neither a name nor a
+  time, so packing one directory twice produces the same bytes. That is a
+  convenience for caching, not the correctness argument: the report's identity is
+  still `report.json`, and the archive's own SHA-256 is there so a transfer can prove
+  it moved the file intact. Every archive is untrusted input even though its producer
+  is trusted, so absolute paths, `..` components, symlinks, hard links, device nodes,
+  anything that is not a regular file, any member the inventory does not list, and
+  any archive that expands past `max_bytes` are all refused before one byte is
+  written. How the file travels — ssh, a bucket, a courier with a disk — stays the
+  caller's business: bencher packs a directory and unpacks a file, and knows nothing
+  about the road between.
+- **A published report can say how to run it again.** An `Execution` has carried
+  `display_label`, `source_revision`, `workflow`, `workflow_run`, `lane` and
+  `attempt` since complete reports existed, and every one of them describes what
+  was measured — not one of them says how. The launcher is the one thing that
+  knows, because it composed the command, and all it could do with that command
+  was print it to a terminal, where it is gone as soon as the scrollback is.
+  Whoever opened the published URL a week later had a revision, a workflow name
+  and a run id, and no way to turn any of them into something to run.
+  `BENCHER_REPRODUCE_COMMAND`, and `Execution.start(reproduce_command=...)` in
+  process, record it under the same rules as the other six: an argument wins over
+  the variable, a blank variable is absent rather than `""`, and a field the
+  caller supplied is not read from the environment at all. The frozen report's
+  entry page now ends with the whole recorded provenance, the command last, so
+  the reader who opens the published URL finds it without opening `report.json`.
+  Bencher never composes this string and never runs it — it is opaque display
+  text, escaped where it reaches the page, and what it says is the launcher's
+  business. It is capped at 1024 characters, because an unbounded environment
+  variable is otherwise an unbounded string in every `report.json` and on every
+  page. `report.json` stays at `schema_version: 1`: a field with a default
+  changes nothing for a reader that reads the manifest as data.
+- **A pointer can no longer outlive the report it redirects to.** `PublicationTarget`
+  has described a backend Age-based Delete policy through `expiry_days` since stores
+  existed, and `minimum_remaining_days` refuses to publish a new reference without that
+  much evidenced lifetime — but nothing ever renewed anything. `ObjectStore.renew` was
+  implemented by both stores and called by nothing, so the execution a pointer named aged
+  out on the backend's schedule like any other, even while it was the current one and the
+  pointer still named it. The redirect then served a URL whose bytes were gone, and the
+  only way to get a working link back was to run the sweep again. `bencher renew` and
+  `CompleteReportPublisher.renew(pointer_key)` resolve the pointer, list the objects of
+  the execution it names and reset the storage age of every one of them, and of the
+  pointer object last, since that is under the same policy too. Publication does the same
+  for the execution it has just made current, which is what a republished older execution
+  needs, because a matching committed retry rewrites nothing; `Published.renewal` carries
+  that outcome and never turns a committed report into a failed publication. A store with
+  no expiry policy answers `RenewalUnsupported`, which is a deployment and not a failure,
+  and a renewal that extends some objects and is refused others answers
+  `RenewalIncomplete` naming both — a report page missing one asset is a broken report
+  page, so there is no such thing as a partial success here.
+- **A run's own publication can move a pointer.** `bencher publish --pointer` has moved
+  the one authoritative redirect since pointers existed, but `PublicationTarget.from_env`
+  read six variables and none of them named one — so the in-process publication added in
+  1.134.0 could only ever produce the immutable per-execution URL it had just committed.
+  A launcher that published from the run had no way to say "and this is now the newest
+  report for this thing" without finding the frozen directory and running a second
+  command, which is exactly the work publishing inline had removed. `BENCHER_PUBLISH_POINTER`
+  names the object key, and `PublicationTarget(pointer=...)` is the in-process form;
+  `bencher publish` now builds the same target and takes the same path, with no change to
+  its arguments. The report is committed and immutable before the pointer moves, so a
+  refused update is reported as `Published.pointer` and never as a failed publication:
+  the CLI still exits nonzero to say the redirect is stale, and a run logs it and keeps
+  the URL it published. `PointerUnchanged` is not a failure — it is what republishing an
+  older execution is supposed to do. The receipt is written first and does not record the
+  pointer: a receipt describes immutable content, and a pointer is whatever the newest
+  publication last made it.
+
 ## [1.134.0] - 2026-09-22
 
 ### Added

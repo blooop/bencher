@@ -688,7 +688,10 @@ zero-baseline percent change) are emitted as `null`.
 `BenchReport.save_report(root)` freezes a complete execution under
 `root/<execution-uuid>/index.html`. It includes tabs, collision-free per-result
 summaries, referenced local media, and a versioned `report.json` inventory of
-relative paths, byte sizes and SHA-256 digests. Use `bn.verify_report(directory)`
+relative paths, byte sizes and SHA-256 digests. The entry page ends with the
+recorded provenance — label, revision, workflow, lane, attempt and the reproduce
+command — so a reader who opens the published URL does not have to read
+`report.json` to find out what the report describes. Use `bn.verify_report(directory)`
 before transferring the directory. Serve it over HTTP; CDN libraries still need
 network access. Moving the directory does not require its original cache.
 
@@ -709,6 +712,7 @@ export BENCHER_SOURCE_REVISION=$(git rev-parse HEAD)
 export BENCHER_WORKFLOW=nightly BENCHER_WORKFLOW_RUN=$CI_RUN_ID
 export BENCHER_LANE=$RUNNER_NAME
 export BENCHER_ATTEMPT=$GITHUB_RUN_ATTEMPT   # 1 on the first run, not 0
+export BENCHER_REPRODUCE_COMMAND="nightly-bench --suite sin --lane $RUNNER_NAME"
 ```
 
 Every execution started in that environment carries those fields, so the frozen
@@ -726,6 +730,16 @@ directly:
 ```bash
 export BENCHER_ATTEMPT=$((BUILDKITE_RETRY_COUNT + 1))
 ```
+
+`BENCHER_REPRODUCE_COMMAND` is the only one of these about the future rather
+than the past: it says how to run this execution again. Bencher never composes it
+and never runs it. It is opaque display text the launcher writes — bencher records
+it in `report.json` and shows it on the frozen report's entry page, escaped, and
+nothing parses it or checks that it still works. What it says is the launcher's
+business: a shell line, a `make` target, a job name, whatever the reader of the
+report needs. It is at most 1024 characters, because every character of it is
+carried by `report.json` and rendered into the page; a launcher with more to say
+exports the name of a script instead.
 
 Bencher reports all of these and never checks them: export them per job, not from
 a long-lived shell, where they would outlive the checkout they name.
@@ -871,6 +885,7 @@ export BENCHER_PUBLISH_STORE=gs://my-reports-bucket
 export BENCHER_PUBLISH_PREFIX=reports/my-benchmark
 export BENCHER_PUBLISH_HTTP_BASE=https://reports.example/benchmarks/my-benchmark
 export BENCHER_PUBLISH_RECEIPT=published.json   # optional
+export BENCHER_PUBLISH_POINTER=latest/my-benchmark/index.html   # optional
 python my_benchmark.py                          # calls bn.run(...)
 ```
 
@@ -879,6 +894,18 @@ the remaining CLI options. `bn.run(..., publication=bn.PublicationTarget(...))`
 is the in-process equivalent, and `BenchRunner.publication` holds the receipt
 afterwards. Read the URL from the receipt file rather than from stdout, which a
 benchmark shares with everything else it prints.
+
+`BENCHER_PUBLISH_POINTER` is `--pointer`: an object key in the same store,
+holding the redirect that answers "where is the newest report for this?". Every
+report URL names one immutable execution, so without a pointer there is no
+stable name to link to at all. The report is committed before the pointer moves
+and the pointer cannot take it back, so a refused update never reads as a failed
+publication: `BenchRunner.publication.url` still names the served report and
+`BenchRunner.publication.pointer` holds the `PointerFailed`, which the run logs
+rather than raises. `PointerUnchanged` is not a failure either — it is what
+republishing an older execution is supposed to do. An exported-but-empty
+variable is an unset one; `PublicationTarget(pointer="")` is refused, because a
+caller that asked for a pointer named no object.
 
 Configuring publication enables the complete export on its own: without
 `BENCHER_REPORT_DIR` the report is frozen into a temporary directory that is
@@ -921,6 +948,117 @@ HTML format fails closed: migrate old aliases explicitly rather than overwriting
 their contents. The lower-level `update_pointer` accepts a `verify_target` callback
 for non-report dependencies; use `CompleteReportPublisher.point` for report targets.
 
+### Moving a frozen report to another machine
+
+The machine that measures is often not the machine that may publish. A device
+running a benchmark has no credentials for the object store, and the host that
+has them never ran the benchmark, so the frozen directory has to cross between
+them. Do not copy it recursively: `report.json` accepts exactly the files it
+lists, and a copy that filters by modification time, merges into a shared
+directory, or lets anything write alongside produces a directory verification
+rightly refuses — on the machine that cannot run the benchmark again.
+
+Pack it into one file instead:
+
+```bash
+# On the machine that ran the benchmark and has no credentials:
+bencher pack reports/my-benchmark/EXECUTION_UUID transfer.tar.gz
+
+# Move transfer.tar.gz however you like: scp, a bucket, a disk in a bag.
+
+# On the machine that has the credentials and never ran the benchmark:
+bencher unpack transfer.tar.gz incoming/EXECUTION_UUID
+bencher publish incoming/EXECUTION_UUID --store gs://my-reports-bucket \
+  --prefix reports/my-benchmark \
+  --http-base https://reports.example/benchmarks/my-benchmark
+```
+
+Packing verifies the directory first, because sealing bytes that already fail
+their own inventory only moves the failure to the far side. Unpacking verifies
+what it wrote before handing the directory over, so the result is publishable as
+it stands and `bencher publish` asks for nothing more. The in-process forms are
+`bn.pack_report(directory, archive)` and `bn.unpack_report(archive, directory)`;
+they answer `ReportPacked` and `ReportUnpacked`, and raise `ValueError` on every
+refusal below.
+
+The archive is a gzip tar with normalised members — sorted by path, mode 0644,
+mtime 0, no owner, no directory entries — and a gzip header that records neither
+a name nor a time, so packing one directory twice gives the same bytes for a
+given zlib build. Treat that as a convenience for caching rather than as the
+report's identity, which remains `report.json` and its per-file digests;
+`ReportPacked.sha256` is the archive's own digest, for proving that a transfer
+moved the file intact.
+
+Both ends refuse rather than repair. Packing refuses a directory that fails
+`verify_report`, an archive path that is already taken, and content that changed
+while it was being read. Unpacking treats every archive as untrusted input, even
+from a producer you trust: absolute paths, `..` components, symlinks, hard links,
+device nodes, anything that is not a regular file, a duplicate member, a member
+the inventory does not list, a missing one, and an archive that expands past
+`--max-bytes` (4 GiB by default) are all refused before anything is written.
+The destination directory must not exist — a frozen execution is immutable, and
+unpacking into an existing directory is the merge these inventories exist to
+catch. A failed unpack leaves no directory behind.
+
+How the file travels is not bencher's business. There is no ssh, no bucket and
+no CI in any of this: bencher packs a directory and unpacks a file.
+
+### Keeping the pointed-at report alive
+
+A pointer and the execution it names are separate objects, and a backend
+Age-based Delete policy ages them independently. Being pointed at does not make
+an execution young, so under such a policy the current report is reaped while
+the redirect still names it, and the pointer starts serving a URL whose bytes
+are gone. Publication never renews old objects, so nothing else prevents this.
+
+`bencher renew` extends the lifetime of every object of the execution the
+pointer currently names, and of the pointer object itself:
+
+```bash
+bencher renew --store gs://my-reports-bucket --prefix reports/my-benchmark \
+  --http-base https://reports.example/benchmarks/my-benchmark \
+  --pointer latest/my-benchmark/index.html --expiry-days 30
+```
+
+Run it on a schedule. `publish` and the in-process publication already renew
+the execution they have just made current, and `Published.renewal` carries that
+outcome — but only when the pointer actually moved, because a pointer that did
+not move made nothing newly current. That covers a republished older execution,
+whose objects a matching retry does not rewrite, and it does not cover the far
+more common case of a report that is current for longer than the window. A
+publication that did write its own objects renews bytes that are seconds old,
+which costs one rewrite per object and buys nothing; renewing whatever the
+pointer names is the rule that cannot be wrong, and report objects are small.
+
+The Python forms are `CompleteReportPublisher.renew(pointer_key)`,
+`bencher.publication_target.renew_pointed_report(target)` for a configured
+`PublicationTarget`, and the lower-level `renew_pointed_execution(store, key,
+storage_root, http_root)` in `bencher.publication_renewal`. All of them answer
+with a value:
+
+- `ExecutionRenewed` — every object, and the pointer, has a fresh storage age.
+- `RenewalUnsupported` — the store has no expiry policy, so nothing is reaped
+  and there is nothing to keep alive. This is a deployment, not a failure.
+- `NothingPointedAt` — the pointer key names no object yet.
+- `PointerMoved` — a concurrent publication moved the pointer while the renewal
+  ran. The execution that was renewed is the one that was current when the pass
+  started; the one the pointer names now was just published, so it is the
+  youngest thing in the store and the next pass covers it.
+- `RenewalIncomplete` — some objects were renewed and at least one was refused,
+  with the reason per key. **Act on this.** A report page missing one asset is a
+  broken report page, so the execution still expires at its oldest object's age.
+- `RenewalFailed` — nothing could be renewed: the pointer is unreadable, it is
+  not a bencher pointer, it names a report served from somewhere else, or the
+  execution it names no longer has its `report.json` and is already broken.
+
+`bencher renew` exits nonzero for the last two and zero for the rest. `bencher
+publish` does the same, after printing the receipt: the report is committed and
+immutable long before anything is renewed, so a refused renewal is never
+reported as a failed publication. A conflicting object version is reread and
+renewed at the version it now has, within a bounded budget. Renewal extends the
+lifetime of what is stored; it does not prove the report is complete, which is
+what `publisher.verify(receipt)` is for.
+
 ### Remote storage and renewal contract
 
 `read(key)` returns `Present(data, version, metadata, created_at, expires_at)`,
@@ -956,10 +1094,11 @@ No configured policy means unsupported renewal.
 
 Set `CompleteReportPublisher(..., minimum_remaining_seconds=...)` (CLI
 `--minimum-remaining-days` with `--expiry-days`) to require verified dependency
-lifetime before new references. Publication never extends that lifetime itself;
-run explicit maintenance first. A zero minimum promises no retention window.
-Scheduling, graph traversal, retention roots and renewal receipts are separate
-maintenance integration, not implemented by ordinary publication.
+lifetime before new references. Committing a report never extends that lifetime
+itself; run explicit maintenance first. A zero minimum promises no retention
+window. `bencher renew` is that maintenance for the one execution a pointer
+names, and is described above. Scheduling it, traversing anything wider than a
+pointer, and retention roots and renewal receipts remain the deployment's.
 
 The opt-in GCS contract test creates a fresh UUID prefix and small objects:
 
