@@ -871,6 +871,7 @@ export BENCHER_PUBLISH_STORE=gs://my-reports-bucket
 export BENCHER_PUBLISH_PREFIX=reports/my-benchmark
 export BENCHER_PUBLISH_HTTP_BASE=https://reports.example/benchmarks/my-benchmark
 export BENCHER_PUBLISH_RECEIPT=published.json   # optional
+export BENCHER_PUBLISH_POINTER=latest/my-benchmark/index.html   # optional
 python my_benchmark.py                          # calls bn.run(...)
 ```
 
@@ -879,6 +880,18 @@ the remaining CLI options. `bn.run(..., publication=bn.PublicationTarget(...))`
 is the in-process equivalent, and `BenchRunner.publication` holds the receipt
 afterwards. Read the URL from the receipt file rather than from stdout, which a
 benchmark shares with everything else it prints.
+
+`BENCHER_PUBLISH_POINTER` is `--pointer`: an object key in the same store,
+holding the redirect that answers "where is the newest report for this?". Every
+report URL names one immutable execution, so without a pointer there is no
+stable name to link to at all. The report is committed before the pointer moves
+and the pointer cannot take it back, so a refused update never reads as a failed
+publication: `BenchRunner.publication.url` still names the served report and
+`BenchRunner.publication.pointer` holds the `PointerFailed`, which the run logs
+rather than raises. `PointerUnchanged` is not a failure either — it is what
+republishing an older execution is supposed to do. An exported-but-empty
+variable is an unset one; `PublicationTarget(pointer="")` is refused, because a
+caller that asked for a pointer named no object.
 
 Configuring publication enables the complete export on its own: without
 `BENCHER_REPORT_DIR` the report is frozen into a temporary directory that is

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A run's own publication can move a pointer.** `bencher publish --pointer` has moved
+  the one authoritative redirect since pointers existed, but `PublicationTarget.from_env`
+  read six variables and none of them named one — so the in-process publication added in
+  1.134.0 could only ever produce the immutable per-execution URL it had just committed.
+  A launcher that published from the run had no way to say "and this is now the newest
+  report for this thing" without finding the frozen directory and running a second
+  command, which is exactly the work publishing inline had removed. `BENCHER_PUBLISH_POINTER`
+  names the object key, and `PublicationTarget(pointer=...)` is the in-process form;
+  `bencher publish` now builds the same target and takes the same path, with no change to
+  its arguments. The report is committed and immutable before the pointer moves, so a
+  refused update is reported as `Published.pointer` and never as a failed publication:
+  the CLI still exits nonzero to say the redirect is stale, and a run logs it and keeps
+  the URL it published. `PointerUnchanged` is not a failure — it is what republishing an
+  older execution is supposed to do. The receipt is written first and does not record the
+  pointer: a receipt describes immutable content, and a pointer is whatever the newest
+  publication last made it.
+
 ## [1.134.0] - 2026-09-22
 
 ### Added

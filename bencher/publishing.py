@@ -8,6 +8,7 @@ import mimetypes
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import quote, urlsplit
 
 from bencher.complete_report import safe_path, verify_report
@@ -19,6 +20,9 @@ from bencher.object_store import (
     ReadFailed,
     WriteFailed,
 )
+
+if TYPE_CHECKING:
+    from bencher.publication_pointers import PointerFailed, PointerUnchanged, PointerUpdated
 
 
 def http_base(value: str) -> str:
@@ -59,8 +63,17 @@ class PublicationReceipt:
 
 @dataclass(frozen=True)
 class Published:
+    """A committed report, and what the publication then did about a pointer.
+
+    ``publish`` never moves a pointer, so it leaves ``pointer`` None; so does a
+    target that names none. ``publish_frozen_report`` fills it in, and the
+    report is committed either way -- a ``PointerFailed`` here reports a stale
+    redirect, never a report that was not published.
+    """
+
     url: str
     receipt: PublicationReceipt
+    pointer: PointerUpdated | PointerUnchanged | PointerFailed | None = None
 
 
 @dataclass(frozen=True)

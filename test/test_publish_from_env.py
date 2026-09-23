@@ -3,26 +3,45 @@
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 
 import bencher as bn
 from bencher.example.benchmark_data import ExampleBenchCfg
-from bencher.object_store import LocalStore, Present
+from bencher.object_store import Absent, LocalStore, Present
+from bencher.publication_pointers import (
+    PointerFailed,
+    PointerUnchanged,
+    PointerUpdated,
+    read_pointer,
+)
 from bencher.publication_target import (
     HTTP_BASE_ENV,
+    POINTER_ENV,
     PREFIX_ENV,
     RECEIPT_ENV,
     STORE_ENV,
     PublicationFailed,
     PublicationTarget,
+    commit_frozen_report,
     publish_frozen_report,
 )
-from bencher.publishing import PublicationReceipt, Published, PublishFailed
+from bencher.publishing import (
+    CompleteReportPublisher,
+    PublicationReceipt,
+    Published,
+    PublishFailed,
+)
+
+# The frozen report directory every pointer test publishes, without a sweep.
+pytest_plugins = ["test.test_publishing"]
 
 HTTP_BASE = "https://reports.example.test/bench"
+POINTER_KEY = "latest/index.html"
 
 
 def benchmark(run_cfg=None):
@@ -290,3 +309,120 @@ def test_a_receipt_that_cannot_be_written_still_names_the_published_url(tmp_path
     publisher = SimpleNamespace(publish=lambda directory: Published(url=url, receipt=receipt))
     with pytest.raises(OSError, match=url):
         publish_frozen_report(tmp_path, target, publisher)
+
+
+def pointed(tmp_path, pointer: str | None = POINTER_KEY, **overrides) -> PublicationTarget:
+    return PublicationTarget(
+        store=str(tmp_path / "store"),
+        prefix="reports",
+        http_base=HTTP_BASE,
+        pointer=pointer,
+        **overrides,
+    )
+
+
+def reexecuted(source, destination, executed_at: str):
+    """Copy a frozen report as if a different execution had produced it."""
+    shutil.copytree(source, destination)
+    manifest = json.loads((destination / "report.json").read_text())
+    manifest["execution"]["uuid"] = str(uuid4())
+    manifest["execution"]["executed_at"] = executed_at
+    (destination / "report.json").write_text(json.dumps(manifest))
+    return destination
+
+
+def test_a_pointer_is_absent_unless_the_environment_names_one():
+    """An exported-but-empty variable is an unset one, as it is for the receipt."""
+    base = {STORE_ENV: "/store", PREFIX_ENV: "reports", HTTP_BASE_ENV: HTTP_BASE}
+    assert PublicationTarget.from_env(base).pointer is None
+    assert PublicationTarget.from_env({**base, POINTER_ENV: ""}).pointer is None
+    assert PublicationTarget.from_env({**base, POINTER_ENV: POINTER_KEY}).pointer == POINTER_KEY
+
+
+def test_a_pointer_set_to_nothing_is_not_the_same_as_no_pointer():
+    """The caller asked for a pointer, and no store holds an object named "".
+    Reading it as "no pointer" would serve a stale redirect forever and say
+    nothing, which is the failure this whole feature exists to prevent."""
+    with pytest.raises(ValueError, match="pointer"):
+        PublicationTarget(store="/store", prefix="reports", http_base=HTTP_BASE, pointer="")
+
+
+def test_a_pointer_key_the_store_would_refuse_is_refused_before_the_sweep():
+    """The update runs after every measurement, so the key is checked with the
+    rest of the target, where a typo costs nothing."""
+    with pytest.raises(ValueError, match="unsafe inventory path"):
+        PublicationTarget(
+            store="/store", prefix="reports", http_base=HTTP_BASE, pointer="../escape"
+        )
+
+
+def test_a_publication_with_no_pointer_writes_none(report, tmp_path):
+    outcome = publish_frozen_report(report, pointed(tmp_path, pointer=None))
+    assert isinstance(outcome, Published)
+    assert outcome.pointer is None
+    assert isinstance(LocalStore(str(tmp_path / "store")).read(POINTER_KEY), Absent)
+
+
+def test_a_configured_pointer_names_the_report_that_was_just_published(report, tmp_path):
+    outcome = publish_frozen_report(report, pointed(tmp_path))
+    assert isinstance(outcome, Published)
+    assert isinstance(outcome.pointer, PointerUpdated)
+    current = LocalStore(str(tmp_path / "store")).read(POINTER_KEY)
+    assert isinstance(current, Present)
+    assert read_pointer(current.data).target == outcome.url
+
+
+def test_republishing_an_older_execution_leaves_the_pointer_alone(report, tmp_path):
+    """Ranking is by measurement time, not upload time, so replaying an old
+    execution publishes its own immutable URL and moves nothing."""
+    target = pointed(tmp_path)
+    newest = publish_frozen_report(report, target)
+    older = reexecuted(report, tmp_path / "older", "2020-01-01T00:00:00+00:00")
+    outcome = publish_frozen_report(older, target)
+    assert isinstance(outcome, Published)
+    assert isinstance(outcome.pointer, PointerUnchanged)
+    assert outcome.url != newest.url
+    current = LocalStore(str(tmp_path / "store")).read(POINTER_KEY)
+    assert read_pointer(current.data).target == newest.url
+
+
+def test_a_refused_pointer_does_not_unpublish_the_report(report, tmp_path, monkeypatch):
+    """The bytes are committed before the pointer moves. Reporting a failure
+    here would send a caller off to run a sweep whose report is already served."""
+    monkeypatch.setattr(
+        CompleteReportPublisher, "point", lambda *args, **kwargs: PointerFailed("denied")
+    )
+    receipt = tmp_path / "receipt.json"
+    outcome = commit_frozen_report(report, pointed(tmp_path, receipt=receipt))
+    assert isinstance(outcome, Published)
+    assert outcome.pointer == PointerFailed("denied")
+    assert json.loads(receipt.read_text())["url"] == outcome.url
+
+
+@pytest.mark.usefixtures("configured")
+def test_a_run_points_at_the_report_it_froze(tmp_path, monkeypatch):
+    """The asymmetry this closes: the CLI could move a pointer and a run could not."""
+    monkeypatch.setenv(POINTER_ENV, POINTER_KEY)
+    monkeypatch.chdir(tmp_path)
+    runner = bn.BenchRunner("pointed", run_cfg=bn.BenchRunCfg())
+    runner.add(benchmark)
+    runner.run(show=False)
+    assert isinstance(runner.publication.pointer, PointerUpdated)
+    current = LocalStore(str(tmp_path / "store")).read(POINTER_KEY)
+    assert isinstance(current, Present)
+    assert read_pointer(current.data).target == runner.publication.url
+
+
+@pytest.mark.usefixtures("configured")
+def test_a_run_keeps_its_url_when_the_pointer_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setenv(POINTER_ENV, POINTER_KEY)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        CompleteReportPublisher, "point", lambda *args, **kwargs: PointerFailed("denied")
+    )
+    runner = bn.BenchRunner("pointed", run_cfg=bn.BenchRunCfg())
+    runner.add(benchmark)
+    runner.run(show=False)
+    assert runner.publication.url.startswith(f"{HTTP_BASE}/")
+    assert runner.publication.pointer == PointerFailed("denied")
+    assert json.loads((tmp_path / "receipt.json").read_text())["url"] == runner.publication.url
