@@ -80,6 +80,59 @@ def verify_report(directory: str | Path) -> dict:
     return manifest
 
 
+# The recorded provenance, in the order a reader asks for it: what the run was
+# called, which revision and job produced it, and last, how to run it again.
+_PROVENANCE_FIELDS = (
+    ("display_label", "run"),
+    ("source_revision", "revision"),
+    ("workflow", "workflow"),
+    ("workflow_run", "workflow run"),
+    ("lane", "lane"),
+    ("attempt", "attempt"),
+    ("reproduce_command", "reproduce"),
+)
+
+
+def provenance_html(execution: Execution) -> str:
+    """Render recorded provenance as a block appended to the entry page.
+
+    Every value is free text an out-of-process launcher exported into a page other
+    people open, so every value is escaped. ``reproduce_command`` is shown and
+    never run: bencher neither composes it nor checks that it still works.
+    """
+    rows = []
+    for field, label in _PROVENANCE_FIELDS:
+        value = getattr(execution, field)
+        if value is None:
+            continue
+        name = html.escape(label)
+        text = html.escape(str(value))
+        tag = "code" if field == "reproduce_command" else "span"
+        rows.append(f"<dt>{name}</dt><dd><{tag}>{text}</{tag}></dd>")
+    rows.append(f"<dt>execution</dt><dd><span>{html.escape(execution.uuid)}</span></dd>")
+    rows.append(f"<dt>started</dt><dd><span>{html.escape(execution.executed_at)}</span></dd>")
+    return (
+        '<footer class="bencher-provenance" style="font:13px/1.6 system-ui,sans-serif;'
+        'padding:12px 16px;border-top:1px solid rgba(128,128,128,0.35);">'
+        '<dl style="display:grid;grid-template-columns:max-content 1fr;gap:2px 12px;margin:0;">'
+        + "".join(rows)
+        + "</dl></footer>"
+    )
+
+
+def append_provenance(page: Path, execution: Execution) -> None:
+    """Put the provenance block on a saved page, before its closing body tag."""
+    content = page.read_text(encoding="utf-8")
+    block = provenance_html(execution)
+    for closing in ("</body>", "</html>"):
+        if closing in content:
+            content = content.replace(closing, block + closing, 1)
+            break
+    else:
+        content += block
+    page.write_text(content, encoding="utf-8")
+
+
 _ATTRIBUTE_URL = re.compile(r"""\b(?:src|href|poster)\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
 _CSS_URL = re.compile(r"""url\(\s*["']?([^)'"\s]+)["']?\s*\)""", re.IGNORECASE)
 _CSS_IMPORT = re.compile(r"""@import\s+["']([^"']+)["']""", re.IGNORECASE)
@@ -220,6 +273,7 @@ def save_complete_report(report: BenchReport, directory: str | Path) -> Path:
             assets = _Assets(staging)
             for path in sorted(staging.rglob("*.html")):
                 assets.rewrite(path)
+            append_provenance(staging / "index.html", execution)
             for entry, summary in zip(entries, summaries, strict=True):
                 path = staging / entry["summary"]
                 path.parent.mkdir(parents=True, exist_ok=True)

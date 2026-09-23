@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **A published report can say how to run it again.** An `Execution` has carried
+  `display_label`, `source_revision`, `workflow`, `workflow_run`, `lane` and
+  `attempt` since complete reports existed, and every one of them describes what
+  was measured — not one of them says how. The launcher is the one thing that
+  knows, because it composed the command, and all it could do with that command
+  was print it to a terminal, where it is gone as soon as the scrollback is.
+  Whoever opened the published URL a week later had a revision, a workflow name
+  and a run id, and no way to turn any of them into something to run.
+  `BENCHER_REPRODUCE_COMMAND`, and `Execution.start(reproduce_command=...)` in
+  process, record it under the same rules as the other six: an argument wins over
+  the variable, a blank variable is absent rather than `""`, and a field the
+  caller supplied is not read from the environment at all. The frozen report's
+  entry page now ends with the whole recorded provenance, the command last, so
+  the reader who opens the published URL finds it without opening `report.json`.
+  Bencher never composes this string and never runs it — it is opaque display
+  text, escaped where it reaches the page, and what it says is the launcher's
+  business. It is capped at 1024 characters, because an unbounded environment
+  variable is otherwise an unbounded string in every `report.json` and on every
+  page. `report.json` stays at `schema_version: 1`: a field with a default
+  changes nothing for a reader that reads the manifest as data.
 - **A pointer can no longer outlive the report it redirects to.** `PublicationTarget`
   has described a backend Age-based Delete policy through `expiry_days` since stores
   existed, and `minimum_remaining_days` refuses to publish a new reference without that

@@ -688,7 +688,10 @@ zero-baseline percent change) are emitted as `null`.
 `BenchReport.save_report(root)` freezes a complete execution under
 `root/<execution-uuid>/index.html`. It includes tabs, collision-free per-result
 summaries, referenced local media, and a versioned `report.json` inventory of
-relative paths, byte sizes and SHA-256 digests. Use `bn.verify_report(directory)`
+relative paths, byte sizes and SHA-256 digests. The entry page ends with the
+recorded provenance — label, revision, workflow, lane, attempt and the reproduce
+command — so a reader who opens the published URL does not have to read
+`report.json` to find out what the report describes. Use `bn.verify_report(directory)`
 before transferring the directory. Serve it over HTTP; CDN libraries still need
 network access. Moving the directory does not require its original cache.
 
@@ -709,6 +712,7 @@ export BENCHER_SOURCE_REVISION=$(git rev-parse HEAD)
 export BENCHER_WORKFLOW=nightly BENCHER_WORKFLOW_RUN=$CI_RUN_ID
 export BENCHER_LANE=$RUNNER_NAME
 export BENCHER_ATTEMPT=$GITHUB_RUN_ATTEMPT   # 1 on the first run, not 0
+export BENCHER_REPRODUCE_COMMAND="nightly-bench --suite sin --lane $RUNNER_NAME"
 ```
 
 Every execution started in that environment carries those fields, so the frozen
@@ -726,6 +730,16 @@ directly:
 ```bash
 export BENCHER_ATTEMPT=$((BUILDKITE_RETRY_COUNT + 1))
 ```
+
+`BENCHER_REPRODUCE_COMMAND` is the only one of these about the future rather
+than the past: it says how to run this execution again. Bencher never composes it
+and never runs it. It is opaque display text the launcher writes — bencher records
+it in `report.json` and shows it on the frozen report's entry page, escaped, and
+nothing parses it or checks that it still works. What it says is the launcher's
+business: a shell line, a `make` target, a job name, whatever the reader of the
+report needs. It is at most 1024 characters, because every character of it is
+carried by `report.json` and rendered into the page; a launcher with more to say
+exports the name of a script instead.
 
 Bencher reports all of these and never checks them: export them per job, not from
 a long-lived shell, where they would outlive the checkout they name.
