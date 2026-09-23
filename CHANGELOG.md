@@ -8,6 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **A frozen report can reach the machine that is allowed to publish it.** The
+  machine that measures is routinely not the machine that has credentials for the
+  object store: a device runs the benchmark, a host publishes it, and nothing in
+  bencher moved the frozen directory between them. What a caller reaches for is a
+  recursive copy, and that is exactly what `verify_report` was written to catch.
+  `report.json` names every file with its size and digest and accepts nothing else,
+  so a copy that filters by modification time, merges into a shared directory, or
+  simply lets something else write alongside produces a directory its own inventory
+  rightly refuses — and the refusal arrives at publication time, on the machine that
+  cannot run the benchmark again. `bencher pack <directory> <archive>` verifies the
+  directory and seals it into one file; `bencher unpack <archive> <directory>` writes
+  it back and verifies it where it landed, and `commit_frozen_report` publishes the
+  result with nothing else done to it. `pack_report` and `unpack_report` are the
+  in-process forms, answering `ReportPacked` and `ReportUnpacked`. The archive is a
+  gzip tar whose members are normalised — sorted by path, mode 0644, mtime 0, no
+  owner, no directory entries — and whose gzip header records neither a name nor a
+  time, so packing one directory twice produces the same bytes. That is a
+  convenience for caching, not the correctness argument: the report's identity is
+  still `report.json`, and the archive's own SHA-256 is there so a transfer can prove
+  it moved the file intact. Every archive is untrusted input even though its producer
+  is trusted, so absolute paths, `..` components, symlinks, hard links, device nodes,
+  anything that is not a regular file, any member the inventory does not list, and
+  any archive that expands past `max_bytes` are all refused before one byte is
+  written. How the file travels — ssh, a bucket, a courier with a disk — stays the
+  caller's business: bencher packs a directory and unpacks a file, and knows nothing
+  about the road between.
 - **A published report can say how to run it again.** An `Execution` has carried
   `display_label`, `source_revision`, `workflow`, `workflow_run`, `lane` and
   `attempt` since complete reports existed, and every one of them describes what

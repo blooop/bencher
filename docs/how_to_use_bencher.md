@@ -948,6 +948,61 @@ HTML format fails closed: migrate old aliases explicitly rather than overwriting
 their contents. The lower-level `update_pointer` accepts a `verify_target` callback
 for non-report dependencies; use `CompleteReportPublisher.point` for report targets.
 
+### Moving a frozen report to another machine
+
+The machine that measures is often not the machine that may publish. A device
+running a benchmark has no credentials for the object store, and the host that
+has them never ran the benchmark, so the frozen directory has to cross between
+them. Do not copy it recursively: `report.json` accepts exactly the files it
+lists, and a copy that filters by modification time, merges into a shared
+directory, or lets anything write alongside produces a directory verification
+rightly refuses — on the machine that cannot run the benchmark again.
+
+Pack it into one file instead:
+
+```bash
+# On the machine that ran the benchmark and has no credentials:
+bencher pack reports/my-benchmark/EXECUTION_UUID transfer.tar.gz
+
+# Move transfer.tar.gz however you like: scp, a bucket, a disk in a bag.
+
+# On the machine that has the credentials and never ran the benchmark:
+bencher unpack transfer.tar.gz incoming/EXECUTION_UUID
+bencher publish incoming/EXECUTION_UUID --store gs://my-reports-bucket \
+  --prefix reports/my-benchmark \
+  --http-base https://reports.example/benchmarks/my-benchmark
+```
+
+Packing verifies the directory first, because sealing bytes that already fail
+their own inventory only moves the failure to the far side. Unpacking verifies
+what it wrote before handing the directory over, so the result is publishable as
+it stands and `bencher publish` asks for nothing more. The in-process forms are
+`bn.pack_report(directory, archive)` and `bn.unpack_report(archive, directory)`;
+they answer `ReportPacked` and `ReportUnpacked`, and raise `ValueError` on every
+refusal below.
+
+The archive is a gzip tar with normalised members — sorted by path, mode 0644,
+mtime 0, no owner, no directory entries — and a gzip header that records neither
+a name nor a time, so packing one directory twice gives the same bytes for a
+given zlib build. Treat that as a convenience for caching rather than as the
+report's identity, which remains `report.json` and its per-file digests;
+`ReportPacked.sha256` is the archive's own digest, for proving that a transfer
+moved the file intact.
+
+Both ends refuse rather than repair. Packing refuses a directory that fails
+`verify_report`, an archive path that is already taken, and content that changed
+while it was being read. Unpacking treats every archive as untrusted input, even
+from a producer you trust: absolute paths, `..` components, symlinks, hard links,
+device nodes, anything that is not a regular file, a duplicate member, a member
+the inventory does not list, a missing one, and an archive that expands past
+`--max-bytes` (4 GiB by default) are all refused before anything is written.
+The destination directory must not exist — a frozen execution is immutable, and
+unpacking into an existing directory is the merge these inventories exist to
+catch. A failed unpack leaves no directory behind.
+
+How the file travels is not bencher's business. There is no ssh, no bucket and
+no CI in any of this: bencher packs a directory and unpacks a file.
+
 ### Keeping the pointed-at report alive
 
 A pointer and the execution it names are separate objects, and a backend
