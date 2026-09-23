@@ -12,10 +12,12 @@ import math
 import os
 import tempfile
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
+
+from bencher.complete_report import safe_path
 
 if TYPE_CHECKING:
     from bencher.publishing import CompleteReportPublisher
@@ -24,11 +26,12 @@ STORE_ENV = "BENCHER_PUBLISH_STORE"
 PREFIX_ENV = "BENCHER_PUBLISH_PREFIX"
 HTTP_BASE_ENV = "BENCHER_PUBLISH_HTTP_BASE"
 RECEIPT_ENV = "BENCHER_PUBLISH_RECEIPT"
+POINTER_ENV = "BENCHER_PUBLISH_POINTER"
 EXPIRY_DAYS_ENV = "BENCHER_PUBLISH_EXPIRY_DAYS"
 MINIMUM_REMAINING_DAYS_ENV = "BENCHER_PUBLISH_MINIMUM_REMAINING_DAYS"
 
 _REQUIRED = (STORE_ENV, PREFIX_ENV, HTTP_BASE_ENV)
-_ALL = (*_REQUIRED, RECEIPT_ENV, EXPIRY_DAYS_ENV, MINIMUM_REMAINING_DAYS_ENV)
+_ALL = (*_REQUIRED, RECEIPT_ENV, POINTER_ENV, EXPIRY_DAYS_ENV, MINIMUM_REMAINING_DAYS_ENV)
 
 
 class PublicationFailed(RuntimeError):
@@ -54,26 +57,46 @@ class PublicationTarget:
     ``expiry_days`` describes a backend Age-based Delete policy the caller has
     already verified; ``minimum_remaining_days`` refuses to publish new
     references without that much evidenced lifetime.
+
+    ``receipt`` and ``pointer`` are the two optional places a publication writes
+    its URL to. ``pointer`` is an object key in the same store, carrying the
+    redirect that answers "where is the newest report for this thing?"; every
+    report URL is per execution and immutable, so without one there is no
+    stable name at all.
     """
 
     store: str
     prefix: str
     http_base: str
     receipt: Path | None = None
+    pointer: str | None = None
     expiry_days: float | None = None
     minimum_remaining_days: float = 0
 
     def __post_init__(self) -> None:
         """Reject what no store can honour, however the target was built.
 
+        An explicitly empty ``pointer`` is refused rather than read as an
+        absent one: the caller asked for a pointer, and no store has an object
+        named "". An empty *variable* is still absent, as it is for every other
+        optional one -- an unset export and an export of nothing are the same
+        thing to a launcher, and ``from_env`` resolves that before it gets here.
+
         Raises:
-            ValueError: If a location is empty or a lifetime is not a usable
-                number of days. Both stores reject an expiry that is not
-                positive by testing ``<= 0``, which ``nan`` passes.
+            ValueError: If a location is empty, a pointer key is not a safe
+                relative object key, or a lifetime is not a usable number of
+                days. Both stores reject an expiry that is not positive by
+                testing ``<= 0``, which ``nan`` passes.
         """
         for name in ("store", "prefix", "http_base"):
             if not getattr(self, name):
                 raise ValueError(f"{name} must not be empty")
+        if self.pointer is not None:
+            if not self.pointer:
+                raise ValueError("pointer must not be empty")
+            # Checked here rather than at the update, which happens after the
+            # sweep: a key the store would refuse must cost nothing to discover.
+            safe_path(self.pointer)
         if self.expiry_days is not None and not (
             math.isfinite(self.expiry_days) and self.expiry_days > 0
         ):
@@ -111,6 +134,7 @@ class PublicationTarget:
             prefix=values[PREFIX_ENV],
             http_base=values[HTTP_BASE_ENV],
             receipt=Path(values[RECEIPT_ENV]) if values[RECEIPT_ENV] else None,
+            pointer=values[POINTER_ENV] or None,
             expiry_days=(
                 _days(values[EXPIRY_DAYS_ENV], EXPIRY_DAYS_ENV) if values[EXPIRY_DAYS_ENV] else None
             ),
@@ -175,34 +199,84 @@ def publish_frozen_report(
     target: PublicationTarget,
     publisher: CompleteReportPublisher | None = None,
 ):
-    """Publish a frozen execution directory, persisting the receipt *target* names.
+    """Publish a frozen execution directory, write the receipt, move the pointer, renew it.
+
+    The report is committed and immutable before either reference is written, so
+    neither can unpublish it. A pointer that did not move is therefore reported
+    on the ``Published`` outcome and never as a failed publication -- a caller
+    that read "publication failed" would rerun a sweep whose measurements are
+    already served. ``PointerUnchanged`` is not a failure at all: it is what
+    republishing an older execution is supposed to do. The receipt is written
+    first, so a refused pointer cannot cost the only record of the URL.
 
     Args:
         directory: A frozen execution directory containing ``report.json``.
         target: Where to commit it and where it will be served from.
-        publisher: A publisher already built from *target*, when the caller needs
-            it afterwards (to update a pointer, say).
+        publisher: A publisher already built from *target*, when the caller built
+            one early to fail before the measurements were taken.
 
     Returns:
         ``Published`` or ``PublishFailed`` -- the receipt is only persisted for
-        the former, because an unpublished URL must not be left on disk.
+        the former, because an unpublished URL must not be left on disk. Where
+        the target names a pointer, ``Published.pointer`` carries the update's
+        own outcome, and ``Published.renewal`` what keeping the newly pointed-at
+        execution alive did. A pointer that did not move made nothing newly
+        current, so nothing is renewed and ``renewal`` stays None; a republished
+        execution whose objects were committed long ago is exactly the case that
+        needs it, because a matching retry writes nothing. A refused renewal is
+        reported here too and never as a failed publication.
 
     Raises:
         OSError: If the receipt could not be written. The message carries the
             URL of the report, which was published regardless.
     """
+    from bencher.publication_pointers import PointerUpdated
     from bencher.publishing import Published
 
     publisher = target.publisher() if publisher is None else publisher
     outcome = publisher.publish(directory)
-    if isinstance(outcome, Published) and target.receipt is not None:
+    if not isinstance(outcome, Published):
+        return outcome
+    if target.receipt is not None:
         try:
             save_receipt(target.receipt, receipt_json(outcome.receipt))
         except OSError as failure:
             # The bytes are committed and immutable by now, and this is the only
             # place the URL has been named.
             raise OSError(f"{outcome.url} was published, but {failure}") from failure
-    return outcome
+    if target.pointer is None:
+        return outcome
+    # `point` rebuilds the execution-time candidate and reverifies the report
+    # before each CAS attempt, exactly as `bencher publish --pointer` does.
+    moved = publisher.point(outcome.receipt, target.pointer)
+    outcome = replace(outcome, pointer=moved)
+    if not isinstance(moved, PointerUpdated):
+        return outcome
+    return replace(outcome, renewal=publisher.renew(target.pointer))
+
+
+def renew_pointed_report(
+    target: PublicationTarget, publisher: CompleteReportPublisher | None = None
+):
+    """Extend the lifetime of the execution this target's pointer names.
+
+    This is the scheduled half of the same job ``publish_frozen_report`` does
+    when a pointer moves. A deployment whose reports expire has to run it
+    between publications too: nothing else resets the storage age of a report
+    that is current but no longer new.
+
+    Returns:
+        A ``bencher.publication_renewal`` outcome. Only ``RenewalIncomplete``
+        and ``RenewalFailed`` ask the caller to do anything.
+
+    Raises:
+        ValueError: If the target names no pointer. There is no execution to
+            keep alive without one, and guessing which is not this function's.
+    """
+    if target.pointer is None:
+        raise ValueError("this target names no pointer, so no execution is current")
+    publisher = target.publisher() if publisher is None else publisher
+    return publisher.renew(target.pointer)
 
 
 def commit_frozen_report(
@@ -211,6 +285,10 @@ def commit_frozen_report(
     publisher: CompleteReportPublisher | None = None,
 ):
     """Publish a frozen execution directory, or raise.
+
+    Only the publication raises. A pointer the target names is moved by
+    ``publish_frozen_report`` afterwards, and its outcome rides on the returned
+    ``Published`` for the caller to log or act on.
 
     Raises:
         PublicationFailed: If the report was not committed and verified. The

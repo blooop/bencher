@@ -80,3 +80,90 @@ def test_receipt_survives_failed_pointer_update(report, tmp_path, capsys, monkey
     output = capsys.readouterr()
     assert json.loads(receipt.read_text()) == json.loads(output.out)
     assert "report committed, pointer update failed: denied" in output.err
+
+
+def test_renew_cli_keeps_the_pointed_at_report_alive(report, tmp_path, capsys):
+    store = str(tmp_path / "store")
+    published = [
+        "publish",
+        str(report),
+        "--store",
+        store,
+        "--prefix",
+        "reports",
+        "--http-base",
+        "https://example.test/bench",
+        "--pointer",
+        "latest/index.html",
+        "--expiry-days",
+        "7",
+    ]
+    assert main(published) == 0
+    capsys.readouterr()
+    assert (
+        main(
+            [
+                "renew",
+                "--store",
+                store,
+                "--prefix",
+                "reports",
+                "--http-base",
+                "https://example.test/bench",
+                "--pointer",
+                "latest/index.html",
+                "--expiry-days",
+                "7",
+            ]
+        )
+        == 0
+    )
+    assert "renewed 5 objects of https://example.test/bench/" in capsys.readouterr().out
+
+
+def test_renew_cli_says_when_nothing_is_pointed_at(tmp_path, capsys):
+    assert (
+        main(
+            [
+                "renew",
+                "--store",
+                str(tmp_path / "store"),
+                "--prefix",
+                "reports",
+                "--http-base",
+                "https://example.test/bench",
+                "--pointer",
+                "latest/index.html",
+                "--expiry-days",
+                "7",
+            ]
+        )
+        == 0
+    )
+    assert "nothing renewed: no pointer is published" in capsys.readouterr().out
+
+
+def test_renew_cli_is_nonzero_when_a_lifetime_was_not_extended(tmp_path, capsys):
+    from bencher.object_store import CreateOnly, LocalStore
+
+    store = LocalStore(tmp_path / "store", expiry_seconds=7 * 86400)
+    store.write("latest/index.html", b"<html>an old alias</html>", CreateOnly())
+    assert (
+        main(
+            [
+                "renew",
+                "--store",
+                str(tmp_path / "store"),
+                "--prefix",
+                "reports",
+                "--http-base",
+                "https://example.test/bench",
+                "--pointer",
+                "latest/index.html",
+                "--expiry-days",
+                "7",
+            ]
+        )
+        == 1
+    )
+    assert "renew failed: invalid pointer" in capsys.readouterr().err
