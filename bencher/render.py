@@ -298,6 +298,14 @@ def _subcommand(name: str):
         from bencher.publishing_cli import renew_main
 
         return renew_main
+    if name == "pack":
+        from bencher.publishing_cli import pack_main
+
+        return pack_main
+    if name == "unpack":
+        from bencher.publishing_cli import unpack_main
+
+        return unpack_main
     return None
 
 
@@ -310,6 +318,8 @@ def main(argv: list[str] | None = None) -> int:
     Render: ``bencher <result.pkl> <output_dir> [--json PATH] [--cachedir DIR]``
     Compare: ``bencher compare <a.pkl> <b.pkl> --json PATH``
     Renew: ``bencher renew --store S --prefix P --http-base U --pointer K --expiry-days N``
+    Pack: ``bencher pack <frozen_dir> <archive>``
+    Unpack: ``bencher unpack <archive> <frozen_dir>``
     """
     argv = sys.argv[1:] if argv is None else argv
 

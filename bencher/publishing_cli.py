@@ -1,4 +1,4 @@
-"""Explicit publication command, separate from legacy render positional arguments."""
+"""Explicit publication and transfer commands, separate from legacy render arguments."""
 
 import argparse
 import sys
@@ -18,6 +18,7 @@ from bencher.publication_target import (
     renew_pointed_report,
 )
 from bencher.publishing import Published, PublishFailed
+from bencher.report_transfer import MAX_UNPACKED_BYTES, pack_report, unpack_report
 
 
 def _lifetime_diagnostic(outcome) -> str | None:
@@ -135,4 +136,58 @@ def renew_main(argv: list[str]) -> int:
         print(f"renew failed: {diagnostic}", file=sys.stderr)
         return 1
     print(_renewal_summary(outcome))
+    return 0
+
+
+def pack_main(argv: list[str]) -> int:
+    """Pack a frozen execution directory into one archive file.
+
+    The machine that measured is often not the machine that may publish. This
+    writes the one object a transfer moves; how it travels is the caller's.
+    """
+    parser = argparse.ArgumentParser(prog="bencher pack", description=pack_main.__doc__)
+    parser.add_argument("directory", help="Frozen execution directory containing report.json")
+    parser.add_argument("archive", help="Archive file to write; it must not already exist")
+    parser.add_argument(
+        "--max-bytes",
+        type=int,
+        default=MAX_UNPACKED_BYTES,
+        help="Refuse a report larger than this, as unpacking would",
+    )
+    args = parser.parse_args(argv)
+    try:
+        packed = pack_report(args.directory, args.archive, max_bytes=args.max_bytes)
+    except (OSError, ValueError) as exc:
+        print(f"pack failed: {exc}", file=sys.stderr)
+        return 1
+    print(
+        f"packed {packed.files} files of {packed.execution} "
+        f"into {packed.archive}; sha256 {packed.sha256}"
+    )
+    return 0
+
+
+def unpack_main(argv: list[str]) -> int:
+    """Unpack a report archive into a new directory and verify it.
+
+    The result is publishable as it stands: run ``bencher publish`` on it. An
+    archive is untrusted input, and an unpack that refuses anything writes
+    nothing.
+    """
+    parser = argparse.ArgumentParser(prog="bencher unpack", description=unpack_main.__doc__)
+    parser.add_argument("archive", help="Archive file written by bencher pack")
+    parser.add_argument("directory", help="Directory to write; it must not already exist")
+    parser.add_argument(
+        "--max-bytes",
+        type=int,
+        default=MAX_UNPACKED_BYTES,
+        help="Refuse an archive that expands past this, before writing anything",
+    )
+    args = parser.parse_args(argv)
+    try:
+        unpacked = unpack_report(args.archive, args.directory, max_bytes=args.max_bytes)
+    except (OSError, ValueError) as exc:
+        print(f"unpack failed: {exc}", file=sys.stderr)
+        return 1
+    print(f"unpacked {unpacked.files} files of {unpacked.execution} into {unpacked.directory}")
     return 0

@@ -66,6 +66,7 @@ from .report_export import (
     result_to_json,
     series_for_var,
 )
+from .report_transfer import ReportPacked, ReportUnpacked, pack_report, unpack_report
 from .results.composable_container.composable_container_base import (
     Axis,
     ComposableContainerBase,
