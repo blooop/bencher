@@ -7,7 +7,10 @@ metrics — peak overshoot and 2 % settling time.
 
 Used by the generated rerun examples (regression monitoring and parameter
 sweep) via ``from bencher.example.example_rerun_over_time import ControlSystemSweep``.
+Run this file directly to see the recordings' history laid out in tabs.
 """
+
+from datetime import datetime, timedelta
 
 import rerun as rr
 
@@ -35,7 +38,7 @@ class ControlSystemSweep(bn.ParametrizedSweep):
     out_settling_time = bn.ResultFloat(
         units="s", doc="2% settling time", direction=bn.OptDir.minimize
     )
-    out_rerun = bn.ResultRerun(width=400, height=400, max_time_events=2)
+    out_rerun = bn.ResultRerun(width=400, height=400, max_time_events=3)
 
     _degradation = 0.0  # set externally per over-time snapshot
 
@@ -70,3 +73,33 @@ class ControlSystemSweep(bn.ParametrizedSweep):
         self.out_overshoot = max(0.0, peak_overshoot)
         self.out_settling_time = last_unsettled * dt
         self.out_rerun = bn.capture_rerun_window()
+
+
+def example_rerun_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
+    """Track the controller over time, with each run's recording in its own tab.
+
+    ``out_rerun`` keeps only the last ``max_time_events`` recordings, so the history
+    shows the latest two runs while the scalar metrics keep all of them.
+    """
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, over_time=True, pane_layout=bn.PaneLayout.tabs)
+    benchable = ControlSystemSweep()
+    bench = benchable.to_bench(run_cfg)
+    base_time = datetime(2024, 1, 1)
+
+    for i, degradation in enumerate([0.0, 0.1, 0.25, 0.4]):
+        benchable._degradation = degradation  # pylint: disable=protected-access
+        run_cfg.clear_cache = True
+        run_cfg.clear_history = i == 0
+        bench.plot_sweep(
+            "controller_over_time",
+            input_vars=[],
+            result_vars=["out_overshoot", "out_settling_time", "out_rerun"],
+            run_cfg=run_cfg,
+            time_src=base_time + timedelta(days=i),
+        )
+
+    return bench
+
+
+if __name__ == "__main__":
+    bn.run(example_rerun_over_time, over_time=True)

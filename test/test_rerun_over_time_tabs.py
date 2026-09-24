@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 import panel as pn
 
 import bencher as bn
+from bencher.example.example_rerun_over_time import example_rerun_over_time
 
 SNAPSHOTS = 3
 
@@ -191,6 +192,20 @@ class TestRerunOverTimeTabs(unittest.TestCase):
 
         self.assertEqual(history_tabs(view), [])
         self.assertEqual(len(recordings(view)), SNAPSHOTS)
+
+
+class TestRerunOverTimeExample(unittest.TestCase):
+    """The runnable example shows its capped rerun history as tabs."""
+
+    def test_example_tabs_the_latest_recordings(self):
+        bench = example_rerun_over_time(bn.BenchRunCfg(auto_plot=False))
+        history = [
+            tabs for tabs in report_view(bench.results[-1]).select(pn.Tabs) if len(tabs) == 2
+        ]
+
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0].active, 1)
+        self.assertEqual(bench.results[-1].ds.sizes["over_time"], 4)
 
 
 if __name__ == "__main__":
