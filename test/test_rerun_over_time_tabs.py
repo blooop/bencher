@@ -93,10 +93,12 @@ def history_tabs(view) -> list[pn.Tabs]:
     ]
 
 
+def markdown_texts(view) -> list[str]:
+    return [str(p.object) for p in view.select(pn.pane.Markdown) if isinstance(p, pn.pane.Markdown)]
+
+
 def recordings(view) -> list[str]:
-    return [
-        p.object for p in view.select(pn.pane.Markdown) if str(p.object).startswith("contents: ")
-    ]
+    return [t for t in markdown_texts(view) if t.startswith("contents: ")]
 
 
 def tab_contents(tabs: pn.Tabs) -> list[str]:
@@ -181,9 +183,7 @@ class TestRerunOverTimeTabs(unittest.TestCase):
 
         self.assertEqual(history_tabs(view), [])
         self.assertEqual(recordings(view), [])
-        self.assertTrue(
-            any(p.object == "*No rerun data available*" for p in view.select(pn.pane.Markdown))
-        )
+        self.assertIn("*No rerun data available*", markdown_texts(view))
 
     def test_grid_layout_keeps_the_row(self):
         res = run_over_time("test_rerun_tabs_grid", bn.PaneLayout.grid, [])
