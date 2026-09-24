@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **A rerun result's history follows `pane_layout`.** With `over_time` and more than one
+  time point, a `ResultRerun` rendered its history as a row of labelled viewers whatever
+  the layout, so a bench keeping ten runs laid ten live viewers side by side. Under
+  `PaneLayout.tabs` (or `tabs_and_grid`, where over_time is the outermost dimension left)
+  each time point is now a tab named by its time label, open on the latest run. `grid`
+  keeps the row.
+
 ## [1.134.0] - 2026-09-22
 
 ### Added

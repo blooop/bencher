@@ -1061,7 +1061,7 @@ class BenchResultBase:
                 and dataset.sizes["over_time"] > 1
             ):
                 if isinstance(result_var, ResultRerun):
-                    return self._pane_over_time_grid(dataset, result_var)
+                    return self._pane_over_time_grid(dataset, result_var, pane_layout)
                 if isinstance(result_var, (ResultVideo, ResultImage)):
                     return self._pane_over_time_slider(dataset, result_var)
                 if isinstance(result_var, PANEL_TYPES):
@@ -1182,11 +1182,14 @@ class BenchResultBase:
         self,
         dataset: xr.Dataset,
         result_var,
-    ) -> pn.Row | pn.pane.Markdown:
-        """Render over_time pane results as a grid of labelled panels.
+        pane_layout: PaneLayout = PaneLayout.grid,
+    ) -> pn.Row | pn.Tabs | pn.pane.Markdown:
+        """Render over_time pane results as labelled panels, one per time point.
 
         Used for ResultRerun because rerun iframes do not work inside a
-        Bokeh JS slider swap (the viewer fails to re-initialise).
+        Bokeh JS slider swap (the viewer fails to re-initialise). Under a tabs
+        layout each time point is a tab named by its label, open on the latest;
+        otherwise they sit side by side in a row.
 
         A container declared on the result var wins over the rerun viewer, the
         same way it does on the single-run path in ``ds_to_container``: a renderer
@@ -1211,11 +1214,13 @@ class BenchResultBase:
             filepath = self._over_time_filepath(dataset, result_var, idx)
             if filepath is None:
                 continue
-            items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), render(filepath)))
+            items.append((label, render(filepath)))
 
         if not items:
             return pn.pane.Markdown("*No rerun data available*")
-        return pn.Row(*items)
+        if pane_layout in (PaneLayout.tabs, PaneLayout.tabs_and_grid):
+            return pn.Tabs(*items, active=len(items) - 1)
+        return pn.Row(*(pn.Column(pn.pane.Markdown(f"**{label}**"), pane) for label, pane in items))
 
     def _pane_over_time_samples(
         self,
