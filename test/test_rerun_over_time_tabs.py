@@ -174,6 +174,25 @@ class TestRerunOverTimeTabs(unittest.TestCase):
         self.assertEqual(tab_contents(tabs[0]), [f"contents: sides 3 run {i}" for i in recorded])
         self.assertEqual(tabs[0].active, len(recorded) - 1)
 
+    def test_skipping_a_middle_run_keeps_each_tab_on_its_own_time_label(self):
+        res = run_over_time(
+            "test_rerun_tabs_missing_middle_run",
+            bn.PaneLayout.tabs,
+            [],
+            unrecorded=frozenset({1}),
+        )
+        tabs = history_tabs(report_view(res))
+
+        self.assertEqual(len(tabs), 1)
+        self.assertEqual(
+            tab_contents(tabs[0]), ["contents: sides 3 run 0", "contents: sides 3 run 2"]
+        )
+        self.assertEqual(
+            list(tabs[0]._names),  # pylint: disable=protected-access
+            ["2000-01-01 00:00:00", "2000-01-01 00:00:02"],
+        )
+        self.assertEqual(tabs[0].active, 1)
+
     def test_tabs_report_no_data_when_no_run_has_a_file(self):
         res = run_over_time(
             "test_rerun_tabs_no_runs",
