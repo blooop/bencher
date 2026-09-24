@@ -33,17 +33,30 @@ class RerunSweep(bn.ParametrizedSweep):
     recording = bn.ResultRerun(width=400, height=400, container=file_contents)
 
     offset = 0
+    unrecorded: frozenset[int] = frozenset()
 
     def benchmark(self):
         filename = bn.gen_path("recording", suffix=".txt")
+        if self.offset in self.unrecorded:
+            self.recording = f"{filename}.never-written"
+            return
+        self.recording = filename
         with open(filename, "w", encoding="utf-8") as handle:
             handle.write(f"sides {self.sides} run {self.offset}")
-        self.recording = filename
 
 
-def run_over_time(name: str, pane_layout: bn.PaneLayout, input_vars: list[str]):
-    """Run the sweep once per time point, so over_time carries real history."""
+def run_over_time(
+    name: str,
+    pane_layout: bn.PaneLayout,
+    input_vars: list[str],
+    unrecorded: frozenset[int] = frozenset(),
+):
+    """Run the sweep once per time point, so over_time carries real history.
+
+    The time points in ``unrecorded`` store a path but write no file there.
+    """
     worker = RerunSweep()
+    worker.unrecorded = unrecorded
     run_cfg = bn.BenchRunCfg(over_time=True, repeats=1, auto_plot=False, pane_layout=pane_layout)
     bench = worker.to_bench(run_cfg)
     base_time = datetime(2000, 1, 1)
@@ -117,6 +130,60 @@ class TestRerunOverTimeTabs(unittest.TestCase):
         contents = sorted(tab_contents(t)[0] for t in tabs)
         self.assertEqual(contents, ["contents: sides 3 run 0", "contents: sides 4 run 0"])
         self.assertTrue(all(len(t) == SNAPSHOTS for t in tabs))
+
+    def test_tabs_and_grid_tabs_the_history_when_it_is_the_only_dimension(self):
+        res = run_over_time("test_rerun_tabs_and_grid_no_inputs", bn.PaneLayout.tabs_and_grid, [])
+        tabs = history_tabs(report_view(res))
+
+        self.assertEqual(len(tabs), 1)
+        self.assertEqual(
+            tab_contents(tabs[0]), [f"contents: sides 3 run {i}" for i in range(SNAPSHOTS)]
+        )
+        self.assertEqual(tabs[0].active, SNAPSHOTS - 1)
+
+    def test_tabs_and_grid_tabs_the_swept_values_and_rows_each_history(self):
+        res = run_over_time(
+            "test_rerun_tabs_and_grid_one_input", bn.PaneLayout.tabs_and_grid, ["sides"]
+        )
+        view = report_view(res)
+
+        self.assertEqual(history_tabs(view), [])
+        outer = [t for t in view.select(pn.Tabs) if len(t) == 2]
+        self.assertEqual(len(outer), 1)
+        for tab, sides in zip(outer[0], (3, 4)):
+            self.assertEqual(
+                sorted(recordings(tab)),
+                [f"contents: sides {sides} run {i}" for i in range(SNAPSHOTS)],
+            )
+
+    def test_tabs_skip_runs_without_a_file_and_open_on_the_latest_that_has_one(self):
+        res = run_over_time(
+            "test_rerun_tabs_missing_runs",
+            bn.PaneLayout.tabs,
+            [],
+            unrecorded=frozenset({1, SNAPSHOTS - 1}),
+        )
+        tabs = history_tabs(report_view(res))
+
+        self.assertEqual(len(tabs), 1)
+        recorded = [i for i in range(SNAPSHOTS) if i not in {1, SNAPSHOTS - 1}]
+        self.assertEqual(tab_contents(tabs[0]), [f"contents: sides 3 run {i}" for i in recorded])
+        self.assertEqual(tabs[0].active, len(recorded) - 1)
+
+    def test_tabs_report_no_data_when_no_run_has_a_file(self):
+        res = run_over_time(
+            "test_rerun_tabs_no_runs",
+            bn.PaneLayout.tabs,
+            [],
+            unrecorded=frozenset(range(SNAPSHOTS)),
+        )
+        view = report_view(res)
+
+        self.assertEqual(history_tabs(view), [])
+        self.assertEqual(recordings(view), [])
+        self.assertTrue(
+            any(p.object == "*No rerun data available*" for p in view.select(pn.pane.Markdown))
+        )
 
     def test_grid_layout_keeps_the_row(self):
         res = run_over_time("test_rerun_tabs_grid", bn.PaneLayout.grid, [])
