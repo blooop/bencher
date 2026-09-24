@@ -13,10 +13,11 @@ not what the rerun viewer does with an .rrd.
 import unittest
 from datetime import datetime, timedelta
 
+import pandas as pd
 import panel as pn
 
 import bencher as bn
-from bencher.example.example_rerun_over_time import example_rerun_over_time
+from bencher.example.example_rerun_over_time import ControlSystemSweep, example_rerun_over_time
 
 SNAPSHOTS = 3
 
@@ -198,14 +199,19 @@ class TestRerunOverTimeExample(unittest.TestCase):
     """The runnable example shows its capped rerun history as tabs."""
 
     def test_example_tabs_the_latest_recordings(self):
+        kept = ControlSystemSweep.param.out_rerun.max_time_events
         bench = example_rerun_over_time(bn.BenchRunCfg(auto_plot=False))
+        res = bench.results[-1]
+        latest = [str(pd.to_datetime(t)) for t in res.ds.coords["over_time"].values[-kept:]]
         history = [
-            tabs for tabs in report_view(bench.results[-1]).select(pn.Tabs) if len(tabs) == 2
+            tabs
+            for tabs in report_view(res).select(pn.Tabs)
+            if list(tabs._names) == latest  # pylint: disable=protected-access
         ]
 
+        self.assertEqual(res.ds.sizes["over_time"], 4)
         self.assertEqual(len(history), 1)
-        self.assertEqual(history[0].active, 1)
-        self.assertEqual(bench.results[-1].ds.sizes["over_time"], 4)
+        self.assertEqual(history[0].active, kept - 1)
 
 
 if __name__ == "__main__":

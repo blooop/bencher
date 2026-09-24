@@ -79,7 +79,7 @@ def example_rerun_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Track the controller over time, with each run's recording in its own tab.
 
     ``out_rerun`` keeps only the last ``max_time_events`` recordings, so the history
-    shows the latest two runs while the scalar metrics keep all of them.
+    shows the latest ``max_time_events`` runs while the scalar metrics keep all of them.
     """
     run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, over_time=True, pane_layout=bn.PaneLayout.tabs)
     benchable = ControlSystemSweep()

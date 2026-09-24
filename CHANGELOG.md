@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PaneLayout.tabs` (or `tabs_and_grid`, where over_time is the outermost dimension left)
   each time point is now a tab named by its time label, open on the latest run. `grid`
   keeps the row.
+- **The shared `ControlSystemSweep` keeps the last three rerun recordings instead of two**,
+  so the generated rerun examples that build on it show three.
 
 ## [1.134.0] - 2026-09-22
 
