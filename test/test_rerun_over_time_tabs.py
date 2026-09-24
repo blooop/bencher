@@ -107,6 +107,11 @@ def tab_contents(tabs: pn.Tabs) -> list[str]:
     return [recordings(tab)[0] for tab in tabs]
 
 
+def tab_names(tabs: pn.Tabs) -> list[str]:
+    """The label of each tab, in order."""
+    return list(tabs._names)  # pylint: disable=protected-access
+
+
 class TestRerunOverTimeTabs(unittest.TestCase):
     """Rerun history renders as tabs under a tabs layout, and as a row otherwise."""
 
@@ -123,8 +128,8 @@ class TestRerunOverTimeTabs(unittest.TestCase):
         res = run_over_time("test_rerun_tabs_labels", bn.PaneLayout.tabs, [])
         tabs = history_tabs(report_view(res))[0]
 
-        self.assertEqual(len(set(tabs._names)), SNAPSHOTS)  # pylint: disable=protected-access
-        self.assertTrue(all("2000-01-01" in name for name in tabs._names))  # pylint: disable=protected-access
+        self.assertEqual(len(set(tab_names(tabs))), SNAPSHOTS)
+        self.assertTrue(all("2000-01-01" in name for name in tab_names(tabs)))
         self.assertEqual(tabs.active, SNAPSHOTS - 1)
 
     def test_tabs_layout_gives_every_swept_value_its_own_history(self):
@@ -188,7 +193,7 @@ class TestRerunOverTimeTabs(unittest.TestCase):
             tab_contents(tabs[0]), ["contents: sides 3 run 0", "contents: sides 3 run 2"]
         )
         self.assertEqual(
-            list(tabs[0]._names),  # pylint: disable=protected-access
+            tab_names(tabs[0]),
             ["2000-01-01 00:00:00", "2000-01-01 00:00:02"],
         )
         self.assertEqual(tabs[0].active, 1)
@@ -222,11 +227,7 @@ class TestRerunOverTimeExample(unittest.TestCase):
         bench = example_rerun_over_time(bn.BenchRunCfg(auto_plot=False))
         res = bench.results[-1]
         latest = [str(pd.to_datetime(t)) for t in res.ds.coords["over_time"].values[-kept:]]
-        history = [
-            tabs
-            for tabs in report_view(res).select(pn.Tabs)
-            if list(tabs._names) == latest  # pylint: disable=protected-access
-        ]
+        history = [tabs for tabs in report_view(res).select(pn.Tabs) if tab_names(tabs) == latest]
 
         self.assertEqual(res.ds.sizes["over_time"], 4)
         self.assertEqual(len(history), 1)
