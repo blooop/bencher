@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.136.0] - 2026-09-25
+
+### Added
+- **`SampleOrder.ROUND_ROBIN`.** Measures every point once per round, one round per
+  repeat, instead of every repeat of a point back to back. A long sweep's drift over time
+  is then spread across its points rather than confounded with whichever ran last. It
+  changes only the sampling order: the dataset, plots and cache keys match `INORDER`.
+
 ## [1.135.0] - 2026-09-24
 
 ### Added
