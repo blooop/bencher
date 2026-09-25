@@ -1,4 +1,6 @@
 import unittest
+import uuid
+from datetime import datetime
 
 import bencher as bn
 
@@ -205,6 +207,34 @@ class TestRoundRobin(unittest.TestCase):
             r * per_round + i * lb + j for i in range(la) for j in range(lb) for r in range(repeats)
         ]
         self.assertEqual(order, expected)
+
+    def test_over_time_point_is_part_of_the_sample_key(self):
+        repeats = 2
+        bench = bn.Bench(f"rr_over_time_{uuid.uuid4().hex}", OrderExample())
+        run_cfg = bn.BenchRunCfg(
+            repeats=repeats,
+            over_time=True,
+            auto_plot=False,
+            cache_results=False,
+            cache_samples=True,
+            executor=bn.Executors.SERIAL,
+        )
+        tag = uuid.uuid4().hex
+        for day in (1, 2):
+            res = bench.plot_sweep(
+                title="order",
+                input_vars=[OrderExample.param.a],
+                result_vars=[OrderExample.param.call_index],
+                run_cfg=run_cfg,
+                time_src=datetime(2000, 1, day),
+                tag=tag,
+                sample_order=bn.SampleOrder.ROUND_ROBIN,
+            )
+        call_index = res.to_xarray()[OrderExample.param.call_index.name]
+        la = len(OrderExample.param.a.values())
+        offset = la * repeats
+        expected = [offset + r * la + i for i in range(la) for r in range(repeats)]
+        self.assertEqual(call_index.isel(over_time=-1).values.flatten().tolist(), expected)
 
     def test_inorder_repeats_each_point_back_to_back(self):
         repeats = 3
