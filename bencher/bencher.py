@@ -1163,6 +1163,7 @@ class Bench(BenchPlotServer):
 
         with phase_timer() as elapsed:
             bench_res, func_inputs, dims_name, total_jobs = self.setup_dataset(bench_cfg, time_src)
+            sample_order = SampleOrder(sample_order)
             # Adjust only the sampling traversal; leave dims/plotting unchanged
             if sample_order != SampleOrder.INORDER:
                 total_dims = len(dims_name)
@@ -1176,10 +1177,12 @@ class Bench(BenchPlotServer):
                 if sample_order == SampleOrder.REVERSED:
                     # Reverse the input portion only
                     iter_order = inputs[::-1] + meta
-                else:
-                    # ROUND_ROBIN: repeat outermost, everything else in natural order
+                elif sample_order == SampleOrder.ROUND_ROBIN:
+                    # Repeat outermost, everything else in natural order
                     repeat = dims_name.index("repeat")
                     iter_order = [repeat] + inputs + [m for m in meta if m != repeat]
+                else:
+                    raise ValueError(f"sample_order {sample_order!r} has no traversal")
 
                 # Generate product in iter_order and map back to original order
                 ordered = []

@@ -245,6 +245,16 @@ class TestRoundRobin(unittest.TestCase):
             _call_order(bn.SampleOrder.INORDER, [OrderExample.param.a], 1),
         )
 
+    def test_unknown_sample_order_raises_instead_of_running(self):
+        with self.assertRaises(ValueError):
+            _call_order("reverse", [OrderExample.param.a], 2)
+
+    def test_member_value_string_still_selects_that_order(self):
+        self.assertEqual(
+            _call_order("REVERSED", [OrderExample.param.a], 1),
+            _call_order(bn.SampleOrder.REVERSED, [OrderExample.param.a], 1),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
