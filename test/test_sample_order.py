@@ -1,4 +1,6 @@
 import unittest
+import uuid
+from datetime import datetime
 
 import bencher as bn
 
@@ -18,6 +20,56 @@ class OrderExample(bn.ParametrizedSweep):
         idx = getattr(self, "_call_counter", 0)
         self.call_index = idx
         self._call_counter = idx + 1  # pylint: disable=attribute-defined-outside-init
+
+
+class TypedInputs(bn.ParametrizedSweep):
+    a = bn.IntSweep(default=0, bounds=[0, 2])
+    b = bn.StringSweep(["x", "y"])
+
+    out = bn.ResultFloat()
+
+    def benchmark(self):
+        CALLS.append((type(self.a), type(self.b)))
+        self.out = 1.0
+
+
+CALLS = []
+
+
+def _run_typed(sample_order: bn.SampleOrder, **run) -> list:
+    CALLS.clear()
+    bn.Bench("typed_inputs", TypedInputs()).plot_sweep(
+        title="typed_inputs",
+        input_vars=["a", "b"],
+        result_vars=["out"],
+        run_cfg=bn.BenchRunCfg(
+            repeats=2,
+            over_time=False,
+            auto_plot=False,
+            cache_results=False,
+            executor=bn.Executors.SERIAL,
+            **run,
+        ),
+        sample_order=sample_order,
+    )
+    return list(CALLS)
+
+
+class TestSampleOrderInputs(unittest.TestCase):
+    def test_worker_sees_the_same_input_types_in_every_order(self):
+        inorder = set(_run_typed(bn.SampleOrder.INORDER, cache_samples=False))
+        for order in (bn.SampleOrder.ROUND_ROBIN, bn.SampleOrder.REVERSED):
+            with self.subTest(order=order):
+                self.assertEqual(set(_run_typed(order, cache_samples=False)), inorder)
+
+    def test_reordered_sweep_hits_the_inorder_sample_cache(self):
+        for order in (bn.SampleOrder.ROUND_ROBIN, bn.SampleOrder.REVERSED):
+            with self.subTest(order=order):
+                filled = _run_typed(
+                    bn.SampleOrder.INORDER, cache_samples=True, clear_sample_cache=True
+                )
+                self.assertEqual(len(filled), 12)
+                self.assertEqual(_run_typed(order, cache_samples=True), [])
 
 
 class TestSampleOrder(unittest.TestCase):
@@ -108,6 +160,130 @@ class TestSampleOrder(unittest.TestCase):
                 expected_rev[pos] = j * la + i
 
         self.assertEqual(reversed_order, expected_rev)
+
+
+def _call_order(sample_order: bn.SampleOrder, input_vars, repeats: int) -> list:
+    """call_index flattened in dataset (inputs..., repeat) order."""
+    bench = bn.Bench("order_test", OrderExample())
+    res = bench.plot_sweep(
+        title="order",
+        input_vars=input_vars,
+        result_vars=[OrderExample.param.call_index],
+        run_cfg=bn.BenchRunCfg(
+            repeats=repeats,
+            over_time=False,
+            auto_plot=False,
+            cache_results=False,
+            cache_samples=False,
+            executor=bn.Executors.SERIAL,
+        ),
+        sample_order=sample_order,
+    )
+    return res.to_xarray()[OrderExample.param.call_index.name].values.flatten().tolist()
+
+
+class TestRoundRobin(unittest.TestCase):
+    """ROUND_ROBIN samples every input point once per round, one round per repeat."""
+
+    def test_every_point_is_sampled_once_before_any_is_repeated(self):
+        repeats = 3
+        order = _call_order(bn.SampleOrder.ROUND_ROBIN, [OrderExample.param.a], repeats)
+        la = len(OrderExample.param.a.values())
+        # Dataset is (a, repeat) in C order; round r visits every a before round r+1.
+        expected = [r * la + i for i in range(la) for r in range(repeats)]
+        self.assertEqual(order, expected)
+
+    def test_inputs_keep_their_natural_order_inside_a_round(self):
+        repeats = 2
+        order = _call_order(
+            bn.SampleOrder.ROUND_ROBIN,
+            [OrderExample.param.a, OrderExample.param.b],
+            repeats,
+        )
+        la = len(OrderExample.param.a.values())
+        lb = len(OrderExample.param.b.values())
+        per_round = la * lb
+        expected = [
+            r * per_round + i * lb + j for i in range(la) for j in range(lb) for r in range(repeats)
+        ]
+        self.assertEqual(order, expected)
+
+    def test_over_time_point_is_part_of_the_sample_key(self):
+        repeats = 2
+        bench = bn.Bench(f"rr_over_time_{uuid.uuid4().hex}", OrderExample())
+        run_cfg = bn.BenchRunCfg(
+            repeats=repeats,
+            over_time=True,
+            auto_plot=False,
+            cache_results=False,
+            cache_samples=True,
+            executor=bn.Executors.SERIAL,
+        )
+        tag = uuid.uuid4().hex
+        for day in (1, 2):
+            res = bench.plot_sweep(
+                title="order",
+                input_vars=[OrderExample.param.a],
+                result_vars=[OrderExample.param.call_index],
+                run_cfg=run_cfg,
+                time_src=datetime(2000, 1, day),
+                tag=tag,
+                sample_order=bn.SampleOrder.ROUND_ROBIN,
+            )
+        call_index = res.to_xarray()[OrderExample.param.call_index.name]
+        la = len(OrderExample.param.a.values())
+        offset = la * repeats
+        expected = [offset + r * la + i for i in range(la) for r in range(repeats)]
+        self.assertEqual(call_index.isel(over_time=-1).values.flatten().tolist(), expected)
+
+    def test_inorder_repeats_each_point_back_to_back(self):
+        repeats = 3
+        order = _call_order(bn.SampleOrder.INORDER, [OrderExample.param.a], repeats)
+        self.assertEqual(order, list(range(len(order))))
+
+    def test_round_robin_does_not_change_results_or_dims(self):
+        run_cfg = bn.BenchRunCfg(
+            repeats=3,
+            over_time=False,
+            auto_plot=False,
+            cache_results=False,
+            cache_samples=False,
+            executor=bn.Executors.SERIAL,
+            subsampling_divisions=2,
+        )
+        input_vars = [bn.ExampleBenchCfg.param.theta]
+        result_vars = [bn.ExampleBenchCfg.param.out_sin]
+        res_in = bn.Bench("rr_eq_1", bn.ExampleBenchCfg()).plot_sweep(
+            title="inorder",
+            input_vars=input_vars,
+            result_vars=result_vars,
+            run_cfg=run_cfg,
+            sample_order=bn.SampleOrder.INORDER,
+        )
+        res_rr = bn.Bench("rr_eq_2", bn.ExampleBenchCfg()).plot_sweep(
+            title="round_robin",
+            input_vars=input_vars,
+            result_vars=result_vars,
+            run_cfg=run_cfg,
+            sample_order=bn.SampleOrder.ROUND_ROBIN,
+        )
+        self.assertTrue(res_in.to_xarray().equals(res_rr.to_xarray()))
+
+    def test_round_robin_with_one_repeat_is_inorder(self):
+        self.assertEqual(
+            _call_order(bn.SampleOrder.ROUND_ROBIN, [OrderExample.param.a], 1),
+            _call_order(bn.SampleOrder.INORDER, [OrderExample.param.a], 1),
+        )
+
+    def test_unknown_sample_order_raises_instead_of_running(self):
+        with self.assertRaises(ValueError):
+            _call_order("reverse", [OrderExample.param.a], 2)
+
+    def test_member_value_string_still_selects_that_order(self):
+        self.assertEqual(
+            _call_order("REVERSED", [OrderExample.param.a], 1),
+            _call_order(bn.SampleOrder.REVERSED, [OrderExample.param.a], 1),
+        )
 
 
 if __name__ == "__main__":

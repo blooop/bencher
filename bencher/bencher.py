@@ -21,7 +21,7 @@ import param
 import xarray as xr
 from param import Parameter
 
-from bencher.bench_cfg import BenchCfg, BenchRunCfg
+from bencher.bench_cfg import BenchCfg, BenchRunCfg, DimsCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
 from bencher.blob_store import collect_cache_dir, record_blob_cache_dir
@@ -1163,19 +1163,26 @@ class Bench(BenchPlotServer):
 
         with phase_timer() as elapsed:
             bench_res, func_inputs, dims_name, total_jobs = self.setup_dataset(bench_cfg, time_src)
+            sample_order = SampleOrder(sample_order)
             # Adjust only the sampling traversal; leave dims/plotting unchanged
-            if sample_order == SampleOrder.REVERSED:
+            if sample_order != SampleOrder.INORDER:
                 total_dims = len(dims_name)
                 num_input_dims = len(bench_res.bench_cfg.input_vars)
 
-                # Extract coordinate values from the dataset to rebuild the Cartesian product
-                dim_values = [list(bench_res.ds.coords[n].values) for n in dims_name]
+                dim_values = DimsCfg(bench_res.bench_cfg).dim_ranges
                 dim_indices = [list(range(len(v))) for v in dim_values]
 
-                # Build iteration order: reverse the input portion only
-                iter_order = list(range(num_input_dims))[::-1] + list(
-                    range(num_input_dims, total_dims)
-                )
+                inputs = list(range(num_input_dims))
+                meta = list(range(num_input_dims, total_dims))
+                if sample_order == SampleOrder.REVERSED:
+                    # Reverse the input portion only
+                    iter_order = inputs[::-1] + meta
+                elif sample_order == SampleOrder.ROUND_ROBIN:
+                    # Repeat outermost, everything else in natural order
+                    repeat = dims_name.index("repeat")
+                    iter_order = [repeat] + inputs + [m for m in meta if m != repeat]
+                else:
+                    raise ValueError(f"sample_order {sample_order!r} has no traversal")
 
                 # Generate product in iter_order and map back to original order
                 ordered = []
