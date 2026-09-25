@@ -553,6 +553,10 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
             _real_run(**decl, sample_order=bn.SampleOrder.INORDER),
             _real_run(**decl, sample_order=bn.SampleOrder.REVERSED),
         )
+        self._assert_no_key_moves(
+            _real_run(**decl, sample_order=bn.SampleOrder.INORDER),
+            _real_run(**decl, sample_order=bn.SampleOrder.ROUND_ROBIN),
+        )
 
     def check_series_id(self) -> None:
         """The pairing this list exists to state: tag partitions storage, series_id names the trend.

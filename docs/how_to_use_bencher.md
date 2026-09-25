@@ -142,6 +142,23 @@ down by dropping a planner asks a different question than the sweep did. Reach f
 whenever the per-sample payload is heavy — recordings, videos, large images — and the page
 is slower or larger than the comparison needs.
 
+### Sampling the repeats round-robin
+
+By default every repeat of one point is measured before the next point starts, so each
+point's repeats share one stretch of the run. When the benchmark runs long enough for
+the machine to drift — thermals, other load, a slow leak — that drift lands on whichever
+points ran last and reads as a difference between them.
+`sample_order=bn.SampleOrder.ROUND_ROBIN` measures every point once per round, one round
+per repeat, so each point's repeats are spread across the whole run:
+
+```python
+bench.plot_sweep(input_vars=["planner"], result_vars=["success"],
+                 sample_order=bn.SampleOrder.ROUND_ROBIN)
+```
+
+Only the order the samples are taken in changes. The dataset, the plots and the cache
+keys are the same as `INORDER`.
+
 ## Result Types
 
 ### Choosing a result type
