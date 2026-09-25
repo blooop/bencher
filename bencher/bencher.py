@@ -21,7 +21,7 @@ import param
 import xarray as xr
 from param import Parameter
 
-from bencher.bench_cfg import BenchCfg, BenchRunCfg
+from bencher.bench_cfg import BenchCfg, BenchRunCfg, DimsCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
 from bencher.blob_store import collect_cache_dir, record_blob_cache_dir
@@ -1168,8 +1168,7 @@ class Bench(BenchPlotServer):
                 total_dims = len(dims_name)
                 num_input_dims = len(bench_res.bench_cfg.input_vars)
 
-                # Extract coordinate values from the dataset to rebuild the Cartesian product
-                dim_values = [list(bench_res.ds.coords[n].values) for n in dims_name]
+                dim_values = DimsCfg(bench_res.bench_cfg).dim_ranges
                 dim_indices = [list(range(len(v))) for v in dim_values]
 
                 inputs = list(range(num_input_dims))

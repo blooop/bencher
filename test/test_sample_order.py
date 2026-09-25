@@ -20,6 +20,56 @@ class OrderExample(bn.ParametrizedSweep):
         self._call_counter = idx + 1  # pylint: disable=attribute-defined-outside-init
 
 
+class TypedInputs(bn.ParametrizedSweep):
+    a = bn.IntSweep(default=0, bounds=[0, 2])
+    b = bn.StringSweep(["x", "y"])
+
+    out = bn.ResultFloat()
+
+    def benchmark(self):
+        CALLS.append((type(self.a), type(self.b)))
+        self.out = 1.0
+
+
+CALLS = []
+
+
+def _run_typed(sample_order: bn.SampleOrder, **run) -> list:
+    CALLS.clear()
+    bn.Bench("typed_inputs", TypedInputs()).plot_sweep(
+        title="typed_inputs",
+        input_vars=["a", "b"],
+        result_vars=["out"],
+        run_cfg=bn.BenchRunCfg(
+            repeats=2,
+            over_time=False,
+            auto_plot=False,
+            cache_results=False,
+            executor=bn.Executors.SERIAL,
+            **run,
+        ),
+        sample_order=sample_order,
+    )
+    return list(CALLS)
+
+
+class TestSampleOrderInputs(unittest.TestCase):
+    def test_worker_sees_the_same_input_types_in_every_order(self):
+        inorder = set(_run_typed(bn.SampleOrder.INORDER, cache_samples=False))
+        for order in (bn.SampleOrder.ROUND_ROBIN, bn.SampleOrder.REVERSED):
+            with self.subTest(order=order):
+                self.assertEqual(set(_run_typed(order, cache_samples=False)), inorder)
+
+    def test_reordered_sweep_hits_the_inorder_sample_cache(self):
+        for order in (bn.SampleOrder.ROUND_ROBIN, bn.SampleOrder.REVERSED):
+            with self.subTest(order=order):
+                filled = _run_typed(
+                    bn.SampleOrder.INORDER, cache_samples=True, clear_sample_cache=True
+                )
+                self.assertEqual(len(filled), 12)
+                self.assertEqual(_run_typed(order, cache_samples=True), [])
+
+
 class TestSampleOrder(unittest.TestCase):
     def test_sample_order_does_not_change_results_or_dims(self):
         # Use deterministic example worker (no noise by default)
