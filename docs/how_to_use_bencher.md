@@ -152,7 +152,7 @@ points ran last and reads as a difference between them.
 per repeat, so each point's repeats are spread across the whole run:
 
 ```python
-bench.plot_sweep(input_vars=["planner"], result_vars=["success"],
+bench.plot_sweep(input_vars=["theta"], result_vars=["out_sin"],
                  sample_order=bn.SampleOrder.ROUND_ROBIN)
 ```
 
