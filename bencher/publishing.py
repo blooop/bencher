@@ -8,6 +8,7 @@ import mimetypes
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import quote, urlsplit
 
 from bencher.complete_report import safe_path, verify_report
@@ -19,6 +20,10 @@ from bencher.object_store import (
     ReadFailed,
     WriteFailed,
 )
+
+if TYPE_CHECKING:
+    from bencher.publication_pointers import PointerFailed, PointerUnchanged, PointerUpdated
+    from bencher.publication_renewal import RenewalOutcome
 
 
 def http_base(value: str) -> str:
@@ -59,8 +64,22 @@ class PublicationReceipt:
 
 @dataclass(frozen=True)
 class Published:
+    """A committed report, and what the publication then did about a pointer.
+
+    ``publish`` never moves a pointer, so it leaves ``pointer`` None; so does a
+    target that names none. ``publish_frozen_report`` fills it in, and the
+    report is committed either way -- a ``PointerFailed`` here reports a stale
+    redirect, never a report that was not published.
+
+    ``renewal`` is what keeping the newly pointed-at execution alive did, and is
+    filled in only where the pointer actually moved. It reports on storage
+    lifetime, not on the publication, which is committed and immutable by then.
+    """
+
     url: str
     receipt: PublicationReceipt
+    pointer: PointerUpdated | PointerUnchanged | PointerFailed | None = None
+    renewal: RenewalOutcome | None = None
 
 
 @dataclass(frozen=True)
@@ -129,6 +148,20 @@ class CompleteReportPublisher:
 
         return update_pointer(
             self.store, key, candidate, attempts=attempts, verify_target=verify_target
+        )
+
+    def renew(self, key: str, *, attempts: int = 3):
+        """Extend the lifetime of the execution the pointer at *key* currently names.
+
+        Publication commits new bytes and never renews old ones, so under a
+        backend age policy this is what keeps a pointer from outliving the report
+        it redirects to. It is safe to call on a schedule and safe to call when
+        nothing has been published yet.
+        """
+        from bencher.publication_renewal import renew_pointed_execution
+
+        return renew_pointed_execution(
+            self.store, key, self.storage_root, self.http_root, attempts=attempts
         )
 
     def _equal(self, value, data: bytes, key: str) -> PublishFailed | None:

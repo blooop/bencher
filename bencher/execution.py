@@ -21,7 +21,13 @@ PROVENANCE_ENV = {
     "workflow_run": "BENCHER_WORKFLOW_RUN",
     "lane": "BENCHER_LANE",
     "attempt": "BENCHER_ATTEMPT",
+    "reproduce_command": "BENCHER_REPRODUCE_COMMAND",
 }
+
+# A command longer than this is not one a reader will copy off a page, and every
+# character of it is carried by report.json and rendered into the report. A
+# launcher with more to say exports the name of a script instead.
+REPRODUCE_COMMAND_LIMIT = 1024
 
 
 def environment_provenance(
@@ -40,7 +46,9 @@ def environment_provenance(
 
     Raises:
         ValueError: If the attempt variable is read and does not hold a positive
-            integer. A misattributed retry is worse than a failed run.
+            integer -- a misattributed retry is worse than a failed run -- or if
+            the reproduce command variable is longer than
+            :data:`REPRODUCE_COMMAND_LIMIT`.
     """
     source = os.environ if env is None else env
     provenance: dict = {}
@@ -50,6 +58,8 @@ def environment_provenance(
         value = source.get(name, "").strip()
         if not value:
             continue
+        if field == "reproduce_command" and len(value) > REPRODUCE_COMMAND_LIMIT:
+            raise ValueError(f"{name} must be at most {REPRODUCE_COMMAND_LIMIT} characters")
         if field != "attempt":
             provenance[field] = value
             continue
@@ -75,12 +85,32 @@ class Execution:
     workflow_run: str | None = None
     lane: str | None = None
     attempt: int | None = None
+    reproduce_command: str | None = None
+    """How to run this execution again, as the launcher wrote it.
+
+    Bencher never composes this string and never runs it. It is opaque display
+    text, reported beside the rest of the provenance so a reader of a published
+    report can see how the run was started; nothing here parses it, shells it
+    out, or checks that it still works. What it says is the launcher's business.
+    """
 
     def __post_init__(self) -> None:
-        for field in ("display_label", "source_revision", "workflow", "workflow_run", "lane"):
+        for field in (
+            "display_label",
+            "source_revision",
+            "workflow",
+            "workflow_run",
+            "lane",
+            "reproduce_command",
+        ):
             value = getattr(self, field)
             if value is not None and not isinstance(value, str):
                 raise TypeError(f"execution {field} must be a string")
+        command = self.reproduce_command
+        if command is not None and len(command) > REPRODUCE_COMMAND_LIMIT:
+            raise ValueError(
+                f"execution reproduce_command must be at most {REPRODUCE_COMMAND_LIMIT} characters"
+            )
         if self.attempt is not None and (type(self.attempt) is not int or self.attempt < 1):
             raise ValueError("execution attempt must be a positive integer")
         if str(UUID(self.uuid)) != self.uuid:

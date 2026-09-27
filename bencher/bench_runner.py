@@ -552,9 +552,41 @@ class BenchRunner:
         publication: PublicationTarget,
         publisher: CompleteReportPublisher | None = None,
     ) -> None:
-        """Commit one frozen execution directory, recording its receipt."""
+        """Commit one frozen execution directory, recording its receipt.
+
+        A pointer moves after the report is committed and cannot take it back,
+        so a refused pointer is logged and the run keeps the URL it published.
+        The outcome stays on ``self.publication.pointer`` for a caller that
+        wants to act on it.
+        """
         self.publication = commit_frozen_report(directory, publication, publisher)
         logger.info("Benchmark report published at %s", self.publication.url)
+        if publication.pointer is not None:
+            self._log_pointer(publication.pointer, self.publication.pointer)
+            self._log_renewal(publication.pointer, self.publication.renewal)
+
+    @staticmethod
+    def _log_renewal(key: str, outcome) -> None:
+        """Say whether the newly pointed-at report will outlive an age policy."""
+        from bencher.publication_renewal import RenewalFailed, RenewalIncomplete
+
+        if isinstance(outcome, (RenewalFailed, RenewalIncomplete)):
+            logger.error("Pointer %s serves a report whose lifetime was not extended", key)
+        elif outcome is not None:
+            logger.debug("Pointer %s renewal: %s", key, type(outcome).__name__)
+
+    @staticmethod
+    def _log_pointer(key: str, outcome) -> None:
+        """Say what the pointer update did, at the level its outcome deserves."""
+        from bencher.publication_pointers import PointerFailed, PointerUpdated
+
+        if isinstance(outcome, PointerUpdated):
+            logger.info("Pointer %s now serves %s", key, outcome.target)
+        elif isinstance(outcome, PointerFailed):
+            logger.error("Report published, but pointer %s did not move: %s", key, outcome.reason)
+        else:
+            # PointerUnchanged: republishing an older execution, by design.
+            logger.info("Pointer %s left alone: %s", key, outcome.reason)
 
     def show_publish(
         self,

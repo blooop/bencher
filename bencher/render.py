@@ -286,6 +286,21 @@ def _run_compare(argv: list[str]) -> int:
     return 0
 
 
+def _subcommand(name: str):
+    """Return the named subcommand's entry point, imported only when it is used."""
+    if name == "compare":
+        return _run_compare
+    if name == "publish":
+        from bencher.publishing_cli import main as publish_main
+
+        return publish_main
+    if name == "renew":
+        from bencher.publishing_cli import renew_main
+
+        return renew_main
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint.
 
@@ -294,15 +309,12 @@ def main(argv: list[str] | None = None) -> int:
 
     Render: ``bencher <result.pkl> <output_dir> [--json PATH] [--cachedir DIR]``
     Compare: ``bencher compare <a.pkl> <b.pkl> --json PATH``
+    Renew: ``bencher renew --store S --prefix P --http-base U --pointer K --expiry-days N``
     """
     argv = sys.argv[1:] if argv is None else argv
 
-    if argv and argv[0] == "compare":
-        return _run_compare(argv[1:])
-    if argv and argv[0] == "publish":
-        from bencher.publishing_cli import main as publish_main
-
-        return publish_main(argv[1:])
+    if argv and (run := _subcommand(argv[0])) is not None:
+        return run(argv[1:])
 
     args = _render_parser().parse_args(argv)
 
