@@ -16,7 +16,8 @@ class PlotPlugin(Protocol):
 
     A plugin renders a BenchData handle into a Panel-embeddable view. The plugin owns
     internal composition (linked hv.Layout, plotly.subplots, full Rerun blueprints, ...);
-    bencher only does outer Panel-level composition over plugin outputs."""
+    bencher only does outer Panel-level composition over plugin outputs.
+    """
 
     name: str
     backend: str
@@ -36,7 +37,8 @@ class PlotPlugin(Protocol):
 class _FunctionPlugin:
     """Concrete plugin synthesised by the @plot_plugin decorator. Class form is canonical
     for distributed plugins; this exists so a one-shot in-script plugin can be a single
-    decorated function."""
+    decorated function.
+    """
 
     name: str
     backend: str
@@ -66,7 +68,8 @@ def plot_plugin(
 
     auto=False makes the plugin named-only: it never appears in automatic selection
     (a default ``to_auto`` report) but is selected when requested by name via
-    ``plot_list``/``include``/``only``."""
+    ``plot_list``/``include``/``only``.
+    """
 
     def decorator(fn: Callable[[BenchData], pn.viewable.Viewable]) -> _FunctionPlugin:
         # No match rule means "always eligible": every PlotFilter field defaults to

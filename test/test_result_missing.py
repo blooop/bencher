@@ -13,6 +13,7 @@ import warnings
 
 import numpy as np
 import param
+import pytest
 
 from bencher.result_collector import _sentinel_for_result_var
 from bencher.variables.parametrised_sweep import ParametrizedSweep
@@ -83,18 +84,18 @@ class TestResultMissingFill(unittest.TestCase):
         for rv in _nan_backed_vars():
             fill, dtype = result_missing_fill(rv)
             with self.subTest(rv=type(rv).__name__):
-                self.assertTrue(math.isnan(fill))
-                self.assertIs(dtype, float)
+                assert math.isnan(fill)
+                assert dtype is float
 
     def test_reference_types_fill_minus_one_int(self):
         for rv in _reference_backed_vars():
             with self.subTest(rv=type(rv).__name__):
-                self.assertEqual(result_missing_fill(rv), (-1, int))
+                assert result_missing_fill(rv) == (-1, int)
 
     def test_object_types_fill_nan_string_object(self):
         for rv in _object_backed_vars():
             with self.subTest(rv=type(rv).__name__):
-                self.assertEqual(result_missing_fill(rv), ("NAN", object))
+                assert result_missing_fill(rv) == ("NAN", object)
 
     def test_sentinel_wrapper_matches_fill(self):
         # The over_time aging path goes through result_collector's thin
@@ -104,24 +105,24 @@ class TestResultMissingFill(unittest.TestCase):
             sentinel = _sentinel_for_result_var(rv)
             with self.subTest(rv=type(rv).__name__):
                 if isinstance(fill, float) and math.isnan(fill):
-                    self.assertTrue(math.isnan(sentinel))
+                    assert math.isnan(sentinel)
                 else:
-                    self.assertEqual(sentinel, fill)
+                    assert sentinel == fill
 
 
 class TestDataVarResultTypes(unittest.TestCase):
     def test_single_column_types_included(self):
         for rv in _reference_backed_vars() + _object_backed_vars():
             with self.subTest(rv=type(rv).__name__):
-                self.assertIsInstance(rv, DATA_VAR_RESULT_TYPES)
-        self.assertIsInstance(ResultFloat(), DATA_VAR_RESULT_TYPES)
-        self.assertIsInstance(ResultBool(), DATA_VAR_RESULT_TYPES)
+                assert isinstance(rv, DATA_VAR_RESULT_TYPES)
+        assert isinstance(ResultFloat(), DATA_VAR_RESULT_TYPES)
+        assert isinstance(ResultBool(), DATA_VAR_RESULT_TYPES)
 
     def test_out_of_band_and_multi_column_types_excluded(self):
         # ResultVec expands to one column per element; ResultHmap is stored
         # out-of-band — neither gets a single data var.
-        self.assertNotIsInstance(ResultVec(size=2), DATA_VAR_RESULT_TYPES)
-        self.assertNotIsInstance(_instantiate(ResultHmap), DATA_VAR_RESULT_TYPES)
+        assert not isinstance(ResultVec(size=2), DATA_VAR_RESULT_TYPES)
+        assert not isinstance(_instantiate(ResultHmap), DATA_VAR_RESULT_TYPES)
 
 
 class TestEveryResultTypeIsStorable(unittest.TestCase):
@@ -149,12 +150,11 @@ class TestEveryResultTypeIsStorable(unittest.TestCase):
             if cls is ResultHmap:
                 continue
             with self.subTest(cls=cls.__name__):
-                self.assertTrue(
-                    issubclass(cls, self.STORABLE),
+                assert issubclass(cls, self.STORABLE), (
                     f"{cls.__name__} is in ALL_RESULT_TYPES but the collector has no "
                     f"branch to store it, so declaring one raises at sweep time. "
                     f"Either wire it into a storage registry or drop it from "
-                    f"ALL_RESULT_TYPES.",
+                    f"ALL_RESULT_TYPES."
                 )
 
     def test_result_kind_covers_all_result_types(self):
@@ -162,62 +162,62 @@ class TestEveryResultTypeIsStorable(unittest.TestCase):
         # silently degrades plot selection rather than failing.
         for cls in ALL_RESULT_TYPES:
             with self.subTest(cls=cls.__name__):
-                self.assertNotEqual(result_kind(_instantiate(cls)), "unknown")
+                assert result_kind(_instantiate(cls)) != "unknown"
 
 
 class TestResultIsMissing(unittest.TestCase):
     def test_numeric_nan_and_none_are_missing(self):
         rv = ResultFloat()
-        self.assertTrue(result_is_missing(rv, float("nan")))
-        self.assertTrue(result_is_missing(rv, np.nan))
-        self.assertTrue(result_is_missing(rv, np.float32("nan")))
-        self.assertTrue(result_is_missing(rv, None))
+        assert result_is_missing(rv, float("nan"))
+        assert result_is_missing(rv, np.nan)
+        assert result_is_missing(rv, np.float32("nan"))
+        assert result_is_missing(rv, None)
 
     def test_numeric_real_values_are_not_missing(self):
         rv = ResultFloat()
-        self.assertFalse(result_is_missing(rv, 0.0))
-        self.assertFalse(result_is_missing(rv, -1))
-        self.assertFalse(result_is_missing(rv, np.float64(3.5)))
-        self.assertFalse(result_is_missing(rv, True))
+        assert not result_is_missing(rv, 0.0)
+        assert not result_is_missing(rv, -1)
+        assert not result_is_missing(rv, np.float64(3.5))
+        assert not result_is_missing(rv, True)
 
     def test_numeric_non_numbers_are_not_missing(self):
         # The *string* "nan" is real data, not the NaN sentinel — no float
         # coercion is attempted for non-numeric values.
         rv = ResultFloat()
-        self.assertFalse(result_is_missing(rv, "nan"))
-        self.assertFalse(result_is_missing(rv, "NAN"))
-        self.assertFalse(result_is_missing(rv, "abc"))
-        self.assertFalse(result_is_missing(rv, [float("nan")]))
+        assert not result_is_missing(rv, "nan")
+        assert not result_is_missing(rv, "NAN")
+        assert not result_is_missing(rv, "abc")
+        assert not result_is_missing(rv, [float("nan")])
 
     def test_reference_minus_one_is_missing(self):
         rv = ResultReference()
-        self.assertTrue(result_is_missing(rv, -1))
-        self.assertTrue(result_is_missing(rv, np.int64(-1)))
-        self.assertFalse(result_is_missing(rv, 0))
-        self.assertFalse(result_is_missing(rv, 7))
-        self.assertFalse(result_is_missing(rv, None))
+        assert result_is_missing(rv, -1)
+        assert result_is_missing(rv, np.int64(-1))
+        assert not result_is_missing(rv, 0)
+        assert not result_is_missing(rv, 7)
+        assert not result_is_missing(rv, None)
 
     def test_object_nan_string_is_missing(self):
         rv = ResultPath()
-        self.assertTrue(result_is_missing(rv, "NAN"))
-        self.assertTrue(result_is_missing(rv, np.str_("NAN")))
-        self.assertFalse(result_is_missing(rv, "img/frame_001.png"))
-        self.assertFalse(result_is_missing(rv, ""))
-        self.assertFalse(result_is_missing(rv, None))
+        assert result_is_missing(rv, "NAN")
+        assert result_is_missing(rv, np.str_("NAN"))
+        assert not result_is_missing(rv, "img/frame_001.png")
+        assert not result_is_missing(rv, "")
+        assert not result_is_missing(rv, None)
 
     def test_dataset_accepts_both_sentinel_generations(self):
         """A mixed-generation over_time history holds "NAN" path sentinels next to
         legacy -1 index sentinels (possibly float-promoted by concat), permanently."""
         rv = ResultDataSet()
-        self.assertTrue(result_is_missing(rv, "NAN"))
-        self.assertTrue(result_is_missing(rv, -1))
-        self.assertTrue(result_is_missing(rv, np.int64(-1)))
-        self.assertTrue(result_is_missing(rv, np.float64(-1.0)))
-        self.assertTrue(result_is_missing(rv, float("nan")))
-        self.assertTrue(result_is_missing(rv, None))
-        self.assertFalse(result_is_missing(rv, "cachedir/blobs/abc123.parquet"))
-        self.assertFalse(result_is_missing(rv, 0))
-        self.assertFalse(result_is_missing(rv, 3))
+        assert result_is_missing(rv, "NAN")
+        assert result_is_missing(rv, -1)
+        assert result_is_missing(rv, np.int64(-1))
+        assert result_is_missing(rv, np.float64(-1.0))
+        assert result_is_missing(rv, float("nan"))
+        assert result_is_missing(rv, None)
+        assert not result_is_missing(rv, "cachedir/blobs/abc123.parquet")
+        assert not result_is_missing(rv, 0)
+        assert not result_is_missing(rv, 3)
 
     def test_fill_round_trips_through_typed_array(self):
         # An array initialised with (fill, dtype) — exactly what
@@ -226,7 +226,7 @@ class TestResultIsMissing(unittest.TestCase):
             fill, dtype = result_missing_fill(rv)
             arr = np.full(3, fill, dtype=dtype)
             with self.subTest(rv=type(rv).__name__):
-                self.assertTrue(result_is_missing(rv, arr[0]))
+                assert result_is_missing(rv, arr[0])
 
 
 class TestResultSpecRegistry(unittest.TestCase):
@@ -240,12 +240,11 @@ class TestResultSpecRegistry(unittest.TestCase):
 
         for cls in _discover_all_result_classes():
             with self.subTest(cls=cls.__name__):
-                self.assertTrue(
-                    cls in RESULT_SPECS or cls in RESULT_SPEC_EXEMPT,
+                assert cls in RESULT_SPECS or cls in RESULT_SPEC_EXEMPT, (
                     f"{cls.__name__} has no entry in RESULT_SPECS and is not in "
                     f"RESULT_SPEC_EXEMPT. Every Result* class must declare a "
                     f"ResultSpec (bencher/variables/results.py) so all nine "
-                    f"derived registries stay complete.",
+                    f"derived registries stay complete."
                 )
 
     def test_exempt_classes_resolve_to_a_registered_spec(self):
@@ -253,8 +252,8 @@ class TestResultSpecRegistry(unittest.TestCase):
         # falls through to a registered base (ResultVar -> ResultFloat).
         for cls in RESULT_SPEC_EXEMPT:
             with self.subTest(cls=cls.__name__):
-                self.assertIsNotNone(result_spec(_instantiate(cls)))
-                self.assertNotIn(cls, ALL_RESULT_TYPES)
+                assert result_spec(_instantiate(cls)) is not None
+                assert cls not in ALL_RESULT_TYPES
 
     def test_no_key_precedes_its_own_subclass(self):
         # Registry insertion order is the isinstance-resolution order, so a
@@ -262,11 +261,10 @@ class TestResultSpecRegistry(unittest.TestCase):
         keys = list(RESULT_SPECS)
         for i, earlier in enumerate(keys):
             for later in keys[i + 1 :]:
-                self.assertFalse(
-                    issubclass(later, earlier),
+                assert not issubclass(later, earlier), (
                     f"{later.__name__} subclasses {earlier.__name__} but is listed "
                     f"after it in RESULT_SPECS; isinstance dispatch would never "
-                    f"reach it. Most-derived classes must come first.",
+                    f"reach it. Most-derived classes must come first."
                 )
 
     def test_missing_sentinels_agree_with_result_is_missing(self):
@@ -275,13 +273,13 @@ class TestResultSpecRegistry(unittest.TestCase):
         for cls, spec in RESULT_SPECS.items():
             inst = _instantiate(cls)
             with self.subTest(cls=cls.__name__):
-                self.assertTrue(result_is_missing(inst, spec.missing_fill))
+                assert result_is_missing(inst, spec.missing_fill)
                 for sentinel in spec.missing_sentinels:
-                    self.assertTrue(result_is_missing(inst, sentinel))
+                    assert result_is_missing(inst, sentinel)
 
     def test_result_spec_is_none_for_non_result_params(self):
-        self.assertIsNone(result_spec(param.Number()))
-        self.assertIsNone(result_spec(param.String()))
+        assert result_spec(param.Number()) is None
+        assert result_spec(param.String()) is None
 
     def test_missing_fill_reads_from_the_spec(self):
         # Permanent (unlike the transitional literal test below): the fill
@@ -292,18 +290,18 @@ class TestResultSpecRegistry(unittest.TestCase):
             inst = _instantiate(cls)
             with self.subTest(cls=cls.__name__):
                 fill, dtype = result_missing_fill(inst)
-                self.assertIs(dtype, spec.fill_dtype)
+                assert dtype is spec.fill_dtype
                 if isinstance(spec.missing_fill, float) and math.isnan(spec.missing_fill):
-                    self.assertTrue(math.isnan(fill))
+                    assert math.isnan(fill)
                 else:
-                    self.assertEqual(fill, spec.missing_fill)
+                    assert fill == spec.missing_fill
         for cls in RESULT_SPEC_EXEMPT:
             fill, dtype = result_missing_fill(_instantiate(cls))
-            self.assertTrue(math.isnan(fill))
-            self.assertIs(dtype, float)
+            assert math.isnan(fill)
+            assert dtype is float
         fill, dtype = result_missing_fill(param.Number())
-        self.assertTrue(math.isnan(fill))
-        self.assertIs(dtype, float)
+        assert math.isnan(fill)
+        assert dtype is float
 
     def test_fill_dtype_is_consistent_with_the_fill_value(self):
         # A spec whose fill and dtype disagree would corrupt the backing array
@@ -311,12 +309,12 @@ class TestResultSpecRegistry(unittest.TestCase):
         for cls, spec in RESULT_SPECS.items():
             with self.subTest(cls=cls.__name__):
                 if spec.fill_dtype is float:
-                    self.assertTrue(math.isnan(spec.missing_fill))
+                    assert math.isnan(spec.missing_fill)
                 elif spec.fill_dtype is int:
-                    self.assertIsInstance(spec.missing_fill, int)
+                    assert isinstance(spec.missing_fill, int)
                 else:
-                    self.assertIs(spec.fill_dtype, object)
-                    self.assertIsInstance(spec.missing_fill, str)
+                    assert spec.fill_dtype is object
+                    assert isinstance(spec.missing_fill, str)
 
 
 class TestDerivedTuplesMatchPreRegistryLiterals(unittest.TestCase):
@@ -412,27 +410,24 @@ class TestDerivedTuplesMatchPreRegistryLiterals(unittest.TestCase):
         }
         for name, (derived, literal) in literals.items():
             with self.subTest(registry=name):
-                self.assertEqual(set(derived), literal)
-                self.assertEqual(len(derived), len(literal), f"{name} has duplicates")
+                assert set(derived) == literal
+                assert len(derived) == len(literal), f"{name} has duplicates"
 
     def test_result_kind_order_identical_including_order(self):
-        self.assertEqual(
-            RESULT_KIND_ORDER,
-            (
-                (ResultBool, "bool"),
-                (ResultFloat, "float"),
-                (ResultVec, "vec"),
-                (ResultImage, "image"),
-                (ResultVideo, "video"),
-                (ResultPath, "path"),
-                (ResultString, "string"),
-                (ResultDataSet, "dataset"),
-                (ResultRerun, "rerun"),
-                (ResultContainer, "container"),
-                (ResultHmap, "hmap"),
-                (ResultReference, "reference"),
-            ),
-        )
+        assert (
+            (ResultBool, "bool"),
+            (ResultFloat, "float"),
+            (ResultVec, "vec"),
+            (ResultImage, "image"),
+            (ResultVideo, "video"),
+            (ResultPath, "path"),
+            (ResultString, "string"),
+            (ResultDataSet, "dataset"),
+            (ResultRerun, "rerun"),
+            (ResultContainer, "container"),
+            (ResultHmap, "hmap"),
+            (ResultReference, "reference"),
+        ) == RESULT_KIND_ORDER
 
 
 class TestUnregisteredResultClassGuard(unittest.TestCase):
@@ -450,9 +445,9 @@ class TestUnregisteredResultClassGuard(unittest.TestCase):
         class BogusSweep(ParametrizedSweep):
             out = ResultBogus()
 
-        with self.assertRaises(TypeError) as ctx:
+        with pytest.raises(TypeError) as ctx:
             BogusSweep.get_input_and_results()
-        self.assertIn("RESULT_SPECS", str(ctx.exception))
+        assert "RESULT_SPECS" in str(ctx.value)
 
     def test_ordinary_inputs_still_classify_as_inputs(self):
         class PlainSweep(ParametrizedSweep):
@@ -460,8 +455,8 @@ class TestUnregisteredResultClassGuard(unittest.TestCase):
             out = ResultFloat()
 
         io = PlainSweep.get_input_and_results()
-        self.assertIn("x", io.inputs)
-        self.assertIn("out", io.results)
+        assert "x" in io.inputs
+        assert "out" in io.results
 
 
 if __name__ == "__main__":

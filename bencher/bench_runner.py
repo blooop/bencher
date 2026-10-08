@@ -596,7 +596,7 @@ class BenchRunner:
                     published_url = self.publisher.publish(report)
                     if published_url:
                         logger.info("Benchmark report published at %s", published_url)
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     logger.exception("Publisher.publish() failed — continuing benchmark")
             else:
                 published_url = report.publish(remote_callback=self.publisher, debug=debug)
@@ -607,13 +607,13 @@ class BenchRunner:
             path = report.save(portable=True)  # file:// needs inline .rrd data
             try:
                 webbrowser.open(path.resolve().as_uri())
-            except Exception:  # pylint: disable=broad-exception-caught
+            except Exception:
                 logger.exception("Failed to open browser for %s", path)
         elif show_mode is ShowMode.PUBLISHED:
             if published_url:
                 try:
                     webbrowser.open(published_url)
-                except Exception:  # pylint: disable=broad-exception-caught
+                except Exception:
                     logger.exception("Failed to open %s", published_url)
             else:
                 logger.warning(

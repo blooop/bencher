@@ -139,32 +139,32 @@ class TestResultVecLength(unittest.TestCase):
         WrongLengthVec.n_elements = 2
         res = _run(WrongLengthVec())
         for name in WrongLengthVec.param.v.index_names():
-            self.assertIn(name, res.ds)
-            self.assertFalse(np.isnan(res.ds[name].values).any(), f"{name} left at the NaN fill")
-        self.assertEqual(res.n_failed, 0)
+            assert name in res.ds
+            assert not np.isnan(res.ds[name].values).any(), f"{name} left at the NaN fill"
+        assert res.n_failed == 0
 
     def test_a_short_vector_warns_and_is_recorded_not_dropped(self) -> None:
         WrongLengthVec.n_elements = 1
         with pytest.warns(WorkerContractWarning) as record:
             res = _run(WrongLengthVec())
         # The sweep completed; the bad samples are counted, not fatal.
-        self.assertEqual(res.n_failed, 2)
+        assert res.n_failed == 2
         msg = _contract_messages(record)[0]
         # The message has to carry all three facts, because the symptom the user
         # would otherwise see is an all-NaN column with nothing pointing at 'v'.
-        self.assertIn("'v'", msg)
-        self.assertIn("size=2", msg)
-        self.assertIn("1 element", msg)
+        assert "'v'" in msg
+        assert "size=2" in msg
+        assert "1 element" in msg
         # The cells stay at the missing sentinel — failed, not fabricated.
         for name in WrongLengthVec.param.v.index_names():
-            self.assertTrue(np.isnan(res.ds[name].values).all())
+            assert np.isnan(res.ds[name].values).all()
 
     def test_a_long_vector_is_also_recorded(self) -> None:
         WrongLengthVec.n_elements = 3
         with pytest.warns(WorkerContractWarning) as record:
             res = _run(WrongLengthVec())
-        self.assertEqual(res.n_failed, 2)
-        self.assertIn("3 element", _contract_messages(record)[0])
+        assert res.n_failed == 2
+        assert "3 element" in _contract_messages(record)[0]
 
     def test_a_non_sequence_is_recorded_naming_the_type(self) -> None:
         """Only reachable from a worker that returns a raw dict.
@@ -190,12 +190,12 @@ class TestResultVecLength(unittest.TestCase):
                 _Worker(),
                 bn.BenchRunCfg(),
             )
-        self.assertEqual(res.n_failed, n_failed_before + 1)
+        assert res.n_failed == n_failed_before + 1
         msg = _contract_messages(record)[0]
-        self.assertIn("'v'", msg)
-        self.assertIn("float", msg)
+        assert "'v'" in msg
+        assert "float" in msg
         # The recorded failure is distinguishable from a catch= sample fault.
-        self.assertIn("WorkerContractError", res.failed_samples[-1].exception)
+        assert "WorkerContractError" in res.failed_samples[-1].exception
 
 
 # ---------------------------------------------------------------------------
@@ -213,38 +213,38 @@ class TestWorkerReturnedNothing(unittest.TestCase):
     def test_serial_records_and_warns(self) -> None:
         with pytest.warns(WorkerContractWarning) as record:
             res = _run(ReturnsNothing())
-        self.assertEqual(res.n_failed, 2)
-        self.assertIn("returned None", _contract_messages(record)[0])
+        assert res.n_failed == 2
+        assert "returned None" in _contract_messages(record)[0]
         # Nothing fabricated: the cells hold the missing sentinel.
-        self.assertTrue(np.isnan(res.ds["y"].values).all())
+        assert np.isnan(res.ds["y"].values).all()
 
     def test_multiprocessing_records_and_warns_too(self) -> None:
         """The path that used to complete green with an all-sentinel dataset."""
         with pytest.warns(WorkerContractWarning) as record:
             res = _run(ReturnsNothing(), executor=Executors.MULTIPROCESSING)
-        self.assertEqual(res.n_failed, 2)
-        self.assertIn("returned None", _contract_messages(record)[0])
+        assert res.n_failed == 2
+        assert "returned None" in _contract_messages(record)[0]
 
     def test_the_message_says_what_to_do(self) -> None:
         # require_worker_result itself still raises (a pure check); the
         # record-and-continue disposition lives in store_results.
-        with self.assertRaises(WorkerContractError) as ctx:
+        with pytest.raises(WorkerContractError) as ctx:
             require_worker_result(None, "job-42")
-        msg = str(ctx.exception)
-        self.assertIn("job-42", msg)
-        self.assertIn("super().__call__(**kwargs)", msg)
+        msg = str(ctx.value)
+        assert "job-42" in msg
+        assert "super().__call__(**kwargs)" in msg
 
     def test_contract_error_is_a_type_error(self) -> None:
         """Callers that matched the previous raising behavior still match."""
-        self.assertTrue(issubclass(WorkerContractError, TypeError))
+        assert issubclass(WorkerContractError, TypeError)
 
     def test_a_real_result_passes_straight_through(self) -> None:
         payload = {"y": 1.0}
-        self.assertIs(require_worker_result(payload, "job-1"), payload)
+        assert require_worker_result(payload, "job-1") is payload
 
     def test_an_empty_dict_is_not_treated_as_missing(self) -> None:
         """A worker with no result vars returns ``{}``, which is falsy but valid."""
-        self.assertEqual(require_worker_result({}, "job-1"), {})
+        assert require_worker_result({}, "job-1") == {}
 
 
 class TestCatchDoesNotChangeContractHandling(unittest.TestCase):
@@ -262,18 +262,18 @@ class TestCatchDoesNotChangeContractHandling(unittest.TestCase):
     def test_catch_does_not_swallow_a_none_return(self) -> None:
         with pytest.warns(WorkerContractWarning):
             res = _run(ReturnsNothing(), catch=Exception)
-        self.assertEqual(res.n_failed, 2)
+        assert res.n_failed == 2
         # The narrow subclass by name: this is the harness's own diagnosis, which is
         # what earns the exemption from `catch=`. A worker-raised
         # WorkerContractError would record as a plain sample fault instead --
         # see TestAWorkerRaisedContractErrorIsStillASampleFault.
-        self.assertIn("WorkerReturnedNothingError", res.failed_samples[0].exception)
+        assert "WorkerReturnedNothingError" in res.failed_samples[0].exception
 
     def test_catch_does_not_swallow_a_wrong_length_vector(self) -> None:
         WrongLengthVec.n_elements = 1
         with pytest.warns(WorkerContractWarning):
             res = _run(WrongLengthVec(), catch=Exception)
-        self.assertEqual(res.n_failed, 2)
+        assert res.n_failed == 2
 
 
 class TestAWorkerRaisedContractErrorIsStillASampleFault:
@@ -327,26 +327,26 @@ class TestContractViolationSurfaces(unittest.TestCase):
         with pytest.warns(WorkerContractWarning):
             res = _run(WrongLengthVec())
         md = res.failed_samples_markdown()
-        self.assertIn("Failed samples", md)
-        self.assertIn("x=0", md)
-        self.assertIn("WorkerContractError", md)
+        assert "Failed samples" in md
+        assert "x=0" in md
+        assert "WorkerContractError" in md
         # And the auto-plot report actually carries the pane.
         panes = res.to_auto_plots()
         names = [getattr(p, "name", "") for p in panes]
-        self.assertIn("Failed Samples", names)
+        assert "Failed Samples" in names
 
     def test_a_clean_run_gets_no_failure_pane(self) -> None:
         res = _run(WrongLengthVec())
         panes = res.to_auto_plots()
         names = [getattr(p, "name", "") for p in panes]
-        self.assertNotIn("Failed Samples", names)
+        assert "Failed Samples" not in names
 
     def test_fail_on_sample_error_gates_contract_violations_at_run_end(self) -> None:
         """Opt-in hard failure still exists — after collection, not mid-run."""
         from bencher.bencher import SampleErrorPolicyError
 
         WrongLengthVec.n_elements = 1
-        with pytest.warns(WorkerContractWarning), self.assertRaises(SampleErrorPolicyError):
+        with pytest.warns(WorkerContractWarning), pytest.raises(SampleErrorPolicyError):
             _run(WrongLengthVec(), fail_on_sample_error=True)
 
     def test_a_missing_result_key_is_recorded_not_fatal(self) -> None:
@@ -369,8 +369,8 @@ class TestContractViolationSurfaces(unittest.TestCase):
                 _Worker(),
                 bn.BenchRunCfg(),
             )
-        self.assertEqual(res.n_failed, n_failed_before + 1)
-        self.assertIn("'v'", _contract_messages(record)[0])
+        assert res.n_failed == n_failed_before + 1
+        assert "'v'" in _contract_messages(record)[0]
 
 
 # ---------------------------------------------------------------------------

@@ -365,17 +365,15 @@ class TestOverTimeHistorySurvivesRelocation(unittest.TestCase):
                 time_src=datetime(2000, 1, 1) + timedelta(seconds=self.RUNS),
             )
 
-            self.assertEqual(result.to_dataset().sizes["over_time"], self.RUNS + 1)
+            assert result.to_dataset().sizes["over_time"] == self.RUNS + 1
             rendered = [
                 str(pane.object)
                 for pane in result.to(bn.DataSetResult).select(pn.pane.Markdown)
                 if str(pane.object).startswith("run=")
             ]
-            self.assertEqual(
-                rendered,
-                [f"run={i} scale=1" for i in range(self.RUNS + 1)],
+            assert rendered == [f"run={i} scale=1" for i in range(self.RUNS + 1)], (
                 "every event before the newest was collected under the old cache "
-                "dir path; all of them must still render from the moved one",
+                "dir path; all of them must still render from the moved one"
             )
 
 
@@ -409,23 +407,22 @@ class TestRenderFromAnotherWorkingDirectory(unittest.TestCase):
                 "foreign_cwd", input_vars=[], result_vars=["table"], run_cfg=run_cfg
             )
             cell = result.to_dataset()["table"].values.flat[0]
-            self.assertEqual(cell, Path(cell).name, "precondition: the cell is a bare name")
+            assert cell == Path(cell).name, "precondition: the cell is a bare name"
             bn.save_result(result, result_pkl)
 
-        self.assertTrue(
-            (workspace / "cachedir" / "blobs").is_dir(),
-            "precondition: the cache dir stayed where the sweep wrote it",
+        assert (workspace / "cachedir" / "blobs").is_dir(), (
+            "precondition: the cache dir stayed where the sweep wrote it"
         )
         with pytest.MonkeyPatch.context() as patch:
             patch.chdir(elsewhere)
-            self.assertFalse(Path("cachedir").exists(), "precondition: no cachedir at the reader")
+            assert not Path("cachedir").exists(), "precondition: no cachedir at the reader"
             loaded = bn.load_result(result_pkl)
             rendered = [
                 str(pane.object)
                 for pane in loaded.to(bn.DataSetResult).select(pn.pane.Markdown)
                 if str(pane.object).startswith("run=")
             ]
-        self.assertEqual(rendered, ["run=0 scale=1"])
+        assert rendered == ["run=0 scale=1"]
 
 
 class TestBothAxesAtOnce(unittest.TestCase):
@@ -473,11 +470,11 @@ class TestBothAxesAtOnce(unittest.TestCase):
         with pytest.MonkeyPatch.context() as patch:
             patch.chdir(reader)
             patch.delenv("BENCHER_CACHE_DIR", raising=False)
-            self.assertFalse(Path("cachedir").exists(), "precondition: no cachedir at the reader")
+            assert not Path("cachedir").exists(), "precondition: no cachedir at the reader"
 
             # Nothing to infer from: both inferable locations are wrong.
             unresolved = bn.load_result(result_pkl)
-            self.assertEqual(self._rendered(unresolved), [])
+            assert self._rendered(unresolved) == []
             # ...and the placeholder has to say so in the report itself, naming
             # the blob and the way out — it is read by people without the log.
             placeholders = [
@@ -485,17 +482,17 @@ class TestBothAxesAtOnce(unittest.TestCase):
                 for pane in unresolved.to(bn.DataSetResult).select(pn.pane.Markdown)
                 if "not found in any known cache dir" in str(pane.object)
             ]
-            self.assertEqual(len(placeholders), 1, placeholders)
-            self.assertIn(".parquet", placeholders[0])
-            self.assertIn("--cachedir", placeholders[0])
+            assert len(placeholders) == 1, placeholders
+            assert ".parquet" in placeholders[0]
+            assert "--cachedir" in placeholders[0]
 
             # ...and being told resolves it, by every route a reader has.
             told = bn.load_result(result_pkl)
             told.blob_cache_dir = moved
-            self.assertEqual(self._rendered(told), ["run=0 scale=1"])
+            assert self._rendered(told) == ["run=0 scale=1"]
 
             patch.setenv("BENCHER_CACHE_DIR", str(moved))
-            self.assertEqual(self._rendered(bn.load_result(result_pkl)), ["run=0 scale=1"])
+            assert self._rendered(bn.load_result(result_pkl)) == ["run=0 scale=1"]
 
     def test_render_report_cache_dir_reaches_the_cells(self):
         """The public entry point, not just the attribute it sets: ``--cachedir``
@@ -515,8 +512,8 @@ class TestBothAxesAtOnce(unittest.TestCase):
             html = bn.render_report(result_pkl, reader / "out", cache_dir=moved).read_text(
                 encoding="utf-8"
             )
-        self.assertIn("run=0 scale=1", html)
-        self.assertNotIn("was not found in any known cache dir", html)
+        assert "run=0 scale=1" in html
+        assert "was not found in any known cache dir" not in html
 
 
 def _tmpdir():

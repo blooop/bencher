@@ -17,6 +17,8 @@ import unittest
 from dataclasses import FrozenInstanceError, asdict
 from unittest import mock
 
+import pytest
+
 import bencher as bn
 from bencher.bench_cfg import BenchCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
@@ -90,15 +92,15 @@ class TestEquivalence(unittest.TestCase):
             worker=ExampleBenchCfg, run_cfg=bn.BenchRunCfg(**run_kwargs), **decl
         )
         actual = _real_run(bn.BenchRunCfg(**run_kwargs), **decl)
-        self.assertEqual(predicted.cache_key, actual.cache_key, "cache_key")
-        self.assertEqual(predicted.history_key, actual.history_key, "history_key")
-        self.assertEqual(predicted.sample_key, actual.sample_key, "sample_key")
-        self.assertEqual(predicted.bench_name, actual.bench_name)
-        self.assertEqual(predicted.tag, actual.tag)
-        self.assertEqual(predicted.repeats, actual.repeats)
-        self.assertEqual(predicted.over_time, actual.over_time)
-        self.assertEqual(predicted.summary, actual.summary)
-        self.assertEqual(predicted, actual)
+        assert predicted.cache_key == actual.cache_key, "cache_key"
+        assert predicted.history_key == actual.history_key, "history_key"
+        assert predicted.sample_key == actual.sample_key, "sample_key"
+        assert predicted.bench_name == actual.bench_name
+        assert predicted.tag == actual.tag
+        assert predicted.repeats == actual.repeats
+        assert predicted.over_time == actual.over_time
+        assert predicted.summary == actual.summary
+        assert predicted == actual
 
     def test_every_declaration_form_default_run(self) -> None:
         for name, decl in DECLARATIONS.items():
@@ -124,8 +126,8 @@ class TestKeySemantics(unittest.TestCase):
         """The plan 09/14 contract, asserted through the new surface."""
         one = self._ident(input_vars=["theta"], result_vars=["out_sin"])
         two = self._ident(input_vars=["theta"], result_vars=["out_sin", "out_cos"])
-        self.assertEqual(one.history_key, two.history_key)
-        self.assertNotEqual(one.cache_key, two.cache_key)
+        assert one.history_key == two.history_key
+        assert one.cache_key != two.cache_key
 
     def test_title_and_description_do_not_move_any_key(self) -> None:
         base = self._ident(input_vars=["theta"], result_vars=["out_sin"])
@@ -136,20 +138,20 @@ class TestKeySemantics(unittest.TestCase):
             description="d",
             post_description="p",
         )
-        self.assertEqual(base.cache_key, titled.cache_key)
-        self.assertEqual(base.history_key, titled.history_key)
+        assert base.cache_key == titled.cache_key
+        assert base.history_key == titled.history_key
 
     def test_bench_name_moves_every_key(self) -> None:
         """The rename case: identical declaration, different name, different series."""
         a = self._ident(bench_name="Alpha", input_vars=["theta"], result_vars=["out_sin"])
         b = self._ident(bench_name="Beta", input_vars=["theta"], result_vars=["out_sin"])
-        self.assertNotEqual(a.history_key, b.history_key)
-        self.assertNotEqual(a.cache_key, b.cache_key)
+        assert a.history_key != b.history_key
+        assert a.cache_key != b.cache_key
 
     def test_bench_name_defaults_to_the_worker_class_name(self) -> None:
         """Matches create_bench, so a prediction and a to_bench() run agree."""
         ident = self._ident(input_vars=["theta"], result_vars=["out_sin"])
-        self.assertEqual(ident.bench_name, "ExampleBenchCfg")
+        assert ident.bench_name == "ExampleBenchCfg"
 
     def test_subsampling_divisions_moves_the_key(self) -> None:
         """Input vars are reshaped before hashing, so the run config is part of identity."""
@@ -161,7 +163,7 @@ class TestKeySemantics(unittest.TestCase):
             ).history_key
             for n in (0, 2, 4)
         }
-        self.assertEqual(len(set(keys.values())), 3, keys)
+        assert len(set(keys.values())) == 3, keys
 
     def test_run_tag_is_prefixed_to_tag(self) -> None:
         ident = self._ident(
@@ -170,7 +172,7 @@ class TestKeySemantics(unittest.TestCase):
             tag="b",
             run_cfg=bn.BenchRunCfg(run_tag="a_"),
         )
-        self.assertEqual(ident.tag, "a_b")
+        assert ident.tag == "a_b"
 
     def test_explicit_repeats_and_over_time_win_over_the_run_cfg(self) -> None:
         """The keyword overrides are documented as overrides, so pin the precedence."""
@@ -182,18 +184,18 @@ class TestKeySemantics(unittest.TestCase):
             repeats=3,
             over_time=True,
         )
-        self.assertEqual(overridden.repeats, 3)
-        self.assertTrue(overridden.over_time)
+        assert overridden.repeats == 3
+        assert overridden.over_time
         # ...and the override reaches the keys, not just the reported fields.
         from_run_cfg = self._ident(input_vars=["theta"], result_vars=["out_sin"], run_cfg=run_cfg)
-        self.assertNotEqual(overridden.history_key, from_run_cfg.history_key)
-        self.assertEqual(
-            overridden.history_key,
-            self._ident(
+        assert overridden.history_key != from_run_cfg.history_key
+        assert (
+            overridden.history_key
+            == self._ident(
                 input_vars=["theta"],
                 result_vars=["out_sin"],
                 run_cfg=bn.BenchRunCfg(repeats=3, over_time=True),
-            ).history_key,
+            ).history_key
         )
 
     def test_the_run_cfg_passed_in_is_not_mutated_by_the_overrides(self) -> None:
@@ -205,18 +207,18 @@ class TestKeySemantics(unittest.TestCase):
             repeats=9,
             over_time=True,
         )
-        self.assertEqual(run_cfg.repeats, 1)
-        self.assertFalse(run_cfg.over_time)
-        self.assertFalse(run_cfg.dry_run)
+        assert run_cfg.repeats == 1
+        assert not run_cfg.over_time
+        assert not run_cfg.dry_run
 
     def test_input_var_order_matters_but_result_var_order_does_not(self) -> None:
         ab = self._ident(input_vars=["theta", "offset"], result_vars=["out_sin", "out_cos"])
         ba = self._ident(input_vars=["offset", "theta"], result_vars=["out_cos", "out_sin"])
-        self.assertNotEqual(ab.history_key, ba.history_key)
+        assert ab.history_key != ba.history_key
         reordered_results = self._ident(
             input_vars=["theta", "offset"], result_vars=["out_cos", "out_sin"]
         )
-        self.assertEqual(ab.cache_key, reordered_results.cache_key)
+        assert ab.cache_key == reordered_results.cache_key
 
 
 class TestValueSemantics(unittest.TestCase):
@@ -226,51 +228,51 @@ class TestValueSemantics(unittest.TestCase):
         )
 
     def test_frozen(self) -> None:
-        with self.assertRaises(FrozenInstanceError):
+        with pytest.raises(FrozenInstanceError):
             self.ident.cache_key = "x"
 
     def test_pickle_round_trip_is_unchanged(self) -> None:
         again = pickle.loads(pickle.dumps(self.ident))
-        self.assertEqual(again, self.ident)
-        self.assertEqual(again.cache_key, self.ident.cache_key)
-        self.assertEqual(again.summary, self.ident.summary)
+        assert again == self.ident
+        assert again.cache_key == self.ident.cache_key
+        assert again.summary == self.ident.summary
 
     def test_json_round_trip_needs_no_custom_encoder(self) -> None:
         blob = json.dumps(asdict(self.ident))
         back = json.loads(blob)
-        self.assertEqual(back["cache_key"], self.ident.cache_key)
-        self.assertEqual(back["history_key"], self.ident.history_key)
+        assert back["cache_key"] == self.ident.cache_key
+        assert back["history_key"] == self.ident.history_key
 
     def test_usable_as_a_dict_key(self) -> None:
         twin = bn.sweep_identity(
             worker=ExampleBenchCfg, input_vars=["theta"], result_vars=["out_sin"]
         )
-        self.assertEqual({self.ident: 1, twin: 2}, {self.ident: 2})
+        assert {self.ident: 1, twin: 2} == {self.ident: 2}
 
     def test_summary_is_excluded_from_equality(self) -> None:
         """It is derived explanation, and a dict field would break hashing."""
         from dataclasses import fields
 
         (summary_field,) = [f for f in fields(bn.SweepIdentity) if f.name == "summary"]
-        self.assertFalse(summary_field.compare)
-        self.assertIsInstance(hash(self.ident), int)
+        assert not summary_field.compare
+        assert isinstance(hash(self.ident), int)
 
 
 class TestErrors(unittest.TestCase):
     def test_by_name_variable_without_a_worker_raises_the_existing_error(self) -> None:
-        with self.assertRaises(TypeError) as ctx:
+        with pytest.raises(TypeError) as ctx:
             bn.sweep_identity(bench_name="X", input_vars=["theta"], result_vars=["out_sin"])
-        self.assertIn("without a worker class instance", str(ctx.exception))
+        assert "without a worker class instance" in str(ctx.value)
 
     def test_no_worker_and_no_bench_name_raises(self) -> None:
-        with self.assertRaises(TypeError) as ctx:
+        with pytest.raises(TypeError) as ctx:
             bn.sweep_identity(input_vars=[], result_vars=[])
-        self.assertIn("bench_name", str(ctx.exception))
+        assert "bench_name" in str(ctx.value)
 
     def test_unknown_variable_name_lists_available_parameters(self) -> None:
-        with self.assertRaises(KeyError) as ctx:
+        with pytest.raises(KeyError) as ctx:
             bn.sweep_identity(worker=ExampleBenchCfg, input_vars=["nope"], result_vars=["out_sin"])
-        self.assertIn("Available parameters", str(ctx.exception))
+        assert "Available parameters" in str(ctx.value)
 
 
 class TestExplain(unittest.TestCase):
@@ -287,14 +289,14 @@ class TestExplain(unittest.TestCase):
         """Regression guard for the exclusion documented in hash_persistent."""
         text = self.ident.explain()
         excluded = text.split("excluded on purpose")[1]
-        self.assertIn("title", excluded)
+        assert "title" in excluded
 
     def test_reports_both_keys_and_the_contributing_fields(self) -> None:
         text = self.ident.explain()
-        self.assertIn(self.ident.cache_key, text)
-        self.assertIn(self.ident.history_key, text)
+        assert self.ident.cache_key in text
+        assert self.ident.history_key in text
         for expected in ("bench_name", "tag", "repeats", "over_time", "input_vars"):
-            self.assertIn(expected, text)
+            assert expected in text
 
     def test_diff_identities_names_what_moved(self) -> None:
         other = bn.sweep_identity(
@@ -304,12 +306,12 @@ class TestExplain(unittest.TestCase):
             tag="nightly",
         )
         lines = bn.diff_identities(self.ident, other)
-        self.assertTrue(any("inputs changed" in line for line in lines), lines)
+        assert any("inputs changed" in line for line in lines), lines
 
     def test_diff_identities_accepts_raw_summaries(self) -> None:
         """The stored last-seen index holds dicts, not SweepIdentity values."""
         lines = bn.diff_identities(self.ident.summary, self.ident.summary)
-        self.assertEqual(lines, [])
+        assert lines == []
 
 
 class TestConfigAccessors(unittest.TestCase):
@@ -323,8 +325,8 @@ class TestConfigAccessors(unittest.TestCase):
             res = bench.plot_sweep(
                 input_vars=["theta"], result_vars=["out_sin"], plot_callbacks=False
             )
-            self.assertEqual(res.bench_cfg.identity(), res.identity)
-            self.assertEqual(res.identity.repeats, 2)
+            assert res.bench_cfg.identity() == res.identity
+            assert res.identity.repeats == 2
         finally:
             bench.close()
 
@@ -345,9 +347,9 @@ class TestConfigAccessors(unittest.TestCase):
             ident = res.bench_cfg.identity(
                 bn.BenchRunCfg(repeats=7, over_time=True, cache_results=True)
             )
-            self.assertEqual(ident.repeats, 7)
-            self.assertTrue(ident.over_time)
-            self.assertEqual(before, {k: getattr(res.bench_cfg, k) for k in merged})
+            assert ident.repeats == 7
+            assert ident.over_time
+            assert before == {k: getattr(res.bench_cfg, k) for k in merged}
         finally:
             bench.close()
 
@@ -360,7 +362,7 @@ class TestConfigAccessors(unittest.TestCase):
             result_vars=["out_sin"],
             run_cfg=run_cfg,
         )
-        self.assertEqual(ident.repeats, 5)
+        assert ident.repeats == 5
 
 
 class TestNoRuntimeCost(unittest.TestCase):
@@ -376,8 +378,8 @@ class TestNoRuntimeCost(unittest.TestCase):
                 return {"y": 1.0}
 
         ident = bn.sweep_identity(worker=Probe, input_vars=["x"], result_vars=["y"])
-        self.assertEqual(calls, [])
-        self.assertTrue(ident.cache_key)
+        assert calls == []
+        assert ident.cache_key
 
     def test_a_worker_class_is_never_instantiated(self) -> None:
         """The case that makes identity reachable for an expensive benchmark.
@@ -394,12 +396,12 @@ class TestNoRuntimeCost(unittest.TestCase):
 
             # Never reaching super().__init__ is the whole point: this class cannot be
             # constructed at all, so identity must not try.
-            def __init__(self, **params):  # pylint: disable=super-init-not-called
+            def __init__(self, **params):
                 raise RuntimeError("requires an active sampling context")
 
         ident = bn.sweep_identity(worker=NeedsHardware, input_vars=["x"], result_vars=["y"])
-        self.assertTrue(ident.history_key)
-        self.assertEqual(ident.bench_name, "NeedsHardware")
+        assert ident.history_key
+        assert ident.bench_name == "NeedsHardware"
 
     def test_a_class_and_an_instance_agree(self) -> None:
         by_class = bn.sweep_identity(
@@ -408,22 +410,22 @@ class TestNoRuntimeCost(unittest.TestCase):
         by_instance = bn.sweep_identity(
             worker=ExampleBenchCfg(), input_vars=["theta"], result_vars=["out_sin"]
         )
-        self.assertEqual(by_class, by_instance)
+        assert by_class == by_instance
 
     def test_auto_discovery_works_from_a_class(self) -> None:
         """get_inputs_only / get_input_defaults / get_results_only are classmethods."""
         by_class = bn.sweep_identity(worker=ExampleBenchCfg)
         by_instance = bn.sweep_identity(worker=ExampleBenchCfg())
-        self.assertEqual(by_class, by_instance)
-        self.assertTrue(by_class.summary["inputs"])
-        self.assertTrue(by_class.summary["results"])
+        assert by_class == by_instance
+        assert by_class.summary["inputs"]
+        assert by_class.summary["results"]
 
     def test_a_zero_length_declaration_still_produces_keys(self) -> None:
         ident = bn.sweep_identity(
             worker=ExampleBenchCfg, input_vars=[], result_vars=["out_sin"], const_vars={}
         )
-        self.assertTrue(ident.cache_key)
-        self.assertNotEqual(ident.cache_key, ident.history_key)
+        assert ident.cache_key
+        assert ident.cache_key != ident.history_key
 
 
 def _dry_identity(run_cfg: bn.BenchRunCfg | None = None, **plot_sweep_kwargs) -> bn.SweepIdentity:
@@ -466,13 +468,13 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
         return bn.sweep_identity(worker=ExampleBenchCfg, **{**_GUARD_BASE, **kwargs})
 
     def _assert_keys_move(self, a: bn.SweepIdentity, b: bn.SweepIdentity) -> None:
-        self.assertNotEqual(a.cache_key, b.cache_key, "cache_key")
-        self.assertNotEqual(a.history_key, b.history_key, "history_key")
+        assert a.cache_key != b.cache_key, "cache_key"
+        assert a.history_key != b.history_key, "history_key"
 
     def _assert_no_key_moves(self, a: bn.SweepIdentity, b: bn.SweepIdentity) -> None:
-        self.assertEqual(a.cache_key, b.cache_key, "cache_key")
-        self.assertEqual(a.history_key, b.history_key, "history_key")
-        self.assertEqual(a.sample_key, b.sample_key, "sample_key")
+        assert a.cache_key == b.cache_key, "cache_key"
+        assert a.history_key == b.history_key, "history_key"
+        assert a.sample_key == b.sample_key, "sample_key"
 
     # --- contributing fields -------------------------------------------------
 
@@ -482,7 +484,7 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
         with mock.patch("bencher.bench_cfg.CACHE_VERSION", 10_000):
             bumped = self._ident()
         self._assert_keys_move(base, bumped)
-        self.assertNotEqual(base.sample_key, bumped.sample_key)
+        assert base.sample_key != bumped.sample_key
 
     def check_bench_name(self) -> None:
         self._assert_keys_move(self._ident(), self._ident(bench_name="Renamed"))
@@ -495,7 +497,7 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
         self._assert_keys_move(base, more)
         # ...but not the sample key, which is hashed with include_repeats=False so a
         # single sample stays reusable across repeat counts.
-        self.assertEqual(base.sample_key, more.sample_key)
+        assert base.sample_key == more.sample_key
 
     def check_tag(self) -> None:
         self._assert_keys_move(self._ident(), self._ident(tag="nightly"))
@@ -512,17 +514,17 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
         """An unordered set, and in the cache key only."""
         one = self._ident()
         two = self._ident(result_vars=["out_sin", "out_cos"])
-        self.assertNotEqual(one.cache_key, two.cache_key)
-        self.assertEqual(one.history_key, two.history_key)
-        self.assertEqual(two.cache_key, self._ident(result_vars=["out_cos", "out_sin"]).cache_key)
+        assert one.cache_key != two.cache_key
+        assert one.history_key == two.history_key
+        assert two.cache_key == self._ident(result_vars=["out_cos", "out_sin"]).cache_key
 
     def check_const_vars(self) -> None:
         """An unordered set: const order only reaches the title string."""
         self._assert_keys_move(self._ident(), self._ident(const_vars={"offset": 0.2}))
         pair = [(ExampleBenchCfg.param.offset, 0.1), (ExampleBenchCfg.param.noisy, True)]
-        self.assertEqual(
-            self._ident(const_vars=pair).cache_key,
-            self._ident(const_vars=list(reversed(pair))).cache_key,
+        assert (
+            self._ident(const_vars=pair).cache_key
+            == self._ident(const_vars=list(reversed(pair))).cache_key
         )
 
     # --- fields excluded on purpose ------------------------------------------
@@ -547,7 +549,7 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
 
     def check_sample_order(self) -> None:
         """Sampling traversal only -- it never reaches BenchCfg at all."""
-        self.assertNotIn("sample_order", BenchCfg.param)
+        assert "sample_order" not in BenchCfg.param
         decl = {"input_vars": [bn.sweep("theta", samples=2)], "result_vars": ["out_sin"]}
         self._assert_no_key_moves(
             _real_run(**decl, sample_order=bn.SampleOrder.INORDER),
@@ -643,7 +645,7 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
 
     def test_every_documented_field_has_a_check(self) -> None:
         """Adding a field to either list without a check fails here."""
-        self.assertEqual(set(self._checks()), set(bn.IDENTITY_FIELDS) | set(bn.EXCLUDED_FIELDS))
+        assert set(self._checks()) == set(bn.IDENTITY_FIELDS) | set(bn.EXCLUDED_FIELDS)
 
     def test_each_documented_field_behaves_as_documented(self) -> None:
         for field_name, check in self._checks().items():
@@ -660,7 +662,7 @@ class TestMathImportedForRealism(unittest.TestCase):
             input_vars=[bn.sweep("theta", [0.0, math.pi / 2, math.pi])],
             result_vars=["out_sin"],
         )
-        self.assertTrue(ident.history_key)
+        assert ident.history_key
 
 
 if __name__ == "__main__":

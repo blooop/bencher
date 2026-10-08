@@ -38,31 +38,31 @@ from bencher.result_collector import ResultCollector
 
 class TestConstant(unittest.TestCase):
     def test_default_cache_size(self):
-        self.assertEqual(DEFAULT_CACHE_SIZE_BYTES, int(100e9))
+        assert int(100000000000.0) == DEFAULT_CACHE_SIZE_BYTES
 
 
 class TestCacheDirStats(unittest.TestCase):
     def test_summary_line_gb(self):
         s = CacheDirStats("sample_cache", 10, 2_500_000_000, 100_000_000_000)
         line = s.summary_line()
-        self.assertIn("2.5 GB", line)
-        self.assertIn("100.0 GB", line)
-        self.assertIn("10", line)
+        assert "2.5 GB" in line
+        assert "100.0 GB" in line
+        assert "10" in line
 
     def test_summary_line_mb(self):
         s = CacheDirStats("img", 5, 1_500_000)
         line = s.summary_line()
-        self.assertIn("1.5 MB", line)
+        assert "1.5 MB" in line
 
     def test_summary_line_kb(self):
         s = CacheDirStats("rrd", 2, 1_500)
         line = s.summary_line()
-        self.assertIn("1.5 KB", line)
+        assert "1.5 KB" in line
 
     def test_summary_line_bytes(self):
         s = CacheDirStats("x", 1, 42)
         line = s.summary_line()
-        self.assertIn("42 B", line)
+        assert "42 B" in line
 
 
 class TestCacheStats(unittest.TestCase):
@@ -73,10 +73,10 @@ class TestCacheStats(unittest.TestCase):
             total_bytes=1500,
         )
         s = stats.summary()
-        self.assertIn("Cache Statistics", s)
-        self.assertIn("sample_cache", s)
-        self.assertIn("img", s)
-        self.assertIn("Total:", s)
+        assert "Cache Statistics" in s
+        assert "sample_cache" in s
+        assert "img" in s
+        assert "Total:" in s
 
 
 class _TempCacheMixin:
@@ -133,8 +133,8 @@ class TestCacheVersion(_TempCacheMixin, unittest.TestCase):
         shutil.rmtree(self.cachedir)
         ensure_cache_version(self.cachedir)
         vf = Path(self.cachedir) / "CACHE_VERSION"
-        self.assertTrue(vf.is_file())
-        self.assertEqual(vf.read_text().strip(), CACHE_VERSION)
+        assert vf.is_file()
+        assert vf.read_text().strip() == CACHE_VERSION
 
     def test_noop_when_version_matches(self):
         vf = Path(self.cachedir) / "CACHE_VERSION"
@@ -143,7 +143,7 @@ class TestCacheVersion(_TempCacheMixin, unittest.TestCase):
         ensure_cache_version(self.cachedir)
         # Cache should still exist
         c = Cache(os.path.join(self.cachedir, "sample_cache"))
-        self.assertEqual(c["k"], "v")
+        assert c["k"] == "v"
         c.close()
 
     def test_clears_on_version_mismatch(self):
@@ -152,16 +152,16 @@ class TestCacheVersion(_TempCacheMixin, unittest.TestCase):
         self._make_managed_cache("sample_cache", {"k": "v"})
         ensure_cache_version(self.cachedir)
         # Old cache should be gone, version updated
-        self.assertEqual(vf.read_text().strip(), CACHE_VERSION)
-        self.assertFalse((Path(self.cachedir) / "sample_cache").is_dir())
+        assert vf.read_text().strip() == CACHE_VERSION
+        assert not (Path(self.cachedir) / "sample_cache").is_dir()
 
     def test_clears_when_no_version_file(self):
         self._make_managed_cache("sample_cache", {"k": "v"})
         ensure_cache_version(self.cachedir)
         vf = Path(self.cachedir) / "CACHE_VERSION"
-        self.assertEqual(vf.read_text().strip(), CACHE_VERSION)
+        assert vf.read_text().strip() == CACHE_VERSION
         # Old data should be cleared
-        self.assertFalse((Path(self.cachedir) / "sample_cache").is_dir())
+        assert not (Path(self.cachedir) / "sample_cache").is_dir()
 
 
 class TestCacheStatsIntegration(_TempCacheMixin, unittest.TestCase):
@@ -171,25 +171,25 @@ class TestCacheStatsIntegration(_TempCacheMixin, unittest.TestCase):
         self._make_job_media("vid", "vid", "key2", b"y" * 200)
 
         stats = cache_stats(self.cachedir)
-        self.assertIsInstance(stats, CacheStats)
+        assert isinstance(stats, CacheStats)
 
         sc = next(s for s in stats.managed if s.path == "sample_cache")
-        self.assertEqual(sc.entries, 2)
-        self.assertGreater(sc.size_bytes, 0)
+        assert sc.entries == 2
+        assert sc.size_bytes > 0
 
         img = next(s for s in stats.media if s.path == "img")
-        self.assertEqual(img.entries, 1)
-        self.assertEqual(img.size_bytes, 100)
+        assert img.entries == 1
+        assert img.size_bytes == 100
 
         vid = next(s for s in stats.media if s.path == "vid")
-        self.assertEqual(vid.entries, 1)
-        self.assertEqual(vid.size_bytes, 200)
+        assert vid.entries == 1
+        assert vid.size_bytes == 200
 
-        self.assertGreater(stats.total_bytes, 0)
+        assert stats.total_bytes > 0
 
     def test_stats_empty(self):
         stats = cache_stats(self.cachedir)
-        self.assertEqual(stats.total_bytes, 0)
+        assert stats.total_bytes == 0
 
     def test_blob_store_is_counted(self):
         """The blob store grows without per-job pruning, so it must not be
@@ -199,10 +199,10 @@ class TestCacheStatsIntegration(_TempCacheMixin, unittest.TestCase):
 
         stats = cache_stats(self.cachedir)
         blobs = next(s for s in stats.content if s.path == "blobs")
-        self.assertEqual(blobs.entries, 2)
-        self.assertEqual(blobs.size_bytes, 400)
-        self.assertEqual(stats.total_bytes, 400)
-        self.assertIn("blobs", stats.summary())
+        assert blobs.entries == 2
+        assert blobs.size_bytes == 400
+        assert stats.total_bytes == 400
+        assert "blobs" in stats.summary()
 
 
 class TestCleanupJobMedia(_TempCacheMixin, unittest.TestCase):
@@ -213,23 +213,23 @@ class TestCleanupJobMedia(_TempCacheMixin, unittest.TestCase):
         other = self._make_job_media("img", "polygon", "other_key")
 
         removed = cleanup_job_media("abc123", self.cachedir)
-        self.assertEqual(removed, 2)
-        self.assertFalse(Path(self.cachedir, "img/polygon/abc123").exists())
-        self.assertFalse(Path(self.cachedir, "rrd/rrd/abc123").exists())
-        self.assertTrue(os.path.exists(other))
+        assert removed == 2
+        assert not Path(self.cachedir, "img/polygon/abc123").exists()
+        assert not Path(self.cachedir, "rrd/rrd/abc123").exists()
+        assert os.path.exists(other)
 
     def test_noop_for_missing_key(self):
         removed = cleanup_job_media("nonexistent", self.cachedir)
-        self.assertEqual(removed, 0)
+        assert removed == 0
 
 
 class TestClearAll(_TempCacheMixin, unittest.TestCase):
     def test_clear_all(self):
         self._make_managed_cache("sample_cache", {"k": "v"})
         self._make_job_media("img", "img", "key1")
-        self.assertTrue(os.path.isdir(self.cachedir))
+        assert os.path.isdir(self.cachedir)
         clear_all(self.cachedir)
-        self.assertFalse(os.path.exists(self.cachedir))
+        assert not os.path.exists(self.cachedir)
 
     def test_clear_all_nonexistent(self):
         clear_all(os.path.join(self.tmpdir, "nonexistent"))
@@ -242,12 +242,12 @@ class TestClearMedia(_TempCacheMixin, unittest.TestCase):
         self._make_job_media("vid", "vid", "key2", b"z" * 50)
 
         deleted, freed = clear_media(self.cachedir)
-        self.assertEqual(deleted, 2)
-        self.assertEqual(freed, 150)
+        assert deleted == 2
+        assert freed == 150
 
         # Managed cache still exists
         c = Cache(os.path.join(self.cachedir, "sample_cache"))
-        self.assertEqual(c["k"], "v")
+        assert c["k"] == "v"
         c.close()
 
     def test_clears_blobs_too(self):
@@ -257,9 +257,9 @@ class TestClearMedia(_TempCacheMixin, unittest.TestCase):
         self._make_blob("abc123def456abcd.parquet", b"q" * 80)
 
         deleted, freed = clear_media(self.cachedir)
-        self.assertEqual(deleted, 1)
-        self.assertEqual(freed, 80)
-        self.assertFalse(Path(self.cachedir, "blobs").exists())
+        assert deleted == 1
+        assert freed == 80
+        assert not Path(self.cachedir, "blobs").exists()
 
 
 class TestBlobsAreNotPerJobPruned(_TempCacheMixin, unittest.TestCase):
@@ -272,15 +272,15 @@ class TestBlobsAreNotPerJobPruned(_TempCacheMixin, unittest.TestCase):
         self._make_job_media("img", "img", "abc123")
 
         cleanup_job_media("abc123", self.cachedir)
-        self.assertTrue(os.path.exists(blob))
+        assert os.path.exists(blob)
 
     def test_clean_orphaned_media_leaves_blobs(self):
         # No sample cache at all, so every job key is dead: maximally aggressive.
         blob = self._make_blob("abc123def456abcd.parquet")
 
         orphans, _ = clean_orphaned_media(self.cachedir, dry_run=False)
-        self.assertEqual(orphans, [])
-        self.assertTrue(os.path.exists(blob))
+        assert orphans == []
+        assert os.path.exists(blob)
 
 
 class TestCleanOrphanedMedia(_TempCacheMixin, unittest.TestCase):
@@ -292,24 +292,24 @@ class TestCleanOrphanedMedia(_TempCacheMixin, unittest.TestCase):
         self._make_job_media("rrd", "rrd", "dead_key")
 
         orphans, _ = clean_orphaned_media(self.cachedir, dry_run=True)
-        self.assertEqual(len(orphans), 1)
-        self.assertIn("dead_key", orphans[0])
+        assert len(orphans) == 1
+        assert "dead_key" in orphans[0]
         # Still exists (dry run)
-        self.assertTrue(Path(self.cachedir, "rrd/rrd/dead_key").exists())
+        assert Path(self.cachedir, "rrd/rrd/dead_key").exists()
 
     def test_deletes_orphans(self):
         self._make_job_media("vid", "vid", "orphan_key")
 
         orphans, _ = clean_orphaned_media(self.cachedir, dry_run=False)
-        self.assertEqual(len(orphans), 1)
-        self.assertFalse(Path(self.cachedir, "vid/vid/orphan_key").exists())
+        assert len(orphans) == 1
+        assert not Path(self.cachedir, "vid/vid/orphan_key").exists()
 
     def test_cleans_legacy_files(self):
         """Legacy UUID-named files (pre-v2) with media extensions are treated as orphans."""
         self._make_legacy_media("img", "img")
 
         orphans, _ = clean_orphaned_media(self.cachedir, dry_run=False)
-        self.assertEqual(len(orphans), 1)
+        assert len(orphans) == 1
 
     def test_ignores_non_media_files(self):
         """Non-media files like .gitkeep should not be treated as orphans."""
@@ -320,15 +320,15 @@ class TestCleanOrphanedMedia(_TempCacheMixin, unittest.TestCase):
             f.write("")
 
         orphans, _ = clean_orphaned_media(self.cachedir, dry_run=False)
-        self.assertEqual(len(orphans), 0)
-        self.assertTrue(os.path.exists(gitkeep))
+        assert len(orphans) == 0
+        assert os.path.exists(gitkeep)
 
     def test_no_orphans(self):
         self._make_managed_cache("sample_cache", {"my_key": "val"})
         self._make_job_media("img", "img", "my_key")
 
         orphans, _ = clean_orphaned_media(self.cachedir, dry_run=True)
-        self.assertEqual(len(orphans), 0)
+        assert len(orphans) == 0
 
 
 BLOB_A = "aaaa000000000000.parquet"
@@ -380,8 +380,8 @@ class TestBlobReachability(_TempCacheMixin, unittest.TestCase):
 
     def test_missing_caches_are_empty_not_unreadable(self):
         reach = blob_reachability(self.cachedir)
-        self.assertEqual(reach.names, frozenset())
-        self.assertTrue(reach.complete)
+        assert reach.names == frozenset()
+        assert reach.complete
 
     def test_history_and_benchmark_caches_are_both_roots(self):
         self._make_managed_cache("history", {"k": _record(_cells([f"/c/blobs/{BLOB_A}"]))})
@@ -389,7 +389,7 @@ class TestBlobReachability(_TempCacheMixin, unittest.TestCase):
             "benchmark_inputs", {"k": _bench_result(_cells([f"/c/blobs/{BLOB_B}"]))}
         )
         reach = blob_reachability(self.cachedir)
-        self.assertEqual(reach.names, frozenset({BLOB_A, BLOB_B}))
+        assert reach.names == frozenset({BLOB_A, BLOB_B})
 
     def test_non_blob_strings_are_not_references(self):
         """Only content-addressed names count, so ordinary media paths are ignored."""
@@ -397,7 +397,7 @@ class TestBlobReachability(_TempCacheMixin, unittest.TestCase):
             "history",
             {"k": _record(_cells(["cachedir/img/img/key/img.png", "not a path", MISSING]))},
         )
-        self.assertEqual(blob_reachability(self.cachedir).names, frozenset())
+        assert blob_reachability(self.cachedir).names == frozenset()
 
     def test_bare_strings_arrays_and_dataarrays_are_all_scanned(self):
         """The walk does not assume a Dataset: any shape a cached value can take
@@ -415,7 +415,7 @@ class TestBlobReachability(_TempCacheMixin, unittest.TestCase):
             },
         )
         reach = blob_reachability(self.cachedir)
-        self.assertEqual(reach.names, frozenset({BLOB_A, BLOB_B, BLOB_C}))
+        assert reach.names == frozenset({BLOB_A, BLOB_B, BLOB_C})
 
     def test_every_managed_cache_is_a_gc_root_or_the_documented_exclusion(self):
         """Guard on the hand-maintained coupling between the two cache lists.
@@ -428,10 +428,9 @@ class TestBlobReachability(_TempCacheMixin, unittest.TestCase):
         can hold datasets without also making it a root would let GC delete
         live blobs — this test forces that decision to be made explicitly.
         """
-        # pylint: disable=protected-access  # the coupling of the two module constants is the subject
         managed = set(cache_management._MANAGED_CACHES)
         roots = set(cache_management._BLOB_REFERENCE_CACHES)
-        self.assertEqual(managed, roots | {"sample_cache"})
+        assert managed == roots | {"sample_cache"}
 
 
 class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
@@ -447,19 +446,19 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
 
         orphans, freed = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
-        self.assertEqual(orphans, [dead])
-        self.assertEqual(freed, 40)
-        self.assertTrue(os.path.exists(live))
-        self.assertFalse(os.path.exists(dead))
+        assert orphans == [dead]
+        assert freed == 40
+        assert os.path.exists(live)
+        assert not os.path.exists(dead)
 
     def test_dry_run_is_the_default_and_deletes_nothing(self):
         dead = self._make_blob(BLOB_B, b"y" * 40)
 
         orphans, freed = clean_orphaned_blobs(self.cachedir)
 
-        self.assertEqual(orphans, [dead])
-        self.assertEqual(freed, 40)
-        self.assertTrue(os.path.exists(dead))
+        assert orphans == [dead]
+        assert freed == 40
+        assert os.path.exists(dead)
 
     def test_blob_referenced_only_by_a_historical_event_survives(self):
         """The case a naive implementation gets wrong: an over_time history's
@@ -470,8 +469,8 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
 
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
-        self.assertEqual(orphans, [])
-        self.assertTrue(os.path.exists(old))
+        assert orphans == []
+        assert os.path.exists(old)
 
     def test_blob_referenced_only_by_a_retired_column_survives(self):
         """A ``meaning_version`` bump retires a column under a mangled name; the
@@ -496,8 +495,8 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
 
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
-        self.assertEqual(orphans, [])
-        self.assertTrue(os.path.exists(retired_blob))
+        assert orphans == []
+        assert os.path.exists(retired_blob)
 
     def test_blob_referenced_only_by_a_dormant_column_survives(self):
         """A column whose variable left the config is retained but not served,
@@ -511,8 +510,8 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
 
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
-        self.assertEqual(orphans, [])
-        self.assertTrue(os.path.exists(dormant_blob))
+        assert orphans == []
+        assert os.path.exists(dormant_blob)
 
     def test_deduplicated_blob_survives_while_another_cell_still_names_it(self):
         """Content addressing means one file backs many cells, which is exactly
@@ -525,8 +524,8 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
 
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
-        self.assertEqual(orphans, [aged_out])
-        self.assertTrue(os.path.exists(shared))
+        assert orphans == [aged_out]
+        assert os.path.exists(shared)
 
     def test_reference_is_matched_by_name_so_a_moved_cachedir_still_protects(self):
         """A blob name *is* its content hash, so a stale absolute prefix from a
@@ -536,8 +535,8 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
 
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
-        self.assertEqual(orphans, [])
-        self.assertTrue(os.path.exists(blob))
+        assert orphans == []
+        assert os.path.exists(blob)
 
     def test_partial_writes_and_stray_files_are_left_alone(self):
         """``materialize_blob`` renames from ``<name>.tmp-<uuid>``; one may belong
@@ -549,11 +548,11 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
 
         orphans, freed = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
-        self.assertEqual(orphans, [])
-        self.assertEqual(freed, 0)
-        self.assertTrue(os.path.exists(tmp_write))
-        self.assertTrue(os.path.exists(stray))
-        self.assertTrue(subdir.is_dir())
+        assert orphans == []
+        assert freed == 0
+        assert os.path.exists(tmp_write)
+        assert os.path.exists(stray)
+        assert subdir.is_dir()
 
     def test_no_reference_caches_at_all_means_every_blob_is_garbage(self):
         """The default configuration writes neither cache (``cache_results`` and
@@ -565,7 +564,7 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
 
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
-        self.assertEqual(orphans, [blob])
+        assert orphans == [blob]
 
     def test_min_age_seconds_protects_a_recently_written_blob(self):
         recent = self._make_blob(BLOB_A)
@@ -574,12 +573,12 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
 
         orphans, freed = clean_orphaned_blobs(self.cachedir, dry_run=False, min_age_seconds=3600)
 
-        self.assertEqual(orphans, [old])
-        self.assertEqual(freed, 40)
-        self.assertTrue(os.path.exists(recent))
+        assert orphans == [old]
+        assert freed == 40
+        assert os.path.exists(recent)
 
     def test_empty_blob_store_is_a_noop(self):
-        self.assertEqual(clean_orphaned_blobs(self.cachedir), ([], 0))
+        assert clean_orphaned_blobs(self.cachedir) == ([], 0)
 
 
 class TestBlobGCDegradesSafely(_TempCacheMixin, unittest.TestCase):
@@ -593,7 +592,7 @@ class TestBlobGCDegradesSafely(_TempCacheMixin, unittest.TestCase):
         """
         self._make_managed_cache("history", {"key": {"payload": b"x" * 200_000}})
         vals = list(Path(self.cachedir, "history").rglob("*.val"))
-        self.assertEqual(len(vals), 1)
+        assert len(vals) == 1
         vals[0].write_bytes(b"not a pickle")
 
     def test_corrupt_record_collects_nothing_and_keeps_every_blob(self):
@@ -602,15 +601,15 @@ class TestBlobGCDegradesSafely(_TempCacheMixin, unittest.TestCase):
 
         orphans, freed = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
-        self.assertEqual((orphans, freed), ([], 0))
-        self.assertTrue(os.path.exists(blob))
+        assert (orphans, freed) == ([], 0)
+        assert os.path.exists(blob)
 
     def test_incomplete_scan_reports_the_offending_entry(self):
         self._corrupt_history_value()
         reach = blob_reachability(self.cachedir)
-        self.assertFalse(reach.complete)
-        self.assertEqual(len(reach.unreadable), 1)
-        self.assertIn("cannot deserialize", reach.unreadable[0])
+        assert not reach.complete
+        assert len(reach.unreadable) == 1
+        assert "cannot deserialize" in reach.unreadable[0]
 
     def test_unopenable_cache_collects_nothing(self):
         blob = self._make_blob(BLOB_A)
@@ -619,8 +618,8 @@ class TestBlobGCDegradesSafely(_TempCacheMixin, unittest.TestCase):
         with mock.patch("bencher.cache_management.Cache", side_effect=OSError("disk on fire")):
             orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
-        self.assertEqual(orphans, [])
-        self.assertTrue(os.path.exists(blob))
+        assert orphans == []
+        assert os.path.exists(blob)
 
     def test_unenumerable_cache_collects_nothing(self):
         blob = self._make_blob(BLOB_A)
@@ -629,8 +628,8 @@ class TestBlobGCDegradesSafely(_TempCacheMixin, unittest.TestCase):
         with mock.patch.object(Cache, "iterkeys", side_effect=OSError("bad index")):
             orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
-        self.assertEqual(orphans, [])
-        self.assertTrue(os.path.exists(blob))
+        assert orphans == []
+        assert os.path.exists(blob)
 
     def test_undeletable_blob_is_still_reported(self):
         """Matching clean_orphaned_media: the report is what was identified as
@@ -640,14 +639,14 @@ class TestBlobGCDegradesSafely(_TempCacheMixin, unittest.TestCase):
         with mock.patch.object(Path, "unlink", side_effect=OSError("read-only")):
             orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
-        self.assertEqual(orphans, [blob])
-        self.assertTrue(os.path.exists(blob))
+        assert orphans == [blob]
+        assert os.path.exists(blob)
 
     def test_dry_run_matches_the_real_run_when_the_scan_is_incomplete(self):
         """A dry run has to stay an accurate preview, so it reports nothing too."""
         self._make_blob(BLOB_A)
         self._corrupt_history_value()
-        self.assertEqual(clean_orphaned_blobs(self.cachedir), ([], 0))
+        assert clean_orphaned_blobs(self.cachedir) == ([], 0)
 
 
 class TestBlobGCExtraRoots(_TempCacheMixin, unittest.TestCase):
@@ -667,7 +666,7 @@ class TestBlobGCExtraRoots(_TempCacheMixin, unittest.TestCase):
 
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
-        self.assertEqual(orphans, [blob])
+        assert orphans == [blob]
 
     def test_extra_root_file_protects_a_saved_result(self):
         blob = self._make_blob(BLOB_A)
@@ -675,8 +674,8 @@ class TestBlobGCExtraRoots(_TempCacheMixin, unittest.TestCase):
 
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False, extra_roots=[saved])
 
-        self.assertEqual(orphans, [])
-        self.assertTrue(os.path.exists(blob))
+        assert orphans == []
+        assert os.path.exists(blob)
 
     def test_extra_root_directory_protects_every_pickle_under_it(self):
         blob_a = self._make_blob(BLOB_A)
@@ -689,9 +688,9 @@ class TestBlobGCExtraRoots(_TempCacheMixin, unittest.TestCase):
             self.cachedir, dry_run=False, extra_roots=[Path(self.tmpdir, "archive")]
         )
 
-        self.assertEqual(orphans, [dead])
-        self.assertTrue(os.path.exists(blob_a))
-        self.assertTrue(os.path.exists(blob_b))
+        assert orphans == [dead]
+        assert os.path.exists(blob_a)
+        assert os.path.exists(blob_b)
 
     def test_missing_extra_root_aborts_rather_than_running_unprotected(self):
         """A typo'd archive path must not silently become an unprotected GC run."""
@@ -701,18 +700,16 @@ class TestBlobGCExtraRoots(_TempCacheMixin, unittest.TestCase):
             self.cachedir, dry_run=False, extra_roots=[Path(self.tmpdir, "nope")]
         )
 
-        self.assertEqual(orphans, [])
-        self.assertTrue(os.path.exists(blob))
+        assert orphans == []
+        assert os.path.exists(blob)
 
     def test_unloadable_extra_root_aborts(self):
         blob = self._make_blob(BLOB_A)
         bad = Path(self.tmpdir, "bad.pkl")
         bad.write_bytes(b"not a pickle")
 
-        self.assertEqual(
-            clean_orphaned_blobs(self.cachedir, dry_run=False, extra_roots=[bad]), ([], 0)
-        )
-        self.assertTrue(os.path.exists(blob))
+        assert clean_orphaned_blobs(self.cachedir, dry_run=False, extra_roots=[bad]) == ([], 0)
+        assert os.path.exists(blob)
 
 
 class TestPrintOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
@@ -725,30 +722,30 @@ class TestPrintOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
     def test_dry_run_report_names_the_blob_and_says_nothing_was_deleted(self):
         dead = self._make_blob(BLOB_B, b"y" * 40)
         out = self._output()
-        self.assertIn(dead, out)
-        self.assertIn("Would reclaim 1", out)
-        self.assertIn("nothing deleted", out)
-        self.assertTrue(os.path.exists(dead))
+        assert dead in out
+        assert "Would reclaim 1" in out
+        assert "nothing deleted" in out
+        assert os.path.exists(dead)
 
     def test_real_run_report(self):
         self._make_blob(BLOB_B, b"y" * 40)
         out = self._output(dry_run=False)
-        self.assertIn("Reclaimed 1", out)
+        assert "Reclaimed 1" in out
 
     def test_long_report_is_truncated(self):
         for i in range(25):
             self._make_blob(f"{i:016x}.pkl")
         out = self._output()
-        self.assertIn("Would reclaim 25", out)
-        self.assertIn("... and 5 more", out)
+        assert "Would reclaim 25" in out
+        assert "... and 5 more" in out
 
     def test_incomplete_scan_report(self):
         self._make_managed_cache("history", {"key": {"payload": b"x" * 200_000}})
         for val in Path(self.cachedir, "history").rglob("*.val"):
             val.write_bytes(b"not a pickle")
         out = self._output(dry_run=False)
-        self.assertIn("aborted", out)
-        self.assertIn("Nothing was deleted", out)
+        assert "aborted" in out
+        assert "Nothing was deleted" in out
 
 
 class TestBlobGCReclaimsAgedOutHistory(unittest.TestCase):
@@ -799,17 +796,17 @@ class TestBlobGCReclaimsAgedOutHistory(unittest.TestCase):
     def test_aged_out_blob_is_reclaimed_and_live_events_survive(self):
         rv = _dataset_result_var("table", max_time_events=2)
         blobs = [self._event({"event": i}, rv, i) for i in range(3)]
-        self.assertEqual(len(set(blobs)), 3)
+        assert len(set(blobs)) == 3
         # The oldest cell is nulled to the sentinel but its file is left behind.
-        self.assertTrue(all(os.path.exists(b) for b in blobs))
+        assert all(os.path.exists(b) for b in blobs)
 
         orphans, freed = clean_orphaned_blobs("cachedir", dry_run=False)
 
-        self.assertEqual([Path(p).name for p in orphans], [blobs[0].name])
-        self.assertGreater(freed, 0)
-        self.assertFalse(os.path.exists(blobs[0]))
-        self.assertTrue(os.path.exists(blobs[1]))
-        self.assertTrue(os.path.exists(blobs[2]))
+        assert [Path(p).name for p in orphans] == [blobs[0].name]
+        assert freed > 0
+        assert not os.path.exists(blobs[0])
+        assert os.path.exists(blobs[1])
+        assert os.path.exists(blobs[2])
 
     def test_aged_out_cell_sharing_a_blob_with_a_live_cell_keeps_the_file(self):
         """Identical payloads deduplicate to one file, so the aged-out event and
@@ -819,13 +816,13 @@ class TestBlobGCReclaimsAgedOutHistory(unittest.TestCase):
         shared = self._event({"event": "same"}, rv, 0)
         other = self._event({"event": "middle"}, rv, 1)
         again = self._event({"event": "same"}, rv, 2)
-        self.assertEqual(shared, again)
+        assert shared == again
 
         orphans, _ = clean_orphaned_blobs("cachedir", dry_run=False)
 
-        self.assertEqual(orphans, [])
-        self.assertTrue(os.path.exists(shared))
-        self.assertTrue(os.path.exists(other))
+        assert orphans == []
+        assert os.path.exists(shared)
+        assert os.path.exists(other)
 
 
 class TestGenPathWithJobKey(_TempCacheMixin, unittest.TestCase):
@@ -846,9 +843,9 @@ class TestGenPathWithJobKey(_TempCacheMixin, unittest.TestCase):
                     p.replace("cachedir/", f"{self.cachedir}/", 1)
                 )
                 path = gen_path("myfile", "testfolder", ".txt")
-            self.assertIn("test_key_123", path)
-            self.assertTrue(path.endswith("myfile.txt"))
-            self.assertNotIn("_", real_path(path).stem.split("myfile")[-1])
+            assert "test_key_123" in path
+            assert path.endswith("myfile.txt")
+            assert "_" not in real_path(path).stem.split("myfile")[-1]
         finally:
             _gen_path_counter.reset(counter_token)
             _current_job_key.reset(token)
@@ -869,9 +866,9 @@ class TestGenPathWithJobKey(_TempCacheMixin, unittest.TestCase):
                 )
                 path1 = gen_path("img", "img", ".png")
                 path2 = gen_path("img", "img", ".png")
-            self.assertNotEqual(path1, path2)
-            self.assertTrue(path1.endswith("img.png"))
-            self.assertTrue(path2.endswith("img_1.png"))
+            assert path1 != path2
+            assert path1.endswith("img.png")
+            assert path2.endswith("img_1.png")
         finally:
             _gen_path_counter.reset(counter_token)
             _current_job_key.reset(token)
@@ -889,7 +886,7 @@ class TestGenPathWithJobKey(_TempCacheMixin, unittest.TestCase):
             path = gen_path("myfile", "testfolder2", ".txt")
         # Should have UUID in it (legacy fallback)
         stem = real_path(path).stem
-        self.assertIn("myfile_", stem)
+        assert "myfile_" in stem
 
 
 if __name__ == "__main__":

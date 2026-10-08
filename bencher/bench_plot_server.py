@@ -69,7 +69,6 @@ class BenchPlotServer:
         Raises:
             FileNotFoundError: No data found was found in the database to plot
         """
-
         if plot_cfg is None:
             plot_cfg = BenchPlotSrvCfg()
 
@@ -93,7 +92,6 @@ class BenchPlotServer:
         Raises:
             FileNotFoundError: No data found was found in the database to plot
         """
-
         with Cache("cachedir/benchmark_inputs") as cache:
             if bench_name in cache:
                 logger.info(f"loading benchmarks: {bench_name}")
@@ -153,13 +151,11 @@ class BenchPlotServer:
     ) -> Thread:
         """Launch a panel server to view results
 
-
         Args:
             bench_cfg (BenchCfg): benchmark results
             plots_instance (list[pn.panel]): list of panel objects to display
             port (int): use a fixed port to launch the server
         """
-
         # suppress verbose tornado and bokeh output
         for noisy_logger in ["tornado", "bokeh"]:
             logging.getLogger(noisy_logger).setLevel(logging.WARNING)

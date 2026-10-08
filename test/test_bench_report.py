@@ -3,6 +3,7 @@ import tempfile
 import unittest
 
 import panel as pn
+import pytest
 
 from bencher.bench_report import BenchReport
 
@@ -12,7 +13,7 @@ class TestBenchReport(unittest.TestCase):
     def test_init_with_bench_name(self):
         bench_name = "Test Bench"
         bench_report = BenchReport(bench_name)
-        self.assertEqual(bench_report.bench_name, bench_name)
+        assert bench_report.bench_name == bench_name
 
     def test_publish_without_a_name_says_what_is_missing(self):
         """An unnamed report has no branch to publish to, on either debug setting.
@@ -28,11 +29,11 @@ class TestBenchReport(unittest.TestCase):
             # `ctx.exception`, which is unset -- so the real failure is buried under an
             # AttributeError from the assertion meant to diagnose it.
             with self.subTest(debug=debug):
-                with self.assertRaises(ValueError) as ctx:
+                with pytest.raises(ValueError) as ctx:
                     bench_report.publish(lambda _b: ("repo", "url"), debug=debug)
-                message = str(ctx.exception)
-                self.assertIn("branch_name", message)
-                self.assertIn("bench_name", message)
+                message = str(ctx.value)
+                assert "branch_name" in message
+                assert "bench_name" in message
 
     # Tests that a Markdown pane with a custom name is appended to the BenchReport instance
     def test_append_markdown_with_custom_name(self):
@@ -40,8 +41,8 @@ class TestBenchReport(unittest.TestCase):
         markdown = "# Test Markdown"
         name = "Custom Markdown"
         md_pane = bench_report.append_markdown(markdown, name=name)
-        self.assertEqual(md_pane.name, name)
-        self.assertEqual(md_pane.object, markdown)
+        assert md_pane.name == name
+        assert md_pane.object == markdown
 
     # Tests that a panel with a custom name is appended to the BenchReport instance
     def test_append_panel_with_custom_name(self):
@@ -49,38 +50,38 @@ class TestBenchReport(unittest.TestCase):
         panel = pn.panel("Test Panel")
         name = "Custom Panel"
         bench_report.append(panel, name=name)
-        self.assertEqual(bench_report.pane[-1].name, name)
-        self.assertEqual(bench_report.pane[-1].objects[0], panel)
+        assert bench_report.pane[-1].name == name
+        assert bench_report.pane[-1].objects[0] == panel
 
     def test_append__col_panel_with_custom_name(self):
         bench_report = BenchReport()
         panel = pn.panel("Test Panel")
         name = "Custom Panel"
         bench_report.append_col(panel, name=name)
-        self.assertEqual(bench_report.pane[-1].name, name)
-        self.assertEqual(bench_report.pane[-1].objects[0], panel)
+        assert bench_report.pane[-1].name == name
+        assert bench_report.pane[-1].objects[0] == panel
 
     def test_append_column(self):
         bench_report = BenchReport()
         panel = pn.panel("Test Panel")
         bench_report.append_col(panel)
-        self.assertEqual(bench_report.pane[-1].name, panel.name)
+        assert bench_report.pane[-1].name == panel.name
 
     def test_append_tab(self):
         bench_report = BenchReport()
         panel = pn.panel("Test Panel")
         bench_report.append_tab(panel)
-        self.assertEqual(bench_report.pane[-1].name, panel.name)
+        assert bench_report.pane[-1].name == panel.name
 
     def test_append_title(self):
         bench_report = BenchReport()
         bench_report.append_title("Title1")
-        self.assertEqual(bench_report.pane[-1].name, "Title1")
+        assert bench_report.pane[-1].name == "Title1"
 
     def test_last_save_ms_default(self):
         """Freshly created BenchReport should have last_save_ms == 0."""
         report = BenchReport("fresh")
-        self.assertEqual(report.last_save_ms, 0.0)
+        assert report.last_save_ms == 0.0
 
     def test_save_records_last_save_ms(self):
         """report.save() should populate last_save_ms with positive timing."""
@@ -88,7 +89,7 @@ class TestBenchReport(unittest.TestCase):
         report.append_markdown("# Test", name="test")
         with tempfile.TemporaryDirectory() as td:
             report.save(directory=td, in_html_folder=False)
-        self.assertGreater(report.last_save_ms, 0.0)
+        assert report.last_save_ms > 0.0
 
     def test_save_injects_embed_height_script(self):
         """Single-tab saves carry the bencher:height reporter exactly once."""
@@ -97,7 +98,7 @@ class TestBenchReport(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             path = report.save(directory=td, in_html_folder=False)
             content = path.read_text(encoding="utf-8")
-        self.assertEqual(content.count("bencher:height embed reporter"), 1)
+        assert content.count("bencher:height embed reporter") == 1
 
     def test_save_multitab_injects_script_and_relay(self):
         """Multi-tab saves: each tab carries the reporter; the index relays heights."""
@@ -110,27 +111,27 @@ class TestBenchReport(unittest.TestCase):
             tab_dir = index_path.parent / "_tabs"
             tab_files = sorted(tab_dir.glob("*.html"))
             tab_contents = [p.read_text(encoding="utf-8") for p in tab_files]
-        self.assertEqual(len(tab_contents), 2)
+        assert len(tab_contents) == 2
         for tab_content in tab_contents:
-            self.assertEqual(tab_content.count("bencher:height embed reporter"), 1)
+            assert tab_content.count("bencher:height embed reporter") == 1
         # The index listens for child heights and relays them upward
-        self.assertIn("bencher:height", index_content)
-        self.assertIn("postMessage", index_content)
-        self.assertNotIn("bencher:height embed reporter", index_content)
+        assert "bencher:height" in index_content
+        assert "postMessage" in index_content
+        assert "bencher:height embed reporter" not in index_content
 
     def test_append_always_targets_last_tab(self):
         """append() puts content into the last tab, regardless of intent."""
         report = BenchReport("multi")
         report.append_tab(pn.pane.Markdown("Tab 0"), "tab0")
         report.append_tab(pn.pane.Markdown("Tab 1"), "tab1")
-        self.assertEqual(len(report.pane), 2)
+        assert len(report.pane) == 2
 
         extra = pn.pane.Markdown("extra content")
         report.append(extra)
 
         # extra lands in the last tab (tab1), not tab0
-        self.assertIn(extra, report.pane[1].objects)
-        self.assertNotIn(extra, report.pane[0].objects)
+        assert extra in report.pane[1].objects
+        assert extra not in report.pane[0].objects
 
     def test_append_to_result_targets_correct_tab(self):
         """append_to_result() routes content to the tab matching a tracked result."""
@@ -140,8 +141,8 @@ class TestBenchReport(unittest.TestCase):
         res1 = _FakeBenchResult("sweep B")
         report.append_result(res0)
         report.append_result(res1)
-        self.assertEqual(len(report.pane), 2)
-        self.assertEqual([r.bench_cfg.title for r in report.bench_results], ["sweep A", "sweep B"])
+        assert len(report.pane) == 2
+        assert [r.bench_cfg.title for r in report.bench_results] == ["sweep A", "sweep B"]
 
         optuna0 = pn.pane.Markdown("optuna for A")
         optuna1 = pn.pane.Markdown("optuna for B")
@@ -150,10 +151,10 @@ class TestBenchReport(unittest.TestCase):
         report.append_to_result(res1, optuna1)
 
         # Each tab now has its own optuna content
-        self.assertIn(optuna0, report.pane[0].objects)
-        self.assertNotIn(optuna0, report.pane[1].objects)
-        self.assertIn(optuna1, report.pane[1].objects)
-        self.assertNotIn(optuna1, report.pane[0].objects)
+        assert optuna0 in report.pane[0].objects
+        assert optuna0 not in report.pane[1].objects
+        assert optuna1 in report.pane[1].objects
+        assert optuna1 not in report.pane[0].objects
 
     def test_append_to_result_fallback_when_untracked(self):
         """append_to_result() falls back to the last tab for untracked results."""
@@ -166,7 +167,7 @@ class TestBenchReport(unittest.TestCase):
             report.append_to_result(unknown, extra)
 
         # Falls back to append, which targets the last tab
-        self.assertIn(extra, report.pane[-1].objects)
+        assert extra in report.pane[-1].objects
 
     def test_multiple_appends_per_result(self):
         """Multiple append_to_result calls on the same result accumulate in the same tab."""
@@ -179,7 +180,7 @@ class TestBenchReport(unittest.TestCase):
             report.append_to_result(res, item)
 
         for item in items:
-            self.assertIn(item, report.pane[0].objects)
+            assert item in report.pane[0].objects
 
     def test_none_plot_does_not_misroute_following_results(self):
         """A result whose plot() returned None (so no tab) must not shift routing:
@@ -192,17 +193,17 @@ class TestBenchReport(unittest.TestCase):
         report.append_result(res_none)  # creates no tab
         report.append_result(res_a)  # tab 0
         report.append_result(res_b)  # tab 1
-        self.assertEqual(len(report.pane), 2)
+        assert len(report.pane) == 2
 
         extra_a = pn.pane.Markdown("extra for A")
         report.append_to_result(res_a, extra_a)
-        self.assertIn(extra_a, report.pane[0].objects)
-        self.assertNotIn(extra_a, report.pane[1].objects)
+        assert extra_a in report.pane[0].objects
+        assert extra_a not in report.pane[1].objects
 
         prep_a = pn.pane.Markdown("prepended for A")
         report.prepend_to_result(res_a, prep_a)
-        self.assertIs(report.pane[0].objects[0], prep_a)
-        self.assertNotIn(prep_a, report.pane[1].objects)
+        assert report.pane[0].objects[0] is prep_a
+        assert prep_a not in report.pane[1].objects
 
     def test_none_plot_then_prepend_to_second_result(self):
         """Prepending to the result after a None-plot result lands at the start of the
@@ -213,11 +214,11 @@ class TestBenchReport(unittest.TestCase):
         res = _FakeBenchResult("real sweep")
         report.append_result(res_none)
         report.append_result(res)
-        self.assertEqual(len(report.pane), 1)
+        assert len(report.pane) == 1
 
         pane = pn.pane.Markdown("prepended")
         report.prepend_to_result(res, pane)
-        self.assertIs(report.pane[0].objects[0], pane)
+        assert report.pane[0].objects[0] is pane
 
     def test_append_to_none_plot_result_falls_back_to_append(self):
         """Content for a result with no tab falls back to the last tab, but is labelled
@@ -232,12 +233,12 @@ class TestBenchReport(unittest.TestCase):
         pane = pn.pane.Markdown("orphan")
         with self.assertLogs("bencher.bench_report", level="WARNING") as cm:
             report.append_to_result(res_none, pane)
-        self.assertIn(pane, report.pane[-1].objects)
-        self.assertIn("no plot", "\n".join(cm.output))
+        assert pane in report.pane[-1].objects
+        assert "no plot" in "\n".join(cm.output)
         # A visible attribution note precedes the misplaced pane in the tab
         objects = report.pane[-1].objects
         note = objects[objects.index(pane) - 1]
-        self.assertIn("no plot", note.object)
+        assert "no plot" in note.object
 
     def test_prepend_to_untracked_result_is_attributed(self):
         """The same attribution applies to prepend_to_result's fallback."""
@@ -247,16 +248,16 @@ class TestBenchReport(unittest.TestCase):
         pane = pn.pane.Markdown("orphan")
         with self.assertLogs("bencher.bench_report", level="WARNING") as cm:
             report.prepend_to_result(_FakeBenchResult("ghost"), pane)
-        self.assertIn(pane, report.pane[-1].objects)
-        self.assertIn("ghost", "\n".join(cm.output))
+        assert pane in report.pane[-1].objects
+        assert "ghost" in "\n".join(cm.output)
 
     def test_clear_resets_results_and_tabs(self):
         report = BenchReport("clearable")
         report.append_result(_FakeBenchResult("sweep"))
-        self.assertEqual(len(report.bench_results), 1)
+        assert len(report.bench_results) == 1
         report.clear()
-        self.assertEqual(report.bench_results, ())
-        self.assertEqual(len(report.pane), 0)
+        assert report.bench_results == ()
+        assert len(report.pane) == 0
 
     def test_bench_results_is_read_only_snapshot(self):
         """bench_results is an immutable snapshot, so an out-of-band append cannot
@@ -264,7 +265,7 @@ class TestBenchReport(unittest.TestCase):
         append_result, which pairs each result with its tab."""
         report = BenchReport("readonly")
         report.append_result(_FakeBenchResult("sweep"))
-        self.assertIsInstance(report.bench_results, tuple)
+        assert isinstance(report.bench_results, tuple)
 
 
 class _FakeBenchCfg:

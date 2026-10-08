@@ -16,7 +16,7 @@ class ComposableContainerDataset(ComposableContainerBase):
     var_name: str | None = None
     var_value: str | None = None
 
-    def render(self, **kwargs):  # pylint: disable=unused-argument
+    def render(self, **kwargs):
         if len(self.container) == 0:
             raise ValueError("Cannot render an empty ComposableContainerDataset")
         if len(self.container) == 1:

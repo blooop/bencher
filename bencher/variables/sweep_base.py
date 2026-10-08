@@ -129,7 +129,7 @@ class SweepBase(param.Parameter):
         this hash, so widening a sweep range still reuses per-sample cache
         entries for overlapping inputs.
         """
-        return (type(self).__name__, self.name, self.units, self.samples)  # pylint: disable=no-member
+        return (type(self).__name__, self.name, self.units, self.samples)
 
     def hash_persistent(self) -> str:
         """Deterministic hash based on :meth:`_sweep_identity`.
@@ -142,13 +142,12 @@ class SweepBase(param.Parameter):
 
     def sampling_str(self) -> str:
         """Generate a string representation of the of the sampling procedure"""
-
         samples = self.values()
         object_str = ",".join([str(i) for i in samples])
         return f"Taking {len(samples)} samples from {self.name} with values: [{object_str}]"
 
     def as_slider(self) -> pn.widgets.slider.DiscreteSlider:
-        """given a sweep variable (self), return the range of values as a panel slider
+        """Given a sweep variable (self), return the range of values as a panel slider
 
         Args:
             debug (bool, optional): pass to the sweepvar to produce a full set of variables, or when debug=True, a reduces number of sweep vars. Defaults to False.
@@ -200,10 +199,10 @@ class SweepBase(param.Parameter):
     def with_samples(self, samples: int) -> SweepBase:
         output = deepcopy(self)
         # TODO set up class properly. Slightly complicated due to slots
-        output.samples = samples  # pylint: disable = attribute-defined-outside-init
+        output.samples = samples
         if hasattr(output, "step"):
             # hack TODO fix this
-            output.step = None  # pylint: disable = attribute-defined-outside-init
+            output.step = None
         return output
 
     def _coerce_bound(self, value):
@@ -242,28 +241,28 @@ class SweepBase(param.Parameter):
         low, high = self._coerce_bound(low), self._coerce_bound(high)
         output = deepcopy(self)
         if hasattr(output, "softbounds"):
-            output.softbounds = (low, high)  # pylint: disable=attribute-defined-outside-init
+            output.softbounds = (low, high)
         elif hasattr(output, "bounds"):
-            output.bounds = (low, high)  # pylint: disable=attribute-defined-outside-init
+            output.bounds = (low, high)
         else:
             raise ValueError(
                 f"{type(self).__name__} has neither 'softbounds' nor 'bounds'; "
                 "with_bounds() cannot override the range"
             )
         if samples is not None:
-            output.samples = samples  # pylint: disable=attribute-defined-outside-init
+            output.samples = samples
         if hasattr(output, "step"):
-            output.step = None  # pylint: disable=attribute-defined-outside-init
+            output.step = None
         return output
 
     def with_sample_values(self, sample_values: list) -> SweepBase:
         output = deepcopy(self)
         # TODO set up class properly. Slightly complicated due to slots
         try:
-            output.sample_values = sample_values  # pylint: disable = attribute-defined-outside-init
+            output.sample_values = sample_values
         except AttributeError:
-            output.objects = sample_values  # pylint: disable = attribute-defined-outside-init
-        output.samples = len(sample_values)  # pylint: disable = attribute-defined-outside-init
+            output.objects = sample_values
+        output.samples = len(sample_values)
         return output
 
     def __call__(

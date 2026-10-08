@@ -193,7 +193,7 @@ def make_legacy(res: bn.BenchResult, payloads: list[bn.ResultDataSet]) -> bn.Ben
     da = res.ds["table"]
     for i, scale in enumerate(SCALES):
         da.loc[{"scale": scale}] = i
-    res._to_dataset_cache.clear()  # pylint: disable=protected-access
+    res._to_dataset_cache.clear()
     return res
 
 
@@ -209,40 +209,37 @@ class TestPathBackedCells(unittest.TestCase):
         for scale in SCALES:
             cell = ds["table"].sel(scale=scale).values.item()
             with self.subTest(scale=scale):
-                self.assertIsInstance(cell, str)
+                assert isinstance(cell, str)
                 # A name, not a path: it must carry no directory, and resolve
                 # against the active cache dir rather than a recorded location.
-                self.assertEqual(cell, Path(cell).name)
-                self.assertTrue(resolve_blob(cell).is_file())
+                assert cell == Path(cell).name
+                assert resolve_blob(cell).is_file()
                 pd.testing.assert_frame_equal(load_blob(cell), expected_frame(scale))
 
     def test_nothing_appended_to_dataset_list(self):
-        self.assertEqual(self.res.dataset_list, [])
+        assert self.res.dataset_list == []
 
     def test_class_declared_container_renders(self):
         rv = self.res.bench_cfg.result_vars[0]
         point = self.res.to_dataset().sel(scale=SCALES[0])
         pane = self.res.ds_to_container(point, rv, container=None)
-        self.assertEqual(pane.object, "declared sum=3")
+        assert pane.object == "declared sum=3"
 
     def test_renderer_supplied_container_beats_declared(self):
         rv = self.res.bench_cfg.result_vars[0]
         point = self.res.to_dataset().sel(scale=SCALES[0])
         pane = self.res.ds_to_container(point, rv, container=renderer_container)
-        self.assertEqual(pane.object, "explicit sum=3")
+        assert pane.object == "explicit sum=3"
 
     def test_per_sample_container_beats_declared(self):
         res = run_sweep(PerSampleSweep(), "test_grammar_per_sample_container")
-        self.assertEqual(res.dataset_list, [])
+        assert res.dataset_list == []
         rv = res.bench_cfg.result_vars[0]
         pane = res.ds_to_container(res.to_dataset().sel(scale=SCALES[0]), rv, container=None)
-        self.assertEqual(pane.object, "per-sample sum=3")
+        assert pane.object == "per-sample sum=3"
 
     def test_dataset_view_renders_every_sample_through_the_chain(self):
-        self.assertEqual(
-            container_output(self.res.to(DataSetResult)),
-            ["declared sum=3", "declared sum=6"],
-        )
+        assert container_output(self.res.to(DataSetResult)) == ["declared sum=3", "declared sum=6"]
 
 
 class TestSplitRenderRoundTrip(unittest.TestCase):
@@ -256,15 +253,15 @@ class TestSplitRenderRoundTrip(unittest.TestCase):
             loaded = bn.load_result(pkl)
 
             # The loaded result renders from its path cells alone.
-            self.assertEqual(loaded.dataset_list, [])
-            self.assertEqual(
-                container_output(loaded.to(DataSetResult)),
-                ["declared sum=3", "declared sum=6"],
-            )
+            assert loaded.dataset_list == []
+            assert container_output(loaded.to(DataSetResult)) == [
+                "declared sum=3",
+                "declared sum=6",
+            ]
 
             out = bn.render_report(loaded, Path(tmp) / "report")
-            self.assertTrue(out.exists())
-            self.assertGreater(out.stat().st_size, 0)
+            assert out.exists()
+            assert out.stat().st_size > 0
 
 
 class TestLegacyIntCells(unittest.TestCase):
@@ -277,10 +274,8 @@ class TestLegacyIntCells(unittest.TestCase):
         )
         rv = res.bench_cfg.result_vars[0]
         pane = res.ds_to_container(res.to_dataset().sel(scale=SCALES[1]), rv, container=None)
-        self.assertEqual(pane.object, "declared sum=6")
-        self.assertEqual(
-            container_output(res.to(DataSetResult)), ["declared sum=3", "declared sum=6"]
-        )
+        assert pane.object == "declared sum=6"
+        assert container_output(res.to(DataSetResult)) == ["declared sum=3", "declared sum=6"]
 
     def test_missing_dataset_list_renders_placeholder_not_raise(self):
         res = make_legacy(run_sweep(PathCellSweep(), "test_grammar_legacy_no_list"), [])
@@ -289,16 +284,16 @@ class TestLegacyIntCells(unittest.TestCase):
         # Attribute deleted entirely (a result pickled without it).
         del res.dataset_list
         pane = res.ds_to_container(res.to_dataset().sel(scale=SCALES[0]), rv, container=None)
-        self.assertIsInstance(pane, pn.pane.Markdown)
-        self.assertIn(PLACEHOLDER_MARKER, pane.object)
-        self.assertIn("table", pane.object)
+        assert isinstance(pane, pn.pane.Markdown)
+        assert PLACEHOLDER_MARKER in pane.object
+        assert "table" in pane.object
 
         # List present but too short (another run's list): same placeholder.
         res.dataset_list = []
         view = res.to(DataSetResult)
-        self.assertIsInstance(view, pn.viewable.Viewable)
-        self.assertEqual(container_output(view), [])
-        self.assertEqual(len(placeholder_output(view)), len(SCALES))
+        assert isinstance(view, pn.viewable.Viewable)
+        assert container_output(view) == []
+        assert len(placeholder_output(view)) == len(SCALES)
 
 
 class TestOverTimeRendersAllPoints(unittest.TestCase):
@@ -310,26 +305,23 @@ class TestOverTimeRendersAllPoints(unittest.TestCase):
 
     def test_history_accumulated(self):
         """Guard on the fixture: with a single event there is no payoff to check."""
-        self.assertEqual(self.res.to_dataset().sizes["over_time"], OVER_TIME_RUNS)
+        assert self.res.to_dataset().sizes["over_time"] == OVER_TIME_RUNS
 
     def test_all_time_points_render(self):
-        self.assertEqual(
-            container_output(self.res.to(DataSetResult)),
-            [
-                f"declared run={run} scale={scale:g}"
-                for scale in SCALES
-                for run in range(OVER_TIME_RUNS)
-            ],
-        )
+        assert container_output(self.res.to(DataSetResult)) == [
+            f"declared run={run} scale={scale:g}"
+            for scale in SCALES
+            for run in range(OVER_TIME_RUNS)
+        ]
 
     def _make_mixed(self, payloads: list[bn.ResultDataSet]) -> bn.BenchResult:
         """Rewrite the oldest cell of the first sample into a legacy int index."""
         res = run_sweep_over_time(OverTimeSweep(), "test_grammar_over_time_mixed")
         da = res.ds["table"]
-        first_cell = {dim: 0 for dim in da.dims}
+        first_cell = dict.fromkeys(da.dims, 0)
         da.values[tuple(first_cell[dim] for dim in da.dims)] = 0
         res.dataset_list = payloads
-        res._to_dataset_cache.clear()  # pylint: disable=protected-access
+        res._to_dataset_cache.clear()
         return res
 
     def test_mixed_history_legacy_event_is_placeholder_even_with_list(self):
@@ -340,19 +332,19 @@ class TestOverTimeRendersAllPoints(unittest.TestCase):
         view = res.to(DataSetResult)
         rendered = container_output(view)
         # The three path cells render; the historical legacy cell degrades.
-        self.assertEqual(len(rendered), len(SCALES) * OVER_TIME_RUNS - 1)
-        self.assertNotIn("declared run=99 scale=1", rendered)
+        assert len(rendered) == len(SCALES) * OVER_TIME_RUNS - 1
+        assert "declared run=99 scale=1" not in rendered
         placeholders = placeholder_output(view)
-        self.assertEqual(len(placeholders), 1)
-        self.assertIn("only the final time event", placeholders[0])
+        assert len(placeholders) == 1
+        assert "only the final time event" in placeholders[0]
 
     def test_mixed_history_without_dataset_list_degrades_to_placeholder(self):
         res = self._make_mixed([])
         view = res.to(DataSetResult)
         rendered = container_output(view)
         # The three path cells still render; the orphaned legacy cell degrades.
-        self.assertEqual(len(rendered), len(SCALES) * OVER_TIME_RUNS - 1)
-        self.assertEqual(len(placeholder_output(view)), 1)
+        assert len(rendered) == len(SCALES) * OVER_TIME_RUNS - 1
+        assert len(placeholder_output(view)) == 1
 
     def test_strict_signature_plot_callback_still_works(self):
         """``plot_callback`` is a public extension point, so the render-internal
@@ -366,12 +358,12 @@ class TestOverTimeRendersAllPoints(unittest.TestCase):
             return pn.pane.Markdown("strict")
 
         view = self.res.map_plot_panes(strict_callback)
-        self.assertIsInstance(view, pn.viewable.Viewable)
+        assert isinstance(view, pn.viewable.Viewable)
         # map_plot_panes defaults to target_dimension=2, so the callback is handed
         # one slice per time event (the samples still inside it) rather than one per
         # sample: the assertion that matters is that the over_time dataset path ran
         # for every event instead of raising TypeError on the first.
-        self.assertEqual(calls.count(("table", False)), OVER_TIME_RUNS)
+        assert calls.count(("table", False)) == OVER_TIME_RUNS
 
 
 class TestLegacyOverTimeHistory(unittest.TestCase):
@@ -388,22 +380,21 @@ class TestLegacyOverTimeHistory(unittest.TestCase):
         res.dataset_list = [
             bn.ResultDataSet(tagged_frame(scale, OVER_TIME_RUNS - 1)) for scale in SCALES
         ]
-        res._to_dataset_cache.clear()  # pylint: disable=protected-access
+        res._to_dataset_cache.clear()
         return res
 
     def test_final_event_real_content_earlier_event_placeholder(self):
         res = self._make_full_legacy()
         view = res.to(DataSetResult)
         # Only the final event resolves against the (final run's) dataset_list.
-        self.assertEqual(
-            container_output(view),
-            [f"declared run={OVER_TIME_RUNS - 1} scale={scale:g}" for scale in SCALES],
-        )
+        assert container_output(view) == [
+            f"declared run={OVER_TIME_RUNS - 1} scale={scale:g}" for scale in SCALES
+        ]
         # Every historical event degrades to a labelled placeholder.
         placeholders = placeholder_output(view)
-        self.assertEqual(len(placeholders), len(SCALES) * (OVER_TIME_RUNS - 1))
+        assert len(placeholders) == len(SCALES) * (OVER_TIME_RUNS - 1)
         for text in placeholders:
-            self.assertIn("only the final time event", text)
+            assert "only the final time event" in text
 
 
 class TestSerializationRobustness(unittest.TestCase):
@@ -417,8 +408,8 @@ class TestSerializationRobustness(unittest.TestCase):
         for scale in SCALES:
             cell = ds["table"].sel(scale=scale).values.item()
             with self.subTest(scale=scale):
-                self.assertIsInstance(cell, str)
-                self.assertTrue(cell.endswith(".pkl"))
+                assert isinstance(cell, str)
+                assert cell.endswith(".pkl")
                 pd.testing.assert_frame_equal(load_blob(cell), nested_frame())
 
     def test_str_payload_renders_the_stored_string(self):
@@ -426,28 +417,27 @@ class TestSerializationRobustness(unittest.TestCase):
         string the worker stored (the file need not exist)."""
         res = run_sweep(StrPayloadSweep(), "test_grammar_str_payload")
         cell = res.to_dataset()["table"].sel(scale=SCALES[0]).values.item()
-        self.assertTrue(cell.endswith(".pkl"))
-        self.assertEqual(load_blob(cell), "/tmp/whatever.csv")
+        assert cell.endswith(".pkl")
+        assert load_blob(cell) == "/tmp/whatever.csv"
         rv = res.bench_cfg.result_vars[0]
         pane = res.ds_to_container(res.to_dataset().sel(scale=SCALES[0]), rv, container=None)
-        self.assertEqual(pane.object, "declared str=/tmp/whatever.csv")
-        self.assertEqual(
-            container_output(res.to(DataSetResult)),
-            ["declared str=/tmp/whatever.csv"] * len(SCALES),
+        assert pane.object == "declared str=/tmp/whatever.csv"
+        assert container_output(res.to(DataSetResult)) == ["declared str=/tmp/whatever.csv"] * len(
+            SCALES
         )
 
     def test_unpicklable_per_sample_container_is_dropped_not_fatal(self):
         """F6: a lambda per-sample container cannot travel with the payload; the
         bare payload is stored and the class-level container applies at render."""
         res = run_sweep(LambdaContainerSweep(), "test_grammar_lambda_container")
-        self.assertEqual(res.dataset_list, [])
+        assert res.dataset_list == []
         cell = res.to_dataset()["table"].sel(scale=SCALES[0]).values.item()
-        self.assertIsInstance(cell, str)
-        self.assertTrue(resolve_blob(cell).is_file())
+        assert isinstance(cell, str)
+        assert resolve_blob(cell).is_file()
         pd.testing.assert_frame_equal(load_blob(cell), expected_frame(SCALES[0]))
         rv = res.bench_cfg.result_vars[0]
         pane = res.ds_to_container(res.to_dataset().sel(scale=SCALES[0]), rv, container=None)
-        self.assertEqual(pane.object, "declared sum=3")
+        assert pane.object == "declared sum=3"
 
 
 class TestUnloadableBlobPlaceholder(unittest.TestCase):
@@ -459,17 +449,17 @@ class TestUnloadableBlobPlaceholder(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             blob = materialize_blob(expected_frame(3.0), tmp)
         # TemporaryDirectory cleanup deleted the blob file behind the path cell.
-        self.assertFalse(Path(blob).exists())
+        assert not Path(blob).exists()
         ds = res.to_dataset().copy(deep=True)
         ds["table"].loc[{"scale": SCALES[0]}] = blob
         pane = res.ds_to_container(ds.sel(scale=SCALES[0]), rv, container=None)
-        self.assertIsInstance(pane, pn.pane.Markdown)
-        self.assertIn("table", pane.object)
+        assert isinstance(pane, pn.pane.Markdown)
+        assert "table" in pane.object
         # The placeholder is the whole report the reader gets for this cell, so
         # it has to carry what they would otherwise have to find in the log:
         # which blob went missing, and how to point at the cache dir holding it.
-        self.assertIn(blob, pane.object)
-        self.assertIn("--cachedir", pane.object)
+        assert blob in pane.object
+        assert "--cachedir" in pane.object
 
 
 class TestResultIsMissingTruthTable(unittest.TestCase):
@@ -510,7 +500,7 @@ class TestResultIsMissingTruthTable(unittest.TestCase):
         for rv, pairs in cases:
             for value, expected in pairs:
                 with self.subTest(rv=type(rv).__name__, value=value):
-                    self.assertEqual(result_is_missing(rv, value), expected)
+                    assert result_is_missing(rv, value) == expected
 
 
 if __name__ == "__main__":

@@ -72,14 +72,12 @@ test = [
     "ipykernel",
     "pip",
     "jupyter_bokeh",
-    "pylint>=3.2.5,<=4.0.9",
     "pytest-cov>=4.1,<=7.1.0",
     "pytest>=7.4,<=9.1.1",
     "hypothesis>=6.104.2,<=6.168.3",
-    # Pinned to the 0.16 minor because the default rule set is the gate's meaning here.
-    # 0.16 replaced the tiny E4/E7/E9/F default with a ~413-rule one, and ruff.toml sets
-    # no `select`, so an older ruff lints against a fraction of what CI checks. 0.17 can
-    # shift those defaults again: on that bump, re-check the `ignore` list in ruff.toml.
+    # Pinned to the 0.16 minor because ruff.toml selects ALL rules: a minor release
+    # stabilises new rules, which then fire here. Bump the minor deliberately, then fix
+    # or justify each new finding in ruff.toml.
     "ruff>=0.16.10,<0.17",
     "sphinxcontrib-mermaid>=1.0,<3.0",
     "coverage>=7.5.4,<=7.16.2",
@@ -157,14 +155,13 @@ perf-track = "python -c \"from bencher.example.example_self_benchmark import exa
 format = "ruff format ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
-pylint = "pylint --version && echo 'running pylint...' && pylint $(git ls-files '*.py')"
 # --python $CONDA_PREFIX points ty at the *active* pixi environment, so `-e py311` and
 # `-e py313` each type-check against their own interpreter and installed packages.
 # Without it ty resolves no third-party import at all (param, panel, numpy, xarray all
 # read as unresolved), which silently degrades every rule that depends on knowing a
 # third-party type. See plans/23-constructive-data-modeling.md P1.
 ty = { cmd = "ty check --respect-ignore-files --python \"$CONDA_PREFIX\" ." }
-lint = { depends-on = ["ruff-lint", "ty", "pylint"] }
+lint = { depends-on = ["ruff-lint", "ty"] }
 style = { depends-on = ["format", "lint"] }
 commit-format = "git commit -a -m'autoformat code' || true"
 test = "pytest"
@@ -185,7 +182,6 @@ ci-no-cover = { depends-on = ["style", "test"] }
 ci = { depends-on = [
     "format",
     "ruff-lint",
-    "pylint",
     "ty",
     "generate-examples",
     "coverage",
@@ -243,15 +239,6 @@ test-timing-xml = "pytest --junit-xml=test-results.xml"
 test-timing-report = "python3 -m bencher.test_timing_report test-results.xml reports"
 test-timing = { depends-on = ["test-timing-xml", "test-timing-report"] }
 
-
-[tool.pylint]
-extension-pkg-whitelist = ["numpy", "scipy"]
-jobs = 16                                                  #detect number of cores
-ignore-paths = ["docs/.*", "bencher/example/generated/.*"]
-
-[tool.pylint.'MESSAGES CONTROL']
-disable = "C,logging-fstring-interpolation,line-too-long,fixme,missing-module-docstring,too-many-instance-attributes,too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements,use-dict-literal,duplicate-code,too-many-public-methods,too-many-nested-blocks,cyclic-import,too-many-positional-arguments,too-many-ancestors"
-enable = "no-else-return,consider-using-in"
 
 [tool.coverage.run]
 omit = ["*/test/*", "__init__.py"]
@@ -342,8 +329,8 @@ unused-ignore-comment = "ignore"
 unused-type-ignore-comment = "ignore" # same rule, renamed in ty >= 0.0.14
 
 # Optional imports, scoped to the exact files rather than whole trees. Neither can be
-# annotated inline: ruff reflows the import past the line limit and the comment lands
-# where pylint's own import-error pragma stops applying.
+# annotated inline: ruff reflows the import past the line limit and an inline ignore
+# comment would land on the wrong line.
 #   - playwright is optional tooling, needed only on the standalone screenshot path.
 # (A third entry, the vestigial `setup.py` setuptools shim, was dropped when plan 03
 # deleted that file along with setup.cfg and MANIFEST.in.)

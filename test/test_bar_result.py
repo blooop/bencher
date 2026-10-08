@@ -73,54 +73,54 @@ class TestBarResult(unittest.TestCase):
 
     def test_to_bar_returns_row_with_bars(self):
         result = self.res_cat.to_bar()
-        self.assertIsInstance(result, pn.Row)
-        self.assertGreater(len(result), 0)
-        self.assertIsInstance(result[0], pn.pane.HoloViews)
-        self.assertIsInstance(result[0].object, hv.Bars)
+        assert isinstance(result, pn.Row)
+        assert len(result) > 0
+        assert isinstance(result[0], pn.pane.HoloViews)
+        assert isinstance(result[0].object, hv.Bars)
 
     def test_to_plot_delegates_to_bar(self):
         result = BarResult.to_plot(self.res_cat)
-        self.assertIsInstance(result, pn.Row)
-        self.assertIsInstance(result[0].object, hv.Bars)
+        assert isinstance(result, pn.Row)
+        assert isinstance(result[0].object, hv.Bars)
 
     def test_to_bar_ds_dims_and_labels(self):
         """Input var on kdims, result var on vdims, ylabel includes units."""
         ds = self.res_cat.to_dataset()
         rv = self.res_cat.bench_cfg.result_vars[0]
         result = self.res_cat.to_bar_ds(ds, rv)
-        self.assertIsInstance(result, pn.pane.HoloViews)
+        assert isinstance(result, pn.pane.HoloViews)
         element = result.object
-        self.assertIsInstance(element, hv.Bars)
-        self.assertEqual(element.kdims[0].name, "method")
-        self.assertEqual(element.vdims[0].name, "score")
+        assert isinstance(element, hv.Bars)
+        assert element.kdims[0].name == "method"
+        assert element.vdims[0].name == "score"
         opts = element.opts.get().kwargs
-        self.assertEqual(opts["title"], "score vs method")
-        self.assertEqual(opts["ylabel"], "score [m]")
+        assert opts["title"] == "score vs method"
+        assert opts["ylabel"] == "score [m]"
 
     def test_to_bar_bool_with_repeats(self):
         """ResultBool with repeats>=2 matches the REDUCE scenario and still plots."""
         result = self.res_bool.to_bar()
-        self.assertIsInstance(result, pn.Row)
-        self.assertGreater(len(result), 0)
-        self.assertIsInstance(result[0].object, hv.Bars)
+        assert isinstance(result, pn.Row)
+        assert len(result) > 0
+        assert isinstance(result[0].object, hv.Bars)
 
     def test_to_bar_groups_by_extra_cats(self):
         """With two categorical inputs the second cat becomes the by grouping."""
         ds = self.res_2cat.to_dataset()
         rv = self.res_2cat.bench_cfg.result_vars[0]
         result = self.res_2cat.to_bar_ds(ds, rv)
-        self.assertIsInstance(result, pn.pane.HoloViews)
+        assert isinstance(result, pn.pane.HoloViews)
         element = result.object
         kdim_names = [d.name for d in element.kdims]
-        self.assertIn("method", kdim_names)
-        self.assertIn("backend", kdim_names)
+        assert "method" in kdim_names
+        assert "backend" in kdim_names
 
     def test_to_bar_nan_does_not_crash(self):
         ds = self.res_nan.to_dataset()
-        self.assertTrue(any(math.isnan(v) for v in ds["score"].values.ravel()))
+        assert any(math.isnan(v) for v in ds["score"].values.ravel())
         result = self.res_nan.to_bar()
-        self.assertIsInstance(result, pn.Row)
-        self.assertIsInstance(result[0].object, hv.Bars)
+        assert isinstance(result, pn.Row)
+        assert isinstance(result[0].object, hv.Bars)
 
     def test_to_bar_rejects_float_sweep(self):
         """A float input sweep fails the float_range=(0,0) filter when override=False.
@@ -128,6 +128,6 @@ class TestBarResult(unittest.TestCase):
         The filter returns None (or a Markdown debug panel), never a bar pane.
         """
         result = self.res_float.to_bar(override=False)
-        self.assertNotIsInstance(result, (pn.Row, pn.pane.HoloViews))
+        assert not isinstance(result, (pn.Row, pn.pane.HoloViews))
         if result is not None:
-            self.assertIsInstance(result, pn.pane.Markdown)
+            assert isinstance(result, pn.pane.Markdown)

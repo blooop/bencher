@@ -19,7 +19,8 @@ log = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class PluginDecision:
     """One row of a selection decision table: whether a plugin was chosen for a
-    given BenchData, and the first gate that rejected it when it wasn't."""
+    given BenchData, and the first gate that rejected it when it wasn't.
+    """
 
     name: str
     backend: str
@@ -30,7 +31,8 @@ class PluginDecision:
 
 def decisions_to_table(decisions: Iterable[PluginDecision]) -> str:
     """Render a decision table (from ``PluginRegistry.explain``) as a markdown-ish
-    text table, chosen rows first."""
+    text table, chosen rows first.
+    """
     rows = [("chart type", "backend", "chosen", "reason")]
     rows += [(d.name, d.backend, "yes" if d.chosen else "no", d.reason) for d in decisions]
     widths = [max(len(r[i]) for r in rows) for i in range(4)]
@@ -57,7 +59,8 @@ class PluginRegistry:
     preferred backend when given, otherwise the highest-priority one. Registering an
     existing (name, backend) pair replaces it, which is the documented override
     mechanism (a user plugin replaces a built-in by sharing its name and backend, or
-    outranks it from a different backend via priority/preference)."""
+    outranks it from a different backend via priority/preference).
+    """
 
     def __init__(self) -> None:
         self._plugins: dict[tuple[str, str], PlotPlugin] = {}
@@ -82,7 +85,8 @@ class PluginRegistry:
 
     def unregister(self, name: str, backend: str | None = None) -> None:
         """Remove a plugin. With no backend, removes every backend's implementation
-        of that chart type."""
+        of that chart type.
+        """
         if backend is not None:
             self._plugins.pop((name, backend), None)
             return
@@ -102,7 +106,8 @@ class PluginRegistry:
 
         With a backend, exact lookup. Without, the preferred implementation:
         highest priority among all backends providing `name` (ties broken by
-        backend string for determinism)."""
+        backend string for determinism).
+        """
         self._ensure_entry_points_loaded()
         if backend is not None:
             return self._plugins.get((name, backend))
@@ -131,11 +136,11 @@ class PluginRegistry:
             eps = metadata.entry_points(group=ENTRY_POINT_GROUP)
         except TypeError:  # pragma: no cover - older importlib.metadata API
             all_eps = metadata.entry_points()
-            eps = all_eps.get(ENTRY_POINT_GROUP, [])  # pylint: disable=no-member
+            eps = all_eps.get(ENTRY_POINT_GROUP, [])
         for ep in eps:
             try:
                 obj = ep.load()
-            except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 log.warning("Skipping plugin entry-point %r: %s", ep.name, exc)
                 continue
             try:
@@ -153,7 +158,7 @@ class PluginRegistry:
         if callable(obj) and not hasattr(obj, "render"):
             try:
                 produced = obj()
-            except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 log.warning("Plugin factory %r raised: %s", ep_name, exc)
                 return
             if isinstance(produced, PlotPlugin):
@@ -217,7 +222,8 @@ class PluginRegistry:
         entries first (in `select()` order — descending priority, then name), each
         rejected entry carrying the first gate that dropped it. `select()` is exactly
         the chosen subset, so this is the authoritative record of why a plot did or
-        did not appear (A2 Phase S2)."""
+        did not appear (A2 Phase S2).
+        """
         chosen: list[PluginDecision] = []
         rejected: list[PluginDecision] = []
 
@@ -329,13 +335,14 @@ class PluginRegistry:
 
         With strict=False (default) a render exception is caught and replaced with a
         visible error pane so one broken plugin doesn't kill the report. strict=True
-        re-raises the first failure — intended for development."""
+        re-raises the first failure — intended for development.
+        """
         plugins = self.select(data, include=include, exclude=exclude, backend=backend, only=only)
         out: list[tuple[str, pn.viewable.Viewable]] = []
         for plugin in plugins:
             try:
                 pane = plugin.render(data)
-            except Exception as exc:  # pylint: disable=broad-exception-caught
+            except Exception as exc:
                 if strict:
                     raise
                 log.exception("Plugin %r raised during render", plugin.name)

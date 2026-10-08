@@ -2,7 +2,6 @@
 
 # _compose_ds is exercised directly: it returns the composed .rrd path, which the
 # public renderers wrap in a pane, so it is the only way to assert on the merge.
-# pylint: disable=protected-access
 
 from pathlib import Path
 

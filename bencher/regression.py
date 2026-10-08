@@ -453,7 +453,8 @@ def _regression_plot_spec(
         Stored bands are symmetric around the baseline, but for directional
         metrics only one side flags a regression. Minimize only trips on
         values above baseline; maximize only trips on values below. None
-        flags either side, so the full symmetric band stays."""
+        flags either side, so the full symmetric band stays.
+        """
         if band is None:
             return None
         lo, hi = band

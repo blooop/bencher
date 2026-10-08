@@ -192,7 +192,7 @@ def _materialize_dataset_value(result_value) -> str:
         else:
             try:
                 return materialize_blob(payload, cache_dir)
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "ResultDataSet sample: per-sample container %r could not be "
                     "pickled (%s: %s); storing the bare payload without it — a "
@@ -481,8 +481,6 @@ class ResultCollector:
                 bench_res, job_result.job.job_id, worker_job.function_input, exc
             )
             return
-        # catch is a runtime tuple of exception types, which pylint cannot see into.
-        # pylint: disable-next=catching-non-exception
         except catch as exc:
             self.record_caught_sample(
                 bench_res, job_result.job.job_id, worker_job.function_input, exc
@@ -924,7 +922,7 @@ class ResultCollector:
                     bench_res.ds[rv.index_name(i)].attrs["units"] = rv.units
                     bench_res.ds[rv.index_name(i)].attrs["long_name"] = rv.name
             else:
-                pass  # todo
+                pass  # TODO
 
         dsvar = bench_res.ds[input_var.name]
         dsvar.attrs["long_name"] = input_var.name

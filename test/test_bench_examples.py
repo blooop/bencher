@@ -22,10 +22,10 @@ class TestBenchExamples(unittest.TestCase):
         return cfg
 
     def examples_asserts(self, example_result, save=False) -> None:
-        self.assertIsNotNone(example_result)
+        assert example_result is not None
         if save or self.generate_all:
             path = example_result.report.save_index("cachedir")
-            self.assertTrue(os.path.exists(path))
+            assert os.path.exists(path)
 
     def test_example_meta(self) -> None:
         self.examples_asserts(example_meta(self.create_run_cfg(), sample_repeats_values=[1, 3]))
@@ -33,4 +33,4 @@ class TestBenchExamples(unittest.TestCase):
     def test_example_meta_default_sample_repeats(self) -> None:
         """Verify the default sample_repeats_values is [1, 10] without running the full sweep."""
         sig = inspect.signature(example_meta)
-        self.assertIsNone(sig.parameters["sample_repeats_values"].default)
+        assert sig.parameters["sample_repeats_values"].default is None

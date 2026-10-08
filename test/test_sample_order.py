@@ -2,6 +2,8 @@ import unittest
 import uuid
 from datetime import datetime
 
+import pytest
+
 import bencher as bn
 
 
@@ -19,7 +21,7 @@ class OrderExample(bn.ParametrizedSweep):
         # than in __init__ so the param base class stays in charge of construction.
         idx = getattr(self, "_call_counter", 0)
         self.call_index = idx
-        self._call_counter = idx + 1  # pylint: disable=attribute-defined-outside-init
+        self._call_counter = idx + 1
 
 
 class TypedInputs(bn.ParametrizedSweep):
@@ -60,7 +62,7 @@ class TestSampleOrderInputs(unittest.TestCase):
         inorder = set(_run_typed(bn.SampleOrder.INORDER, cache_samples=False))
         for order in (bn.SampleOrder.ROUND_ROBIN, bn.SampleOrder.REVERSED):
             with self.subTest(order=order):
-                self.assertEqual(set(_run_typed(order, cache_samples=False)), inorder)
+                assert set(_run_typed(order, cache_samples=False)) == inorder
 
     def test_reordered_sweep_hits_the_inorder_sample_cache(self):
         for order in (bn.SampleOrder.ROUND_ROBIN, bn.SampleOrder.REVERSED):
@@ -68,8 +70,8 @@ class TestSampleOrderInputs(unittest.TestCase):
                 filled = _run_typed(
                     bn.SampleOrder.INORDER, cache_samples=True, clear_sample_cache=True
                 )
-                self.assertEqual(len(filled), 12)
-                self.assertEqual(_run_typed(order, cache_samples=True), [])
+                assert len(filled) == 12
+                assert _run_typed(order, cache_samples=True) == []
 
 
 class TestSampleOrder(unittest.TestCase):
@@ -112,15 +114,12 @@ class TestSampleOrder(unittest.TestCase):
         ds_rev = res_rev.to_xarray()
 
         # Dataset values must be identical regardless of sampling order
-        self.assertTrue(ds_in.equals(ds_rev))
+        assert ds_in.equals(ds_rev)
 
         # Dimension order should match input_vars order and remain unchanged
         var_name = bn.ExampleBenchCfg.param.out_sin.name
-        self.assertEqual(
-            list(ds_in[var_name].dims)[:2],
-            [v.name for v in input_vars],
-        )
-        self.assertEqual(list(ds_in[var_name].dims), list(ds_rev[var_name].dims))
+        assert list(ds_in[var_name].dims)[:2] == [v.name for v in input_vars]
+        assert list(ds_in[var_name].dims) == list(ds_rev[var_name].dims)
 
     def test_sample_order_reverses_traversal_only(self):
         def run(sample_order: bn.SampleOrder):
@@ -145,7 +144,7 @@ class TestSampleOrder(unittest.TestCase):
         reversed_order = run(bn.SampleOrder.REVERSED)
 
         # In-order should be 0..N-1
-        self.assertEqual(inorder, list(range(len(inorder))))
+        assert inorder == list(range(len(inorder)))
 
         # For reversed traversal, the left-most input (a) varies fastest.
         # Compute expected flattened sequence using dims order (a,b).
@@ -159,7 +158,7 @@ class TestSampleOrder(unittest.TestCase):
                 # Sampling sequence index when 'a' varies fastest: j*la + i
                 expected_rev[pos] = j * la + i
 
-        self.assertEqual(reversed_order, expected_rev)
+        assert reversed_order == expected_rev
 
 
 def _call_order(sample_order: bn.SampleOrder, input_vars, repeats: int) -> list:
@@ -191,7 +190,7 @@ class TestRoundRobin(unittest.TestCase):
         la = len(OrderExample.param.a.values())
         # Dataset is (a, repeat) in C order; round r visits every a before round r+1.
         expected = [r * la + i for i in range(la) for r in range(repeats)]
-        self.assertEqual(order, expected)
+        assert order == expected
 
     def test_inputs_keep_their_natural_order_inside_a_round(self):
         repeats = 2
@@ -206,7 +205,7 @@ class TestRoundRobin(unittest.TestCase):
         expected = [
             r * per_round + i * lb + j for i in range(la) for j in range(lb) for r in range(repeats)
         ]
-        self.assertEqual(order, expected)
+        assert order == expected
 
     def test_over_time_point_is_part_of_the_sample_key(self):
         repeats = 2
@@ -234,12 +233,12 @@ class TestRoundRobin(unittest.TestCase):
         la = len(OrderExample.param.a.values())
         offset = la * repeats
         expected = [offset + r * la + i for i in range(la) for r in range(repeats)]
-        self.assertEqual(call_index.isel(over_time=-1).values.flatten().tolist(), expected)
+        assert call_index.isel(over_time=-1).values.flatten().tolist() == expected
 
     def test_inorder_repeats_each_point_back_to_back(self):
         repeats = 3
         order = _call_order(bn.SampleOrder.INORDER, [OrderExample.param.a], repeats)
-        self.assertEqual(order, list(range(len(order))))
+        assert order == list(range(len(order)))
 
     def test_round_robin_does_not_change_results_or_dims(self):
         run_cfg = bn.BenchRunCfg(
@@ -267,22 +266,20 @@ class TestRoundRobin(unittest.TestCase):
             run_cfg=run_cfg,
             sample_order=bn.SampleOrder.ROUND_ROBIN,
         )
-        self.assertTrue(res_in.to_xarray().equals(res_rr.to_xarray()))
+        assert res_in.to_xarray().equals(res_rr.to_xarray())
 
     def test_round_robin_with_one_repeat_is_inorder(self):
-        self.assertEqual(
-            _call_order(bn.SampleOrder.ROUND_ROBIN, [OrderExample.param.a], 1),
-            _call_order(bn.SampleOrder.INORDER, [OrderExample.param.a], 1),
+        assert _call_order(bn.SampleOrder.ROUND_ROBIN, [OrderExample.param.a], 1) == _call_order(
+            bn.SampleOrder.INORDER, [OrderExample.param.a], 1
         )
 
     def test_unknown_sample_order_raises_instead_of_running(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             _call_order("reverse", [OrderExample.param.a], 2)
 
     def test_member_value_string_still_selects_that_order(self):
-        self.assertEqual(
-            _call_order("REVERSED", [OrderExample.param.a], 1),
-            _call_order(bn.SampleOrder.REVERSED, [OrderExample.param.a], 1),
+        assert _call_order("REVERSED", [OrderExample.param.a], 1) == _call_order(
+            bn.SampleOrder.REVERSED, [OrderExample.param.a], 1
         )
 
 

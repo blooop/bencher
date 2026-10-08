@@ -9,7 +9,7 @@ from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
 class TabulatorResult(HoloviewResult):
-    def to_plot(self, **kwargs) -> pn.widgets.Tabulator | None:  # pylint:disable=unused-argument
+    def to_plot(self, **kwargs) -> pn.widgets.Tabulator | None:
         """Create an interactive table visualization of the data.
 
         Passes the data to the panel Tabulator type to display an interactive table.
@@ -59,7 +59,6 @@ class TabulatorResult(HoloviewResult):
         Returns:
             pn.widgets.Tabulator: An interactive table widget.
         """
-
         # Assume input is an xarray.Dataset. Keep Dataset throughout.
         ds: xr.Dataset = dataset if isinstance(dataset, xr.Dataset) else xr.Dataset(dataset)
 

@@ -77,7 +77,6 @@ class OptunaResult(BenchResultBase):
         Returns:
             list[pn.pane.panel]: A list of optuna plot summarising the benchmark process
         """
-
         return self.collect_optuna_plots(**kwargs)
 
     def to_optuna_from_results(
@@ -271,7 +270,7 @@ class OptunaResult(BenchResultBase):
 
         try:
             self.studies = [self.bench_result_to_study(True)]
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:
             logger.exception("Optuna study creation failed")
             return pn.Column(pn.pane.Markdown(f"**Optuna study creation failed**: {e}"))
         tab_names = ["Analysis"]
@@ -279,7 +278,7 @@ class OptunaResult(BenchResultBase):
             try:
                 self.studies.append(self.bench_result_to_study(False))
                 tab_names = ["With Repeats", "Without Repeats"]
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 logger.exception("Optuna without-repeats study creation failed")
                 tab_names = ["Analysis (without-repeats study failed)"]
 

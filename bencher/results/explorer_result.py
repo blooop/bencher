@@ -7,14 +7,13 @@ from bencher.results.pane_result import PaneResult
 
 
 class ExplorerResult(PaneResult):
-    def to_plot(self, **kwargs) -> pn.pane.Pane:  # pylint: disable=unused-argument
+    def to_plot(self, **kwargs) -> pn.pane.Pane:
         """Produces a hvplot explorer instance to explore the generated dataset
         see: https://hvplot.holoviz.org/getting_started/explorer.html
 
         Returns:
             pn.pane.Pane: A dynamic pane for exploring a dataset
         """
-
         if len(self.bench_cfg.input_vars) > 0:
             return hvplot_of(self.to_xarray()).explorer()
 

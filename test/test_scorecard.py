@@ -1,7 +1,5 @@
 """Tests for bencher.scorecard."""
 
-# pylint: disable=redefined-outer-name  # pytest fixtures are injected by name
-
 from __future__ import annotations
 
 import json
@@ -105,7 +103,7 @@ def _write_summary(reports_dir, tag, bench_name, metrics, regressions, time_even
     (tag_dir / f"{bench_name}.summary.json").write_text(json.dumps(data))
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_reports(tmp_path: Path) -> Path:
     """Create mock summary.json files across categories and verdicts."""
     t0 = "2026-06-10 09:00 0000000"

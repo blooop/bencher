@@ -292,7 +292,7 @@ def test_unknown_compose_method_is_rejected_by_name():
     """An out-of-vocabulary compose method names itself instead of raising KeyError."""
     container = ComposableContainerRerun(compose_method="not_a_compose_type")
     with pytest.raises(ValueError, match="not_a_compose_type"):
-        _ = container._spec  # pylint: disable=protected-access
+        _ = container._spec
 
 
 def test_public_api_exports_rerun_composition_types():

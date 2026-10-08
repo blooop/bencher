@@ -7,7 +7,7 @@ from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
 class TableResult(HoloviewResult):
-    def to_plot(self, **kwargs) -> hv.Table:  # pylint:disable=unused-argument
+    def to_plot(self, **kwargs) -> hv.Table:
         """Convert the dataset to a Table visualization.
 
         Returns:

@@ -144,7 +144,7 @@ class VideoSummaryResult(BenchResultBase):
             if video_controls is None:
                 video_controls = VideoControls()
             return video_controls.video_container(
-                filename, width=kwargs.get("width", None), height=kwargs.get("height", None)
+                filename, width=kwargs.get("width"), height=kwargs.get("height")
             )
         return None
 
@@ -168,7 +168,6 @@ class VideoSummaryResult(BenchResultBase):
         Returns:
             list[ComposeType]: A list of composition methods for composing the dataset result
         """
-
         return compose_method_list_for_dims(
             len(dataset.sizes),
             first_compose_method=first_compose_method,

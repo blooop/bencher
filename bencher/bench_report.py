@@ -39,7 +39,7 @@ def _inline_rrd(
         from bencher.utils_rrd import inline_rrd_iframes
 
         inline_rrd_iframes(html_path, rrd_base=rrd_base, portable=portable)
-    except Exception:  # pylint: disable=broad-except
+    except Exception:
         logger.warning("inline_rrd_iframes failed for %s", html_path, exc_info=True)
 
 
@@ -111,7 +111,7 @@ def _inject_embed_script(html_path: Path) -> None:
         else:
             content += _EMBED_HEIGHT_SCRIPT
         html_path.write_text(content, encoding="utf-8")
-    except Exception:  # pylint: disable=broad-except
+    except Exception:
         logger.warning("inject_embed_script failed for %s", html_path, exc_info=True)
 
 
@@ -128,7 +128,7 @@ class Publisher(Protocol):
 
     def publish(self, report: BenchReport) -> str | None:
         """Publish a report. Returns the published URL, or None."""
-        ...  # pylint: disable=unnecessary-ellipsis
+        ...
 
 
 @dataclass
@@ -178,7 +178,7 @@ class BenchReport(BenchPlotServer):
         if other is self:
             return
         self.pane.extend(list(other.pane))
-        self._result_tabs.extend(other._result_tabs)  # pylint: disable=protected-access
+        self._result_tabs.extend(other._result_tabs)
 
     def append_title(self, title: str, new_tab: bool = True):
         if new_tab:
@@ -388,7 +388,6 @@ class BenchReport(BenchPlotServer):
         Returns:
             Path: the save path
         """
-
         t0 = time.perf_counter()
         try:
             if filename is None:
@@ -607,7 +606,6 @@ if (_embedded) {{
         Returns:
             str: the url of the published report
         """
-
         if branch_name is None:
             if self.bench_name is None:
                 # Previously this fell through to `None += "_debug" if debug else ""`, so

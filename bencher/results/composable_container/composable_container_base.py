@@ -166,7 +166,6 @@ class ComposableContainerBase:
             str | None: Pretty string representation with fixed width, or None when
                 neither a name nor a value was given (every caller tests for None).
         """
-
         if isinstance(var_value, (int, float)):
             var_value = FormatFloat()(var_value)
         if var_name is not None and var_value is not None:

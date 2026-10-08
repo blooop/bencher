@@ -227,7 +227,7 @@ class ResultVec(param.List):
         return _hash_slots(self)
 
     def index_name(self, idx: int) -> str:
-        """given the index of the vector, return the column name that
+        """Given the index of the vector, return the column name that
 
         Args:
             idx (int): index of the result vector
@@ -235,7 +235,6 @@ class ResultVec(param.List):
         Returns:
             str: column name of the vector for the xarray dataset
         """
-
         mapping = ["x", "y", "z"]
         if idx < 3:
             index = mapping[idx]
@@ -579,7 +578,8 @@ class ResultKind(StrEnum):
     The values feed the A2 plot-selection signatures, so they must stay
     stable strings. Explicit values rather than ``auto()``: ``strenum``'s
     ``auto()`` yields the member *name* verbatim, which would silently change
-    these to uppercase (plan 23 D4)."""
+    these to uppercase (plan 23 D4).
+    """
 
     BOOL = "bool"
     FLOAT = "float"
@@ -798,7 +798,8 @@ def result_spec(result_var) -> ResultSpec | None:
 
     Returns ``None`` for parameters that are not registered result types.
     Deprecated subclasses absent from the registry (``ResultVar``) resolve to
-    their base class's spec via isinstance."""
+    their base class's spec via isinstance.
+    """
     for cls, spec in RESULT_SPECS.items():
         if isinstance(result_var, cls):
             return spec
@@ -843,7 +844,8 @@ _MEDIA_RESULT_TYPES = _spec_types(lambda s: s.is_media)
 
 def result_kind(result_var) -> str:
     """Classify a result variable into a coarse, serializable kind name used by
-    plot-selection signatures (A2)."""
+    plot-selection signatures (A2).
+    """
     spec = result_spec(result_var)
     return spec.kind.value if spec is not None else "unknown"
 
@@ -884,7 +886,8 @@ def result_missing_fill(rv) -> tuple[Any, type]:
 
     Read from the ResultSpec registry; an unregistered parameter (or a future
     numeric result type before registration) falls back to the NaN family,
-    matching the pre-registry behavior."""
+    matching the pre-registry behavior.
+    """
     spec = result_spec(rv)
     if spec is None:
         return float("nan"), float

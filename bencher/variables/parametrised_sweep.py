@@ -39,7 +39,6 @@ class ParametrizedSweep(Parameterized):
             invalidate persisted caches (plan 23 §7). Left as-is deliberately; fixing it
             needs a phase that can bump ``CACHE_VERSION``.
         """
-
         curhash = 0
         if hash_value:
             for k, v in param_type.param.values().items():
@@ -51,7 +50,8 @@ class ParametrizedSweep(Parameterized):
     def hash_persistent(self) -> int | str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run.
 
-        Inherits ``param_hash``'s ``0``-or-digest return; see there."""
+        Inherits ``param_hash``'s ``0``-or-digest return; see there.
+        """
         return ParametrizedSweep.param_hash(self, True)
 
     def update_params_from_kwargs(self, **kwargs) -> None:

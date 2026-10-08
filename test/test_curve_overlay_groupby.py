@@ -4,8 +4,6 @@ Validates that the overlay produced when categorical groupby dimensions exist
 contains the expected Curve elements with correct labels and optional Spread bands.
 """
 
-# pylint: disable=protected-access
-
 from unittest.mock import MagicMock
 
 import holoviews as hv

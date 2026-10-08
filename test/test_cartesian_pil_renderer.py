@@ -7,7 +7,6 @@ do not silently change the visual output.
 # TimelineShape._skip_labels is set directly: it is the renderer's own overlay-mode
 # switch, and turning it off is what makes the golden hash independent of the host's
 # fonts. There is no public way to ask for a label-less strip.
-# pylint: disable=protected-access
 
 from __future__ import annotations
 

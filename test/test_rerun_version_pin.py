@@ -96,7 +96,7 @@ class TestDeclaredRerunPin(unittest.TestCase):
 
     def setUp(self):
         self.specifiers = declared_rerun_specifiers()
-        self.assertEqual(sorted(self.specifiers), sorted(RERUN_PACKAGES))
+        assert sorted(self.specifiers) == sorted(RERUN_PACKAGES)
 
     def test_each_window_admits_every_patch_of_its_minors(self):
         """A patch fixes a format bencher round-trips; a minor reshapes the API."""
@@ -105,54 +105,46 @@ class TestDeclaredRerunPin(unittest.TestCase):
                 specifier = self.specifiers[name]
                 floor = declared_floor(specifier)
                 minors = declared_minors(specifier)
-                self.assertTrue(minors, f"{name} {specifier} admits no whole minor")
+                assert minors, f"{name} {specifier} admits no whole minor"
                 for minor in sorted(minors):
                     for patch in (0, 99):
-                        self.assertTrue(
-                            specifier.contains(f"{floor.major}.{minor}.{patch}"),
-                            f"{name} {specifier} does not admit all of {floor.major}.{minor}.x",
+                        assert specifier.contains(f"{floor.major}.{minor}.{patch}"), (
+                            f"{name} {specifier} does not admit all of {floor.major}.{minor}.x"
                         )
                 for outside in (
                     f"{floor.major}.{max(minors) + 1}.0",
                     f"{floor.major}.{min(minors) - 1}.99",
                 ):
-                    self.assertFalse(
-                        specifier.contains(outside),
-                        f"{name} {specifier} reaches outside its minors to {outside}",
+                    assert not specifier.contains(outside), (
+                        f"{name} {specifier} reaches outside its minors to {outside}"
                     )
 
     def test_both_rerun_packages_declare_the_same_window(self):
         """``rerun-notebook`` ships the viewer assets for its matching ``rerun-sdk``."""
         windows = {str(self.specifiers[name]) for name in RERUN_PACKAGES}
-        self.assertEqual(len(windows), 1, f"rerun packages disagree on window: {windows}")
+        assert len(windows) == 1, f"rerun packages disagree on window: {windows}"
 
     def test_every_minor_below_the_top_is_pinned_by_an_environment(self):
         """The default env resolves the newest minor; each older one needs its own env."""
         minors = declared_minors(self.specifiers["rerun-sdk"])
         pinned = pinned_minors_by_feature()
-        self.assertEqual(
-            minors - {max(minors)},
-            set().union(*pinned.values()) if pinned else set(),
+        assert minors - {max(minors)} == (set().union(*pinned.values()) if pinned else set()), (
             "the rerun window names a minor no environment resolves (or pins one it "
-            f"does not name): window {sorted(minors)}, pinned {pinned}",
+            f"does not name): window {sorted(minors)}, pinned {pinned}"
         )
         in_environments = features_in_environments()
         for feature in pinned:
-            self.assertIn(
-                feature,
-                in_environments,
+            assert feature in in_environments, (
                 f"feature {feature} pins a rerun minor but no environment includes it, "
-                f"so nothing solves or tests it",
+                f"so nothing solves or tests it"
             )
 
     def test_pinned_features_stay_inside_the_declared_window(self):
         declared = self.specifiers["rerun-sdk"]
         for feature, minors in pinned_minors_by_feature().items():
             with self.subTest(feature=feature):
-                self.assertLessEqual(
-                    minors,
-                    declared_minors(declared),
-                    f"feature {feature} pins a rerun minor outside {declared}",
+                assert minors <= declared_minors(declared), (
+                    f"feature {feature} pins a rerun minor outside {declared}"
                 )
 
     def test_installed_rerun_packages_satisfy_the_declared_pin(self):
@@ -162,19 +154,17 @@ class TestDeclaredRerunPin(unittest.TestCase):
                     installed = get_package_version(name)
                 except PackageNotFoundError:  # pragma: no cover - rerun extra is always installed
                     self.skipTest(f"{name} is not installed")
-                self.assertTrue(
-                    self.specifiers[name].contains(installed, prereleases=True),
-                    f"installed {name} {installed} violates declared {self.specifiers[name]}",
+                assert self.specifiers[name].contains(installed, prereleases=True), (
+                    f"installed {name} {installed} violates declared {self.specifiers[name]}"
                 )
 
     def test_viewer_fallback_version_is_within_the_declared_pin(self):
         """With no ``rerun-sdk`` installed, the CDN viewer version is still a supported one."""
         with mock.patch("bencher.utils_rrd.get_package_version", side_effect=PackageNotFoundError):
             fallback = _get_rerun_version()
-        self.assertTrue(
-            self.specifiers["rerun-sdk"].contains(fallback, prereleases=True),
+        assert self.specifiers["rerun-sdk"].contains(fallback, prereleases=True), (
             f"viewer fallback {fallback} violates declared rerun-sdk pin "
-            f"{self.specifiers['rerun-sdk']}",
+            f"{self.specifiers['rerun-sdk']}"
         )
 
 

@@ -2,6 +2,7 @@
 
 import unittest
 
+import pytest
 from hypothesis import given, settings, strategies as st
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg
@@ -20,12 +21,12 @@ class TestSweepExecutor(unittest.TestCase):
     def test_init_default_cache_size(self):
         """Test default cache size is set."""
         executor = SweepExecutor()
-        self.assertEqual(executor.cache_size, int(100e9))
+        assert executor.cache_size == int(100000000000.0)
 
     def test_init_custom_cache_size(self):
         """Test custom cache size is set."""
         executor = SweepExecutor(cache_size=int(50e9))
-        self.assertEqual(executor.cache_size, int(50e9))
+        assert executor.cache_size == int(50000000000.0)
 
     def test_convert_vars_to_params_from_string(self):
         """Test converting string variable names to params."""
@@ -36,7 +37,7 @@ class TestSweepExecutor(unittest.TestCase):
             worker_class_instance=self.worker_instance,
             worker_input_cfg=ExampleBenchCfg,
         )
-        self.assertEqual(result.name, "theta")
+        assert result.name == "theta"
 
     def test_convert_vars_to_params_from_dict(self):
         """Test converting dict config to params."""
@@ -47,7 +48,7 @@ class TestSweepExecutor(unittest.TestCase):
             worker_class_instance=self.worker_instance,
             worker_input_cfg=ExampleBenchCfg,
         )
-        self.assertEqual(result.name, "theta")
+        assert result.name == "theta"
 
     def test_convert_vars_to_params_from_param(self):
         """Test passing param.Parameter directly."""
@@ -58,11 +59,11 @@ class TestSweepExecutor(unittest.TestCase):
             worker_class_instance=self.worker_instance,
             worker_input_cfg=ExampleBenchCfg,
         )
-        self.assertEqual(result.name, "theta")
+        assert result.name == "theta"
 
     def test_convert_vars_to_params_type_error(self):
         """Test proper error for invalid variable types."""
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             self.executor.convert_vars_to_params(
                 12345,  # Invalid type
                 "input",
@@ -79,13 +80,13 @@ class TestSweepExecutor(unittest.TestCase):
         ]
         result = self.executor.define_const_inputs(const_vars)
 
-        self.assertEqual(result["theta"], 1.5)
-        self.assertEqual(result["offset"], 0.1)
+        assert result["theta"] == 1.5
+        assert result["offset"] == 0.1
 
     def test_define_const_inputs_none(self):
         """Test None input returns None."""
         result = self.executor.define_const_inputs(None)
-        self.assertIsNone(result)
+        assert result is None
 
     def test_init_sample_cache(self):
         """Test FutureCache initialization with config."""
@@ -95,8 +96,8 @@ class TestSweepExecutor(unittest.TestCase):
 
         cache = self.executor.init_sample_cache(run_cfg)
 
-        self.assertIsNotNone(cache)
-        self.assertEqual(self.executor.sample_cache, cache)
+        assert cache is not None
+        assert self.executor.sample_cache == cache
 
     def test_init_sample_cache_with_caching_disabled(self):
         """Test FutureCache when cache_samples=False."""
@@ -106,9 +107,9 @@ class TestSweepExecutor(unittest.TestCase):
 
         cache = self.executor.init_sample_cache(run_cfg)
 
-        self.assertIsNotNone(cache)
+        assert cache is not None
         # When cache_samples=False, cache.cache should be None
-        self.assertIsNone(cache.cache)
+        assert cache.cache is None
 
     def test_clear_call_counts(self):
         """Test clearing call counts."""
@@ -121,7 +122,7 @@ class TestSweepExecutor(unittest.TestCase):
 
         self.executor.clear_call_counts()
 
-        self.assertEqual(self.executor.sample_cache.worker_wrapper_call_count, 0)
+        assert self.executor.sample_cache.worker_wrapper_call_count == 0
 
     def test_clear_call_counts_no_cache(self):
         """Test clearing call counts when no cache exists."""
@@ -145,7 +146,7 @@ class TestSweepExecutor(unittest.TestCase):
     def test_get_cache_stats_no_cache(self):
         """Test getting stats when no cache exists."""
         result = self.executor.get_cache_stats()
-        self.assertEqual(result, "")
+        assert result == ""
 
     def test_get_cache_stats_with_cache(self):
         """Test getting stats when cache is present."""
@@ -157,7 +158,7 @@ class TestSweepExecutor(unittest.TestCase):
         result = self.executor.get_cache_stats()
 
         # Should return non-empty stats string
-        self.assertIsInstance(result, str)
+        assert isinstance(result, str)
 
     def test_convert_vars_to_params_with_max_subsampling_divisions(self):
         """Test max_subsampling_divisions handling when run_cfg.subsampling_divisions is set."""
@@ -172,12 +173,12 @@ class TestSweepExecutor(unittest.TestCase):
             worker_input_cfg=ExampleBenchCfg,
         )
 
-        self.assertEqual(result.name, "theta")
+        assert result.name == "theta"
         # The parameter should have been processed with subsampling_divisions adjustment
 
     def test_convert_vars_to_params_bad_string_gives_helpful_error(self):
         """Test that a typo in a string variable name gives a helpful KeyError."""
-        with self.assertRaises(KeyError) as ctx:
+        with pytest.raises(KeyError) as ctx:
             self.executor.convert_vars_to_params(
                 "thetaa",
                 "input",
@@ -185,15 +186,15 @@ class TestSweepExecutor(unittest.TestCase):
                 worker_class_instance=self.worker_instance,
                 worker_input_cfg=ExampleBenchCfg,
             )
-        msg = str(ctx.exception)
-        self.assertIn("thetaa", msg)
-        self.assertIn("not found", msg)
-        self.assertIn("Available parameters", msg)
-        self.assertIn("theta", msg)  # listed in available parameters
+        msg = str(ctx.value)
+        assert "thetaa" in msg
+        assert "not found" in msg
+        assert "Available parameters" in msg
+        assert "theta" in msg  # listed in available parameters
 
     def test_convert_vars_to_params_bad_dict_name_gives_helpful_error(self):
         """Test that a typo in a dict variable name gives a helpful KeyError."""
-        with self.assertRaises(KeyError) as ctx:
+        with pytest.raises(KeyError) as ctx:
             self.executor.convert_vars_to_params(
                 {"name": "thetaa"},
                 "input",
@@ -201,14 +202,14 @@ class TestSweepExecutor(unittest.TestCase):
                 worker_class_instance=self.worker_instance,
                 worker_input_cfg=ExampleBenchCfg,
             )
-        msg = str(ctx.exception)
-        self.assertIn("thetaa", msg)
-        self.assertIn("not found", msg)
+        msg = str(ctx.value)
+        assert "thetaa" in msg
+        assert "not found" in msg
 
     def test_clear_tag_from_sample_cache_lazy_init(self):
         """Test clear_tag_from_sample_cache initializes cache if None."""
         # sample_cache should be None initially
-        self.assertIsNone(self.executor.sample_cache)
+        assert self.executor.sample_cache is None
 
         run_cfg = BenchRunCfg()
         run_cfg.cache_samples = True
@@ -218,7 +219,7 @@ class TestSweepExecutor(unittest.TestCase):
         self.executor.clear_tag_from_sample_cache("test_tag", run_cfg)
 
         # Cache should now be initialized
-        self.assertIsNotNone(self.executor.sample_cache)
+        assert self.executor.sample_cache is not None
 
     # Hypothesis property-based tests
     @settings(deadline=10000)
@@ -233,11 +234,11 @@ class TestSweepExecutor(unittest.TestCase):
 
         cache = self.executor.init_sample_cache(run_cfg)
 
-        self.assertIsNotNone(cache)
+        assert cache is not None
         if cache_samples:
-            self.assertIsNotNone(cache.cache)
+            assert cache.cache is not None
         else:
-            self.assertIsNone(cache.cache)
+            assert cache.cache is None
 
 
 class TestWorkerKwargsWrapper(unittest.TestCase):
@@ -262,8 +263,8 @@ class TestWorkerKwargsWrapper(unittest.TestCase):
 
         worker_kwargs_wrapper(my_worker, bench_cfg, theta=1.0, repeat=1)
 
-        self.assertNotIn("repeat", call_log[0])
-        self.assertIn("theta", call_log[0])
+        assert "repeat" not in call_log[0]
+        assert "theta" in call_log[0]
 
     def test_passes_repeat_when_pass_repeat_true(self):
         """Test repeat is passed when pass_repeat=True."""
@@ -284,8 +285,8 @@ class TestWorkerKwargsWrapper(unittest.TestCase):
 
         worker_kwargs_wrapper(my_worker, bench_cfg, theta=1.0, repeat=1)
 
-        self.assertIn("repeat", call_log[0])
-        self.assertIn("theta", call_log[0])
+        assert "repeat" in call_log[0]
+        assert "theta" in call_log[0]
 
     def test_filters_meta_vars(self):
         """Test over_time and time_event are always filtered."""
@@ -308,9 +309,9 @@ class TestWorkerKwargsWrapper(unittest.TestCase):
             my_worker, bench_cfg, theta=1.0, repeat=1, over_time="2024-01-01", time_event="ev1"
         )
 
-        self.assertNotIn("over_time", call_log[0])
-        self.assertNotIn("time_event", call_log[0])
-        self.assertIn("theta", call_log[0])
+        assert "over_time" not in call_log[0]
+        assert "time_event" not in call_log[0]
+        assert "theta" in call_log[0]
 
     def test_does_not_mutate_original_kwargs(self):
         """Verify that the original kwargs dict is not mutated by filtering."""
@@ -332,7 +333,7 @@ class TestWorkerKwargsWrapper(unittest.TestCase):
 
         worker_kwargs_wrapper(my_worker, bench_cfg, **original)
 
-        self.assertEqual(original, snapshot)
+        assert original == snapshot
 
     def test_worker_mutation_of_mutable_value_does_not_leak(self):
         """Verify deepcopy prevents worker mutations of mutable values from leaking back."""
@@ -354,7 +355,7 @@ class TestWorkerKwargsWrapper(unittest.TestCase):
         original = {"data": shared_list, "repeat": 1}
         worker_kwargs_wrapper(mutating_worker, bench_cfg, **original)
 
-        self.assertEqual(shared_list, [1, 2, 3])
+        assert shared_list == [1, 2, 3]
 
     def test_no_meta_keys_present(self):
         """Test behavior when no metadata keys are in kwargs."""
@@ -375,7 +376,7 @@ class TestWorkerKwargsWrapper(unittest.TestCase):
 
         worker_kwargs_wrapper(my_worker, bench_cfg, theta=1.0, phi=2.0)
 
-        self.assertEqual(call_log[0], {"theta": 1.0, "phi": 2.0})
+        assert call_log[0] == {"theta": 1.0, "phi": 2.0}
 
     def test_only_meta_keys(self):
         """Test that worker receives empty dict when only metadata keys are present."""
@@ -396,7 +397,7 @@ class TestWorkerKwargsWrapper(unittest.TestCase):
 
         worker_kwargs_wrapper(my_worker, bench_cfg, repeat=1, over_time="t", time_event="e")
 
-        self.assertEqual(call_log[0], {})
+        assert call_log[0] == {}
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ def test_imports():
 
 def test_imports_from_bencher():
     """Container classes are importable from top-level bencher package."""
-    import bencher as bn  # pylint: disable=import-outside-toplevel
+    import bencher as bn
 
     assert bn.ComposableContainerPanel is not None
     assert bn.ComposableContainerDataset is not None

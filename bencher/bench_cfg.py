@@ -41,7 +41,7 @@ class ShowMode(LowercaseStrEnum):
     NONE = auto()
 
 
-_SHOW_ALIASES: dict[bool | None | str, ShowMode] = {
+_SHOW_ALIASES: dict[bool | str | None, ShowMode] = {
     True: ShowMode.LIVE,
     False: ShowMode.NONE,
     None: ShowMode.NONE,
@@ -618,7 +618,6 @@ class BenchRunCfg(BenchPlotSrvCfg):
         Returns:
             BenchRunCfg: Configuration object with settings from command line arguments
         """
-
         parser = argparse.ArgumentParser(description="benchmark")
 
         parser.add_argument(
@@ -733,7 +732,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
             return cls(**defaults)
         result = deepcopy(run_cfg)
         for key, value in defaults.items():
-            if getattr(result, key) == cls.param[key].default:  # pylint: disable=unsubscriptable-object
+            if getattr(result, key) == cls.param[key].default:
                 setattr(result, key, value)
         return result
 
@@ -974,7 +973,6 @@ class BenchCfg(BenchRunCfg):
         Returns:
             str: A persistent hash value for the benchmark configuration
         """
-
         if include_repeats:
             # needed so that the historical xarray arrays are the same size
             repeats_hash = hash_sha1(self.repeats)
@@ -1104,7 +1102,6 @@ class BenchCfg(BenchRunCfg):
         Returns:
             pn.pane.Markdown | pn.Column: Panel containing the sweep description
         """
-
         latex = self.to_latex()
         desc = pn.pane.Markdown(self.describe_benchmark(), width=width)
         if accordion:

@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # BENCH_CFG
 def optuna_grid_search(bench_cfg: BenchCfg, trial_vars: list | None = None) -> optuna.Study:
-    """use optuna to perform a grid search
+    """Use optuna to perform a grid search
 
     Args:
         bench_cfg (BenchCfg): setting for grid search
@@ -108,7 +108,6 @@ def sweep_var_to_optuna_dist(var: param.Parameter) -> optuna.distributions.BaseD
     Returns:
         optuna.distributions.BaseDistribution: Optuna representation of a sweep var
     """
-
     if isinstance(var, IntSweep):
         return optuna.distributions.IntDistribution(var.sweep_bounds[0], var.sweep_bounds[1])
     if isinstance(var, FloatSweep):
@@ -210,7 +209,7 @@ def _append_safe(row, plot_fn, *args, **kwargs):
         row.append(plot_fn(*args, **kwargs))
     except _EXPECTED_PLOT_FAILURES as exc:
         row.append(_plot_failure_pane(plot_fn, exc))
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # noqa: BLE001
         row.append(_plot_failure_pane(plot_fn, exc, unexpected=True))
 
 
@@ -223,5 +222,5 @@ def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
         row.append(fig)
     except _EXPECTED_PLOT_FAILURES as exc:
         row.append(_plot_failure_pane(plot_fn, exc))
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # noqa: BLE001
         row.append(_plot_failure_pane(plot_fn, exc, unexpected=True))

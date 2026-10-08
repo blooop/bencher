@@ -292,7 +292,7 @@ class StringSweep(SweepSelector):
         params:
             Additional param overrides.
 
-        Returns
+        Returns:
         -------
         StringSweep
             A sweep with a single sentinel placeholder value.
@@ -340,7 +340,6 @@ class EnumSweep(SweepSelector):
 
 def _make_hashable(value: Any) -> Any:
     """Create a deterministic, hashable representation of arbitrary YAML data."""
-
     if isinstance(value, np.ndarray):
         return _make_hashable(value.tolist())
     if isinstance(value, Mapping):

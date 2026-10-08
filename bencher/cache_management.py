@@ -554,12 +554,12 @@ def _scan_cache_for_blob_names(cache_path: Path, names: set[str], unreadable: li
     """Walk every value in one diskcache, recording roots that cannot be read."""
     try:
         cache = Cache(str(cache_path))
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # noqa: BLE001
         unreadable.append(f"{cache_path}: cannot open ({type(exc).__name__}: {exc})")
         return
     try:
         keys = list(cache.iterkeys())
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # noqa: BLE001
         unreadable.append(f"{cache_path}: cannot enumerate ({type(exc).__name__}: {exc})")
         cache.close()
         return
@@ -570,7 +570,7 @@ def _scan_cache_for_blob_names(cache_path: Path, names: set[str], unreadable: li
             except KeyError:
                 # Evicted between listing and reading: it references nothing now.
                 continue
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # noqa: BLE001
                 unreadable.append(
                     f"{cache_path}[{key!r}]: cannot deserialize ({type(exc).__name__}: {exc})"
                 )
@@ -638,7 +638,7 @@ def blob_reachability(
         try:
             with path.open("rb") as fh:
                 value = pickle.load(fh)
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # noqa: BLE001
             unreadable.append(f"{path}: cannot load ({type(exc).__name__}: {exc})")
             continue
         _walk_blob_references(value, names, set())

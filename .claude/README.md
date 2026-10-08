@@ -22,7 +22,7 @@ Once setup is complete, Claude can use these pixi tasks:
 #### Testing & Quality
 - `pixi run test` - Run pytest tests
 - `pixi run coverage` - Run tests with coverage report
-- `pixi run lint` - Run ruff and pylint linters
+- `pixi run lint` - Run ruff and ty
 - `pixi run format` - Format code with ruff
 
 #### CI Tasks

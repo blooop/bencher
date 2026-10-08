@@ -247,7 +247,7 @@ class Group(Shape):
 
     def _deep_copy(self) -> Group:
         return Group(
-            children=[c._deep_copy() for c in self.children],  # pylint: disable=protected-access
+            children=[c._deep_copy() for c in self.children],
             direction=self.direction,
             depth=self.depth,
         )
@@ -255,7 +255,7 @@ class Group(Shape):
     def _deep_copy_recolored(self, color_index: int) -> Group:
         """Copy and recolor in a single traversal."""
         return Group(
-            children=[c._deep_copy_recolored(color_index) for c in self.children],  # pylint: disable=protected-access
+            children=[c._deep_copy_recolored(color_index) for c in self.children],
             direction=self.direction,
             depth=self.depth,
         )
@@ -353,7 +353,7 @@ class TimelineShape(Shape):
         scaled_w, scaled_h = inner_img.size
 
         # Need the underlying PIL Image (not ImageDraw) for pasting
-        base_img: Image.Image = img._image  # pylint: disable=protected-access
+        base_img: Image.Image = img._image
 
         frames_y = y + FILM_PAD + FILM_SPROCKET_H + FILM_SPROCKET_MARGIN
         font_label = _get_font(12)
@@ -459,7 +459,7 @@ class TimelineShape(Shape):
             )
 
     def _deep_copy(self) -> TimelineShape:
-        return TimelineShape(self.inner._deep_copy(), self.count)  # pylint: disable=protected-access
+        return TimelineShape(self.inner._deep_copy(), self.count)
 
     def _deep_copy_recolored(self, color_index: int) -> TimelineShape:
         # Recolours the wrapped shape and rewraps. The base class used to supply this
@@ -468,7 +468,7 @@ class TimelineShape(Shape):
         # sum type explicit turned that into a missing implementation, which is what it
         # always was.
         return TimelineShape(
-            self.inner._deep_copy_recolored(color_index),  # pylint: disable=protected-access
+            self.inner._deep_copy_recolored(color_index),
             self.count,
         )
 
@@ -525,7 +525,7 @@ class StrobeShape(Shape):
         if self.flash > 0.3:
             fill_alpha = self.flash * 0.08
             overlay = Image.new("RGB", (total_w, box_h), c.strobe_color)
-            base_img = img._image  # pylint: disable=protected-access
+            base_img = img._image
             # Crop the region, blend with overlay, then paste back
             region = base_img.crop((x, y, x + total_w, y + box_h))
             blended = Image.blend(region, overlay, fill_alpha)
@@ -637,13 +637,13 @@ class StrobeShape(Shape):
         self.draw_tally_overlay(img, tally_x, tally_y, tally_avail_w)
 
     def _deep_copy(self) -> StrobeShape:
-        return StrobeShape(self.inner._deep_copy(), self.count, self.cfg, self.flash)  # pylint: disable=protected-access
+        return StrobeShape(self.inner._deep_copy(), self.count, self.cfg, self.flash)
 
     def _deep_copy_recolored(self, color_index: int) -> StrobeShape:
         # See TimelineShape._deep_copy_recolored: inherited from the base this walked a
         # None `children` and raised.
         return StrobeShape(
-            self.inner._deep_copy_recolored(color_index),  # pylint: disable=protected-access
+            self.inner._deep_copy_recolored(color_index),
             self.count,
             self.cfg,
             self.flash,
@@ -673,7 +673,7 @@ def render_animation(
     output_dir : str
         Directory for the output video.
 
-    Returns
+    Returns:
     -------
     str
         Path to the output animation file.

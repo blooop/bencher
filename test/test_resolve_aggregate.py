@@ -1,5 +1,7 @@
 import unittest
 
+import pytest
+
 from bencher.utils import resolve_aggregate
 
 
@@ -15,104 +17,104 @@ class TestResolveAggregate(unittest.TestCase):
     # --- None / False: no aggregation ---
 
     def test_none_returns_none(self):
-        self.assertIsNone(resolve_aggregate(None, self.vars3))
+        assert resolve_aggregate(None, self.vars3) is None
 
     def test_false_returns_none(self):
-        self.assertIsNone(resolve_aggregate(False, self.vars3))
+        assert resolve_aggregate(False, self.vars3) is None
 
     # --- True: collapse to 1-D (aggregate all but first) ---
 
     def test_true_3_keeps_first(self):
-        self.assertEqual(resolve_aggregate(True, self.vars3), ["y", "z"])
+        assert resolve_aggregate(True, self.vars3) == ["y", "z"]
 
     def test_true_2_keeps_first(self):
-        self.assertEqual(resolve_aggregate(True, self.vars2), ["y"])
+        assert resolve_aggregate(True, self.vars2) == ["y"]
 
     def test_true_1_nothing_to_aggregate(self):
-        self.assertIsNone(resolve_aggregate(True, self.vars1))
+        assert resolve_aggregate(True, self.vars1) is None
 
     def test_true_empty_nothing_to_aggregate(self):
-        self.assertIsNone(resolve_aggregate(True, self.vars0))
+        assert resolve_aggregate(True, self.vars0) is None
 
     # --- int: last N dims ---
 
     def test_int_1_of_3(self):
-        self.assertEqual(resolve_aggregate(1, self.vars3), ["z"])
+        assert resolve_aggregate(1, self.vars3) == ["z"]
 
     def test_int_2_of_3(self):
-        self.assertEqual(resolve_aggregate(2, self.vars3), ["y", "z"])
+        assert resolve_aggregate(2, self.vars3) == ["y", "z"]
 
     def test_int_3_of_3(self):
-        self.assertEqual(resolve_aggregate(3, self.vars3), ["x", "y", "z"])
+        assert resolve_aggregate(3, self.vars3) == ["x", "y", "z"]
 
     def test_int_exceeds_length(self):
-        with self.assertRaises(ValueError) as cm:
+        with pytest.raises(ValueError) as cm:
             resolve_aggregate(4, self.vars3)
-        self.assertIn("aggregate=4 exceeds", str(cm.exception))
+        assert "aggregate=4 exceeds" in str(cm.value)
 
     def test_int_zero(self):
-        with self.assertRaises(ValueError) as cm:
+        with pytest.raises(ValueError) as cm:
             resolve_aggregate(0, self.vars3)
-        self.assertIn("must be >= 1", str(cm.exception))
+        assert "must be >= 1" in str(cm.value)
 
     def test_int_negative(self):
-        with self.assertRaises(ValueError) as cm:
+        with pytest.raises(ValueError) as cm:
             resolve_aggregate(-1, self.vars3)
-        self.assertIn("must be >= 1", str(cm.exception))
+        assert "must be >= 1" in str(cm.value)
 
     # --- list[str]: named dims ---
 
     def test_list_valid_subset(self):
-        self.assertEqual(resolve_aggregate(["x", "z"], self.vars3), ["x", "z"])
+        assert resolve_aggregate(["x", "z"], self.vars3) == ["x", "z"]
 
     def test_list_all(self):
-        self.assertEqual(resolve_aggregate(["x", "y", "z"], self.vars3), ["x", "y", "z"])
+        assert resolve_aggregate(["x", "y", "z"], self.vars3) == ["x", "y", "z"]
 
     def test_list_single(self):
-        self.assertEqual(resolve_aggregate(["y"], self.vars3), ["y"])
+        assert resolve_aggregate(["y"], self.vars3) == ["y"]
 
     def test_list_unknown_name(self):
-        with self.assertRaises(ValueError) as cm:
+        with pytest.raises(ValueError) as cm:
             resolve_aggregate(["x", "bogus"], self.vars3)
-        self.assertIn("unknown input var names", str(cm.exception))
+        assert "unknown input var names" in str(cm.value)
 
     def test_list_empty(self):
-        self.assertEqual(resolve_aggregate([], self.vars3), [])
+        assert resolve_aggregate([], self.vars3) == []
 
     def test_list_non_string_elements(self):
-        with self.assertRaises(TypeError) as cm:
+        with pytest.raises(TypeError) as cm:
             resolve_aggregate([1, 2], self.vars3)
-        self.assertIn("aggregate list elements must be str", str(cm.exception))
+        assert "aggregate list elements must be str" in str(cm.value)
 
     def test_list_mixed_elements(self):
-        with self.assertRaises(TypeError) as cm:
+        with pytest.raises(TypeError) as cm:
             resolve_aggregate(["x", 42], self.vars3)
-        self.assertIn("aggregate list elements must be str", str(cm.exception))
+        assert "aggregate list elements must be str" in str(cm.value)
 
     # --- input_var_names=None ---
 
     def test_true_with_none_input_var_names(self):
-        with self.assertRaises(ValueError) as cm:
+        with pytest.raises(ValueError) as cm:
             resolve_aggregate(True, None)
-        self.assertIn("requires input_var_names", str(cm.exception))
+        assert "requires input_var_names" in str(cm.value)
 
     def test_int_with_none_input_var_names(self):
-        with self.assertRaises(ValueError) as cm:
+        with pytest.raises(ValueError) as cm:
             resolve_aggregate(2, None)
-        self.assertIn("requires input_var_names", str(cm.exception))
+        assert "requires input_var_names" in str(cm.value)
 
     def test_list_with_none_input_var_names_passes_through(self):
         """When input_var_names is None, list aggregate is returned unvalidated."""
-        self.assertEqual(resolve_aggregate(["x", "bogus"], None), ["x", "bogus"])
+        assert resolve_aggregate(["x", "bogus"], None) == ["x", "bogus"]
 
     # --- type errors ---
 
     def test_unsupported_type_string(self):
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             resolve_aggregate("x", self.vars3)
 
     def test_unsupported_type_float(self):
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             resolve_aggregate(2.5, self.vars3)
 
 
@@ -146,12 +148,12 @@ class TestResolveAggregateIntegration(unittest.TestCase):
     def test_aggregate_true_sets_agg_over_dims(self):
         """aggregate=True should resolve to all but the first input dim on BenchCfg."""
         cfg = self.res_agg_true.bench_cfg
-        self.assertEqual(cfg.agg_over_dims, ["float2"])
+        assert cfg.agg_over_dims == ["float2"]
 
     def test_no_aggregate_has_none(self):
         """Without aggregate, agg_over_dims should be None."""
         cfg = self.res_explicit.bench_cfg
-        self.assertIsNone(cfg.agg_over_dims)
+        assert cfg.agg_over_dims is None
 
     def test_aggregate_int_selects_last_n(self):
         """aggregate=1 should select only the last input dim."""
@@ -167,7 +169,7 @@ class TestResolveAggregateIntegration(unittest.TestCase):
             plot_callbacks=False,
             aggregate=1,
         )
-        self.assertEqual(res.bench_cfg.agg_over_dims, ["float2"])
+        assert res.bench_cfg.agg_over_dims == ["float2"]
 
     def test_show_aggregate_plots_false_skips_band_result(self):
         """show_aggregate_plots=False suppresses aggregate section in to_auto_plots."""
@@ -185,7 +187,7 @@ class TestResolveAggregateIntegration(unittest.TestCase):
             aggregate=True,
         )
         # agg_over_dims is still set on the config
-        self.assertIsNotNone(res.bench_cfg.agg_over_dims)
+        assert res.bench_cfg.agg_over_dims is not None
         plots = res.to_auto_plots()
         # The "Aggregated View" markdown should not appear
         md_texts = [
@@ -194,7 +196,7 @@ class TestResolveAggregateIntegration(unittest.TestCase):
             if isinstance(p, pn.pane.Markdown)
             and "Aggregated View" in str(getattr(p, "object", ""))
         ]
-        self.assertEqual(len(md_texts), 0, "Aggregated View section should be suppressed")
+        assert len(md_texts) == 0, "Aggregated View section should be suppressed"
 
     def test_show_aggregate_plots_true_renders_band_result(self):
         """show_aggregate_plots=True (default) renders the aggregate section."""
@@ -218,4 +220,4 @@ class TestResolveAggregateIntegration(unittest.TestCase):
             if isinstance(p, pn.pane.Markdown)
             and "Aggregated View" in str(getattr(p, "object", ""))
         ]
-        self.assertGreater(len(md_texts), 0, "Aggregated View section should be present")
+        assert len(md_texts) > 0, "Aggregated View section should be present"

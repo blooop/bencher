@@ -133,7 +133,6 @@ def un_camel(camel: str) -> str:
     Returns:
         str: uncamelcased string
     """
-
     return capitalise_words(re.sub("([a-z])([A-Z])", r"\g<1> \g<2>", camel.replace("_", " ")))
 
 
@@ -572,7 +571,6 @@ def publish_file(filepath: str, remote: str, branch_name: str) -> None:  # pragm
             ``"https://github.com/user/repo.git"``.
         branch_name (str): Branch to force-push the file to.
     """
-
     with tempfile.TemporaryDirectory() as temp_dir:
         shutil.copy(filepath, temp_dir)
         filename = Path(filepath).name

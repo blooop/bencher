@@ -124,7 +124,8 @@ class WorkerContractError(TypeError):
     sweep **continues** — a broken sample must never abort a run and lose the
     expensive samples already collected (owner decision amending plan 23 §6.2,
     2026-07-31). Subclasses ``TypeError`` so callers that consumed the previous
-    raising behavior still match."""
+    raising behavior still match.
+    """
 
 
 class WorkerContractWarning(UserWarning):
@@ -133,7 +134,8 @@ class WorkerContractWarning(UserWarning):
 
     The sample is counted in ``BenchResult.n_failed`` and listed in the
     report's failed-samples summary. Promote to an error in strict pipelines
-    with ``warnings.filterwarnings("error", category=bn.WorkerContractWarning)``."""
+    with ``warnings.filterwarnings("error", category=bn.WorkerContractWarning)``.
+    """
 
 
 class WorkerReturnedNothingError(WorkerContractError):
@@ -150,7 +152,8 @@ class WorkerReturnedNothingError(WorkerContractError):
     Without the split, P5's move of the handler inside the ``try`` silently
     tolerated a worker-raised ``WorkerContractError`` on the pooled path even with
     ``catch=()`` -- loud on SERIAL, silent on MULTIPROCESSING, which is the very
-    executor-dependent divergence B3 exists to kill (review finding, 2026-07-31)."""
+    executor-dependent divergence B3 exists to kill (review finding, 2026-07-31).
+    """
 
 
 def _returned_none_error(job_id: str) -> WorkerReturnedNothingError:
@@ -159,7 +162,8 @@ def _returned_none_error(job_id: str) -> WorkerReturnedNothingError:
     Minted only where that cause is actually *known*: ``require_worker_result``
     (the pooled path, holding the worker's return value) and ``FutureCache.submit``
     at the serial site (which has just called ``run_job``). Both produce the
-    identical message."""
+    identical message.
+    """
     return WorkerReturnedNothingError(
         f"The benchmark function for job {job_id} returned None. "
         "Make sure you are returning a dict or `super().__call__(**kwargs)` "
@@ -174,7 +178,8 @@ def _no_result_error(job_id: str) -> WorkerReturnedNothingError:
     :func:`_returned_none_error` this path does not know the cause. It is reached
     by a cache entry holding ``None`` and by a ``JobFuture`` constructed with no
     arguments at all, both of which the pre-review wording mislabelled as a
-    worker bug."""
+    worker bug.
+    """
     return WorkerReturnedNothingError(
         f"No result was produced for job {job_id}: it was constructed with neither "
         "a result nor a pending future. Either a cache entry holds None, or the "
@@ -203,7 +208,8 @@ def require_worker_result(result: dict | None, job_id: str) -> dict:
     worker raises. The raise is consumed by ``store_results``, which records the
     sample as failed and warns instead of aborting the sweep (plan 23 §6.2 as
     amended: crashing mid-run loses expensive data; the failure surfaces in the
-    report instead)."""
+    report instead).
+    """
     if result is None:
         raise _returned_none_error(job_id)
     return result
@@ -261,7 +267,8 @@ class Broken:
     The error is supplied by whoever *knows* the cause -- ``FutureCache.submit``
     at the serial site, having just seen ``run_job`` return ``None`` -- rather
     than inferred from the syntactic shape of the constructor call, which cannot
-    tell a ``None``-returning worker from a cache entry holding ``None``."""
+    tell a ``None``-returning worker from a cache entry holding ``None``.
+    """
 
     error: WorkerReturnedNothingError
 

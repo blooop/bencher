@@ -21,7 +21,7 @@ try:
     from bencher.results.rerun_result import RerunResult
 except ModuleNotFoundError:
 
-    class RerunResult:  # pylint: disable=missing-class-docstring
+    class RerunResult:
         pass
 
 
@@ -122,7 +122,7 @@ class BenchResult(
     RerunTimelineResult,
     DataSetResult,
     OptunaResult,
-):  # pylint: disable=too-many-ancestors
+):
     """Contains the results of the benchmark and has methods to cast the results to various datatypes and graphical representations"""
 
     def __init__(self, bench_cfg) -> None:
@@ -394,12 +394,12 @@ class BenchResult(
         ):
             try:
                 row.append(plugin.render(data))
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # noqa: BLE001
                 row.append(report_render_failure(f"Plot plugin '{plugin.name}'", exc))
         for plot_callback in extra_callbacks:
             try:
                 row.append(plot_callback(self, override=override, **kwargs))
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # noqa: BLE001
                 row.append(report_render_failure(f"Plot callback '{plot_callback.__name__}'", exc))
 
         self.plt_cnt_cfg.print_debug = True
@@ -442,7 +442,8 @@ class BenchResult(
 
         Known callbacks translate to their plugin names; unknown callables keep
         working through the legacy direct-call path. None means "no restriction"
-        (all registered plugins participate)."""
+        (all registered plugins participate).
+        """
         if plot_list is None:
             return None, []
         include_names: list[str] = []
@@ -525,7 +526,7 @@ class BenchResult(
                         plot_cols.append(ep(self))
                     else:
                         plot_cols.append(ep)
-                except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                except Exception as exc:  # noqa: BLE001
                     name = getattr(ep, "__name__", repr(ep))
                     plot_cols.append(report_render_failure(f"Extra panel '{name}'", exc))
 
@@ -735,7 +736,7 @@ class BenchResult(
         for r in results:
             try:
                 pane = pn.pane.HoloViews(r.render_overlay(**overlay_kwargs), name=r.variable)
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # noqa: BLE001
                 pane = report_render_failure(f"Regression overlay for '{r.variable}'", exc)
             container.append((r.variable, pane) if use_tabs else pane)
         return container.render()

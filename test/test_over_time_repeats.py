@@ -1,7 +1,5 @@
 """Tests for over_time + repeats support in bar and distribution plots."""
 
-# pylint: disable=redefined-outer-name
-
 import random
 from datetime import datetime, timedelta
 
@@ -271,7 +269,7 @@ class TestShowAggregatedTimeTab:
         if depth > 10:
             return 0
         if isinstance(plots, pn.Tabs):
-            for title in plots._names:  # pylint: disable=protected-access
+            for title in plots._names:
                 if "aggregated" in title.lower():
                     count += 1
         try:

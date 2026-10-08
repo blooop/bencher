@@ -8,7 +8,6 @@ none of the recordings, with one WARNING per sample as the only signal.
 
 # _to_rerun_recordings is the half of to_rerun under test; the public method wraps
 # it in a Column with the mapped viewer.
-# pylint: disable=protected-access
 
 import re
 from pathlib import Path

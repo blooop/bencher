@@ -336,7 +336,6 @@ class TestGCRacingGC:
             try:
                 barrier.wait()
                 results.append(clean_orphaned_blobs(str(tmp_path), dry_run=False))
-            # pylint: disable=broad-exception-caught  # any raise at all is the failure
             except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
 

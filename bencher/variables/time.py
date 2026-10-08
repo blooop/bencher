@@ -88,7 +88,7 @@ class TimeBase(SweepBase, Selector):
     __slots__ = shared_slots
 
     def values(self) -> list[str]:
-        """return all the values for a parameter sweep.  If debug is true return a reduced list"""
+        """Return all the values for a parameter sweep.  If debug is true return a reduced list"""
         return self.objects
 
 

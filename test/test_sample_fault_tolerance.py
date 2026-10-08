@@ -17,6 +17,7 @@ import unittest
 from typing import ClassVar
 
 import numpy as np
+import pytest
 
 import bencher as bn
 from bencher.bencher import _enforce_sample_error_policy
@@ -79,19 +80,19 @@ class TestDefaultIsFailFast(unittest.TestCase):
     """P1, pinned as a regression test: the default behaviour is unchanged."""
 
     def test_an_uncaught_exception_propagates_out_of_the_sweep(self) -> None:
-        with self.assertRaises(RuntimeError) as ctx:
+        with pytest.raises(RuntimeError) as ctx:
             _run(fail_at=(2,))
-        self.assertIn("cursed", str(ctx.exception))
+        assert "cursed" in str(ctx.value)
 
     def test_a_clean_sweep_records_no_failures(self) -> None:
         res = _run()
-        self.assertEqual(res.n_failed, 0)
-        self.assertEqual(res.failed_samples, [])
-        self.assertEqual(res.failed_fraction, 0.0)
+        assert res.n_failed == 0
+        assert res.failed_samples == []
+        assert res.failed_fraction == 0.0
 
     def test_catch_defaults_to_empty(self) -> None:
-        self.assertEqual(bn.BenchRunCfg().catch, ())
-        self.assertIs(bn.BenchRunCfg().fail_on_sample_error, False)
+        assert bn.BenchRunCfg().catch == ()
+        assert bn.BenchRunCfg().fail_on_sample_error is False
 
 
 class TestCatch(unittest.TestCase):
@@ -99,43 +100,43 @@ class TestCatch(unittest.TestCase):
 
     def test_one_failure_out_of_four_does_not_lose_the_others(self) -> None:
         res = _run(fail_at=(2,), catch=(RuntimeError,))
-        self.assertEqual(res.n_failed, 1)
+        assert res.n_failed == 1
         values = res.ds["y"].values.reshape(-1)
-        self.assertEqual(len(values), 4, "the dataset shape must be unchanged")
-        self.assertTrue(np.isnan(values[2]), "the failed coordinate must hold the fill")
+        assert len(values) == 4, "the dataset shape must be unchanged"
+        assert np.isnan(values[2]), "the failed coordinate must hold the fill"
         for i in (0, 1, 3):
-            self.assertEqual(values[i], i * 2.0, f"successful sample {i} was lost")
+            assert values[i] == i * 2.0, f"successful sample {i} was lost"
 
     def test_the_failure_records_the_inputs_and_the_exception(self) -> None:
         res = _run(fail_at=(2,), catch=(RuntimeError,))
         (failure,) = res.failed_samples
-        self.assertEqual(failure.inputs.get("x"), 2)
-        self.assertIn("cursed", failure.exception)
-        self.assertIn("RuntimeError", failure.exception)
-        self.assertIn("Traceback", failure.traceback)
-        self.assertTrue(failure.job_id)
+        assert failure.inputs.get("x") == 2
+        assert "cursed" in failure.exception
+        assert "RuntimeError" in failure.exception
+        assert "Traceback" in failure.traceback
+        assert failure.job_id
 
     def test_an_unlisted_exception_type_still_aborts(self) -> None:
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             _run(fail_at=(1,), exc_type=ValueError, catch=(RuntimeError,))
 
     def test_a_parent_class_in_catch_covers_a_subclass(self) -> None:
         res = _run(fail_at=(1,), exc_type=ValueError, catch=(Exception,))
-        self.assertEqual(res.n_failed, 1)
+        assert res.n_failed == 1
 
     def test_every_sample_failing_still_completes(self) -> None:
         """Documented, and exactly why fail_on_sample_error exists."""
         res = _run(fail_at=(0, 1, 2, 3), catch=(RuntimeError,))
-        self.assertEqual(res.n_failed, 4)
-        self.assertTrue(np.all(np.isnan(res.ds["y"].values)))
-        self.assertEqual(res.failed_fraction, 1.0)
+        assert res.n_failed == 4
+        assert np.all(np.isnan(res.ds["y"].values))
+        assert res.failed_fraction == 1.0
 
     def test_a_warning_is_logged_naming_the_inputs(self) -> None:
         import logging
 
         with self.assertLogs("bencher.result_collector", level=logging.WARNING) as logs:
             _run(fail_at=(2,), catch=(RuntimeError,))
-        self.assertTrue(any("x=2" in line for line in logs.output), logs.output)
+        assert any("x=2" in line for line in logs.output), logs.output
 
     def test_catch_has_one_home(self) -> None:
         """``catch`` is run configuration and lives on ``BenchRunCfg`` only.
@@ -146,8 +147,8 @@ class TestCatch(unittest.TestCase):
         """
         import inspect
 
-        self.assertNotIn("catch", inspect.signature(bn.Bench.plot_sweep).parameters)
-        self.assertNotIn("fail_on_sample_error", inspect.signature(bn.Bench.plot_sweep).parameters)
+        assert "catch" not in inspect.signature(bn.Bench.plot_sweep).parameters
+        assert "fail_on_sample_error" not in inspect.signature(bn.Bench.plot_sweep).parameters
 
 
 class TestBothExecutorPaths(unittest.TestCase):
@@ -185,17 +186,17 @@ class TestBothExecutorPaths(unittest.TestCase):
 
     def test_the_pool_path_tolerates_a_failure(self) -> None:
         res = self._pool_store((RuntimeError,))
-        self.assertEqual(res.n_failed, 1)
+        assert res.n_failed == 1
         (failure,) = res.failed_samples
-        self.assertIn("pool boom", failure.exception)
-        self.assertEqual(failure.inputs, {"x": 1})
+        assert "pool boom" in failure.exception
+        assert failure.inputs == {"x": 1}
 
     def test_the_pool_path_still_aborts_without_catch(self) -> None:
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self._pool_store(())
 
     def test_the_pool_path_still_aborts_for_an_unlisted_type(self) -> None:
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self._pool_store((ValueError,))
 
 
@@ -221,14 +222,14 @@ class TestNoCacheOnFailure(unittest.TestCase):
         try:
             bench.plot_sweep(input_vars=["x"], result_vars=["y"], plot_callbacks=False)
             first = list(Counting.calls)
-            self.assertEqual(sorted(first), [0, 1], "the first sweep was not a cold miss")
+            assert sorted(first) == [0, 1], "the first sweep was not a cold miss"
             bench.run_cfg.clear_sample_cache = False
             bench.plot_sweep(input_vars=["x"], result_vars=["y"], plot_callbacks=False)
         finally:
             bench.close()
         second = Counting.calls[len(first) :]
-        self.assertIn(1, second, "the failed sample was cached and never retried")
-        self.assertNotIn(0, second, "the successful sample should have come from cache")
+        assert 1 in second, "the failed sample was cached and never retried"
+        assert 0 not in second, "the successful sample should have come from cache"
 
 
 class TestTheFractionIsOverExecutedSamples(unittest.TestCase):
@@ -262,13 +263,13 @@ class TestTheFractionIsOverExecutedSamples(unittest.TestCase):
         bench = self._bench()
         try:
             cold = self._sweep(bench)
-            self.assertEqual((cold.n_failed, cold.n_attempted), (1, 4))
-            self.assertEqual(cold.failed_fraction, 0.25)
+            assert (cold.n_failed, cold.n_attempted) == (1, 4)
+            assert cold.failed_fraction == 0.25
             # Second sweep: 3 of 4 come from cache, only the failing one runs.
             self._second_sweep_reads_the_cache(bench)
             warm = self._sweep(bench)
-            self.assertEqual((warm.n_failed, warm.n_attempted), (1, 1))
-            self.assertEqual(warm.failed_fraction, 1.0)
+            assert (warm.n_failed, warm.n_attempted) == (1, 1)
+            assert warm.failed_fraction == 1.0
         finally:
             Flaky.fail_at = ()
             bench.close()
@@ -279,9 +280,9 @@ class TestTheFractionIsOverExecutedSamples(unittest.TestCase):
         try:
             self._sweep(bench)  # 1 of 4 executed failed -> 25%, under the threshold
             self._second_sweep_reads_the_cache(bench)
-            with self.assertRaises(bn.SampleErrorPolicyError) as ctx:
+            with pytest.raises(bn.SampleErrorPolicyError) as ctx:
                 self._sweep(bench)  # 1 of 1 executed failed -> 100%
-            self.assertIn("100%", str(ctx.exception))
+            assert "100%" in str(ctx.value)
         finally:
             Flaky.fail_at = ()
             bench.close()
@@ -308,7 +309,7 @@ class TestTheCacheHitPathIsNotThisRunsErrors(unittest.TestCase):
         first = self._bench(clear_cache=True)
         try:
             res = first.plot_sweep(input_vars=["x"], result_vars=["y"], plot_callbacks=False)
-            self.assertEqual(res.n_failed, 1)
+            assert res.n_failed == 1
         finally:
             first.close()
 
@@ -319,14 +320,14 @@ class TestTheCacheHitPathIsNotThisRunsErrors(unittest.TestCase):
         finally:
             second.close()
         # The loaded artifact still reports its holes -- it really does have one.
-        self.assertEqual(revived.n_failed, 1)
+        assert revived.n_failed == 1
 
     def test_the_policy_still_fires_for_a_run_that_actually_sampled(self) -> None:
         """The guard is 'did this run sample', not 'is caching on'."""
         Flaky.fail_at = (2,)
         bench = self._bench(clear_cache=True, fail_on_sample_error=True)
         try:
-            with self.assertRaises(bn.SampleErrorPolicyError):
+            with pytest.raises(bn.SampleErrorPolicyError):
                 bench.plot_sweep(input_vars=["x"], result_vars=["y"], plot_callbacks=False)
         finally:
             Flaky.fail_at = ()
@@ -344,14 +345,14 @@ class TestCatchIsValidatedEagerly(unittest.TestCase):
 
     def test_a_bare_exception_class_is_accepted_and_wrapped(self) -> None:
         res = _run(fail_at=(2,), catch=RuntimeError)
-        self.assertEqual(res.n_failed, 1)
+        assert res.n_failed == 1
 
     def test_a_non_exception_type_is_rejected(self) -> None:
         """TypeError, because that is what ``except`` itself raises for one."""
         for bad in (str, 42, "RuntimeError", (ValueError, "nope")):
-            with self.subTest(catch=bad), self.assertRaises(TypeError) as ctx:
+            with self.subTest(catch=bad), pytest.raises(TypeError) as ctx:
                 _run(fail_at=(2,), catch=bad)
-            self.assertIn("catch", str(ctx.exception))
+            assert "catch" in str(ctx.value)
 
     def test_nothing_is_sampled_before_the_knobs_are_validated(self) -> None:
         """A typo must cost milliseconds, not a whole sweep.
@@ -368,11 +369,11 @@ class TestCatchIsValidatedEagerly(unittest.TestCase):
                 cfg.cache_results = False
                 bench = Counting().to_bench(cfg)
                 try:
-                    with self.assertRaises((TypeError, ValueError)):
+                    with pytest.raises((TypeError, ValueError)):
                         bench.plot_sweep(input_vars=["x"], result_vars=["y"], plot_callbacks=False)
                 finally:
                     bench.close()
-                self.assertEqual(Counting.calls, [], "the sweep ran before validating")
+                assert Counting.calls == [], "the sweep ran before validating"
 
 
 class TestRegressionBoundary(unittest.TestCase):
@@ -389,49 +390,49 @@ class TestRegressionBoundary(unittest.TestCase):
         clean = np.array([10.0, 10.1, 9.9, 10.05])
         with_hole = np.array([10.0, 10.1, np.nan, 9.9, 10.05])
         curr = np.array([10.0])
-        self.assertEqual(
-            detect_percentage("latency", clean, curr).baseline_value,
-            detect_percentage("latency", with_hole, curr).baseline_value,
+        assert (
+            detect_percentage("latency", clean, curr).baseline_value
+            == detect_percentage("latency", with_hole, curr).baseline_value
         )
 
     def test_a_filled_failure_is_not_read_as_a_regression(self) -> None:
         hist = np.array([10.0, 10.1, 9.9, 10.05])
         # One repeat of the current sample was caught; the others are unchanged.
         result = detect_percentage("latency", hist, np.array([10.0, np.nan, 10.1]))
-        self.assertFalse(result.regressed)
+        assert not result.regressed
         self.assertAlmostEqual(result.current_value, 10.05)
 
     def test_a_metric_whose_every_sample_failed_reports_no_measurement(self) -> None:
         """Fails safe (no false regression) but silent -- documented, not fixed here."""
         hist = np.array([10.0, 10.1, 9.9, 10.05])
         result = detect_percentage("latency", hist, np.array([np.nan, np.nan]))
-        self.assertFalse(result.regressed)
-        self.assertTrue(np.isnan(result.current_value))
+        assert not result.regressed
+        assert np.isnan(result.current_value)
 
 
 class TestFailOnSampleError(unittest.TestCase):
     """D3 — the accounting that makes catch= safe to use unattended."""
 
     def test_true_raises_when_any_sample_failed(self) -> None:
-        with self.assertRaises(bn.SampleErrorPolicyError) as ctx:
+        with pytest.raises(bn.SampleErrorPolicyError) as ctx:
             _run(fail_at=(2,), catch=(RuntimeError,), fail_on_sample_error=True)
-        self.assertIn("1 sample(s) failed", str(ctx.exception))
+        assert "1 sample(s) failed" in str(ctx.value)
 
     def test_true_does_not_raise_for_a_clean_run(self) -> None:
         res = _run(catch=(RuntimeError,), fail_on_sample_error=True)
-        self.assertEqual(res.n_failed, 0)
+        assert res.n_failed == 0
 
     def test_a_fraction_below_the_threshold_does_not_raise(self) -> None:
         res = _run(fail_at=(2,), catch=(RuntimeError,), fail_on_sample_error=0.5)
-        self.assertEqual(res.n_failed, 1)
-        self.assertLess(res.failed_fraction, 0.5)
+        assert res.n_failed == 1
+        assert res.failed_fraction < 0.5
 
     def test_a_fraction_at_the_threshold_raises(self) -> None:
-        with self.assertRaises(bn.SampleErrorPolicyError):
+        with pytest.raises(bn.SampleErrorPolicyError):
             _run(fail_at=(1, 2), catch=(RuntimeError,), fail_on_sample_error=0.5)
 
     def test_an_out_of_range_threshold_is_rejected(self) -> None:
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             _run(fail_at=(2,), catch=(RuntimeError,), fail_on_sample_error=1.5)
 
     def test_an_out_of_range_threshold_is_rejected_even_when_nothing_failed(self) -> None:
@@ -442,7 +443,7 @@ class TestFailOnSampleError(unittest.TestCase):
         at the one moment the caller was trying to read a sample failure.
         """
         for bad in (1.5, 50, -0.2):
-            with self.subTest(threshold=bad), self.assertRaises(ValueError):
+            with self.subTest(threshold=bad), pytest.raises(ValueError):
                 _run(catch=(RuntimeError,), fail_on_sample_error=bad)
 
     def test_a_truthy_integer_is_rejected_rather_than_guessed_at(self) -> None:
@@ -453,14 +454,14 @@ class TestFailOnSampleError(unittest.TestCase):
         failed" that someone writing 1 (or feeding it from YAML) almost certainly
         meant. Floats stay unambiguous, so 1.0 still means 100%.
         """
-        with self.assertRaises(ValueError) as ctx:
+        with pytest.raises(ValueError) as ctx:
             _run(fail_at=(2,), catch=(RuntimeError,), fail_on_sample_error=1)
-        self.assertIn("ambiguous", str(ctx.exception))
+        assert "ambiguous" in str(ctx.value)
 
     def test_one_point_zero_is_still_a_hundred_percent(self) -> None:
         res = _run(fail_at=(2,), catch=(RuntimeError,), fail_on_sample_error=1.0)
-        self.assertEqual(res.n_failed, 1)  # 1 of 4: below 100%, so no raise
-        with self.assertRaises(bn.SampleErrorPolicyError):  # all 4 fail: 100%
+        assert res.n_failed == 1  # 1 of 4: below 100%, so no raise
+        with pytest.raises(bn.SampleErrorPolicyError):  # all 4 fail: 100%
             _run(fail_at=(0, 1, 2, 3), catch=(RuntimeError,), fail_on_sample_error=1.0)
 
     def test_zero_and_false_leave_the_policy_off(self) -> None:
@@ -468,7 +469,7 @@ class TestFailOnSampleError(unittest.TestCase):
         for off in (False, 0, 0.0):
             with self.subTest(policy=off):
                 res = _run(fail_at=(2,), catch=(RuntimeError,), fail_on_sample_error=off)
-                self.assertEqual(res.n_failed, 1)
+                assert res.n_failed == 1
 
     def test_the_result_is_still_registered_before_the_raise(self) -> None:
         """Losing the artifact would defeat the point of catching."""
@@ -479,12 +480,12 @@ class TestFailOnSampleError(unittest.TestCase):
         cfg.cache_samples = False
         bench = Flaky().to_bench(cfg)
         try:
-            with self.assertRaises(bn.SampleErrorPolicyError):
+            with pytest.raises(bn.SampleErrorPolicyError):
                 bench.plot_sweep(input_vars=["x"], result_vars=["y"], plot_callbacks=False)
-            self.assertEqual(len(bench.results), 1)
+            assert len(bench.results) == 1
             res = bench.get_result()
-            self.assertEqual(res.n_failed, 1)
-            self.assertEqual(res.ds["y"].values.reshape(-1)[0], 0.0)
+            assert res.n_failed == 1
+            assert res.ds["y"].values.reshape(-1)[0] == 0.0
         finally:
             Flaky.fail_at = ()
             bench.close()
@@ -509,8 +510,8 @@ class TestResultsCachedBeforeThisFeatureExisted(unittest.TestCase):
 
     def test_the_accounting_reads_as_a_clean_run(self) -> None:
         revived = self._revived_old_result()
-        self.assertEqual(revived.n_failed, 0)
-        self.assertEqual(revived.failed_fraction, 0.0)
+        assert revived.n_failed == 0
+        assert revived.failed_fraction == 0.0
 
     def test_the_policy_does_not_raise_on_such_a_result(self) -> None:
         revived = self._revived_old_result()
@@ -534,7 +535,7 @@ class TestIdentityIsUnaffected(unittest.TestCase):
                 keys.append(res.bench_cfg.hash_persistent(True))
             finally:
                 bench.close()
-        self.assertEqual(keys[0], keys[1])
+        assert keys[0] == keys[1]
 
 
 if __name__ == "__main__":

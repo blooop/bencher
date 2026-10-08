@@ -255,7 +255,7 @@ def _beneficial(delta: float, direction: object) -> bool:
 
 
 def _delta_improved(reg: Mapping[str, object]) -> bool:
-    """delta method: gate the improvement on |current - baseline| in absolute units.
+    """Delta method: gate the improvement on |current - baseline| in absolute units.
 
     Strict ``>`` to mirror :func:`~bencher.regression.detect_delta`'s
     ``delta > max_delta`` exactly (contrast :func:`_percent_improved`, which keeps
@@ -271,7 +271,7 @@ def _delta_improved(reg: Mapping[str, object]) -> bool:
 
 
 def _adaptive_improved(reg: Mapping[str, object]) -> bool:
-    """adaptive method: improved iff outside the MAD band (and any percent band)."""
+    """Adaptive method: improved iff outside the MAD band (and any percent band)."""
     current = _finite_value(reg.get("current_value"))
     baseline = _finite_value(reg.get("baseline_value"))
     band_lower = _finite_value(reg.get("band_lower"))
@@ -296,7 +296,7 @@ def _adaptive_improved(reg: Mapping[str, object]) -> bool:
 
 
 def _percent_improved(reg: Mapping[str, object]) -> bool:
-    """percentage method (and unknown-method fallback, mirroring method_cells)."""
+    """Percentage method (and unknown-method fallback, mirroring method_cells)."""
     change_percent = _finite_value(reg.get("change_percent"))
     threshold = _finite_value(reg.get("threshold"))
     if change_percent is None or threshold is None:

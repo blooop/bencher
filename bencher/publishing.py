@@ -156,9 +156,7 @@ class CompleteReportPublisher:
         # Written, Conflict and unknown submission outcomes all require read-back.
         return self._equal(self.store.read(key), data, key)
 
-    def publish(  # pylint: disable=too-many-return-statements
-        self, directory: str | Path
-    ) -> Published | PublishFailed:
+    def publish(self, directory: str | Path) -> Published | PublishFailed:
         root = Path(directory)
         try:
             manifest = verify_report(root)
@@ -203,9 +201,7 @@ class CompleteReportPublisher:
         verified = self.verify(receipt)
         return verified if isinstance(verified, PublishFailed) else Published(receipt.url, receipt)
 
-    def verify(  # pylint: disable=too-many-return-statements
-        self, receipt: PublicationReceipt
-    ) -> dict | PublishFailed:
+    def verify(self, receipt: PublicationReceipt) -> dict | PublishFailed:
         """Check the committed inventory, including entry bytes, before making new references."""
         safe_path(receipt.prefix)
         manifest_key = f"{receipt.prefix}/report.json"

@@ -122,7 +122,7 @@ def _compare_rank(left: tuple[int | str, ...], right: tuple[int | str, ...]) -> 
     return comparison
 
 
-def update_pointer(  # pylint: disable=too-many-return-statements
+def update_pointer(
     store: ObjectStore,
     key: str,
     candidate: PointerCandidate,

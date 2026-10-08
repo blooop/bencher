@@ -319,7 +319,7 @@ class GcloudStore:
         except (ValueError, KeyError, TypeError) as exc:
             return ListFailed(f"invalid GCS listing: {type(exc).__name__}")
 
-    def renew(  # pylint: disable=too-many-return-statements
+    def renew(
         self, key: str, expected_version: str
     ) -> Renewed | Conflict | Absent | Unsupported | WriteFailed:
         self._path(key)

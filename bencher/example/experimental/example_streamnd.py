@@ -1,6 +1,3 @@
-# pylint: skip-file  #this is experimental still
-
-
 import time
 
 import holoviews as hv

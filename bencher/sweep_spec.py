@@ -189,7 +189,8 @@ class SweepSpec:
 
     def plus_input_vars(self, *input_vars) -> SweepSpec:
         """Append input variables. Order is the dimension layout, so appending
-        puts the new dimension last."""
+        puts the new dimension last.
+        """
         flat = []
         for entry in input_vars:
             if isinstance(entry, (list, tuple)) and not isinstance(entry, str):

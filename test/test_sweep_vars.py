@@ -2,7 +2,7 @@ import unittest
 from enum import auto
 
 from hypothesis import (
-    given,  # pylint: disable=unused-import
+    given,
     strategies as st,
 )
 from strenum import StrEnum
@@ -15,27 +15,27 @@ from bencher.variables.results import ResultFloat
 class TestVarSweeps(unittest.TestCase):
     def test_int_sweep_01(self):
         int_sweep = IntSweep(bounds=[0, 1])
-        self.assertEqual(int_sweep.default, 0)
+        assert int_sweep.default == 0
         self.assertListEqual(int_sweep.values(), [0, 1])
 
     def test_int_sweep_06(self):
         int_sweep = IntSweep(bounds=[0, 6])
-        self.assertEqual(int_sweep.default, 0)
+        assert int_sweep.default == 0
         self.assertListEqual(int_sweep.values(), [0, 1, 2, 3, 4, 5, 6])
 
     def test_int_sweep_06_debug_sampes(self):
         int_sweep = IntSweep(bounds=[0, 6])
-        self.assertEqual(int_sweep.default, 0)
+        assert int_sweep.default == 0
         self.assertListEqual(int_sweep.values(), [0, 1, 2, 3, 4, 5, 6])
 
     def test_int_sweep_10_debug_sampes(self):
         int_sweep = IntSweep(bounds=[0, 10])
-        self.assertEqual(int_sweep.default, 0)
+        assert int_sweep.default == 0
         self.assertListEqual(int_sweep.values(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
     def test_int_sweep_10_with_values_(self):
         int_sweep = IntSweep(bounds=[0, 10])
-        self.assertEqual(int_sweep.default, 0)
+        assert int_sweep.default == 0
         self.assertListEqual(int_sweep.values(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         self.assertListEqual(int_sweep.with_samples(3).values(), [0, 5, 10])
 
@@ -171,10 +171,10 @@ class TestVarSweeps(unittest.TestCase):
 
     def test_bool_default(self) -> None:
         bool_sweep_true = BoolSweep(default=True)
-        self.assertTrue(bool_sweep_true.default)
+        assert bool_sweep_true.default
 
         bool_sweep_false = BoolSweep(default=False)
-        self.assertFalse(bool_sweep_false.default)
+        assert not bool_sweep_false.default
 
     def test_bool_sweep_level(self):
         bool_sweep = BoolSweep()
@@ -200,17 +200,17 @@ class TestVarSweeps(unittest.TestCase):
     @given(st.integers(min_value=1, max_value=10))
     def test_int_sweep_samples(self, samples):
         int_sweep = IntSweep(bounds=[0, 10], samples=samples)
-        self.assertEqual(int_sweep.default, 0)
-        self.assertEqual(len(int_sweep.values()), samples)
+        assert int_sweep.default == 0
+        assert len(int_sweep.values()) == samples
 
     def test_sweep_bounds_property(self):
         fs = FloatSweep(bounds=(0, 1))
-        self.assertEqual(fs.sweep_bounds, (0, 1))
-        self.assertIsNone(fs.bounds)
+        assert fs.sweep_bounds == (0, 1)
+        assert fs.bounds is None
 
         int_sw = IntSweep(bounds=(0, 10))
-        self.assertEqual(int_sw.sweep_bounds, (0, 10))
-        self.assertIsNone(int_sw.bounds)
+        assert int_sw.sweep_bounds == (0, 10)
+        assert int_sw.bounds is None
 
     def test_float_sweep_out_of_bounds(self):
         class Cfg(ParametrizedSweep):
@@ -219,10 +219,10 @@ class TestVarSweeps(unittest.TestCase):
 
         cfg = Cfg()
         cfg.update_params_from_kwargs(theta=1.5)
-        self.assertEqual(cfg.theta, 1.5)
+        assert cfg.theta == 1.5
 
         cfg.update_params_from_kwargs(theta=-0.5)
-        self.assertEqual(cfg.theta, -0.5)
+        assert cfg.theta == -0.5
 
     def test_int_sweep_out_of_bounds(self):
         class Cfg(ParametrizedSweep):
@@ -231,7 +231,7 @@ class TestVarSweeps(unittest.TestCase):
 
         cfg = Cfg()
         cfg.update_params_from_kwargs(count=15)
-        self.assertEqual(cfg.count, 15)
+        assert cfg.count == 15
 
         cfg.update_params_from_kwargs(count=-5)
-        self.assertEqual(cfg.count, -5)
+        assert cfg.count == -5

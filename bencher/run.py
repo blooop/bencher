@@ -36,7 +36,7 @@ def _shutdown_all_servers() -> None:
     while _active_runners:
         try:
             _active_runners.pop().shutdown()
-        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception:  # noqa: BLE001
             print(
                 "bencher: error shutting down panel server, continuing cleanup",
                 file=sys.stderr,
@@ -59,7 +59,7 @@ def _sigterm_handler(signum, frame) -> None:
 
 def _install_sigterm_handler() -> None:
     """Install SIGTERM handler lazily, only when servers are actually running."""
-    global _sigterm_installed, _prev_sigterm_handler  # pylint: disable=global-statement
+    global _sigterm_installed, _prev_sigterm_handler
     if not _sigterm_installed:
         _sigterm_installed = True
         _prev_sigterm_handler = signal.getsignal(signal.SIGTERM)
@@ -209,7 +209,7 @@ def run(
                 for res in bench.results:
                     try:
                         bench.report.append_to_result(res, res.to_optuna_plots())
-                    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                    except Exception as exc:  # noqa: BLE001
                         bench.report.append(report_render_failure("Optuna plot generation", exc))
             return bench
 
@@ -251,7 +251,7 @@ def run(
         if bench_to_close is not None:
             try:
                 bench_to_close.close()
-            except Exception:  # pylint: disable=broad-exception-caught
+            except Exception:
                 logger.exception("Error closing bench")
 
     if show_mode is ShowMode.LIVE and br.servers:

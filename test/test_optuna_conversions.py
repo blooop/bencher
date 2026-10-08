@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import optuna
 import panel as pn
 import param
+import pytest
 from strenum import StrEnum
 
 import bencher as bn
@@ -45,46 +46,46 @@ class TestOptimizeFlag(unittest.TestCase):
     """Tests for the optimize flag on sweep variables."""
 
     def test_default_optimize_true_for_input_types(self):
-        self.assertTrue(SweepCfg.param.int_var.optimize)
-        self.assertTrue(SweepCfg.param.float_var.optimize)
-        self.assertTrue(SweepCfg.param.enum_var.optimize)
-        self.assertTrue(SweepCfg.param.bool_var.optimize)
-        self.assertTrue(SweepCfg.param.string_var.optimize)
+        assert SweepCfg.param.int_var.optimize
+        assert SweepCfg.param.float_var.optimize
+        assert SweepCfg.param.enum_var.optimize
+        assert SweepCfg.param.bool_var.optimize
+        assert SweepCfg.param.string_var.optimize
 
     def test_default_optimize_false_for_time_types(self):
         from datetime import datetime
 
         ts = TimeSnapshot(datetime_src=datetime.now())
-        self.assertFalse(ts.optimize)
+        assert not ts.optimize
 
         from bencher.variables.time import TimeEvent
 
         time_ev = TimeEvent(time_event="ev1")
-        self.assertFalse(time_ev.optimize)
+        assert not time_ev.optimize
 
     def test_explicit_optimize_false(self):
         f = FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
-        self.assertFalse(f.optimize)
+        assert not f.optimize
         i = IntSweep(default=1, bounds=(0, 10), optimize=False)
-        self.assertFalse(i.optimize)
+        assert not i.optimize
         s = StringSweep(["a", "b"], optimize=False)
-        self.assertFalse(s.optimize)
+        assert not s.optimize
         e = EnumSweep(SweepColor, optimize=False)
-        self.assertFalse(e.optimize)
+        assert not e.optimize
         b = BoolSweep(optimize=False)
-        self.assertFalse(b.optimize)
+        assert not b.optimize
 
     def test_deepcopy_preserves_flag(self):
         from copy import deepcopy
 
         f = FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
         f_copy = deepcopy(f)
-        self.assertFalse(f_copy.optimize)
+        assert not f_copy.optimize
 
     def test_with_samples_preserves_flag(self):
         f = FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
         f2 = f.with_samples(5)
-        self.assertFalse(f2.optimize)
+        assert not f2.optimize
 
     def test_yaml_sweep_optimize_default_and_override(self):
         from pathlib import Path
@@ -93,72 +94,72 @@ class TestOptimizeFlag(unittest.TestCase):
 
         yaml_path = Path(__file__).resolve().parent.parent / "bencher/example/yaml_sweep_list.yaml"
         default_yaml = YamlSweep(yaml_path)
-        self.assertTrue(default_yaml.optimize)
+        assert default_yaml.optimize
 
         disabled_yaml = YamlSweep(yaml_path, optimize=False)
-        self.assertFalse(disabled_yaml.optimize)
+        assert not disabled_yaml.optimize
 
     def test_selector_sweep_deepcopy_and_with_samples(self):
         from copy import deepcopy
 
         s = StringSweep(["a", "b", "c"], optimize=False)
         s_copy = deepcopy(s)
-        self.assertFalse(s_copy.optimize)
+        assert not s_copy.optimize
 
         s_sampled = s.with_samples(2)
-        self.assertFalse(s_sampled.optimize)
+        assert not s_sampled.optimize
 
         e = EnumSweep(SweepColor, optimize=False)
         e_copy = deepcopy(e)
-        self.assertFalse(e_copy.optimize)
+        assert not e_copy.optimize
 
         b = BoolSweep(optimize=False)
         b_copy = deepcopy(b)
-        self.assertFalse(b_copy.optimize)
+        assert not b_copy.optimize
 
 
 class TestSweepVarToOptunaDist(unittest.TestCase):
     def test_int_sweep(self):
         var = SweepCfg.param.int_var
         dist = sweep_var_to_optuna_dist(var)
-        self.assertIsInstance(dist, optuna.distributions.IntDistribution)
-        self.assertEqual(dist.low, 0)
-        self.assertEqual(dist.high, 10)
+        assert isinstance(dist, optuna.distributions.IntDistribution)
+        assert dist.low == 0
+        assert dist.high == 10
 
     def test_float_sweep(self):
         var = SweepCfg.param.float_var
         dist = sweep_var_to_optuna_dist(var)
-        self.assertIsInstance(dist, optuna.distributions.FloatDistribution)
+        assert isinstance(dist, optuna.distributions.FloatDistribution)
         self.assertAlmostEqual(dist.low, 0.0)
         self.assertAlmostEqual(dist.high, 1.0)
 
     def test_enum_sweep(self):
         var = SweepCfg.param.enum_var
         dist = sweep_var_to_optuna_dist(var)
-        self.assertIsInstance(dist, optuna.distributions.CategoricalDistribution)
+        assert isinstance(dist, optuna.distributions.CategoricalDistribution)
 
     def test_bool_sweep(self):
         var = SweepCfg.param.bool_var
         dist = sweep_var_to_optuna_dist(var)
-        self.assertIsInstance(dist, optuna.distributions.CategoricalDistribution)
-        self.assertEqual(dist.choices, (False, True))
+        assert isinstance(dist, optuna.distributions.CategoricalDistribution)
+        assert dist.choices == (False, True)
 
     def test_string_sweep(self):
         var = SweepCfg.param.string_var
         dist = sweep_var_to_optuna_dist(var)
-        self.assertIsInstance(dist, optuna.distributions.CategoricalDistribution)
+        assert isinstance(dist, optuna.distributions.CategoricalDistribution)
 
     def test_time_snapshot(self):
         from datetime import datetime
 
         ts = TimeSnapshot(datetime_src=datetime.now())
         dist = sweep_var_to_optuna_dist(ts)
-        self.assertIsInstance(dist, optuna.distributions.FloatDistribution)
+        assert isinstance(dist, optuna.distributions.FloatDistribution)
 
     def test_unsupported_type(self):
         # A plain param.Parameter is not supported
         var = param.Parameter()
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             sweep_var_to_optuna_dist(var)
 
 
@@ -168,7 +169,7 @@ class TestSweepVarToSuggest(unittest.TestCase):
         trial.suggest_int.return_value = 5
         var = SweepCfg.param.int_var
         result = sweep_var_to_suggest(var, trial)
-        self.assertEqual(result, 5)
+        assert result == 5
         trial.suggest_int.assert_called_once()
 
     def test_float_suggest(self):
@@ -176,33 +177,33 @@ class TestSweepVarToSuggest(unittest.TestCase):
         trial.suggest_float.return_value = 0.5
         var = SweepCfg.param.float_var
         result = sweep_var_to_suggest(var, trial)
-        self.assertEqual(result, 0.5)
+        assert result == 0.5
 
     def test_enum_suggest(self):
         trial = MagicMock()
         trial.suggest_categorical.return_value = SweepColor.red
         var = SweepCfg.param.enum_var
         result = sweep_var_to_suggest(var, trial)
-        self.assertEqual(result, SweepColor.red)
+        assert result == SweepColor.red
 
     def test_bool_suggest(self):
         trial = MagicMock()
         trial.suggest_categorical.return_value = True
         var = SweepCfg.param.bool_var
         result = sweep_var_to_suggest(var, trial)
-        self.assertTrue(result)
+        assert result
 
     def test_string_suggest(self):
         trial = MagicMock()
         trial.suggest_categorical.return_value = "a"
         var = SweepCfg.param.string_var
         result = sweep_var_to_suggest(var, trial)
-        self.assertEqual(result, "a")
+        assert result == "a"
 
     def test_unsupported_type(self):
         trial = MagicMock()
         var = param.Parameter()
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             sweep_var_to_suggest(var, trial)
 
 
@@ -221,8 +222,8 @@ class TestCfgFromOptunaTrial(unittest.TestCase):
         )
         # Verify the study can be created from bench results
         study = res.bench_result_to_study(include_meta=True)
-        self.assertIsInstance(study, optuna.Study)
-        self.assertTrue(len(study.trials) > 0)
+        assert isinstance(study, optuna.Study)
+        assert len(study.trials) > 0
 
 
 class TestParamImportance(unittest.TestCase):
@@ -237,8 +238,8 @@ class TestParamImportance(unittest.TestCase):
         )
         study = res.bench_result_to_study(include_meta=True)
         result = param_importance(res.bench_cfg, study)
-        self.assertIsInstance(result, pn.Column)
-        self.assertTrue(len(result) > 0)
+        assert isinstance(result, pn.Column)
+        assert len(result) > 0
 
     def test_param_importance_with_width(self):
         bench = SweepCfg().to_bench()
@@ -251,8 +252,8 @@ class TestParamImportance(unittest.TestCase):
         )
         study = res.bench_result_to_study(include_meta=True)
         result = param_importance(res.bench_cfg, study, plot_width=500)
-        self.assertIsInstance(result, pn.Column)
-        self.assertTrue(len(result) > 0)
+        assert isinstance(result, pn.Column)
+        assert len(result) > 0
 
 
 class TestSummariseTrial(unittest.TestCase):
@@ -270,9 +271,9 @@ class TestSummariseTrial(unittest.TestCase):
         study.optimize(lambda trial: trial.suggest_float("float_var", 0, 1), n_trials=3)
         trial = study.best_trial
         output = summarise_trial(trial, res.bench_cfg)
-        self.assertIsInstance(output, list)
-        self.assertTrue(len(output) > 0)
-        self.assertIn("Trial id:", output[0])
+        assert isinstance(output, list)
+        assert len(output) > 0
+        assert "Trial id:" in output[0]
 
 
 class TestOptunaGridSearch(unittest.TestCase):
@@ -287,8 +288,8 @@ class TestOptunaGridSearch(unittest.TestCase):
         )
         study = optuna_grid_search(res.bench_cfg)
         # repeat has optimize=False, should not be in search space
-        search_space = study.sampler._search_space  # pylint: disable=protected-access
-        self.assertNotIn("repeat", search_space)
+        search_space = study.sampler._search_space
+        assert "repeat" not in search_space
 
     def test_trial_vars_includes_all(self):
         bench = SweepCfg().to_bench()
@@ -302,9 +303,9 @@ class TestOptunaGridSearch(unittest.TestCase):
         trial_vars = list(res.bench_cfg.all_vars)
         study = optuna_grid_search(res.bench_cfg, trial_vars=trial_vars)
         # When trial_vars provided, all vars should be in search space
-        search_space = study.sampler._search_space  # pylint: disable=protected-access
-        self.assertIn("repeat", search_space)
-        self.assertIn("float_var", search_space)
+        search_space = study.sampler._search_space
+        assert "repeat" in search_space
+        assert "float_var" in search_space
 
 
 class _UnexpectedPlotError(Exception):
@@ -339,17 +340,17 @@ class TestAppendSafe(unittest.TestCase):
 
     def test_expected_failure_appends_pane(self):
         row, logs = self._panes(_append_safe, _boom_expected)
-        self.assertEqual(1, len(row))
-        self.assertIn("_boom_expected", row[0].object)
-        self.assertIn("expected boom", logs)
+        assert len(row) == 1
+        assert "_boom_expected" in row[0].object
+        assert "expected boom" in logs
         # The expected path adds no "Unexpected" log of its own.
-        self.assertNotIn("Unexpected", logs)
+        assert "Unexpected" not in logs
 
     def test_unexpected_failure_also_appends_pane_and_logs(self):
         row, logs = self._panes(_append_safe, _boom_unexpected)
-        self.assertEqual(1, len(row))
-        self.assertIn("_boom_unexpected", row[0].object)
-        self.assertIn("Unexpected _UnexpectedPlotError", logs)
+        assert len(row) == 1
+        assert "_boom_unexpected" in row[0].object
+        assert "Unexpected _UnexpectedPlotError" in logs
 
     def test_sized_variant_handles_both_paths(self):
         for plot_fn in (_boom_expected, _boom_unexpected):
@@ -361,11 +362,11 @@ class TestAppendSafe(unittest.TestCase):
                 ):
                     warnings.simplefilter("always")
                     _append_safe_sized(row, plot_fn, 400)
-                self.assertEqual(1, len(row))
-                self.assertIn(plot_fn.__name__, row[0].object)
+                assert len(row) == 1
+                assert plot_fn.__name__ in row[0].object
 
     def test_successful_plot_is_appended_unchanged(self):
         row = pn.Row()
         marker = pn.pane.Markdown("ok")
         _append_safe(row, lambda: marker)
-        self.assertIs(marker, row[0])
+        assert marker is row[0]

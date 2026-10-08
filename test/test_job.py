@@ -45,21 +45,21 @@ class TestJob(unittest.TestCase):
         res4 = jc.call(var2=2).result()
 
         # will only be equal if cache is used because of the randomness
-        self.assertEqual(res1["result"], res2["result"])
-        self.assertNotEqual(res1["result"], res3["result"], f"{res1}")
-        self.assertNotEqual(res1["result"], res4["result"], f"{res1}")
+        assert res1["result"] == res2["result"]
+        assert res1["result"] != res3["result"], f"{res1}"
+        assert res1["result"] != res4["result"], f"{res1}"
 
         # create new class, make sure it has the same results
         cp2 = CachedParamExample()
         jc2 = JobFunctionCache(cp2.__call__, executor=executor, cache_name="test_cache")
         res1cp2 = jc2.call(var1=1).result()
-        self.assertEqual(res1["result"], res1cp2["result"])
+        assert res1["result"] == res1cp2["result"]
 
         # create cache with a different name and check it does not have the same results
         cp3 = CachedParamExample()
         jc3 = JobFunctionCache(cp3.__call__, executor=executor, cache_name="test_cache2")
         res1cp3 = jc3.call(var1=1).result()
-        self.assertNotEqual(res1["result"], res1cp3["result"])
+        assert res1["result"] != res1cp3["result"]
 
     @settings(deadline=5000)  # Increased deadline for multiprocessing startup overhead
     @given(st.sampled_from([bn.Executors.SERIAL, bn.Executors.MULTIPROCESSING]))
@@ -71,27 +71,27 @@ class TestJob(unittest.TestCase):
 
         res1 = jc.call(var1=1).result()
 
-        self.assertEqual(jc.worker_wrapper_call_count, 1)
-        self.assertEqual(jc.worker_cache_call_count, 0)
-        self.assertEqual(jc.worker_fn_call_count, 1)
+        assert jc.worker_wrapper_call_count == 1
+        assert jc.worker_cache_call_count == 0
+        assert jc.worker_fn_call_count == 1
 
         jc.clear_call_counts()
         res2 = jc.call(var1=1).result()
 
-        self.assertEqual(jc.worker_wrapper_call_count, 1)
-        self.assertEqual(jc.worker_cache_call_count, 1)
-        self.assertEqual(jc.worker_fn_call_count, 0)
+        assert jc.worker_wrapper_call_count == 1
+        assert jc.worker_cache_call_count == 1
+        assert jc.worker_fn_call_count == 0
 
-        self.assertEqual(res1["result"], res2["result"])
+        assert res1["result"] == res2["result"]
 
         jc.clear_call_counts()
         jc.overwrite = True
         res3 = jc.call(var1=1).result()
-        self.assertEqual(jc.worker_wrapper_call_count, 1)
-        self.assertEqual(jc.worker_cache_call_count, 0)
-        self.assertEqual(jc.worker_fn_call_count, 1)
+        assert jc.worker_wrapper_call_count == 1
+        assert jc.worker_cache_call_count == 0
+        assert jc.worker_fn_call_count == 1
 
-        self.assertNotEqual(res1["result"], res3["result"], f"{res1}")
+        assert res1["result"] != res3["result"], f"{res1}"
 
     @settings(deadline=5000)  # Increased deadline for multiprocessing startup overhead
     @given(st.sampled_from([bn.Executors.SERIAL, bn.Executors.MULTIPROCESSING]))

@@ -1,7 +1,5 @@
 """Behavioral tests for bencher/results/volume_result.py (VolumeResult)."""
 
-# pylint: disable=redefined-outer-name  # pytest fixtures are injected by name
-
 import math
 
 import panel as pn

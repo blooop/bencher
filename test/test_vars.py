@@ -20,16 +20,14 @@ class TestBencherHashing(unittest.TestCase):
         ex = AllSweepVars()
         ex2 = AllSweepVars()
 
-        self.assertEqual(
-            ex.param.var_float.hash_persistent(), ex2.param.var_float.hash_persistent()
-        )
-        self.assertEqual(ex.param.var_int.hash_persistent(), ex2.param.var_int.hash_persistent())
-        self.assertEqual(ex.param.var_enum.hash_persistent(), ex2.param.var_enum.hash_persistent())
+        assert ex.param.var_float.hash_persistent() == ex2.param.var_float.hash_persistent()
+        assert ex.param.var_int.hash_persistent() == ex2.param.var_int.hash_persistent()
+        assert ex.param.var_enum.hash_persistent() == ex2.param.var_enum.hash_persistent()
 
         print(ex.__repr__())
         print(ex2.__repr__())
 
-        self.assertEqual(ex.hash_persistent(), ex2.hash_persistent())
+        assert ex.hash_persistent() == ex2.hash_persistent()
 
     def test_hash_sweep(self) -> None:
         """hash values only seem to not match if run in a separate process, so run the hash test in separate processes"""
@@ -37,17 +35,13 @@ class TestBencherHashing(unittest.TestCase):
         asv = AllSweepVars()
         asv2 = AllSweepVars()
 
-        self.assertEqual(
-            asv.hash_persistent(),
-            asv2.hash_persistent(),
-            "The classes should have equal hash when it has identical values",
+        assert asv.hash_persistent() == asv2.hash_persistent(), (
+            "The classes should have equal hash when it has identical values"
         )
 
         asv2.var_float = 1
-        self.assertNotEqual(
-            asv.hash_persistent(),
-            asv2.hash_persistent(),
-            "The classes should not have equal hash when they have different values",
+        assert asv.hash_persistent() != asv2.hash_persistent(), (
+            "The classes should not have equal hash when they have different values"
         )
 
     # turn this off as its quite expensive and the new hash function is reliable, turn back on for release

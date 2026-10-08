@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import ClassVar
 from unittest import mock
 
+import pytest
+
 from bencher import Bench, BenchRunCfg, load_result, render_report, save_result
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.render import _prog, main as render_main
@@ -35,10 +37,10 @@ class TestCollect(unittest.TestCase):
             run_cfg=BenchRunCfg(repeats=1),
             title="collect_no_tabs",
         )
-        self.assertIsNotNone(res)
-        self.assertIsNotNone(res.ds)
+        assert res is not None
+        assert res.ds is not None
         # The defining property: collection appends nothing to the report.
-        self.assertEqual(len(bench.report.pane), 0)
+        assert len(bench.report.pane) == 0
 
     def test_collect_constructs_far_fewer_objects_than_render(self):
         """collect() must build dramatically fewer holoviews/bokeh objects than a render.
@@ -69,10 +71,8 @@ class TestCollect(unittest.TestCase):
         )
         render_delta = _count_plot_objects() - base2
 
-        self.assertLess(
-            collect_delta,
-            max(10, render_delta // 4),
-            f"collect built {collect_delta} plot objects vs render {render_delta}",
+        assert collect_delta < max(10, render_delta // 4), (
+            f"collect built {collect_delta} plot objects vs render {render_delta}"
         )
 
     def test_plot_sweep_auto_plot_false_matches_collect(self):
@@ -84,8 +84,8 @@ class TestCollect(unittest.TestCase):
             title="auto_plot_false",
             auto_plot=False,
         )
-        self.assertIsNotNone(res)
-        self.assertEqual(len(bench.report.pane), 0)
+        assert res is not None
+        assert len(bench.report.pane) == 0
 
     def test_plot_sweep_auto_plot_true_builds_report(self):
         bench = _make_bench()
@@ -95,7 +95,7 @@ class TestCollect(unittest.TestCase):
             run_cfg=BenchRunCfg(repeats=1),
             title="auto_plot_true",
         )
-        self.assertGreater(len(bench.report.pane), 0)
+        assert len(bench.report.pane) > 0
 
     def test_run_cfg_auto_plot_false_is_honored(self):
         """auto_plot=None (default) must defer to run_cfg.auto_plot, so a caller
@@ -110,11 +110,11 @@ class TestCollect(unittest.TestCase):
             run_cfg=run_cfg,
             title="run_cfg_auto_plot_false",
         )
-        self.assertEqual(len(bench.report.pane), 0)
+        assert len(bench.report.pane) == 0
 
     def test_collect_rejects_explicit_auto_plot(self):
         bench = _make_bench()
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             bench.collect(
                 input_vars=[ExampleBenchCfg.param.theta],
                 result_vars=[ExampleBenchCfg.param.out_sin],
@@ -144,19 +144,18 @@ class TestCollectParity(unittest.TestCase):
         res_collect = bench_collect.collect(run_cfg=BenchRunCfg(repeats=2), **self.PARITY_KWARGS)
 
         # plot_sweep built a report tab; collect built none. The *data* is equal.
-        self.assertGreater(len(bench_plot.report.pane), 0)
-        self.assertEqual(len(bench_collect.report.pane), 0)
+        assert len(bench_plot.report.pane) > 0
+        assert len(bench_collect.report.pane) == 0
         xr.testing.assert_equal(res_collect.ds, res_plot.ds)
-        self.assertEqual(set(res_collect.ds.data_vars), set(res_plot.ds.data_vars))
+        assert set(res_collect.ds.data_vars) == set(res_plot.ds.data_vars)
 
     def test_collect_regression_report_matches_plot_sweep(self):
         res_plot = _make_bench().plot_sweep(run_cfg=BenchRunCfg(repeats=2), **self.PARITY_KWARGS)
         res_collect = _make_bench().collect(run_cfg=BenchRunCfg(repeats=2), **self.PARITY_KWARGS)
         # Regression detection runs during collection too; without over_time both
         # paths leave it at the default (None).
-        self.assertEqual(
-            getattr(res_collect, "regression_report", None),
-            getattr(res_plot, "regression_report", None),
+        assert getattr(res_collect, "regression_report", None) == getattr(
+            res_plot, "regression_report", None
         )
 
 
@@ -175,11 +174,11 @@ class TestSaveLoadRender(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "result.pkl"
             save_result(res, path)
-            self.assertTrue(path.exists())
+            assert path.exists()
             loaded = load_result(path)
-            self.assertIsNotNone(loaded.ds)
+            assert loaded.ds is not None
             # Dataset round-trips with identical variables.
-            self.assertEqual(set(loaded.ds.data_vars), set(res.ds.data_vars))
+            assert set(loaded.ds.data_vars) == set(res.ds.data_vars)
 
     def test_save_result_preserves_object_index(self):
         """save_result must strip object_index for pickling but leave the live
@@ -193,16 +192,16 @@ class TestSaveLoadRender(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             save_result(res, Path(tmp) / "result.pkl")
         # Same list identity and contents after saving.
-        self.assertIs(res.object_index, sentinel)
-        self.assertEqual(len(res.object_index), 2)
+        assert res.object_index is sentinel
+        assert len(res.object_index) == 2
 
     def test_render_report_from_object(self):
         bench = _make_bench()
         res = self._collect(bench)
         with tempfile.TemporaryDirectory() as tmp:
             out = render_report(res, tmp)
-            self.assertTrue(Path(out).exists())
-            self.assertGreater(Path(out).stat().st_size, 0)
+            assert Path(out).exists()
+            assert Path(out).stat().st_size > 0
 
     def test_render_report_from_path(self):
         bench = _make_bench()
@@ -212,8 +211,8 @@ class TestSaveLoadRender(unittest.TestCase):
             save_result(res, path)
             out_dir = Path(tmp) / "report"
             out = render_report(path, out_dir)
-            self.assertTrue(Path(out).exists())
-            self.assertTrue(any(out_dir.rglob("*.html")))
+            assert Path(out).exists()
+            assert any(out_dir.rglob("*.html"))
 
     def test_cli_main(self):
         bench = _make_bench()
@@ -223,8 +222,8 @@ class TestSaveLoadRender(unittest.TestCase):
             save_result(res, path)
             out_dir = Path(tmp) / "report"
             rc = render_main([str(path), str(out_dir)])
-            self.assertEqual(rc, 0)
-            self.assertTrue(any(out_dir.rglob("*.html")))
+            assert rc == 0
+            assert any(out_dir.rglob("*.html"))
 
     def test_cli_render_failure_returns_1(self):
         """A render failure must be caught by the CLI guard and reported as exit
@@ -240,16 +239,16 @@ class TestSaveLoadRender(unittest.TestCase):
                 self.assertLogs("bencher.render", level="ERROR") as cm,
             ):
                 rc = render_main([str(path), str(out_dir)])
-            self.assertEqual(rc, 1)
-            self.assertTrue(any("boom" in line for line in cm.output))
+            assert rc == 1
+            assert any("boom" in line for line in cm.output)
 
     def test_cli_bad_args(self):
-        self.assertEqual(render_main([]), 2)
+        assert render_main([]) == 2
 
     def test_cli_missing_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             rc = render_main([str(Path(tmp) / "nope.pkl"), tmp])
-            self.assertEqual(rc, 2)
+            assert rc == 2
 
     def test_cli_render_with_json(self):
         import json
@@ -262,10 +261,10 @@ class TestSaveLoadRender(unittest.TestCase):
             out_dir = Path(tmp) / "report"
             json_path = Path(tmp) / "result.json"
             rc = render_main([str(path), str(out_dir), "--json", str(json_path)])
-            self.assertEqual(rc, 0)
-            self.assertTrue(any(out_dir.rglob("*.html")))
-            self.assertTrue(json_path.exists())
-            self.assertEqual(json.loads(json_path.read_text())["schema_version"], 1)
+            assert rc == 0
+            assert any(out_dir.rglob("*.html"))
+            assert json_path.exists()
+            assert json.loads(json_path.read_text())["schema_version"] == 1
 
     def test_cli_compare(self):
         import json
@@ -278,9 +277,9 @@ class TestSaveLoadRender(unittest.TestCase):
             save_result(self._collect(bench_b), b)
             cmp_path = Path(tmp) / "cmp.json"
             rc = render_main(["compare", str(a), str(b), "--json", str(cmp_path)])
-            self.assertEqual(rc, 0)
-            self.assertTrue(cmp_path.exists())
-            self.assertIn("summary", json.loads(cmp_path.read_text()))
+            assert rc == 0
+            assert cmp_path.exists()
+            assert "summary" in json.loads(cmp_path.read_text())
 
     def test_cli_compare_missing_file(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -293,7 +292,7 @@ class TestSaveLoadRender(unittest.TestCase):
                     str(Path(tmp) / "out.json"),
                 ]
             )
-            self.assertEqual(rc, 2)
+            assert rc == 2
 
     def test_cli_compare_value_error_surfaced(self):
         """A ValueError from compare (e.g. no shared metrics) must be printed to
@@ -316,8 +315,8 @@ class TestSaveLoadRender(unittest.TestCase):
                 contextlib.redirect_stderr(stderr),
             ):
                 rc = render_main(["compare", str(a), str(b), "--json", str(Path(tmp) / "c.json")])
-            self.assertEqual(rc, 1)
-            self.assertIn("no comparable scalar result variables", stderr.getvalue())
+            assert rc == 1
+            assert "no comparable scalar result variables" in stderr.getvalue()
 
     def test_prog_name_is_invocation_aware(self):
         """Usage/help shows ``bencher`` under the console script and the
@@ -328,9 +327,9 @@ class TestSaveLoadRender(unittest.TestCase):
             "/venv/bin/bencher-3.12",
         ):
             with mock.patch("bencher.render.sys.argv", [argv0, "--help"]):
-                self.assertEqual(_prog(), "bencher")
+                assert _prog() == "bencher"
         with mock.patch("bencher.render.sys.argv", ["/path/to/render.py"]):
-            self.assertEqual(_prog(), "python -m bencher.render")
+            assert _prog() == "python -m bencher.render"
 
     def test_save_emit_json_opt_in(self):
         """BenchReport.save(emit_json=...) writes result.json next to the HTML."""
@@ -342,8 +341,8 @@ class TestSaveLoadRender(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             bench.report.save(directory=tmp, emit_json=True)
             matches = list(Path(tmp).rglob("result.json"))
-            self.assertTrue(matches)
-            self.assertEqual(json.loads(matches[0].read_text())["schema_version"], 1)
+            assert matches
+            assert json.loads(matches[0].read_text())["schema_version"] == 1
 
 
 if __name__ == "__main__":

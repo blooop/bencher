@@ -351,7 +351,6 @@ class TestReachabilityWalkRobustness:
             cache["record"] = node
 
         calls = 0
-        # pylint: disable=protected-access  # the walk's internals are the subject here
         real_children = cache_management._blob_reference_children
 
         def counting_children(value):

@@ -11,6 +11,8 @@ from __future__ import annotations
 import unittest
 import warnings
 
+import pytest
+
 import bencher as bn
 from bencher.example.benchmark_data import ExampleBenchCfg
 
@@ -53,35 +55,32 @@ class TestDuplicateResultVars(unittest.TestCase):
         once, _ = _sweep(input_vars=["theta"], result_vars=["out_sin"])
         twice, warns = _sweep(input_vars=["theta"], result_vars=["out_sin", "out_sin"])
 
-        self.assertEqual(
-            once.bench_cfg.hash_persistent(True),
-            twice.bench_cfg.hash_persistent(True),
-            "a duplicated result var must not move the cache key",
+        assert once.bench_cfg.hash_persistent(True) == twice.bench_cfg.hash_persistent(True), (
+            "a duplicated result var must not move the cache key"
         )
-        self.assertEqual(
-            once.bench_cfg.hash_persistent(True, include_result_vars=False),
-            twice.bench_cfg.hash_persistent(True, include_result_vars=False),
-        )
-        self.assertTrue(any("declared twice" in w for w in warns), warns)
+        assert once.bench_cfg.hash_persistent(
+            True, include_result_vars=False
+        ) == twice.bench_cfg.hash_persistent(True, include_result_vars=False)
+        assert any("declared twice" in w for w in warns), warns
 
     def test_the_dataset_never_differed(self) -> None:
         once, _ = _sweep(input_vars=["theta"], result_vars=["out_sin"])
         twice, _ = _sweep(input_vars=["theta"], result_vars=["out_sin", "out_sin"])
-        self.assertEqual(set(once.ds.data_vars), set(twice.ds.data_vars))
-        self.assertEqual(dict(once.ds.sizes), dict(twice.ds.sizes))
+        assert set(once.ds.data_vars) == set(twice.ds.data_vars)
+        assert dict(once.ds.sizes) == dict(twice.ds.sizes)
 
     def test_config_holds_one_entry_per_name(self) -> None:
         res, _ = _sweep(input_vars=["theta"], result_vars=["out_sin", "out_cos", "out_sin"])
         names = [v.name for v in res.bench_cfg.result_vars]
-        self.assertEqual(names, ["out_sin", "out_cos"])
+        assert names == ["out_sin", "out_cos"]
 
     def test_the_warning_names_the_variable_and_both_positions(self) -> None:
         _res, warns = _sweep(
             input_vars=["theta"], result_vars=["out_sin", "out_cos", "out_bool", "out_cos"]
         )
         (msg,) = [w for w in warns if "declared twice" in w]
-        self.assertIn("'out_cos'", msg)
-        self.assertIn("positions 1 and 3", msg)
+        assert "'out_cos'" in msg
+        assert "positions 1 and 3" in msg
 
     def test_the_warning_is_attributed_to_the_caller_not_to_bencher(self) -> None:
         """Pins ``stacklevel``: the blame belongs to whoever wrote the declaration.
@@ -92,10 +91,8 @@ class TestDuplicateResultVars(unittest.TestCase):
         """
         caught = _sweep_raw_warnings(input_vars=["theta"], result_vars=["out_sin", "out_sin"])
         (dup,) = [w for w in caught if "declared twice" in str(w.message)]
-        self.assertEqual(
-            dup.filename,
-            __file__,
-            f"warning blamed {dup.filename}:{dup.lineno}, not the calling test module",
+        assert dup.filename == __file__, (
+            f"warning blamed {dup.filename}:{dup.lineno}, not the calling test module"
         )
 
     def test_object_and_string_forms_are_compared_by_name(self) -> None:
@@ -103,25 +100,25 @@ class TestDuplicateResultVars(unittest.TestCase):
             input_vars=["theta"],
             result_vars=["out_sin", ExampleBenchCfg.param.out_sin],
         )
-        self.assertEqual([v.name for v in res.bench_cfg.result_vars], ["out_sin"])
-        self.assertTrue(any("declared twice" in w for w in warns))
+        assert [v.name for v in res.bench_cfg.result_vars] == ["out_sin"]
+        assert any("declared twice" in w for w in warns)
 
     def test_distinct_variables_are_never_judged_duplicates(self) -> None:
         res, warns = _sweep(input_vars=["theta"], result_vars=["out_sin", "out_cos", "out_bool"])
-        self.assertEqual(len(res.bench_cfg.result_vars), 3)
-        self.assertEqual([w for w in warns if "declared twice" in w], [])
+        assert len(res.bench_cfg.result_vars) == 3
+        assert [w for w in warns if "declared twice" in w] == []
 
 
 class TestDuplicateInputVars(unittest.TestCase):
     """P4 — the xarray broadcasting error, replaced by a message about the cause."""
 
     def test_duplicate_input_raises_naming_the_variable_and_positions(self) -> None:
-        with self.assertRaises(ValueError) as ctx:
+        with pytest.raises(ValueError) as ctx:
             _sweep(input_vars=["theta", "theta"], result_vars=["out_sin"])
-        msg = str(ctx.exception)
-        self.assertIn("'theta'", msg)
-        self.assertIn("positions [0, 1]", msg)
-        self.assertIn("one dataset dimension", msg)
+        msg = str(ctx.value)
+        assert "'theta'" in msg
+        assert "positions [0, 1]" in msg
+        assert "one dataset dimension" in msg
 
     def test_it_raises_before_any_sample_runs(self) -> None:
         """The xarray error arrived after the whole sweep had been executed."""
@@ -141,11 +138,11 @@ class TestDuplicateInputVars(unittest.TestCase):
         cfg.cache_samples = False
         bench = Probe().to_bench(cfg)
         try:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 bench.plot_sweep(input_vars=["x", "x"], result_vars=["y"], plot_callbacks=False)
         finally:
             bench.close()
-        self.assertEqual(calls, [], "samples ran before the declaration was rejected")
+        assert calls == [], "samples ran before the declaration was rejected"
 
     def test_mixed_declaration_forms_are_caught(self) -> None:
         for label, decl in {
@@ -153,21 +150,21 @@ class TestDuplicateInputVars(unittest.TestCase):
             "str+spec": ["theta", bn.sweep("theta", samples=2)],
             "object+spec": [ExampleBenchCfg.param.theta, bn.sweep("theta", samples=2)],
         }.items():
-            with self.subTest(forms=label), self.assertRaises(ValueError):
+            with self.subTest(forms=label), pytest.raises(ValueError):
                 _sweep(input_vars=decl, result_vars=["out_sin"])
 
     def test_three_occurrences_are_all_reported(self) -> None:
-        with self.assertRaises(ValueError) as ctx:
+        with pytest.raises(ValueError) as ctx:
             _sweep(input_vars=["theta", "theta", "theta"], result_vars=["out_sin"])
-        self.assertIn("3 times", str(ctx.exception))
-        self.assertIn("[0, 1, 2]", str(ctx.exception))
+        assert "3 times" in str(ctx.value)
+        assert "[0, 1, 2]" in str(ctx.value)
 
     def test_distinct_inputs_are_unaffected(self) -> None:
         res, _ = _sweep(
             input_vars=[bn.sweep("theta", samples=2), bn.sweep("offset", samples=2)],
             result_vars=["out_sin"],
         )
-        self.assertEqual([v.name for v in res.bench_cfg.input_vars], ["theta", "offset"])
+        assert [v.name for v in res.bench_cfg.input_vars] == ["theta", "offset"]
 
 
 class TestDuplicateConstVars(unittest.TestCase):
@@ -180,20 +177,20 @@ class TestDuplicateConstVars(unittest.TestCase):
             const_vars=[("offset", 0.1), ("offset", 0.1)],
         )
         names = [c[0].name for c in res.bench_cfg.const_vars]
-        self.assertEqual(names.count("offset"), 1)
-        self.assertEqual(warns, [])
+        assert names.count("offset") == 1
+        assert warns == []
 
     def test_conflicting_values_raise_naming_both(self) -> None:
-        with self.assertRaises(ValueError) as ctx:
+        with pytest.raises(ValueError) as ctx:
             _sweep(
                 input_vars=["theta"],
                 result_vars=["out_sin"],
                 const_vars=[("offset", 0.1), ("offset", 0.2)],
             )
-        msg = str(ctx.exception)
-        self.assertIn("'offset'", msg)
-        self.assertIn("0.1", msg)
-        self.assertIn("0.2", msg)
+        msg = str(ctx.value)
+        assert "'offset'" in msg
+        assert "0.1" in msg
+        assert "0.2" in msg
 
     def test_dict_and_pair_forms_produce_identical_hashes(self) -> None:
         as_dict, _ = _sweep(
@@ -202,9 +199,7 @@ class TestDuplicateConstVars(unittest.TestCase):
         as_pairs, _ = _sweep(
             input_vars=["theta"], result_vars=["out_sin"], const_vars=[("offset", 0.1)]
         )
-        self.assertEqual(
-            as_dict.bench_cfg.hash_persistent(True), as_pairs.bench_cfg.hash_persistent(True)
-        )
+        assert as_dict.bench_cfg.hash_persistent(True) == as_pairs.bench_cfg.hash_persistent(True)
 
     def test_a_deduped_duplicate_hashes_as_the_single_declaration(self) -> None:
         once, _ = _sweep(input_vars=["theta"], result_vars=["out_sin"], const_vars={"offset": 0.1})
@@ -213,9 +208,7 @@ class TestDuplicateConstVars(unittest.TestCase):
             result_vars=["out_sin"],
             const_vars=[("offset", 0.1), ("offset", 0.1)],
         )
-        self.assertEqual(
-            once.bench_cfg.hash_persistent(True), twice.bench_cfg.hash_persistent(True)
-        )
+        assert once.bench_cfg.hash_persistent(True) == twice.bench_cfg.hash_persistent(True)
 
 
 class TestHelperInIsolation(unittest.TestCase):
@@ -228,7 +221,7 @@ class TestHelperInIsolation(unittest.TestCase):
         results = [ExampleBenchCfg.param.out_sin]
         consts = [[ExampleBenchCfg.param.offset, 0.1]]
         out = validate_declared_vars(inputs, results, consts)
-        self.assertEqual(out, (inputs, results, consts))
+        assert out == (inputs, results, consts)
 
     def test_const_equality_uses_the_same_digest_the_hash_uses(self) -> None:
         """Values that hash the same are the same const for identity purposes."""
@@ -239,7 +232,7 @@ class TestHelperInIsolation(unittest.TestCase):
             [],
             [[ExampleBenchCfg.param.offset, 0.1], [ExampleBenchCfg.param.offset, 0.1]],
         )
-        self.assertEqual(len(consts), 1)
+        assert len(consts) == 1
 
 
 class TestHashFoldsVariablesAsSets(unittest.TestCase):
@@ -265,24 +258,24 @@ class TestHashFoldsVariablesAsSets(unittest.TestCase):
     def test_a_duplicate_result_var_does_not_move_the_key(self) -> None:
         once = self._cfg([ExampleBenchCfg.param.out_sin], [])
         twice = self._cfg([ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_sin], [])
-        self.assertEqual(once.hash_persistent(True), twice.hash_persistent(True))
+        assert once.hash_persistent(True) == twice.hash_persistent(True)
 
     def test_a_duplicate_const_does_not_move_the_key(self) -> None:
         pair = [ExampleBenchCfg.param.offset, 0.1]
         once = self._cfg([ExampleBenchCfg.param.out_sin], [pair])
         twice = self._cfg([ExampleBenchCfg.param.out_sin], [pair, list(pair)])
-        self.assertEqual(once.hash_persistent(True), twice.hash_persistent(True))
+        assert once.hash_persistent(True) == twice.hash_persistent(True)
 
     def test_distinct_vars_still_produce_distinct_keys(self) -> None:
         """Deduping must collapse repeats, not collapse the set itself."""
         one = self._cfg([ExampleBenchCfg.param.out_sin], [])
         two = self._cfg([ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos], [])
-        self.assertNotEqual(one.hash_persistent(True), two.hash_persistent(True))
+        assert one.hash_persistent(True) != two.hash_persistent(True)
 
     def test_declaration_order_is_still_irrelevant(self) -> None:
         forward = self._cfg([ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos], [])
         reverse = self._cfg([ExampleBenchCfg.param.out_cos, ExampleBenchCfg.param.out_sin], [])
-        self.assertEqual(forward.hash_persistent(True), reverse.hash_persistent(True))
+        assert forward.hash_persistent(True) == reverse.hash_persistent(True)
 
 
 if __name__ == "__main__":

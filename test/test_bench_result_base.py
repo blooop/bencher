@@ -3,6 +3,7 @@ import unittest
 import holoviews as hv
 import numpy as np
 import panel as pn
+import pytest
 
 import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
@@ -107,41 +108,41 @@ class TestAggOverDimsStd(unittest.TestCase):
 
     def test_mean_agg_produces_std(self):
         ds = self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
-        self.assertIn("distance", ds.data_vars)
-        self.assertIn("distance_std", ds.data_vars)
+        assert "distance" in ds.data_vars
+        assert "distance_std" in ds.data_vars
 
     def test_mean_std_is_non_negative(self):
         ds = self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
-        self.assertTrue((ds["distance_std"].values >= 0).all())
+        assert (ds["distance_std"].values >= 0).all()
 
     def test_mean_agg_removes_aggregated_dim(self):
         """The aggregated dimension should no longer appear as a coordinate."""
         ds = self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
-        self.assertNotIn("float1", ds.dims)
+        assert "float1" not in ds.dims
 
     def test_mean_agg_default_fn(self):
         """agg_fn=None should default to mean and produce _std."""
         ds = self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn=None)
-        self.assertIn("distance_std", ds.data_vars)
+        assert "distance_std" in ds.data_vars
 
     # --- multiple result vars ---
 
     def test_mean_agg_multiple_result_vars(self):
         """Each result var should get its own _std."""
         ds = self.res_1d_multi.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
-        self.assertIn("distance", ds.data_vars)
-        self.assertIn("distance_std", ds.data_vars)
-        self.assertIn("sample_noise", ds.data_vars)
-        self.assertIn("sample_noise_std", ds.data_vars)
+        assert "distance" in ds.data_vars
+        assert "distance_std" in ds.data_vars
+        assert "sample_noise" in ds.data_vars
+        assert "sample_noise_std" in ds.data_vars
 
     # --- repeat-based _std replacement ---
 
     def test_mean_agg_replaces_repeat_std(self):
         """Agg std should replace repeat-based std without merge conflict."""
         ds = self.res_1d_2rep.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
-        self.assertIn("distance_std", ds.data_vars)
+        assert "distance_std" in ds.data_vars
         std_vars = [v for v in ds.data_vars if v.endswith("_std")]
-        self.assertEqual(std_vars, ["distance_std"])
+        assert std_vars == ["distance_std"]
 
     def test_agg_std_differs_from_repeat_std(self):
         """Agg std (across float1 values) should differ from repeat std."""
@@ -150,31 +151,31 @@ class TestAggOverDimsStd(unittest.TestCase):
         # Repeat std is per-float1-point; agg std is across float1 values.
         # They measure different things, so the agg result should be a scalar
         # while repeat result still has the float1 dim.
-        self.assertIn("float1", ds_repeat_only.dims)
-        self.assertNotIn("float1", ds_agg.dims)
+        assert "float1" in ds_repeat_only.dims
+        assert "float1" not in ds_agg.dims
 
     # --- 2D sweep: partial and full aggregation ---
 
     def test_2d_agg_one_dim(self):
         """Aggregating one of two dims should keep the other."""
         ds = self.res_2d.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
-        self.assertNotIn("float1", ds.dims)
-        self.assertIn("float2", ds.dims)
-        self.assertIn("distance_std", ds.data_vars)
+        assert "float1" not in ds.dims
+        assert "float2" in ds.dims
+        assert "distance_std" in ds.data_vars
 
     def test_2d_agg_both_dims(self):
         """Aggregating both dims should produce a scalar dataset."""
         ds = self.res_2d.to_dataset(agg_over_dims=["float1", "float2"], agg_fn="mean")
-        self.assertNotIn("float1", ds.dims)
-        self.assertNotIn("float2", ds.dims)
-        self.assertIn("distance_std", ds.data_vars)
+        assert "float1" not in ds.dims
+        assert "float2" not in ds.dims
+        assert "distance_std" in ds.data_vars
 
     def test_2d_agg_with_repeats(self):
         """2D sweep + repeats: agg should replace repeat std cleanly."""
         ds = self.res_2d_2rep.to_dataset(agg_over_dims=["float1", "float2"], agg_fn="mean")
-        self.assertIn("distance_std", ds.data_vars)
+        assert "distance_std" in ds.data_vars
         std_vars = [v for v in ds.data_vars if v.endswith("_std")]
-        self.assertEqual(std_vars, ["distance_std"])
+        assert std_vars == ["distance_std"]
 
     # --- std correctness: known values ---
 
@@ -186,7 +187,7 @@ class TestAggOverDimsStd(unittest.TestCase):
         raw_vals = ds_raw["distance"].values
         if raw_vals.size > 1 and not np.all(raw_vals == raw_vals.flat[0]):
             # If there is any variation, std should be > 0
-            self.assertGreater(float(ds_agg["distance_std"].values), 0.0)
+            assert float(ds_agg["distance_std"].values) > 0.0
 
     def test_mean_value_correctness(self):
         """Mean in the aggregated dataset should match manual computation."""
@@ -200,19 +201,19 @@ class TestAggOverDimsStd(unittest.TestCase):
 
     def test_sum_agg_no_std(self):
         ds = self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn="sum")
-        self.assertNotIn("distance_std", ds.data_vars)
+        assert "distance_std" not in ds.data_vars
 
     def test_max_agg_no_std(self):
         ds = self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn="max")
-        self.assertNotIn("distance_std", ds.data_vars)
+        assert "distance_std" not in ds.data_vars
 
     def test_min_agg_no_std(self):
         ds = self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn="min")
-        self.assertNotIn("distance_std", ds.data_vars)
+        assert "distance_std" not in ds.data_vars
 
     def test_median_agg_no_std(self):
         ds = self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn="median")
-        self.assertNotIn("distance_std", ds.data_vars)
+        assert "distance_std" not in ds.data_vars
 
     # --- edge cases ---
 
@@ -220,18 +221,18 @@ class TestAggOverDimsStd(unittest.TestCase):
         """Requesting aggregation over a nonexistent dim should not error."""
         ds = self.res_1d_1rep.to_dataset(agg_over_dims=["nonexistent"], agg_fn="mean")
         # Should return unaggregated dataset (with float1 still present)
-        self.assertIn("float1", ds.dims)
+        assert "float1" in ds.dims
 
     def test_partial_missing_dims(self):
         """Only present dims should be aggregated; missing ones are ignored."""
         ds = self.res_1d_1rep.to_dataset(agg_over_dims=["float1", "nonexistent"], agg_fn="mean")
-        self.assertNotIn("float1", ds.dims)
-        self.assertIn("distance_std", ds.data_vars)
+        assert "float1" not in ds.dims
+        assert "distance_std" in ds.data_vars
 
     def test_no_agg_over_dims_no_std(self):
         """Without agg_over_dims, no extra _std should appear (repeats=1)."""
         ds = self.res_1d_1rep.to_dataset()
-        self.assertNotIn("distance_std", ds.data_vars)
+        assert "distance_std" not in ds.data_vars
 
     def test_uppercase_agg_fn_raises(self):
         """The vocabulary is exactly AggFn's lowercase values (case-sensitive).
@@ -241,7 +242,7 @@ class TestAggOverDimsStd(unittest.TestCase):
         more spelling of the vocabulary and is gone — optimize() and
         BenchCfg.agg_fn always rejected "MEAN".
         """
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn="MEAN")
 
 
@@ -266,31 +267,31 @@ class TestAggFnVocabulary(unittest.TestCase):
 
     def test_agg_fn_map_covers_every_member(self):
         """AGG_FN_MAP's keys derive from (and must stay in sync with) AggFn."""
-        self.assertEqual(set(AGG_FN_MAP), set(AggFn))
+        assert set(AGG_FN_MAP) == set(AggFn)
         # Set equality alone would still pass if AGG_FN_MAP reverted to raw-string
         # keys, because AggFn is a StrEnum and "mean" == AggFn.MEAN. Pin the key
         # *type* so the derivation cannot silently regress to a fifth spelling.
-        self.assertTrue(all(isinstance(k, AggFn) for k in AGG_FN_MAP))
+        assert all(isinstance(k, AggFn) for k in AGG_FN_MAP)
 
     def test_bench_cfg_objects_are_agg_fn_values(self):
         """The ObjectSelector's accepted strings are exactly AggFn's values."""
         objects = bn.BenchCfg.param.agg_fn.objects
-        self.assertEqual(objects, [m.value for m in AggFn])
-        self.assertEqual(bn.BenchCfg.param.agg_fn.default, AggFn.MEAN.value)
+        assert objects == [m.value for m in AggFn]
+        assert bn.BenchCfg.param.agg_fn.default == AggFn.MEAN.value
         # Plain str, not AggFn members: the descriptor's objects are what gets
         # stored on and serialized out of BenchCfg, so the shape is pinned here
         # (and is why readers must construct the enum — plan 24 A3).
-        self.assertTrue(all(type(o) is str for o in objects))
-        self.assertIs(type(bn.BenchCfg.param.agg_fn.default), str)
+        assert all(type(o) is str for o in objects)
+        assert type(bn.BenchCfg.param.agg_fn.default) is str
 
     def test_unknown_agg_fn_raises_instead_of_silently_meaning_mean(self):
         """Before plan 23 P11 the ladder's terminal else silently meant mean."""
-        with self.assertRaises(ValueError) as ctx:
+        with pytest.raises(ValueError) as ctx:
             self.res.to_dataset(agg_over_dims=["float1"], agg_fn="bogus")
-        msg = str(ctx.exception)
-        self.assertIn("bogus", msg)
+        msg = str(ctx.value)
+        assert "bogus" in msg
         for member in AggFn:
-            self.assertIn(member.value, msg)
+            assert member.value in msg
 
     def test_each_member_aggregates_as_before(self):
         """Every valid agg_fn (member or raw string) matches the numpy result."""
@@ -302,7 +303,7 @@ class TestAggFnVocabulary(unittest.TestCase):
             AggFn.MIN: np.nanmin,
             AggFn.MEDIAN: np.nanmedian,
         }
-        self.assertEqual(set(expected), set(AggFn))
+        assert set(expected) == set(AggFn)
         for member, np_fn in expected.items():
             for spelling in (member, member.value):
                 ds = self.res.to_dataset(agg_over_dims=["float1"], agg_fn=spelling)
@@ -323,7 +324,7 @@ class TestAggFnVocabulary(unittest.TestCase):
         """
         worker = CountingWorker()
         bench = worker.to_bench()
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             bench.plot_sweep(
                 "agg_fn_bogus",
                 input_vars=[CountingWorker.param.float1],
@@ -333,7 +334,7 @@ class TestAggFnVocabulary(unittest.TestCase):
                 aggregate=["float1"],
                 agg_fn="bogus",
             )
-        self.assertEqual(worker.calls, 0, "config was rejected only after sampling")
+        assert worker.calls == 0, "config was rejected only after sampling"
 
         # Control: the identical sweep with a valid agg_fn *does* sample, proving
         # the zero above is the raise's doing and not a sweep that never runs.
@@ -346,15 +347,15 @@ class TestAggFnVocabulary(unittest.TestCase):
             aggregate=["float1"],
             agg_fn="mean",
         )
-        self.assertGreater(worker.calls, 0)
+        assert worker.calls > 0
 
     def test_uppercase_agg_fn_error_names_the_lowercase_spelling(self):
         """The break is small but the fix should not need guessing."""
-        with self.assertRaises(ValueError) as ctx:
+        with pytest.raises(ValueError) as ctx:
             self.res.to_dataset(agg_over_dims=["float1"], agg_fn="MEAN")
-        msg = str(ctx.exception)
-        self.assertIn("lowercase", msg)
-        self.assertIn("'mean'", msg)
+        msg = str(ctx.value)
+        assert "lowercase" in msg
+        assert "'mean'" in msg
 
     def test_unknown_agg_fn_raises_without_agg_over_dims(self):
         """Validation must not be data-dependent.
@@ -363,22 +364,22 @@ class TestAggFnVocabulary(unittest.TestCase):
         *validation* on that would make an unknown value raise or pass depending
         on the dataset's dims -- the shape plan 23 exists to remove.
         """
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.res.to_dataset(agg_fn="bogus")
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.res.to_dataset(agg_over_dims=[], agg_fn="bogus")
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.res.to_dataset(agg_over_dims=["nonexistent"], agg_fn="bogus")
 
     def test_unknown_agg_fn_raises_on_a_warm_cache(self):
         """The cache-key call is the only validation once _to_dataset_cache hits."""
         self.res.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.res.to_dataset(agg_over_dims=["float1"], agg_fn="bogus")
 
     def test_unknown_agg_fn_param_assignment_raises(self):
         """Assigning through the param descriptor is also boundary-checked."""
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.res.bench_cfg.agg_fn = "bogus"
 
     def test_valid_raw_string_through_param_field_reaches_shipped_path(self):
@@ -396,7 +397,7 @@ class TestAggFnVocabulary(unittest.TestCase):
         )
         # param stores the raw string, not an enum member: this is exactly why
         # normalize_agg_fn must construct the enum at the boundary (plan 24 A3).
-        self.assertIs(type(res.bench_cfg.agg_fn), str)
+        assert type(res.bench_cfg.agg_fn) is str
         raw = res.to_dataset()["distance"].values
         ds = res.to_dataset(agg_over_dims=res.bench_cfg.agg_over_dims, agg_fn=res.bench_cfg.agg_fn)
         np.testing.assert_allclose(
@@ -404,9 +405,9 @@ class TestAggFnVocabulary(unittest.TestCase):
         )
         # The shipped consumer itself (reads bench_cfg.agg_fn internally);
         # calling the private method is the point of this plan-24 A3 test.
-        summary = res._scalar_aggregate_summary()  # pylint: disable=protected-access
-        self.assertIsInstance(summary, pn.pane.Markdown)
-        self.assertNotIn("No result variables found", summary.object)
+        summary = res._scalar_aggregate_summary()
+        assert isinstance(summary, pn.pane.Markdown)
+        assert "No result variables found" not in summary.object
 
 
 class TestBenchResultBase(unittest.TestCase):
@@ -439,8 +440,8 @@ class TestBenchResultBase(unittest.TestCase):
         # print(res_repeat2.to_hv_dataset())
         # print(res_repeat2.to_dataset()["distance"].attrs)
 
-        self.assertEqual(
-            res_repeat1.to_dataset()["distance"].attrs, res_repeat2.to_dataset()["distance"].attrs
+        assert (
+            res_repeat1.to_dataset()["distance"].attrs == res_repeat2.to_dataset()["distance"].attrs
         )
 
         # bm.__call__(float_vars=1, sample_with_repeats=1)
@@ -532,7 +533,7 @@ class TestBenchResultBase(unittest.TestCase):
 
         # The statistics keep every repeat: this is a display resolution, and a
         # reduced dataset has no repeat dimension left to thin.
-        self.assertNotIn("repeat", res.to_dataset(bn.ReduceType.REDUCE).dims)
+        assert "repeat" not in res.to_dataset(bn.ReduceType.REDUCE).dims
 
     def _make_1d_result(self, repeats=1):
         bench = BenchableObject().to_bench(bn.BenchRunCfg(repeats=repeats))
@@ -548,50 +549,50 @@ class TestBenchResultBase(unittest.TestCase):
         res = self._make_1d_result()
         rv = res.bench_cfg.result_vars[0]
         da = res.get_optimal_value_indices(rv)
-        self.assertIsNotNone(da)
+        assert da is not None
         import xarray as xr
 
-        self.assertIsInstance(da, xr.DataArray)
+        assert isinstance(da, xr.DataArray)
 
     def test_get_optimal_vec(self):
         res = self._make_1d_result()
         rv = res.bench_cfg.result_vars[0]
         ivs = res.bench_cfg.input_vars
         vec = res.get_optimal_vec(rv, ivs)
-        self.assertIsInstance(vec, list)
-        self.assertEqual(len(vec), len(ivs))
+        assert isinstance(vec, list)
+        assert len(vec) == len(ivs)
 
     def test_get_optimal_inputs_tuple(self):
         res = self._make_1d_result()
         rv = res.bench_cfg.result_vars[0]
         output = res.get_optimal_inputs(rv)
-        self.assertIsInstance(output, list)
-        self.assertTrue(len(output) > 0)
+        assert isinstance(output, list)
+        assert len(output) > 0
 
     def test_get_optimal_inputs_dict(self):
         res = self._make_1d_result()
         rv = res.bench_cfg.result_vars[0]
         output = res.get_optimal_inputs(rv, as_dict=True)
-        self.assertIsInstance(output, dict)
+        assert isinstance(output, dict)
 
     def test_get_optimal_inputs_no_consts(self):
         res = self._make_1d_result()
         rv = res.bench_cfg.result_vars[0]
         output = res.get_optimal_inputs(rv, keep_existing_consts=False)
-        self.assertIsInstance(output, list)
+        assert isinstance(output, list)
 
     def test_get_hmap_none(self):
         res = self._make_1d_result()
         # No hmaps stored, should return None
         result = res.get_hmap("nonexistent")
-        self.assertIsNone(result)
+        assert result is None
 
     def test_to_plot_title(self):
         res = self._make_1d_result()
         title = res.to_plot_title()
-        self.assertIsInstance(title, str)
-        self.assertIn("distance", title)
-        self.assertIn("float1", title)
+        assert isinstance(title, str)
+        assert "distance" in title
+        assert "float1" in title
 
     def test_to_plot_title_empty(self):
         # Test with no input vars
@@ -604,66 +605,66 @@ class TestBenchResultBase(unittest.TestCase):
             plot_callbacks=False,
         )
         title = res.to_plot_title()
-        self.assertEqual(title, "")
+        assert title == ""
 
     def test_to_dataset_with_result_var_str(self):
         res = self._make_1d_result()
         ds = res.to_dataset(result_var="distance")
-        self.assertIn("distance", ds.data_vars)
+        assert "distance" in ds.data_vars
 
     def test_to_dataset_with_result_var_param(self):
         res = self._make_1d_result()
         rv = res.bench_cfg.result_vars[0]
         ds = res.to_dataset(result_var=rv)
-        self.assertIn("distance", ds.data_vars)
+        assert "distance" in ds.data_vars
 
     def test_to_dataset_reduce_none(self):
         res = self._make_1d_result(repeats=2)
         ds = res.to_dataset(reduce=ReduceType.NONE)
-        self.assertIn("repeat", ds.dims)
+        assert "repeat" in ds.dims
 
     def test_to_dataset_reduce_minmax(self):
         res = self._make_1d_result(repeats=2)
         ds = res.to_dataset(reduce=ReduceType.MINMAX)
         # Should have mean and range vars
-        self.assertIn("distance", ds.data_vars)
-        self.assertIn("distance_range", ds.data_vars)
+        assert "distance" in ds.data_vars
+        assert "distance_range" in ds.data_vars
 
     def test_to_dataset_agg_mean(self):
         res = self._make_1d_result()
         ds = res.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
-        self.assertNotIn("float1", ds.dims)
+        assert "float1" not in ds.dims
 
     def test_to_dataset_agg_sum(self):
         res = self._make_1d_result()
         ds = res.to_dataset(agg_over_dims=["float1"], agg_fn="sum")
-        self.assertNotIn("float1", ds.dims)
+        assert "float1" not in ds.dims
 
     def test_to_dataset_agg_max(self):
         res = self._make_1d_result()
         ds = res.to_dataset(agg_over_dims=["float1"], agg_fn="max")
-        self.assertNotIn("float1", ds.dims)
+        assert "float1" not in ds.dims
 
     def test_to_dataset_agg_min(self):
         res = self._make_1d_result()
         ds = res.to_dataset(agg_over_dims=["float1"], agg_fn="min")
-        self.assertNotIn("float1", ds.dims)
+        assert "float1" not in ds.dims
 
     def test_to_dataset_agg_median(self):
         res = self._make_1d_result()
         ds = res.to_dataset(agg_over_dims=["float1"], agg_fn="median")
-        self.assertNotIn("float1", ds.dims)
+        assert "float1" not in ds.dims
 
     def test_to_dataset_agg_missing_dim(self):
         res = self._make_1d_result()
         # Aggregate over non-existent dim - should warn and return unaggregated
         ds = res.to_dataset(agg_over_dims=["nonexistent_dim"], agg_fn="mean")
-        self.assertIn("float1", ds.dims)
+        assert "float1" in ds.dims
 
     def test_describe_sweep(self):
         res = self._make_1d_result()
         desc = res.describe_sweep()
-        self.assertIsNotNone(desc)
+        assert desc is not None
 
     def test_map_plot_panes(self):
         res = self._make_1d_result()
@@ -672,35 +673,35 @@ class TestBenchResultBase(unittest.TestCase):
             return pn.pane.Markdown(f"# {result_var.name}")
 
         result = res.map_plot_panes(plot_cb)
-        self.assertIsNotNone(result)
+        assert result is not None
 
     def test_to_hv_dataset_none_reduce(self):
         res = self._make_1d_result(repeats=2)
         hv_ds = res.to_hv_dataset(ReduceType.NONE)
-        self.assertIsInstance(hv_ds, hv.Dataset)
+        assert isinstance(hv_ds, hv.Dataset)
 
     def test_to_pandas(self):
         res = self._make_1d_result()
         df = res.to_pandas()
-        self.assertIn("distance", df.columns)
-        self.assertIn("float1", df.columns)
+        assert "distance" in df.columns
+        assert "float1" in df.columns
 
     def test_to_pandas_no_reset(self):
         res = self._make_1d_result()
         df = res.to_pandas(reset_index=False)
-        self.assertIn("distance", df.columns)
+        assert "distance" in df.columns
 
     def test_to_xarray(self):
         res = self._make_1d_result()
         ds = res.to_xarray()
-        self.assertIn("distance", ds.data_vars)
+        assert "distance" in ds.data_vars
 
     def test_set_plot_size(self):
         res = self._make_1d_result()
         res.bench_cfg.plot_size = 500
         kwargs = res.set_plot_size()
-        self.assertEqual(kwargs["width"], 500)
-        self.assertEqual(kwargs["height"], 500)
+        assert kwargs["width"] == 500
+        assert kwargs["height"] == 500
 
     def test_set_plot_size_with_overrides(self):
         res = self._make_1d_result()
@@ -708,22 +709,22 @@ class TestBenchResultBase(unittest.TestCase):
         res.bench_cfg.plot_width = 700
         res.bench_cfg.plot_height = 300
         kwargs = res.set_plot_size()
-        self.assertEqual(kwargs["width"], 700)
-        self.assertEqual(kwargs["height"], 300)
+        assert kwargs["width"] == 700
+        assert kwargs["height"] == 300
 
     def test_title_from_ds(self):
         res = self._make_1d_result()
         ds = res.to_dataset()
         rv = res.bench_cfg.result_vars[0]
         title = res.title_from_ds(ds, rv)
-        self.assertIsInstance(title, str)
+        assert isinstance(title, str)
 
     def test_title_from_ds_override(self):
         res = self._make_1d_result()
         ds = res.to_dataset()
         rv = res.bench_cfg.result_vars[0]
         title = res.title_from_ds(ds, rv, title="Custom Title")
-        self.assertEqual(title, "Custom Title")
+        assert title == "Custom Title"
 
     def test_title_from_ds_dataarray(self):
         res = self._make_1d_result()
@@ -731,7 +732,7 @@ class TestBenchResultBase(unittest.TestCase):
         da = ds["distance"]
         rv = res.bench_cfg.result_vars[0]
         title = res.title_from_ds(da, rv)
-        self.assertIsInstance(title, str)
+        assert isinstance(title, str)
 
     def test_to_dataset_mutation_safety(self):
         """Mutating the returned dataset must not affect the source self.ds."""
@@ -755,12 +756,12 @@ class TestBenchResultBase(unittest.TestCase):
         # passed for the xr.Dataset the method returned before it was fixed. Pin the
         # number.
         expected = len(BenchableObject.param.float1.values())
-        self.assertEqual(self._make_1d_result().result_samples(), expected)
+        assert self._make_1d_result().result_samples() == expected
 
     def test_result_samples_counts_repeats(self):
         """Repeats multiply the count -- it is cells recorded, not sweep points."""
         expected = len(BenchableObject.param.float1.values()) * 3
-        self.assertEqual(self._make_1d_result(repeats=3).result_samples(), expected)
+        assert self._make_1d_result(repeats=3).result_samples() == expected
 
     def test_result_samples_is_max_not_sum_across_result_vars(self):
         """Two result variables over N samples is N samples, not 2N.
@@ -775,29 +776,29 @@ class TestBenchResultBase(unittest.TestCase):
             plot_callbacks=False,
         )
         counts = {name: int(res.ds.count()[name].values) for name in res.ds.data_vars}
-        self.assertEqual(counts, {"full": 5, "partial": 2})
-        self.assertEqual(res.result_samples(), 5)
+        assert counts == {"full": 5, "partial": 2}
+        assert res.result_samples() == 5
 
     def test_to_dataset_cache_returns_same_object(self):
         """Identical args with deep=False should return the exact same cached object."""
         res = self._make_1d_result(repeats=2)
         ds1 = res.to_dataset(reduce=ReduceType.REDUCE, deep=False)
         ds2 = res.to_dataset(reduce=ReduceType.REDUCE, deep=False)
-        self.assertIs(ds1, ds2)
+        assert ds1 is ds2
 
     def test_to_dataset_cache_auto_resolves(self):
         """AUTO and its resolved type should share the same cache entry."""
         res = self._make_1d_result(repeats=2)
         ds_auto = res.to_dataset(reduce=ReduceType.AUTO, deep=False)
         ds_reduce = res.to_dataset(reduce=ReduceType.REDUCE, deep=False)
-        self.assertIs(ds_auto, ds_reduce)
+        assert ds_auto is ds_reduce
 
     def test_to_dataset_cache_different_args(self):
         """Different args should produce different cache entries."""
         res = self._make_1d_result(repeats=2)
         ds_reduce = res.to_dataset(reduce=ReduceType.REDUCE, deep=False)
         ds_none = res.to_dataset(reduce=ReduceType.NONE, deep=False)
-        self.assertIsNot(ds_reduce, ds_none)
+        assert ds_reduce is not ds_none
 
     def test_to_dataset_cache_result_var_normalization(self):
         """Parameter and string for the same result_var should hit same cache entry."""
@@ -805,37 +806,37 @@ class TestBenchResultBase(unittest.TestCase):
         rv_param = res.bench_cfg.result_vars[0]
         ds_param = res.to_dataset(result_var=rv_param, deep=False)
         ds_str = res.to_dataset(result_var=rv_param.name, deep=False)
-        self.assertIs(ds_param, ds_str)
+        assert ds_param is ds_str
 
     def test_to_dataset_cache_different_fidelities(self):
         """Different subsampling_divisions values should produce different cache entries."""
         res = self._make_1d_result()
         ds_none = res.to_dataset(subsampling_divisions=None, deep=False)
         ds_1 = res.to_dataset(subsampling_divisions=1, deep=False)
-        self.assertIsNot(ds_none, ds_1)
+        assert ds_none is not ds_1
 
     def test_to_dataset_deep_default_returns_copy(self):
         """Default (deep=True) should return a distinct object safe to mutate."""
         res = self._make_1d_result()
         ds_cached = res.to_dataset(deep=False)
         ds_deep = res.to_dataset()  # deep=True is the default
-        self.assertIsNot(ds_cached, ds_deep)
+        assert ds_cached is not ds_deep
         # Mutating the deep copy must not affect the cached version
         for var in ds_deep.data_vars:
             ds_deep[var].values[:] = -999
             break
         ds_again = res.to_dataset(deep=False)
-        self.assertIs(ds_again, ds_cached)
+        assert ds_again is ds_cached
 
     def test_to_dataset_cache_cleared_on_post_setup(self):
         """Cache should be invalidated when post_setup() is called."""
         res = self._make_1d_result()
         ds1 = res.to_dataset(deep=False)
-        self.assertTrue(len(res._to_dataset_cache) > 0)  # pylint: disable=protected-access
+        assert len(res._to_dataset_cache) > 0
         res.post_setup()
-        self.assertEqual(len(res._to_dataset_cache), 0)  # pylint: disable=protected-access
+        assert len(res._to_dataset_cache) == 0
         ds2 = res.to_dataset(deep=False)
-        self.assertIsNot(ds1, ds2)
+        assert ds1 is not ds2
 
 
 class _IndependentAxisBench(bn.ParametrizedSweep):
@@ -888,13 +889,12 @@ class TestAxiswiseShareAxis(unittest.TestCase):
         )
         plots = res.to_auto()
         elements = _collect_hv_elements(plots)
-        self.assertGreater(len(elements), 0, "Expected at least one holoviews element")
+        assert len(elements) > 0, "Expected at least one holoviews element"
         for elem in elements:
             norm = hv.Store.lookup_options("bokeh", elem, "norm")
-            self.assertTrue(
-                norm.kwargs.get("axiswise", False),
+            assert norm.kwargs.get("axiswise", False), (
                 f"Expected axiswise=True on {type(elem).__name__} (share_axis=False), "
-                f"got norm opts: {norm.kwargs}",
+                f"got norm opts: {norm.kwargs}"
             )
 
     def test_share_axis_default_no_axiswise(self):
@@ -906,10 +906,9 @@ class TestAxiswiseShareAxis(unittest.TestCase):
         )
         plots = res.to_auto()
         elements = _collect_hv_elements(plots)
-        self.assertGreater(len(elements), 0, "Expected at least one holoviews element")
+        assert len(elements) > 0, "Expected at least one holoviews element"
         for elem in elements:
             norm = hv.Store.lookup_options("bokeh", elem, "norm")
-            self.assertFalse(
-                norm.kwargs.get("axiswise", False),
-                f"Expected axiswise=False (share_axis=True default), got norm opts: {norm.kwargs}",
+            assert not norm.kwargs.get("axiswise", False), (
+                f"Expected axiswise=False (share_axis=True default), got norm opts: {norm.kwargs}"
             )

@@ -518,7 +518,7 @@ class HoloviewResult(PaneResult):
                         cont.autoplay = True
                 state["update"] = False
 
-        def _on_exit(x, y):  # pragma: no cover  # pylint: disable=unused-argument
+        def _on_exit(x, y):  # pragma: no cover
             state["update"] = True
 
         posxy = hv.streams.PointerXY(source=plot)

@@ -434,7 +434,7 @@ class TestParametrizedSweepPickle:
     def test_class_params_pickle_after_with_subsampling_divisions(self):
         """Each class-level param, after with_subsampling_divisions(), must pickle."""
         for p_name in ("color", "label", "enabled", "count", "ratio"):
-            param = SampleConfig.param[p_name]  # pylint: disable=unsubscriptable-object
+            param = SampleConfig.param[p_name]
             mutated = param.with_subsampling_divisions(2)
             restored = _pickle_roundtrip(mutated)
             assert restored.values() == mutated.values(), (

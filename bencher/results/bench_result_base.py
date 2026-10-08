@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 _ANY_COUNT = VarRange.unbounded()
 _AT_LEAST_ONE = VarRange.at_least(1)
 
-# todo add plugins
+# TODO add plugins
 # https://gist.github.com/dorneanu/cce1cd6711969d581873a88e0257e312
 # https://kaleidoescape.github.io/decorated-plugins/
 
@@ -279,7 +279,6 @@ class BenchResultBase:
         Returns:
             hv.Dataset: results in the form of a holoviews dataset
         """
-
         if reduce == ReduceType.NONE:
             ds_out = self.to_dataset(
                 reduce,
@@ -568,7 +567,6 @@ class BenchResultBase:
         Returns:
             list[Any]: A vector of optimal values for the desired input vector
         """
-
         da = self.get_optimal_value_indices(result_var)
         output = []
         for iv in input_vars:
@@ -1280,7 +1278,7 @@ class BenchResultBase:
         return pn.Row(*items)
 
     def zero_dim_da_to_val(self, da_ds: xr.DataArray | xr.Dataset) -> Any:
-        # todo this is really horrible, need to improve
+        # TODO this is really horrible, need to improve
         dim = None
         if isinstance(da_ds, xr.Dataset):
             dim = next(iter(da_ds.keys()))
@@ -1328,7 +1326,7 @@ class BenchResultBase:
                 return candidate
         return None
 
-    def _dataset_sample_to_container(  # pylint: disable=too-many-return-statements
+    def _dataset_sample_to_container(
         self, val: Any, result_var: Parameter, container, legacy_trusted: bool = True
     ) -> Any:
         """Render one stored ``ResultDataSet`` cell, whichever generation stored it.
@@ -1372,7 +1370,7 @@ class BenchResultBase:
                     getattr(self, "blob_cache_dir", None),
                     fallback_cache_dirs=blob_cache_dir_hints(self.ds),
                 )
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "ResultDataSet '%s': failed to load blob %r (%s: %s)",
                     result_var.name,
@@ -1439,7 +1437,7 @@ class BenchResultBase:
         resolved = container or self.declared_container(ref, result_var)
         return resolved(ref.obj) if resolved is not None else ref.obj
 
-    def ds_to_container(  # pylint: disable=too-many-return-statements
+    def ds_to_container(
         self,
         dataset: xr.Dataset,
         result_var: Parameter,

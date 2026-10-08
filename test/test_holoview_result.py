@@ -11,8 +11,6 @@ from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import DEFAULT_PLOT_SIZE, HoloviewResult
 from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 
-# pylint: disable=protected-access
-
 
 class TestHoloviewResult(unittest.TestCase):
     @classmethod
@@ -60,16 +58,16 @@ class TestHoloviewResult(unittest.TestCase):
 
     def test_set_default_opts(self):
         result = HoloviewResult.set_default_opts()
-        self.assertIn("width", result)
-        self.assertIn("height", result)
-        self.assertIn("tools", result)
-        self.assertEqual(result["width"], DEFAULT_PLOT_SIZE)
-        self.assertEqual(result["height"], DEFAULT_PLOT_SIZE)
+        assert "width" in result
+        assert "height" in result
+        assert "tools" in result
+        assert result["width"] == DEFAULT_PLOT_SIZE
+        assert result["height"] == DEFAULT_PLOT_SIZE
 
     def test_set_default_opts_custom(self):
         result = HoloviewResult.set_default_opts(width=800, height=400)
-        self.assertEqual(result["width"], 800)
-        self.assertEqual(result["height"], 400)
+        assert result["width"] == 800
+        assert result["height"] == 400
 
     def test_default_opts_cover_all_element_types(self):
         """Every element type bencher emits must carry the shared default size.
@@ -83,115 +81,111 @@ class TestHoloviewResult(unittest.TestCase):
         for element in HoloviewResult.DEFAULT_SIZED_ELEMENTS:
             registered = hv.Store.options(backend="bokeh")[element.name]
             opts = registered.groups["plot"].options
-            self.assertEqual(opts.get("width"), DEFAULT_PLOT_SIZE, element.name)
-            self.assertEqual(opts.get("height"), DEFAULT_PLOT_SIZE, element.name)
+            assert opts.get("width") == DEFAULT_PLOT_SIZE, element.name
+            assert opts.get("height") == DEFAULT_PLOT_SIZE, element.name
 
     def test_to_hv_type_curve(self):
         chart = self.res_1d.to_hv_type(hv.Curve)
-        self.assertIsInstance(chart, hv.Element)
+        assert isinstance(chart, hv.Element)
 
     def test_to_hv_type_bars(self):
         chart = self.res_1d.to_hv_type(hv.Bars)
-        self.assertIsInstance(chart, hv.Element)
+        assert isinstance(chart, hv.Element)
 
     def test_to_hv_type_2d_points(self):
         chart = self.res_2d.to_hv_type(hv.Points)
-        self.assertIsInstance(chart, hv.Element)
+        assert isinstance(chart, hv.Element)
 
     def test_overlay_plots(self):
         def plot_cb(rv):
             return self.res_1d.to_hv_dataset().to(hv.Curve)
 
         result = self.res_1d.overlay_plots(plot_cb)
-        self.assertIsInstance(result, hv.Overlay)
+        assert isinstance(result, hv.Overlay)
 
     def test_overlay_plots_returns_none(self):
         result = self.res_1d.overlay_plots(lambda rv: None)
-        self.assertIsNone(result)
+        assert result is None
 
     def test_overlay_plots_markdown(self):
         result = self.res_1d.overlay_plots(lambda rv: pn.pane.Markdown(f"# {rv.name}"))
-        self.assertIsInstance(result, pn.Row)
+        assert isinstance(result, pn.Row)
 
     def test_layout_plots(self):
         def plot_cb(rv):
             return self.res_1d.to_hv_dataset().to(hv.Curve)
 
         result = self.res_1d.layout_plots(plot_cb)
-        self.assertIsInstance(result, hv.Layout)
+        assert isinstance(result, hv.Layout)
 
     def test_layout_plots_none_results(self):
         result = self.res_1d.layout_plots(lambda rv: None)
-        self.assertIsNone(result)
+        assert result is None
 
     def test_time_widget(self):
         widget = self.res_1d.time_widget("Test Title")
-        self.assertIsInstance(widget, dict)
-        self.assertEqual(widget["title"], "Test Title")
+        assert isinstance(widget, dict)
+        assert widget["title"] == "Test Title"
 
     def test_hv_container_ds(self):
         ds = self.res_1d.to_dataset()
         rv = self.res_1d.bench_cfg.result_vars[0]
         result = self.res_1d.hv_container_ds(ds, rv, container=hv.Bars)
-        self.assertIsInstance(result, hv.Element)
+        assert isinstance(result, hv.Element)
 
     def test_to_hv_container(self):
         result = self.res_1d.to_hv_container(hv.Bars)
-        self.assertIsInstance(result, pn.Row)
+        assert isinstance(result, pn.Row)
 
     def test_result_var_to_container_column(self):
         # Static-like method — no sweep data needed
         container = HoloviewResult.result_var_to_container(self.res_1d, ResultFloat())
-        self.assertEqual(container, pn.Column)
+        assert container == pn.Column
 
     def test_result_var_to_container_image(self):
         container = HoloviewResult.result_var_to_container(self.res_1d, ResultImage())
-        self.assertEqual(container, pn.pane.PNG)
+        assert container == pn.pane.PNG
 
     def test_result_var_to_container_video(self):
         container = HoloviewResult.result_var_to_container(self.res_1d, ResultVideo())
-        self.assertEqual(container, pn.pane.Video)
+        assert container == pn.pane.Video
 
     def test_setup_results_and_containers_default(self):
         rv = ResultFloat()
         vars_out, containers = self.res_1d.setup_results_and_containers(rv)
-        self.assertEqual(len(vars_out), 1)
-        self.assertEqual(len(containers), 1)
-        self.assertIsInstance(containers[0], pn.Column)
+        assert len(vars_out) == 1
+        assert len(containers) == 1
+        assert isinstance(containers[0], pn.Column)
 
     def test_setup_results_and_containers_explicit(self):
         rv = ResultFloat()
         vars_out, containers = self.res_1d.setup_results_and_containers(rv, container=pn.Column)
-        self.assertEqual(len(vars_out), 1)
-        self.assertEqual(len(containers), 1)
+        assert len(vars_out) == 1
+        assert len(containers) == 1
 
     def test_to_error_bar(self):
         result = self.res_1d_r2.to_error_bar()
-        self.assertIsInstance(result, hv.Element)
+        assert isinstance(result, hv.Element)
 
     def test_to_points(self):
         result = self.res_2d.to_points()
-        self.assertIsInstance(result, hv.Element)
+        assert isinstance(result, hv.Element)
 
     def test_to_points_reduce(self):
         result = self.res_2d_r2.to_points(reduce=ReduceType.REDUCE)
-        self.assertIsInstance(result, hv.Element)
+        assert isinstance(result, hv.Element)
 
     def test_apply_opts_bare_element(self):
         """A bare HoloViews element gets opts applied directly."""
         curve = hv.Curve([(0, 0), (1, 1)])
         result = HoloviewResult._apply_opts(curve, xrotation=30)
-        self.assertEqual(
-            hv.Store.lookup_options("bokeh", result, "plot").options.get("xrotation"), 30
-        )
+        assert hv.Store.lookup_options("bokeh", result, "plot").options.get("xrotation") == 30
 
     def test_apply_opts_pane_wrapper(self):
         """A pn.pane.HoloViews wrapper gets opts applied to its .object."""
         pane = pn.pane.HoloViews(hv.Curve([(0, 0), (1, 1)]))
         HoloviewResult._apply_opts(pane, xrotation=30)
-        self.assertEqual(
-            hv.Store.lookup_options("bokeh", pane.object, "plot").options.get("xrotation"), 30
-        )
+        assert hv.Store.lookup_options("bokeh", pane.object, "plot").options.get("xrotation") == 30
 
     def test_apply_opts_layout_container(self):
         """A panel layout container (e.g. from widget_location='bottom') must
@@ -208,6 +202,6 @@ class TestHoloviewResult(unittest.TestCase):
         )
         # title/ylabel are plot options for Curve in the bokeh backend, alongside xrotation.
         plot_opts = hv.Store.lookup_options("bokeh", pane.object, "plot").options
-        self.assertEqual(plot_opts.get("xrotation"), 30)
-        self.assertEqual(plot_opts.get("title"), "A long title")
-        self.assertEqual(plot_opts.get("ylabel"), "Custom Y Label")
+        assert plot_opts.get("xrotation") == 30
+        assert plot_opts.get("title") == "A long title"
+        assert plot_opts.get("ylabel") == "Custom Y Label"

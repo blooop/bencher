@@ -65,7 +65,8 @@ def _declared_kwargs(callback: Callable) -> frozenset[str] | None:
     **kwargs or its signature cannot be introspected (no filtering in either case).
     Deliberately uncached: an lru_cache here would pin every callback — including
     per-run closures and bound methods with their captured data — for process
-    lifetime, and would crash on unhashable callables."""
+    lifetime, and would crash on unhashable callables.
+    """
     try:
         params = inspect.signature(callback).parameters
     except (TypeError, ValueError):  # C-extension/builtin callables, odd wrappers
@@ -117,7 +118,8 @@ def _named_only_specs() -> list[tuple[str, str, Callable]]:
     be requested by name in ``plot_list`` (A1 Phase 3). Plotly appears only where a
     plot already required it (surface, like volume above); rerun is its own backend
     and imports the rerun SDK lazily inside the renderer, so registration is safe
-    without the package installed."""
+    without the package installed.
+    """
     from bencher.results.dataset_result import DataSetResult
     from bencher.results.holoview_results.band_result import BandResult
     from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (

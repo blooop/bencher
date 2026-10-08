@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 import panel as pn
+import pytest
 import xarray as xr
 
 from bencher.plotting.plot_filter import PlotFilter, VarRange
@@ -33,42 +34,42 @@ def _make_pane(text: str) -> pn.viewable.Viewable:
 class TestBenchData(unittest.TestCase):
     def test_fake_defaults(self) -> None:
         data = BenchData.fake()
-        self.assertIsInstance(data.dataset, xr.Dataset)
-        self.assertEqual(data.input_vars, ())
-        self.assertEqual(data.result_vars, ())
-        self.assertIsInstance(data.run_meta, RunMeta)
-        self.assertIsNone(data.optimizer_study)
-        self.assertEqual(data.baseline_runs, ())
+        assert isinstance(data.dataset, xr.Dataset)
+        assert data.input_vars == ()
+        assert data.result_vars == ()
+        assert isinstance(data.run_meta, RunMeta)
+        assert data.optimizer_study is None
+        assert data.baseline_runs == ()
 
     def test_has_capability(self) -> None:
         data = BenchData.fake()
-        self.assertFalse(data.has("optimizer_study"))
-        self.assertFalse(data.has("baseline_runs"))
-        self.assertFalse(data.has("cache"))
+        assert not data.has("optimizer_study")
+        assert not data.has("baseline_runs")
+        assert not data.has("cache")
 
         data2 = data.with_changes(optimizer_study=object())
-        self.assertTrue(data2.has("optimizer_study"))
-        self.assertFalse(data.has("optimizer_study"), "with_changes must not mutate original")
+        assert data2.has("optimizer_study")
+        assert not data.has("optimizer_study"), "with_changes must not mutate original"
 
     def test_has_capability_accepts_enum(self) -> None:
         data = BenchData.fake().with_changes(cache=object())
-        self.assertTrue(data.has(Capability.CACHE))
-        self.assertTrue(data.has("cache"))
+        assert data.has(Capability.CACHE)
+        assert data.has("cache")
 
     def test_has_unknown_capability_raises(self) -> None:
         """An unknown capability name raises (with the valid vocabulary) instead of
         silently reading as 'absent' (plan 23 C10)."""
         data = BenchData.fake()
-        with self.assertRaises(ValueError) as ctx:
+        with pytest.raises(ValueError) as ctx:
             data.has("nonexistent")
-        self.assertIn("nonexistent", str(ctx.exception))
+        assert "nonexistent" in str(ctx.value)
         for cap in Capability:
-            self.assertIn(cap.value, str(ctx.exception))
+            assert cap.value in str(ctx.value)
 
     def test_frozen(self) -> None:
         data = BenchData.fake()
         # frozen dataclasses raise FrozenInstanceError, a subclass of AttributeError
-        with self.assertRaises(AttributeError):
+        with pytest.raises(AttributeError):
             data.dataset = xr.Dataset()  # type: ignore[misc]
 
 
@@ -85,8 +86,8 @@ class TestRegistry(unittest.TestCase):
             return _make_pane("foo")
 
         self.reg.register(_foo)
-        self.assertIs(self.reg.get("t.foo"), _foo)
-        self.assertIn(_foo, self.reg.all())
+        assert self.reg.get("t.foo") is _foo
+        assert _foo in self.reg.all()
 
     def test_register_requires_non_empty_name(self) -> None:
         @plot_plugin(name="x", register=False)
@@ -95,7 +96,7 @@ class TestRegistry(unittest.TestCase):
 
         # Mutate to violate the contract.
         _stub.name = ""
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.reg.register(_stub)
 
     def test_register_typoed_capability_raises(self) -> None:
@@ -112,13 +113,13 @@ class TestRegistry(unittest.TestCase):
         def _stub(_: BenchData) -> pn.viewable.Viewable:
             return _make_pane("x")
 
-        with self.assertRaises(ValueError) as ctx:
+        with pytest.raises(ValueError) as ctx:
             self.reg.register(_stub)
-        msg = str(ctx.exception)
-        self.assertIn("legacy_resutl", msg)  # cspell:disable-line
-        self.assertIn("typo", msg)
+        msg = str(ctx.value)
+        assert "legacy_resutl" in msg  # cspell:disable-line
+        assert "typo" in msg
         for cap in Capability:
-            self.assertIn(cap.value, msg)
+            assert cap.value in msg
 
     def test_select_does_not_abort_on_post_registration_capability_mutation(self) -> None:
         """Selection runs mid-run, after an expensive sweep, and both production call
@@ -145,9 +146,9 @@ class TestRegistry(unittest.TestCase):
 
         data = _data_with_floats(1)
         with self.assertLogs("bencher.plugins.registry", level="WARNING"):
-            self.assertEqual(self.reg.select(data), ())
+            assert self.reg.select(data) == ()
         reasons = [d.reason for d in self.reg.explain(data) if d.name == "mutated"]
-        self.assertIn("invalid capability", reasons[0])
+        assert "invalid capability" in reasons[0]
 
     def test_a_bad_capability_does_not_break_the_plugins_after_it(self) -> None:
         """The rejection handler must not take the rest of the loop down with it.
@@ -196,7 +197,7 @@ class TestRegistry(unittest.TestCase):
         data = _data_with_floats(1)
         with self.assertLogs("bencher.plugins.registry", level="WARNING"):
             selected = self.reg.select(data, exclude=["nothing_named_this"])
-        self.assertEqual([p.name for p in selected], ["zzz_healthy"])
+        assert [p.name for p in selected] == ["zzz_healthy"]
 
     def test_register_valid_capability_strings_accepted(self) -> None:
         """External plugins passing valid plain strings keep working."""
@@ -211,7 +212,7 @@ class TestRegistry(unittest.TestCase):
             return _make_pane("x")
 
         self.reg.register(_stub)
-        self.assertIs(self.reg.get("valid_caps"), _stub)
+        assert self.reg.get("valid_caps") is _stub
 
     def test_override_same_name_and_backend_replaces(self) -> None:
         @plot_plugin(name="dup", backend="a", register=False)
@@ -224,8 +225,8 @@ class TestRegistry(unittest.TestCase):
 
         self.reg.register(_a1)
         self.reg.register(_a2)
-        self.assertIs(self.reg.get("dup"), _a2)
-        self.assertEqual(len(self.reg.all()), 1)
+        assert self.reg.get("dup") is _a2
+        assert len(self.reg.all()) == 1
 
     def test_same_name_different_backends_coexist(self) -> None:
         """The same chart type can be implemented by several backends; get(name)
@@ -241,10 +242,10 @@ class TestRegistry(unittest.TestCase):
 
         self.reg.register(_a)
         self.reg.register(_b)
-        self.assertEqual(len(self.reg.all()), 2)
-        self.assertIs(self.reg.get("dup"), _a)
-        self.assertIs(self.reg.get("dup", backend="b"), _b)
-        self.assertEqual(self.reg.implementations("dup"), (_a, _b))
+        assert len(self.reg.all()) == 2
+        assert self.reg.get("dup") is _a
+        assert self.reg.get("dup", backend="b") is _b
+        assert self.reg.implementations("dup") == (_a, _b)
 
     def test_unregister(self) -> None:
         @plot_plugin(name="t.foo", register=False)
@@ -253,7 +254,7 @@ class TestRegistry(unittest.TestCase):
 
         self.reg.register(_foo)
         self.reg.unregister("t.foo")
-        self.assertIsNone(self.reg.get("t.foo"))
+        assert self.reg.get("t.foo") is None
 
     def test_unregister_single_backend(self) -> None:
         @plot_plugin(name="t.foo", backend="a", register=False)
@@ -267,10 +268,10 @@ class TestRegistry(unittest.TestCase):
         self.reg.register(_a)
         self.reg.register(_b)
         self.reg.unregister("t.foo", backend="a")
-        self.assertIs(self.reg.get("t.foo"), _b)
+        assert self.reg.get("t.foo") is _b
         # No backend given removes every remaining implementation.
         self.reg.unregister("t.foo")
-        self.assertIsNone(self.reg.get("t.foo"))
+        assert self.reg.get("t.foo") is None
 
 
 class TestSelection(unittest.TestCase):
@@ -322,7 +323,7 @@ class TestSelection(unittest.TestCase):
     def test_priority_order(self) -> None:
         data = _data_with_floats(1)
         names = [p.name for p in self.reg.select(data)]
-        self.assertEqual(names, ["alpha", "beta"])  # gamma's filter excludes it
+        assert names == ["alpha", "beta"]  # gamma's filter excludes it
 
     def test_backend_preference_swaps_implementation(self) -> None:
         """`backend` states a preference: chart types the preferred backend implements
@@ -344,15 +345,15 @@ class TestSelection(unittest.TestCase):
 
         # No preference: highest-priority implementation per chart type.
         chosen = {p.name: p.backend for p in self.reg.select(data)}
-        self.assertEqual(chosen, {"alpha": "hv", "beta": "plotly"})
+        assert chosen == {"alpha": "hv", "beta": "plotly"}
 
         # Preferring plotly swaps alpha's implementation; beta already plotly.
         chosen = {p.name: p.backend for p in self.reg.select(data, backend="plotly")}
-        self.assertEqual(chosen, {"alpha": "plotly", "beta": "plotly"})
+        assert chosen == {"alpha": "plotly", "beta": "plotly"}
 
         # Preferring hv keeps beta (only implemented in plotly) available.
         chosen = {p.name: p.backend for p in self.reg.select(data, backend="hv")}
-        self.assertEqual(chosen, {"alpha": "hv", "beta": "plotly"})
+        assert chosen == {"alpha": "hv", "beta": "plotly"}
 
     def test_select_dedupes_chart_types(self) -> None:
         """select() returns one implementation per chart type, not one per backend."""
@@ -369,23 +370,23 @@ class TestSelection(unittest.TestCase):
 
         self.reg.register(_alpha_plotly)
         names = [p.name for p in self.reg.select(_data_with_floats(1))]
-        self.assertEqual(sorted(names), ["alpha", "beta"])
+        assert sorted(names) == ["alpha", "beta"]
 
     def test_include_exclude(self) -> None:
         data = _data_with_floats(1)
-        self.assertEqual([p.name for p in self.reg.select(data, include=["alpha"])], ["alpha"])
-        self.assertEqual([p.name for p in self.reg.select(data, exclude=["alpha"])], ["beta"])
+        assert [p.name for p in self.reg.select(data, include=["alpha"])] == ["alpha"]
+        assert [p.name for p in self.reg.select(data, exclude=["alpha"])] == ["beta"]
 
     def test_only_short_circuits_filter(self) -> None:
         # `only` bypasses the match filter — gamma's default filter rejects everything,
         # but explicit selection by name should still succeed.
         data = _data_with_floats(1)
         picked = self.reg.select(data, only="gamma")
-        self.assertEqual([p.name for p in picked], ["gamma"])
+        assert [p.name for p in picked] == ["gamma"]
 
     def test_only_unknown_returns_empty(self) -> None:
         data = _data_with_floats(1)
-        self.assertEqual(self.reg.select(data, only="nope"), ())
+        assert self.reg.select(data, only="nope") == ()
 
     def test_named_only_plugin_requires_explicit_naming(self) -> None:
         """auto=False plugins never appear in automatic selection, but naming them
@@ -404,9 +405,9 @@ class TestSelection(unittest.TestCase):
 
         self.reg.register(_delta)
         data = _data_with_floats(1)
-        self.assertNotIn("delta", [p.name for p in self.reg.select(data)])
-        self.assertEqual([p.name for p in self.reg.select(data, include=["delta"])], ["delta"])
-        self.assertEqual([p.name for p in self.reg.select(data, only="delta")], ["delta"])
+        assert "delta" not in [p.name for p in self.reg.select(data)]
+        assert [p.name for p in self.reg.select(data, include=["delta"])] == ["delta"]
+        assert [p.name for p in self.reg.select(data, only="delta")] == ["delta"]
 
     def test_plugin_without_auto_attribute_is_automatic(self) -> None:
         """Plugins predating the `auto` attribute must keep appearing automatically."""
@@ -423,7 +424,7 @@ class TestSelection(unittest.TestCase):
                 return _make_pane("epsilon")
 
         self.reg.register(NoAutoAttr())
-        self.assertIn("epsilon", [p.name for p in self.reg.select(_data_with_floats(1))])
+        assert "epsilon" in [p.name for p in self.reg.select(_data_with_floats(1))]
 
     def test_requires_capability_gating(self) -> None:
         @plot_plugin(
@@ -438,10 +439,10 @@ class TestSelection(unittest.TestCase):
 
         self.reg.register(_p)
         data = _data_with_floats(1)
-        self.assertNotIn("needs_optimizer", [p.name for p in self.reg.select(data)])
+        assert "needs_optimizer" not in [p.name for p in self.reg.select(data)]
 
         data2 = data.with_changes(optimizer_study=object())
-        self.assertIn("needs_optimizer", [p.name for p in self.reg.select(data2)])
+        assert "needs_optimizer" in [p.name for p in self.reg.select(data2)]
 
 
 class TestRender(unittest.TestCase):
@@ -462,10 +463,10 @@ class TestRender(unittest.TestCase):
 
         self.reg.register(_ok)
         rendered = self.reg.render(_data_with_floats(1))
-        self.assertEqual(len(rendered), 1)
+        assert len(rendered) == 1
         name, pane = rendered[0]
-        self.assertEqual(name, "ok")
-        self.assertIsInstance(pane, pn.viewable.Viewable)
+        assert name == "ok"
+        assert isinstance(pane, pn.viewable.Viewable)
 
     def test_render_substitutes_error_pane(self) -> None:
         @plot_plugin(name="boom", match=self.permissive, register=False)
@@ -474,12 +475,12 @@ class TestRender(unittest.TestCase):
 
         self.reg.register(_boom)
         rendered = self.reg.render(_data_with_floats(1))
-        self.assertEqual(len(rendered), 1)
+        assert len(rendered) == 1
         name, pane = rendered[0]
-        self.assertEqual(name, "boom")
-        self.assertIsInstance(pane, pn.pane.Markdown)
-        self.assertIn("Plugin error", str(pane.object))
-        self.assertIn("intentional test failure", str(pane.object))
+        assert name == "boom"
+        assert isinstance(pane, pn.pane.Markdown)
+        assert "Plugin error" in str(pane.object)
+        assert "intentional test failure" in str(pane.object)
 
     def test_render_strict_reraises(self) -> None:
         @plot_plugin(name="boom", match=self.permissive, register=False)
@@ -487,7 +488,7 @@ class TestRender(unittest.TestCase):
             raise RuntimeError("intentional test failure")
 
         self.reg.register(_boom)
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self.reg.render(_data_with_floats(1), strict=True)
 
     def test_render_one_failing_does_not_kill_others(self) -> None:
@@ -503,7 +504,7 @@ class TestRender(unittest.TestCase):
         self.reg.register(_boom)
         rendered = self.reg.render(_data_with_floats(1))
         names = [name for name, _ in rendered]
-        self.assertEqual(names, ["ok", "boom"])
+        assert names == ["ok", "boom"]
 
 
 class TestGlobalRegistration(unittest.TestCase):
@@ -517,7 +518,7 @@ class TestGlobalRegistration(unittest.TestCase):
         def _smoke(_: BenchData) -> pn.viewable.Viewable:
             return _make_pane("smoke")
 
-        self.assertIs(get_registry().get("global.smoke"), _smoke)
+        assert get_registry().get("global.smoke") is _smoke
 
     def test_register_plugin_function(self) -> None:
         @plot_plugin(name="global.smoke", match=PlotFilter(), register=False)
@@ -525,7 +526,7 @@ class TestGlobalRegistration(unittest.TestCase):
             return _make_pane("smoke")
 
         register_plugin(_smoke)
-        self.assertIs(get_registry().get("global.smoke"), _smoke)
+        assert get_registry().get("global.smoke") is _smoke
 
     def test_default_match_is_always_eligible(self) -> None:
         """A plugin declared without a match rule must be selectable for any sweep
@@ -541,7 +542,7 @@ class TestGlobalRegistration(unittest.TestCase):
         reg.register(_smoke)
         for n_floats in (0, 1, 3):
             selected = reg.select(_data_with_floats(n_floats))
-            self.assertEqual([p.name for p in selected], ["global.smoke"])
+            assert [p.name for p in selected] == ["global.smoke"]
 
 
 class TestDefaultPlotFilterIsPermissive(unittest.TestCase):
@@ -560,10 +561,10 @@ class TestDefaultPlotFilterIsPermissive(unittest.TestCase):
     def test_default_filter_matches_various_shapes(self) -> None:
         f = PlotFilter()
         for cfg in self.SHAPES:
-            self.assertTrue(f.matches_result(cfg, "default", override=False).overall)
+            assert f.matches_result(cfg, "default", override=False).overall
 
     def test_match_all_is_gone(self) -> None:
-        self.assertFalse(hasattr(PlotFilter, "match_all"))
+        assert not hasattr(PlotFilter, "match_all")
 
     def test_plugin_without_a_match_rule_is_never_hidden(self) -> None:
         """The plugin.py footgun: declaring a plugin with no match rule, or with the
@@ -584,7 +585,7 @@ class TestDefaultPlotFilterIsPermissive(unittest.TestCase):
         for cfg in self.SHAPES:
             data = BenchData.fake(plt_cnt_cfg=cfg)
             names = sorted(p.name for p in reg.select(data))
-            self.assertEqual(names, ["p6.explicit", "p6.implicit"], msg=str(cfg))
+            assert names == ["p6.explicit", "p6.implicit"], str(cfg)
 
 
 class TestEntryPointDiscovery(unittest.TestCase):
@@ -620,8 +621,8 @@ class TestEntryPointDiscovery(unittest.TestCase):
         with patch("bencher.plugins.registry.metadata.entry_points") as ep_mock:
             ep_mock.return_value = [FakeEP()]
             with self.assertLogs("bencher.plugins.registry", level="WARNING") as cm:
-                self.assertEqual(reg.all(), ())
-        self.assertIn("nope", "\n".join(cm.output))
+                assert reg.all() == ()
+        assert "nope" in "\n".join(cm.output)
 
     def test_skip_on_load_failure(self) -> None:
         reg = PluginRegistry()
@@ -636,7 +637,7 @@ class TestEntryPointDiscovery(unittest.TestCase):
             ep_mock.return_value = [FakeEP()]
             # Must not raise — broken plugin is skipped.
             reg.all()
-            self.assertEqual(reg.all(), ())
+            assert reg.all() == ()
 
     def test_load_plugin_instance(self) -> None:
         @plot_plugin(name="ep.alpha", match=PlotFilter(), register=False)
@@ -653,7 +654,7 @@ class TestEntryPointDiscovery(unittest.TestCase):
 
         with patch("bencher.plugins.registry.metadata.entry_points") as ep_mock:
             ep_mock.return_value = [FakeEP()]
-            self.assertIs(reg.get("ep.alpha"), _alpha)
+            assert reg.get("ep.alpha") is _alpha
 
     def test_load_factory_returning_iterable(self) -> None:
         @plot_plugin(name="ep.one", match=PlotFilter(), register=False)
@@ -678,7 +679,7 @@ class TestEntryPointDiscovery(unittest.TestCase):
         with patch("bencher.plugins.registry.metadata.entry_points") as ep_mock:
             ep_mock.return_value = [FakeEP()]
             names = sorted(p.name for p in reg.all())
-            self.assertEqual(names, ["ep.one", "ep.two"])
+            assert names == ["ep.one", "ep.two"]
 
 
 class TestDeletedPlotGates(unittest.TestCase):
@@ -700,13 +701,13 @@ class TestDeletedPlotGates(unittest.TestCase):
 
     def test_plt_cnt_cfg_no_longer_declares_them(self):
         params = PltCntCfg.param.objects()
-        self.assertNotIn("vector_len", params)
-        self.assertNotIn("result_vars", params)
+        assert "vector_len" not in params
+        assert "result_vars" not in params
 
     def test_plot_filter_no_longer_declares_them(self):
         fields = {f.name for f in dataclasses.fields(PlotFilter)}
-        self.assertNotIn("vector_len", fields)
-        self.assertNotIn("result_vars", fields)
+        assert "vector_len" not in fields
+        assert "result_vars" not in fields
 
     def test_selection_ignores_them(self):
         # A sweep shape that the deleted gates would have rejected had they
@@ -719,7 +720,7 @@ class TestDeletedPlotGates(unittest.TestCase):
             repeats_range=VarRange.at_least(1),
             input_range=VarRange.at_least(1),
         ).matches_result(cfg, "probe", False)
-        self.assertTrue(res.overall)
+        assert res.overall
 
 
 if __name__ == "__main__":

@@ -524,7 +524,6 @@ class Bench(BenchPlotServer):
             TypeError: If variable parameters are not of the correct type
             FileNotFoundError: If only_plot=True and no cached results exist
         """
-
         if self.worker_class_instance is not None:
             if input_vars is not None:
                 input_vars_in = deepcopy(input_vars)
@@ -552,11 +551,10 @@ class Bench(BenchPlotServer):
 
             if const_vars is not None:
                 const_vars_in = deepcopy(const_vars)
+            elif self.const_vars is None:
+                const_vars_in = self.worker_class_instance.get_input_defaults()
             else:
-                if self.const_vars is None:
-                    const_vars_in = self.worker_class_instance.get_input_defaults()
-                else:
-                    const_vars_in = deepcopy(self.const_vars)
+                const_vars_in = deepcopy(self.const_vars)
         else:
             input_vars_in = deepcopy(input_vars) if input_vars is not None else []
             result_vars_in = deepcopy(result_vars) if result_vars is not None else []
@@ -1266,9 +1264,6 @@ class Bench(BenchPlotServer):
                 # identical ones that could drift apart.
                 try:
                     result = self.sample_cache.submit(cache_job, prefetched=prefetched)
-                # catch is a runtime tuple of exception types, which pylint
-                # cannot see into.
-                # pylint: disable-next=catching-non-exception
                 except catch as exc:
                     # The serial executor runs the worker *inside* submit(), so on
                     # the default executor a raising sample never reaches
@@ -1387,8 +1382,7 @@ class Bench(BenchPlotServer):
         return self.report.publish(remote_callback, branch_name=branch_name)
 
     def get_result_vars(self, as_str: bool = True) -> list[str] | list[Parameter]:
-        """
-        Retrieve the result variables from the worker class instance.
+        """Retrieve the result variables from the worker class instance.
 
         Args:
             as_str (bool): If True, the result variables are returned as strings.
@@ -1958,7 +1952,7 @@ class Bench(BenchPlotServer):
                         trial.user_attrs[WARM_STARTED] = True
                     study.add_trials(trials)
                     added += len(trials)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 logger.debug("Failed to warm-start from result", exc_info=True)
         return added
 
@@ -1982,7 +1976,7 @@ class Bench(BenchPlotServer):
         for iv in input_vars:
             try:
                 vals = list(iv.values())
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 # Not every sweep var can enumerate its values (e.g. dynamically
                 # populated selectors); skip it rather than aborting the whole grid.
                 logger.debug("Skipping input var %s: values() failed", iv.name, exc_info=True)
@@ -2027,7 +2021,7 @@ class Bench(BenchPlotServer):
                     )
                     study.add_trial(trial)
                     added += 1
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     logger.debug("Failed to warm-start trial from cache", exc_info=True)
 
         return added

@@ -140,7 +140,8 @@ class PltCntCfg(param.Parameterized):
 
 def _missing_mask(da: xr.DataArray, rv) -> xr.DataArray:
     """True where an entry holds *rv*'s missing-value sentinel (see
-    ``result_missing_fill``); plain NaN when the variable is unknown."""
+    ``result_missing_fill``); plain NaN when the variable is unknown.
+    """
     if rv is not None:
         fill, _ = result_missing_fill(rv)
         if not (isinstance(fill, float) and math.isnan(fill)):
@@ -158,7 +159,8 @@ def _samples_per_point(ds: xr.Dataset, result_vars=None) -> int:
     structural padding when repeats or levels grew between runs. Variables
     without the repeat dimension are ignored when another variable carries it
     (a lone panel var must not mask real repeats); if none carries it, each
-    point holds one sample, or none at all for a dataset with no result data."""
+    point holds one sample, or none at all for a dataset with no result data.
+    """
     rv_by_name = {rv.name: rv for rv in result_vars} if result_vars else {}
     counts = []
     for name, da in ds.data_vars.items():

@@ -21,7 +21,7 @@ YAML_EXAMPLES = [
 ]
 
 
-def example_meta_yaml(run_cfg: bn.BenchRunCfg | None = None) -> None:  # pylint: disable=unused-argument
+def example_meta_yaml(run_cfg: bn.BenchRunCfg | None = None) -> None:
     """Copy YAML sweep examples into the generated directory."""
     dest = GENERATED_DIR / OUTPUT_DIR
     dest.mkdir(parents=True, exist_ok=True)

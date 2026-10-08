@@ -14,6 +14,7 @@ import unittest
 from enum import auto
 
 import numpy as np
+import pytest
 from strenum import StrEnum
 
 import bencher as bn
@@ -58,33 +59,33 @@ def _run_sweep(bench_cls):
 
 class TestNanDefaultConstruction(unittest.TestCase):
     def test_default_is_nan(self):
-        self.assertTrue(math.isnan(ResultFloat().default))
-        self.assertTrue(math.isnan(ResultVec(size=2).default))
-        self.assertTrue(math.isnan(ResultBool().default))
+        assert math.isnan(ResultFloat().default)
+        assert math.isnan(ResultVec(size=2).default)
+        assert math.isnan(ResultBool().default)
 
     def test_default_can_be_nan(self):
-        self.assertTrue(math.isnan(ResultFloat(default=float("nan")).default))
-        self.assertTrue(math.isnan(ResultVec(size=2, default=float("nan")).default))
+        assert math.isnan(ResultFloat(default=float("nan")).default)
+        assert math.isnan(ResultVec(size=2, default=float("nan")).default)
 
     def test_bool_default_can_be_nan(self):
         # ResultBool locks bounds to [0, 1]; NaN must still be accepted as the
         # "missing" sentinel rather than rejected as out-of-bounds.
-        self.assertTrue(math.isnan(ResultBool(default=float("nan")).default))
+        assert math.isnan(ResultBool(default=float("nan")).default)
 
     def test_explicit_zero_default_opt_out(self):
-        self.assertEqual(ResultFloat(default=0).default, 0)
-        self.assertEqual(ResultVec(size=2, default=0).default, 0)
-        self.assertEqual(ResultBool(default=0).default, 0)
+        assert ResultFloat(default=0).default == 0
+        assert ResultVec(size=2, default=0).default == 0
+        assert ResultBool(default=0).default == 0
 
     def test_explicit_numeric_default_still_honoured(self):
-        self.assertEqual(ResultFloat(default=5).default, 5)
+        assert ResultFloat(default=5).default == 5
 
     def test_nan_default_does_not_change_hash(self):
         # ``default`` is not a hashed slot, so opting in to NaN must not wipe
         # over_time history for an otherwise-identical result var.
-        self.assertEqual(
-            ResultFloat(units="s").hash_persistent(),
-            ResultFloat(units="s", default=float("nan")).hash_persistent(),
+        assert (
+            ResultFloat(units="s").hash_persistent()
+            == ResultFloat(units="s", default=float("nan")).hash_persistent()
         )
 
 
@@ -106,7 +107,7 @@ class TestResultBoolNanBounds(unittest.TestCase):
         class Child(Base):
             flag = ResultBool(default=float("nan"), doc="child override")
 
-        self.assertTrue(math.isnan(Child.param.flag.default))
+        assert math.isnan(Child.param.flag.default)
 
     def test_nan_value_assignment_accepted(self):
         class B(bn.ParametrizedSweep):
@@ -114,7 +115,7 @@ class TestResultBoolNanBounds(unittest.TestCase):
 
         obj = B()
         obj.flag = float("nan")  # mark missing at runtime
-        self.assertTrue(math.isnan(obj.flag))
+        assert math.isnan(obj.flag)
 
     def test_numpy_nan_scalar_accepted(self):
         # The NaN check uses math.isnan rather than isinstance(val, float) so
@@ -124,7 +125,7 @@ class TestResultBoolNanBounds(unittest.TestCase):
 
         obj = B()
         obj.flag = np.float32("nan")
-        self.assertTrue(math.isnan(obj.flag))
+        assert math.isnan(obj.flag)
 
     def test_real_outcomes_still_coerce_in_bounds(self):
         class B(bn.ParametrizedSweep):
@@ -132,18 +133,18 @@ class TestResultBoolNanBounds(unittest.TestCase):
 
         obj = B()
         obj.flag = True
-        self.assertEqual(obj.flag, 1)
+        assert obj.flag == 1
         obj.flag = False
-        self.assertEqual(obj.flag, 0)
+        assert obj.flag == 0
 
     def test_out_of_bounds_value_still_rejected(self):
         class B(bn.ParametrizedSweep):
             flag = ResultBool(doc="x")
 
         obj = B()
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             obj.flag = 2.0  # above upper bound
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             obj.flag = -1.0  # below lower bound
 
 
@@ -153,12 +154,12 @@ class TestNanDefaultEndToEnd(unittest.TestCase):
     def test_unrecorded_zero_default_stores_zero(self):
         ds = _run_sweep(UnrecordedZeroBench).to_dataset()
         for val in ds["out"].values.flat:
-            self.assertEqual(float(val), 0.0)
+            assert float(val) == 0.0
 
     def test_unrecorded_nan_default_stores_nan(self):
         ds = _run_sweep(UnrecordedNanBench).to_dataset()
         for val in ds["out"].values.flat:
-            self.assertTrue(np.isnan(val))
+            assert np.isnan(val)
 
 
 class TestNanDefaultSerialization(unittest.TestCase):
@@ -188,7 +189,7 @@ class TestNanDefaultSerialization(unittest.TestCase):
             path = bn.save_result(res, os.path.join(tmp, "res.pkl"))
             loaded = bn.load_result(path)
         for val in loaded.to_dataset()["out"].values.flat:
-            self.assertTrue(np.isnan(val))
+            assert np.isnan(val)
 
     def test_render_report_with_nan_default_succeeds(self):
         # render_report is the only step that builds holoviews/panel/bokeh
@@ -197,7 +198,7 @@ class TestNanDefaultSerialization(unittest.TestCase):
         res = self._collect_nan()
         with tempfile.TemporaryDirectory() as tmp:
             out = bn.render_report(res, tmp)
-            self.assertTrue(os.path.exists(out))
+            assert os.path.exists(out)
 
 
 if __name__ == "__main__":

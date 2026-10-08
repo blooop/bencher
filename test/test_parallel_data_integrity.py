@@ -137,7 +137,7 @@ def _cache_test_worker_double(**kwargs):
     return {"result": kwargs.get("x", 0) * 2}
 
 
-def _cache_test_worker_const(**kwargs):  # pylint: disable=unused-argument
+def _cache_test_worker_const(**kwargs):
     """Returns constant for eviction tests. Must be at module level for pickle."""
     return {"result": 42}
 

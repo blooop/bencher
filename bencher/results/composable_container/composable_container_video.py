@@ -62,7 +62,6 @@ class ComposableContainerVideo(ComposableContainerBase):
         Raises:
             RuntimeWarning: if file format is not recognised
         """
-        # pylint: disable=import-outside-toplevel
         from moviepy import ImageClip, VideoClip, VideoFileClip
 
         # print(f"append obj: {type(obj)}, {obj}")
@@ -116,7 +115,6 @@ class ComposableContainerVideo(ComposableContainerBase):
         Returns:
             CompositeVideoClip: A composite video clip containing the images/videos added via append()
         """
-        # pylint: disable=import-outside-toplevel
         from moviepy import CompositeVideoClip, ImageClip, clips_array, concatenate_videoclips, vfx
 
         if render_cfg is None:
@@ -198,7 +196,6 @@ class ComposableContainerVideo(ComposableContainerBase):
         return deepcopy(self)
 
     def extend_clip(self, clip: VideoClip, desired_duration: float):
-        # pylint: disable=import-outside-toplevel
         from moviepy import ImageClip, concatenate_videoclips
 
         if clip.duration is None:

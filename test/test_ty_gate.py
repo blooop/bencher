@@ -243,7 +243,7 @@ class TestEffectiveGateConfig:
 
     def test_gate_reports_a_tier_a_violation_in_first_party_code(
         self,
-        seeded_repo_gate_run: tuple[str, int],  # pylint: disable=redefined-outer-name
+        seeded_repo_gate_run: tuple[str, int],
     ) -> None:
         output, returncode = seeded_repo_gate_run
         assert "_ty_gate_probe.py" in output, (
@@ -263,7 +263,7 @@ class TestEffectiveGateConfig:
 
     def test_generated_notebooks_do_not_gate_the_type_check(
         self,
-        seeded_repo_gate_run: tuple[str, int],  # pylint: disable=redefined-outer-name
+        seeded_repo_gate_run: tuple[str, int],
     ) -> None:
         """`pixi run ty` must not depend on whether docs have been built.
 
