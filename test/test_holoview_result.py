@@ -1,6 +1,7 @@
 """Tests for bencher/results/holoview_results/holoview_result.py"""
 
 import unittest
+from unittest import mock
 
 import holoviews as hv
 import panel as pn
@@ -174,6 +175,14 @@ class TestHoloviewResult(unittest.TestCase):
     def test_to_points_reduce(self):
         result = self.res_2d_r2.to_points(reduce=ReduceType.REDUCE)
         assert isinstance(result, hv.Element)
+
+    def test_to_holomap_list_keeps_each_holomap(self):
+        """Each named HoloMap ends up in the returned column (it used to come back empty)."""
+        built = {name: hv.HoloMap({0: hv.Curve([(0, 0), (1, i)])}) for i, name in enumerate("ab")}
+        with mock.patch.object(HoloviewResult, "to_holomap", side_effect=built.__getitem__):
+            col = self.res_1d.to_holomap_list(["a", "b"])
+        assert isinstance(col, pn.Column)
+        assert [pane.object for pane in col] == [built["a"], built["b"]]
 
     def test_apply_opts_bare_element(self):
         """A bare HoloViews element gets opts applied directly."""
