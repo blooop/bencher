@@ -382,9 +382,11 @@ class YamlSelection(str):
             return self.key() == other
         return NotImplemented
 
-    # Defining __eq__ makes Python set __hash__ to None; state that explicitly so the
-    # class stays unhashable, as it has always been.
-    __hash__ = None  # type: ignore[assignment]
+    # Defining __eq__ makes Python set __hash__ to None, which left this str subclass
+    # unusable as a dict key or set member. It equals its plain-str key, so it must hash
+    # like that key (a == b implies hash(a) == hash(b)); selections that share a key but
+    # differ in value then only collide, which equality resolves.
+    __hash__ = str.__hash__
 
     def __lt__(self, other: Any) -> bool:
         if isinstance(other, YamlSelection):
