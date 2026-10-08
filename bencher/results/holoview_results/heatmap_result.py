@@ -9,8 +9,7 @@ from param import Parameter
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
-from bencher.results.holoview_results.holoview_result import HoloviewResult
-from bencher.results.holoview_results.holoview_result import use_tap as _USE_TAP
+from bencher.results.holoview_results.holoview_result import HoloviewResult, use_tap as _USE_TAP
 from bencher.results.hvplot_accessor import hvplot_of
 from bencher.variables.results import ResultFloat
 

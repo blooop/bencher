@@ -7,11 +7,6 @@ exclude = ["*.md"]
 
 [lint]
 ignore = [
-    # E501 is not in ruff's default rule set, so this entry is inert today. It is kept
-    # as a guard: the long strings it would flag are example `description=` prose and
-    # embedded URLs that cannot be wrapped, so anyone widening `select` to cover E5
-    # should decide about those 400-odd lines deliberately rather than by accident.
-    "E501", # Line longer than `line-length` (100).
     # DTZ001/DTZ005: bencher's time axis is deliberately naive local wall-clock time.
     # The `over_time` dimension is stored as a numpy datetime64 xarray coordinate, which
     # has no timezone concept — passing tz-aware datetimes degrades the coordinate to
@@ -24,10 +19,7 @@ ignore = [
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-# Ignore `E402` (import violations) in all `__init__.py` files, and in `path/to/file.py`.
 [lint.per-file-ignores]
-"__init__.py" = ["E402", "F401"]
-"**/{tests,docs,tools}/*" = ["E402"]
 # RUF023: `__slots__` order is load-bearing here, not cosmetic. `_hash_slots` in this
 # module hashes slot values in declaration order, so sorting __slots__ silently changes
 # every BenchCfg.hash_persistent() value and strands all on-disk benchmark and over_time
@@ -35,3 +27,9 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # file only — every other module is still checked. See the golden hash guard in
 # test/test_hash_persistent.py.
 "bencher/variables/results.py" = ["RUF023"]
+
+# Keep `from m import (A as A, B as B)` grouped. The package `__init__.py` files re-export
+# their public API with redundant aliases (PEP 484 explicit re-exports, which F401
+# accepts), and without this isort splits every aliased name onto its own import line.
+[lint.isort]
+combine-as-imports = true

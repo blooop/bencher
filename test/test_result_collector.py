@@ -13,8 +13,7 @@ from unittest import mock
 import numpy as np
 import pandas as pd
 import xarray as xr
-from hypothesis import given, settings
-from hypothesis import strategies as st
+from hypothesis import given, settings, strategies as st
 
 import bencher as bn
 from bencher.bench_cfg import BenchCfg

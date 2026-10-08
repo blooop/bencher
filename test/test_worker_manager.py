@@ -4,8 +4,7 @@ import dataclasses
 import unittest
 from typing import get_args
 
-from hypothesis import given, settings
-from hypothesis import strategies as st
+from hypothesis import given, settings, strategies as st
 
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.worker_manager import (

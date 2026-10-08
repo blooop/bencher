@@ -19,8 +19,7 @@ cannot land half-done.
 
 import tomllib
 import unittest
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as get_package_version
+from importlib.metadata import PackageNotFoundError, version as get_package_version
 from pathlib import Path
 from unittest import mock
 

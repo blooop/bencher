@@ -9,8 +9,7 @@ from shutil import rmtree
 
 import pytest
 from diskcache import Cache
-from hypothesis import given, settings
-from hypothesis import strategies as st
+from hypothesis import given, settings, strategies as st
 
 from bencher import Bench, BenchCfg, BenchRunCfg
 from bencher.example.benchmark_data import ExampleBenchCfg

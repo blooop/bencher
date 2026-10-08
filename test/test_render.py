@@ -9,8 +9,7 @@ from unittest import mock
 
 from bencher import Bench, BenchRunCfg, load_result, render_report, save_result
 from bencher.example.benchmark_data import ExampleBenchCfg
-from bencher.render import _prog
-from bencher.render import main as render_main
+from bencher.render import _prog, main as render_main
 
 
 def _count_plot_objects() -> int:

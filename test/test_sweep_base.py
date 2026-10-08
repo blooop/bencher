@@ -1,7 +1,6 @@
 import unittest
 
-from hypothesis import given
-from hypothesis import strategies as st
+from hypothesis import given, strategies as st
 
 import bencher as bn
 from bencher.example.benchmark_data import AllSweepVars, PostprocessFn

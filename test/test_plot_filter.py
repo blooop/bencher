@@ -1,7 +1,6 @@
 import unittest
 
-from hypothesis import given
-from hypothesis import strategies as st
+from hypothesis import given, strategies as st
 
 from bencher.plotting.plot_filter import PlotFilter, PltCntCfg, VarRange
 

@@ -27,8 +27,7 @@ from bencher.bench_report import BenchReport
 from bencher.blob_store import collect_cache_dir, record_blob_cache_dir
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
 from bencher.execution import current_execution
-from bencher.history import OnHistoryReset
-from bencher.history import config_summary as history_config_summary
+from bencher.history import OnHistoryReset, config_summary as history_config_summary
 from bencher.job import (
     Executors,
     FutureCache,

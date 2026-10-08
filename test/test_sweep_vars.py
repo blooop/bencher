@@ -1,8 +1,10 @@
 import unittest
 from enum import auto
 
-from hypothesis import given  # pylint: disable=unused-import
-from hypothesis import strategies as st
+from hypothesis import (
+    given,  # pylint: disable=unused-import
+    strategies as st,
+)
 from strenum import StrEnum
 
 from bencher.variables.inputs import BoolSweep, EnumSweep, FloatSweep, IntSweep, StringSweep
