@@ -20,13 +20,13 @@ CONSTRUCTORS = {
     "TimeSnapshot(str)": lambda: TimeSnapshot("run_1"),
     "TimeEvent": lambda: TimeEvent("pr_1"),
     "StringSweep": lambda: bn.StringSweep(["a", "b"]),
-    "BoolSweep": lambda: bn.BoolSweep(),
+    "BoolSweep": bn.BoolSweep,
     "EnumSweep": lambda: bn.EnumSweep(_Colour),
     "IntSweep": lambda: bn.IntSweep(default=1, bounds=[0, 5]),
     "FloatSweep": lambda: bn.FloatSweep(default=1.0, bounds=[0.0, 5.0]),
     "ResultFloat": lambda: bn.ResultFloat(units="s"),
-    "ResultString": lambda: bn.ResultString(),
-    "ResultPath": lambda: bn.ResultPath(),
+    "ResultString": bn.ResultString,
+    "ResultPath": bn.ResultPath,
 }
 
 
