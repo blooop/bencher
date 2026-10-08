@@ -1511,13 +1511,13 @@ class BenchResultBase:
             return self._dataset_sample_to_container(val, result_var, container, legacy_trusted)
         if isinstance(result_var, ResultReference):
             if not 0 <= val < len(self.object_index):
-                # The cell keeps its index, but save_result and the result cache
-                # strip object_index by design, so a loaded result has no live
-                # object behind it. Say so in the pane instead of an IndexError.
+                # The cell's index has no object in this result's object_index,
+                # e.g. after save/load or a result-cache hit (both strip it).
+                # Say so in the pane instead of an IndexError.
                 return pn.pane.Markdown(
                     f"*'{result_var.name}': this ResultReference object was not persisted "
-                    "with the saved result; use ResultDataSet for a payload that must "
-                    "survive save/load*"
+                    "(save_result and the result cache keep only its index); use "
+                    "ResultDataSet for a payload that must survive either*"
                 )
             ref = self.object_index[val]
             if ref is not None:
