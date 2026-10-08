@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 import bencher as bn
+from bencher.variables.inputs import YamlSelection
 
 EXAMPLE_YAML = (
     Path(__file__).resolve().parent.parent / "bencher" / "example" / "yaml_sweep_list.yaml"
@@ -104,3 +105,12 @@ def test_yaml_sweep_hash_includes_value(tmp_path):
     hash_v2 = ConfigSweepV2().hash_persistent()
 
     assert hash_v1 != hash_v2
+
+
+def test_yaml_selection_is_hashable_like_its_key():
+    sel = YamlSelection("fast", {"speed": 10})
+    # It compares equal to its plain-str key, so it must hash like that key too.
+    assert sel == "fast"
+    assert hash(sel) == hash("fast")
+    assert {sel: 1}["fast"] == 1
+    assert {sel, "fast"} == {"fast"}
