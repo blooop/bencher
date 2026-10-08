@@ -11,6 +11,14 @@ from urllib.parse import quote
 from bencher.complete_report import verify_report
 
 
+def _load_summary(path: Path) -> dict:
+    """Read one result summary, which must be a JSON object."""
+    summary = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(summary, dict):
+        raise TypeError("Result summary must be an object")
+    return summary
+
+
 def discover_complete_reports(reports_dir: Path, root: str = "") -> list[dict]:
     """Select the newest complete result for each tag, machine and configuration.
 
@@ -37,9 +45,7 @@ def discover_complete_reports(reports_dir: Path, root: str = "") -> list[dict]:
                     execution.get("lane"),
                 )
                 hash(key)
-                summary = json.loads((path.parent / entry["summary"]).read_text(encoding="utf-8"))
-                if not isinstance(summary, dict):
-                    raise TypeError("Result summary must be an object")
+                summary = _load_summary(path.parent / entry["summary"])
                 record = {
                     "tag": tag,
                     "entry": entry,

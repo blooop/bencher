@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterable
 from concurrent.futures import Future, ProcessPoolExecutor
 from dataclasses import dataclass
 from enum import auto
-from typing import Protocol, assert_never, runtime_checkable
+from typing import Any, Protocol, assert_never, runtime_checkable
 
 from diskcache import Cache
 from strenum import StrEnum
@@ -38,7 +38,7 @@ class SupportsSubmit(Protocol):
     narrow one (plan 23 P2).
     """
 
-    def submit(self, fn: Callable, /, *args, **kwargs) -> Future: ...
+    def submit(self, fn: Callable, /, *args: Any, **kwargs: Any) -> Future: ...
 
     def shutdown(self, wait: bool = True) -> None: ...
 
@@ -85,7 +85,7 @@ class Job:
         self.tag = tag
 
 
-def normalize_catch(catch) -> tuple[type[BaseException], ...]:
+def normalize_catch(catch: Any) -> tuple[type[BaseException], ...]:
     """Coerce a ``catch=`` value to a tuple of exception types, or reject it.
 
     Validated eagerly, at the start of the run: left alone, a bare class reaches
@@ -116,29 +116,34 @@ def normalize_catch(catch) -> tuple[type[BaseException], ...]:
 
 
 class WorkerContractError(TypeError):
-    """A worker broke the harness contract (returned ``None``, or set a
-    ``ResultVec`` to the wrong shape).
+    """A worker broke the harness contract.
+
+    It returned ``None``, or set a ``ResultVec`` to the wrong shape.
 
     Distinct from a sample fault: the collector records the sample as failed,
     emits :class:`WorkerContractWarning`, surfaces it in the report, and the
     sweep **continues** — a broken sample must never abort a run and lose the
     expensive samples already collected (owner decision amending plan 23 §6.2,
     2026-07-31). Subclasses ``TypeError`` so callers that consumed the previous
-    raising behavior still match."""
+    raising behavior still match.
+    """
 
 
 class WorkerContractWarning(UserWarning):
-    """Emitted when a sample is dropped because the worker broke the harness
-    contract (see :class:`WorkerContractError`).
+    """Emitted when a sample is dropped because the worker broke the harness contract.
+
+    See :class:`WorkerContractError`.
 
     The sample is counted in ``BenchResult.n_failed`` and listed in the
     report's failed-samples summary. Promote to an error in strict pipelines
-    with ``warnings.filterwarnings("error", category=bn.WorkerContractWarning)``."""
+    with ``warnings.filterwarnings("error", category=bn.WorkerContractWarning)``.
+    """
 
 
 class WorkerReturnedNothingError(WorkerContractError):
-    """A job yielded no result at all -- **the harness's own diagnosis**, never a
-    worker's.
+    """A job yielded no result at all.
+
+    This is **the harness's own diagnosis**, never a worker's.
 
     Exists to keep "the framework decided a job produced nothing" separable from
     "a worker raised ``WorkerContractError`` itself", which it can: the class is
@@ -150,7 +155,8 @@ class WorkerReturnedNothingError(WorkerContractError):
     Without the split, P5's move of the handler inside the ``try`` silently
     tolerated a worker-raised ``WorkerContractError`` on the pooled path even with
     ``catch=()`` -- loud on SERIAL, silent on MULTIPROCESSING, which is the very
-    executor-dependent divergence B3 exists to kill (review finding, 2026-07-31)."""
+    executor-dependent divergence B3 exists to kill (review finding, 2026-07-31).
+    """
 
 
 def _returned_none_error(job_id: str) -> WorkerReturnedNothingError:
@@ -159,7 +165,8 @@ def _returned_none_error(job_id: str) -> WorkerReturnedNothingError:
     Minted only where that cause is actually *known*: ``require_worker_result``
     (the pooled path, holding the worker's return value) and ``FutureCache.submit``
     at the serial site (which has just called ``run_job``). Both produce the
-    identical message."""
+    identical message.
+    """
     return WorkerReturnedNothingError(
         f"The benchmark function for job {job_id} returned None. "
         "Make sure you are returning a dict or `super().__call__(**kwargs)` "
@@ -174,7 +181,8 @@ def _no_result_error(job_id: str) -> WorkerReturnedNothingError:
     :func:`_returned_none_error` this path does not know the cause. It is reached
     by a cache entry holding ``None`` and by a ``JobFuture`` constructed with no
     arguments at all, both of which the pre-review wording mislabelled as a
-    worker bug."""
+    worker bug.
+    """
     return WorkerReturnedNothingError(
         f"No result was produced for job {job_id}: it was constructed with neither "
         "a result nor a pending future. Either a cache entry holds None, or the "
@@ -203,7 +211,8 @@ def require_worker_result(result: dict | None, job_id: str) -> dict:
     worker raises. The raise is consumed by ``store_results``, which records the
     sample as failed and warns instead of aborting the sweep (plan 23 §6.2 as
     amended: crashing mid-run loses expensive data; the failure surfaces in the
-    report instead)."""
+    report instead).
+    """
     if result is None:
         raise _returned_none_error(job_id)
     return result
@@ -261,7 +270,8 @@ class Broken:
     The error is supplied by whoever *knows* the cause -- ``FutureCache.submit``
     at the serial site, having just seen ``run_job`` return ``None`` -- rather
     than inferred from the syntactic shape of the constructor call, which cannot
-    tell a ``None``-returning worker from a cache entry holding ``None``."""
+    tell a ``None``-returning worker from a cache entry holding ``None``.
+    """
 
     error: WorkerReturnedNothingError
 
@@ -422,7 +432,7 @@ class Executors(StrEnum):
     SERIAL = auto()  # slow but reliable
     MULTIPROCESSING = auto()  # breaks for large number of futures
     SCOOP = auto()  # requires running with python -m scoop your_file.py
-    # THREADS=auto() #not that useful as most bench code is cpu bound
+    # No threads mode: most bench code is CPU bound, so threads would not help.
 
     @staticmethod
     def factory(provider: Executors | str) -> SupportsSubmit | None:
@@ -525,7 +535,7 @@ class FutureCache:
         tag_index: bool = True,
         size_limit: int = int(20e9),  # 20 GB standalone default; overridden by SweepExecutor
         cache_samples: bool = True,  # internal default; public APIs default to False/None
-    ):
+    ) -> None:
         """Initialize a FutureCache with optional caching and execution settings.
 
         Args:
@@ -723,7 +733,7 @@ class JobFunctionCache(FutureCache):
         cache_name: str = "fcache",
         tag_index: bool = True,
         size_limit: int = int(100e8),
-    ):
+    ) -> None:
         """Initialize a JobFunctionCache for a specific function.
 
         Args:
@@ -743,7 +753,7 @@ class JobFunctionCache(FutureCache):
         )
         self.function = function
 
-    def call(self, **kwargs) -> JobFuture:
+    def call(self, **kwargs: Any) -> JobFuture:
         """Call the wrapped function with the provided arguments.
 
         This method creates a Job for the function call and submits it through the cache.

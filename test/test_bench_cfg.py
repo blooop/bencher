@@ -149,7 +149,7 @@ class TestBenchRunCfgRoundTrip:
         assert cfg.run_date == stamp
 
     def test_deprecated_level_kwarg_maps_to_subsampling_divisions(self):
-        with pytest.warns(DeprecationWarning):
+        with pytest.warns(DeprecationWarning, match="The 'level' parameter is deprecated"):
             cfg = BenchRunCfg(level=3)
         assert cfg.subsampling_divisions == 3
 
@@ -192,7 +192,7 @@ class TestWithDefaults:
             BenchRunCfg.with_defaults(None, not_a_real_param=1)
 
     def test_deprecated_level_key_warns_and_maps(self):
-        with pytest.warns(DeprecationWarning):
+        with pytest.warns(DeprecationWarning, match="The 'level' parameter is deprecated"):
             cfg = BenchRunCfg.with_defaults(None, level=4)
         assert cfg.subsampling_divisions == 4
 

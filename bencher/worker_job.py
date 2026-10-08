@@ -54,12 +54,14 @@ class WorkerJob:
         Computed from the swept dimensions only -- constant inputs are deliberately
         excluded (they are merged into :attr:`function_input`, not here).
         """
-        return hmap_canonical_input(dict(zip(self.dims_name, self.function_input_vars)))
+        return hmap_canonical_input(
+            dict(zip(self.dims_name, self.function_input_vars, strict=True))
+        )
 
     @cached_property
     def function_input(self) -> dict:
         """Complete input as a dictionary with dimension names as keys."""
-        function_input = dict(zip(self.dims_name, self.function_input_vars))
+        function_input = dict(zip(self.dims_name, self.function_input_vars, strict=True))
         if self.constant_inputs is not None:
             function_input = function_input | self.constant_inputs
         return function_input

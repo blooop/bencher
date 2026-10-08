@@ -334,11 +334,9 @@ def _build_class_code(info, _float_count, _cat_count, noise_val=0.0, time_offset
     cls_lines.append("    def benchmark(self):")
 
     if noise_val > 0 and "noise_body" in info:
-        for line in info["noise_body"]:
-            cls_lines.append(f"        {line.format(noise=noise_val)}")
+        cls_lines.extend(f"        {line.format(noise=noise_val)}" for line in info["noise_body"])
     else:
-        for line in info["call_body"]:
-            cls_lines.append(f"        {line.format(noise=0)}")
+        cls_lines.extend(f"        {line.format(noise=0)}" for line in info["call_body"])
 
     if time_offset:
         result_name = next(iter(info["result_vars"].keys()))

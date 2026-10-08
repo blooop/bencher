@@ -16,7 +16,8 @@ class Capability(StrEnum):
     A plugin's ``requires`` (see ``Plugin`` in plugin.py) names capabilities from this
     enum (plain strings with these exact values are accepted and normalized). Unknown
     names raise at plugin registration time — a misspelled capability would otherwise
-    make the plugin permanently, silently unselectable (plan 23 C10)."""
+    make the plugin permanently, silently unselectable (plan 23 C10).
+    """
 
     OPTIMIZER_STUDY = "optimizer_study"
     BASELINE_RUNS = "baseline_runs"
@@ -28,7 +29,8 @@ def to_capability(value: str | Capability) -> Capability:
     """Normalize *value* to a :class:`Capability`.
 
     Raises ValueError naming the bad string and the valid vocabulary when *value*
-    is not a known capability."""
+    is not a known capability.
+    """
     try:
         return Capability(value)
     except ValueError:
@@ -38,8 +40,11 @@ def to_capability(value: str | Capability) -> Capability:
 
 @runtime_checkable
 class CacheHandle(Protocol):
-    """Plugin-accessible memoization surface. Bencher core supplies a concrete handle;
-    plugins treat it as opaque key/value storage."""
+    """Plugin-accessible memoization surface.
+
+    Bencher core supplies a concrete handle;
+    plugins treat it as opaque key/value storage.
+    """
 
     def get(self, key: str) -> Any | None: ...
 
@@ -55,8 +60,11 @@ class RunMeta:
 
 @dataclass(frozen=True)
 class BenchData:
-    """Frozen value type handed to plot plugins. The stable public contract surface for
-    plugin authors — internal bencher refactors must preserve this shape."""
+    """Frozen value type handed to plot plugins.
+
+    The stable public contract surface for
+    plugin authors — internal bencher refactors must preserve this shape.
+    """
 
     dataset: xr.Dataset
     input_vars: tuple = ()
@@ -86,7 +94,8 @@ class BenchData:
         ``ty`` **check-time** error rather than a runtime abort. This is the
         licensed case of plan 24 A1: the subject comes from
         :func:`to_capability`, whose return type is established as
-        ``Capability`` (it is not a ``param`` descriptor read)."""
+        ``Capability`` (it is not a ``param`` descriptor read).
+        """
         cap = to_capability(capability)
         match cap:
             case Capability.OPTIMIZER_STUDY:
@@ -100,7 +109,7 @@ class BenchData:
             case unreachable:
                 assert_never(unreachable)
 
-    def with_changes(self, **kwargs) -> BenchData:
+    def with_changes(self, **kwargs: Any) -> BenchData:
         return replace(self, **kwargs)
 
     @classmethod
@@ -111,12 +120,13 @@ class BenchData:
         input_vars: tuple = (),
         result_vars: tuple = (),
         plt_cnt_cfg: PltCntCfg | None = None,
-        **overrides,
+        **overrides: Any,
     ) -> BenchData:
         """Construct a minimal BenchData for plugin unit tests.
 
         Defaults dataset to an empty xr.Dataset and plt_cnt_cfg to a zero-counted config so
-        plugin authors can construct a usable handle in one line."""
+        plugin authors can construct a usable handle in one line.
+        """
         return cls(
             dataset=dataset if dataset is not None else xr.Dataset(),
             input_vars=tuple(input_vars),

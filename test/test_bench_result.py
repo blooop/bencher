@@ -57,15 +57,15 @@ def collect_hv_elements(panel_obj) -> list:
     return elements
 
 
-def _failing_cb(self, **kwargs):  # pylint: disable=unused-argument
+def _failing_cb(self, **kwargs):
     raise RuntimeError("intentional test failure")
 
 
-def _marker_cb_a(self, **kwargs):  # pylint: disable=unused-argument
+def _marker_cb_a(self, **kwargs):
     return pn.pane.Markdown("marker_a")
 
 
-def _marker_cb_b(self, **kwargs):  # pylint: disable=unused-argument
+def _marker_cb_b(self, **kwargs):
     return pn.pane.Markdown("marker_b")
 
 
@@ -78,16 +78,16 @@ class TestBenchResultTo(unittest.TestCase):
 
     def test_to_line_result_returns_viewable(self):
         plot = self.res.to(LineResult)
-        self.assertIsNotNone(plot)
-        self.assertIsInstance(plot, pn.viewable.Viewable)
+        assert plot is not None
+        assert isinstance(plot, pn.viewable.Viewable)
 
     def test_to_line_result_plots_worker_values(self):
         plot = self.res.to(LineResult)
         elements = collect_hv_elements(plot)
-        self.assertGreater(len(elements), 0, "Expected at least one holoviews element")
+        assert len(elements) > 0, "Expected at least one holoviews element"
         df = elements[0].dframe()
-        self.assertIn("x", df.columns)
-        self.assertIn("value", df.columns)
+        assert "x" in df.columns
+        assert "value" in df.columns
         df = df.sort_values("x")
         np.testing.assert_allclose(df["x"].to_numpy(), [0.0, 1.0, 2.0])
         np.testing.assert_allclose(df["value"].to_numpy(), [0.0, 2.0, 4.0])
@@ -95,7 +95,7 @@ class TestBenchResultTo(unittest.TestCase):
     def test_to_does_not_mutate_source(self):
         ds_before = self.res.ds
         self.res.to(LineResult)
-        self.assertIs(self.res.ds, ds_before)
+        assert self.res.ds is ds_before
 
 
 class TestBenchResultToAuto(unittest.TestCase):
@@ -105,24 +105,24 @@ class TestBenchResultToAuto(unittest.TestCase):
 
     def test_to_auto_explicit_plot_list(self):
         panes = self.res.to_auto(plot_list=[LineResult.to_plot])
-        self.assertIsInstance(panes, pn.Column)
-        self.assertEqual(len(panes), 1)
-        self.assertGreater(len(collect_hv_elements(panes)), 0)
+        assert isinstance(panes, pn.Column)
+        assert len(panes) == 1
+        assert len(collect_hv_elements(panes)) > 0
 
     def test_to_auto_remove_plots(self):
         both = self.res.to_auto(plot_list=[_marker_cb_a, _marker_cb_b])
-        self.assertEqual([p.object for p in both], ["marker_a", "marker_b"])
+        assert [p.object for p in both] == ["marker_a", "marker_b"]
         removed = self.res.to_auto(
             plot_list=[_marker_cb_a, _marker_cb_b],
             remove_plots=[_marker_cb_b],
         )
-        self.assertEqual([p.object for p in removed], ["marker_a"])
+        assert [p.object for p in removed] == ["marker_a"]
 
     def test_to_auto_all_removed_returns_placeholder(self):
         panes = self.res.to_auto(plot_list=[LineResult.to_plot], remove_plots=[LineResult.to_plot])
-        self.assertEqual(len(panes), 1)
-        self.assertIsInstance(panes[0], pn.pane.Markdown)
-        self.assertIn("No Plotters are able to represent these results", panes[0].object)
+        assert len(panes) == 1
+        assert isinstance(panes[0], pn.pane.Markdown)
+        assert "No Plotters are able to represent these results" in panes[0].object
 
     def test_to_auto_failing_callback_surfaced_not_raised(self):
         with (
@@ -131,20 +131,18 @@ class TestBenchResultToAuto(unittest.TestCase):
         ):
             warnings.simplefilter("always")
             panes = self.res.to_auto(plot_list=[_failing_cb, LineResult.to_plot])
-        self.assertTrue(any("_failing_cb" in msg for msg in captured.output))
+        assert any("_failing_cb" in msg for msg in captured.output)
         # A failure warns, so a caller that never configured logging still sees it.
-        self.assertTrue(
-            any(issubclass(w.category, RenderFailedWarning) for w in caught),
-            "expected a RenderFailedWarning for the failing callback",
+        assert any(issubclass(w.category, RenderFailedWarning) for w in caught), (
+            "expected a RenderFailedWarning for the failing callback"
         )
         # The working callback still renders, and the failure leaves a visible
         # marker in its place rather than silently shrinking the report.
-        self.assertEqual(len(panes), 2)
-        self.assertGreater(len(collect_hv_elements(panes)), 0)
+        assert len(panes) == 2
+        assert len(collect_hv_elements(panes)) > 0
         markers = [p for p in panes if isinstance(p, pn.pane.Markdown)]
-        self.assertTrue(
-            any("_failing_cb" in m.object and "failed to render" in m.object for m in markers),
-            "expected a visible failure pane naming the failing callback",
+        assert any("_failing_cb" in m.object and "failed to render" in m.object for m in markers), (
+            "expected a visible failure pane naming the failing callback"
         )
 
 
@@ -152,23 +150,23 @@ class TestBenchResultToAutoPlots(unittest.TestCase):
     def test_to_auto_plots_first_entry_is_sweep_summary(self):
         res = run_sweep()
         col = res.to_auto_plots()
-        self.assertIsInstance(col, pn.Column)
-        self.assertGreaterEqual(len(col), 2)
-        self.assertEqual(col[0].name, "Plots View")
+        assert isinstance(col, pn.Column)
+        assert len(col) >= 2
+        assert col[0].name == "Plots View"
 
 
 class TestBenchResultPlot(unittest.TestCase):
     def test_plot_none_callbacks_returns_none(self):
         res = run_sweep()
         res.bench_cfg.plot_callbacks = None
-        self.assertIsNone(res.plot())
+        assert res.plot() is None
 
     def test_plot_empty_callbacks_returns_empty_column(self):
         res = run_sweep()
         res.bench_cfg.plot_callbacks = []
         out = res.plot()
-        self.assertIsInstance(out, pn.Column)
-        self.assertEqual(len(out), 0)
+        assert isinstance(out, pn.Column)
+        assert len(out) == 0
 
     def test_plot_list_callbacks_one_entry_each(self):
         res = run_sweep()
@@ -177,38 +175,38 @@ class TestBenchResultPlot(unittest.TestCase):
             lambda r: pn.pane.Markdown("second"),
         ]
         out = res.plot()
-        self.assertIsInstance(out, pn.Column)
-        self.assertEqual(len(out), 2)
-        self.assertEqual(out[0].object, "first")
-        self.assertEqual(out[1].object, "second")
+        assert isinstance(out, pn.Column)
+        assert len(out) == 2
+        assert out[0].object == "first"
+        assert out[1].object == "second"
 
     def test_plot_callbacks_receive_result_instance(self):
         res = run_sweep()
         seen = []
         res.bench_cfg.plot_callbacks = [lambda r: seen.append(r) or pn.pane.Markdown("cb")]
         res.plot()
-        self.assertEqual(seen, [res])
+        assert seen == [res]
 
 
 class TestDefaultPlotCallbacks(unittest.TestCase):
     def test_default_plot_callbacks_non_empty(self):
         callbacks = BenchResult.default_plot_callbacks()
-        self.assertIsInstance(callbacks, list)
-        self.assertGreater(len(callbacks), 0)
-        self.assertTrue(all(callable(cb) for cb in callbacks))
-        self.assertIn(LineResult.to_plot, callbacks)
+        assert isinstance(callbacks, list)
+        assert len(callbacks) > 0
+        assert all(callable(cb) for cb in callbacks)
+        assert LineResult.to_plot in callbacks
 
 
 class TestFromExisting(unittest.TestCase):
     def test_from_existing_copies_state(self):
         res = run_sweep()
         clone = BenchResult.from_existing(res)
-        self.assertIsNot(clone, res)
-        self.assertIsInstance(clone, BenchResult)
-        self.assertIs(clone.ds, res.ds)
-        self.assertIs(clone.bench_cfg, res.bench_cfg)
-        self.assertIs(clone.plt_cnt_cfg, res.plt_cnt_cfg)
-        self.assertIs(clone.regression_report, res.regression_report)
+        assert clone is not res
+        assert isinstance(clone, BenchResult)
+        assert clone.ds is res.ds
+        assert clone.bench_cfg is res.bench_cfg
+        assert clone.plt_cnt_cfg is res.plt_cnt_cfg
+        assert clone.regression_report is res.regression_report
 
     def test_from_existing_produces_same_dataset(self):
         res = run_sweep()
@@ -227,17 +225,17 @@ class TestNanRobustness(unittest.TestCase):
 
     def test_nan_present_in_dataset(self):
         vals = self.res.to_dataset()["value"].values.flatten()
-        self.assertEqual(int(np.isnan(vals).sum()), 1)
+        assert int(np.isnan(vals).sum()) == 1
         np.testing.assert_allclose(np.sort(vals[~np.isnan(vals)]), [0.0, 4.0])
 
     def test_to_line_with_nan_does_not_crash(self):
         plot = self.res.to(LineResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
     def test_to_auto_plots_with_nan_does_not_crash(self):
         col = self.res.to_auto_plots()
-        self.assertIsInstance(col, pn.Column)
-        self.assertEqual(col[0].name, "Plots View")
+        assert isinstance(col, pn.Column)
+        assert col[0].name == "Plots View"
 
 
 if __name__ == "__main__":

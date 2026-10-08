@@ -196,7 +196,7 @@ def test_a_target_no_publisher_accepts_is_refused_before_the_sweep(staging, tmp_
 
 
 @pytest.mark.parametrize(
-    "field, value",
+    ("field", "value"),
     [
         ("expiry_days", float("nan")),
         ("expiry_days", float("inf")),

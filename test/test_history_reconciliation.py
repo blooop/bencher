@@ -13,9 +13,11 @@ import unittest
 import uuid
 import warnings
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import ClassVar
 
 import numpy as np
+import pytest
 import xarray as xr
 
 import bencher as bn
@@ -87,16 +89,13 @@ class TestOrderIndependentKeys(unittest.TestCase):
     def test_result_var_reorder_is_noop(self):
         a = bn.ResultBool(units="ratio")
         b = bn.ResultFloat(units="s")
-        self.assertEqual(_key([a, b]), _key([b, a]))
+        assert _key([a, b]) == _key([b, a])
 
     def test_const_var_reorder_is_noop(self):
         a = bn.ResultBool(units="ratio")
         w = _float_sweep("width")
         g = _float_sweep("angle", units="deg", bounds=(0, 90))
-        self.assertEqual(
-            _key([a], [(w, 0.5), (g, 30.0)]),
-            _key([a], [(g, 30.0), (w, 0.5)]),
-        )
+        assert _key([a], [(w, 0.5), (g, 30.0)]) == _key([a], [(g, 30.0), (w, 0.5)])
 
     def test_input_var_order_still_matters(self):
         # Input order determines the dimension layout of the result arrays.
@@ -105,15 +104,12 @@ class TestOrderIndependentKeys(unittest.TestCase):
         a = bn.ResultBool(units="ratio")
         cfg_wg = _bench_cfg([a], input_vars=[w, g])
         cfg_gw = _bench_cfg([a], input_vars=[g, w])
-        self.assertNotEqual(
-            cfg_wg.hash_persistent(True),
-            cfg_gw.hash_persistent(True),
-        )
+        assert cfg_wg.hash_persistent(True) != cfg_gw.hash_persistent(True)
 
     def test_const_value_still_matters(self):
         a = bn.ResultBool(units="ratio")
         w = _float_sweep("width")
-        self.assertNotEqual(_key([a], [(w, 0.5)]), _key([a], [(w, 0.7)]))
+        assert _key([a], [(w, 0.5)]) != _key([a], [(w, 0.7)])
 
 
 class TestNamedIdentity(unittest.TestCase):
@@ -122,28 +118,27 @@ class TestNamedIdentity(unittest.TestCase):
     def test_result_var_rename_moves_per_var_hash(self):
         x = _result_float("duration")
         y = _result_float("latency")
-        self.assertNotEqual(x.hash_persistent(), y.hash_persistent())
+        assert x.hash_persistent() != y.hash_persistent()
 
     def test_input_var_rename_moves_per_var_hash(self):
         p = _float_sweep("speed")
         q = _float_sweep("velocity")
-        self.assertNotEqual(p.hash_persistent(), q.hash_persistent())
+        assert p.hash_persistent() != q.hash_persistent()
 
     def test_result_var_rename_moves_strict_key(self):
-        self.assertNotEqual(_key([_result_float("duration")]), _key([_result_float("latency")]))
+        assert _key([_result_float("duration")]) != _key([_result_float("latency")])
 
     def test_const_rename_moves_key(self):
         a = bn.ResultBool(units="ratio")
-        self.assertNotEqual(
-            _key([a], [(_float_sweep("width"), 0.5)]),
-            _key([a], [(_float_sweep("depth"), 0.5)]),
+        assert _key([a], [(_float_sweep("width"), 0.5)]) != _key(
+            [a], [(_float_sweep("depth"), 0.5)]
         )
 
     def test_meaning_version_moves_identity(self):
         v1 = _result_float("m")
         v2 = _result_float("m", meaning_version=2)
-        self.assertNotEqual(v1.hash_persistent(), v2.hash_persistent())
-        self.assertNotEqual(column_identity(v1, "m"), column_identity(v2, "m"))
+        assert v1.hash_persistent() != v2.hash_persistent()
+        assert column_identity(v1, "m") != column_identity(v2, "m")
 
 
 class TestHistoryKeyExcludesResultVars(unittest.TestCase):
@@ -154,22 +149,15 @@ class TestHistoryKeyExcludesResultVars(unittest.TestCase):
         b = bn.ResultFloat(units="s")
         x = _result_float("duration")
         y = _result_float("latency")
-        self.assertEqual(
-            _key([a, b], include_result_vars=False),
-            _key([b], include_result_vars=False),
-        )
-        self.assertEqual(
-            _key([x], include_result_vars=False),
-            _key([y], include_result_vars=False),
-        )
+        assert _key([a, b], include_result_vars=False) == _key([b], include_result_vars=False)
+        assert _key([x], include_result_vars=False) == _key([y], include_result_vars=False)
 
     def test_input_change_moves_history_key(self):
         a = bn.ResultBool(units="ratio")
         cfg_p = _bench_cfg([a], input_vars=[_float_sweep("speed")])
         cfg_q = _bench_cfg([a], input_vars=[_float_sweep("velocity")])
-        self.assertNotEqual(
-            cfg_p.hash_persistent(True, include_result_vars=False),
-            cfg_q.hash_persistent(True, include_result_vars=False),
+        assert cfg_p.hash_persistent(True, include_result_vars=False) != cfg_q.hash_persistent(
+            True, include_result_vars=False
         )
 
 
@@ -200,7 +188,7 @@ class ReconcilerBase(unittest.TestCase):
     """Runs the collector against a throwaway cachedir."""
 
     def setUp(self):
-        self._old_cwd = os.getcwd()
+        self._old_cwd = Path.cwd()
         self._tmp = tempfile.mkdtemp()
         os.chdir(self._tmp)
         self.collector = ResultCollector()
@@ -230,42 +218,43 @@ class TestReconcilerLifecycle(ReconcilerBase):
     def test_added_column_backfills_and_records_birth(self):
         self.load(["a"], 1, [_result_float("a")])
         served = self.load(["a", "c"], 2, [_result_float("a"), _result_float("c")])
-        self.assertEqual(set(served.data_vars), {"a", "c"})
-        self.assertEqual(served.sizes["over_time"], 2)
-        self.assertTrue(np.isnan(served["c"].values[0, 0]))
-        self.assertEqual(served["c"].values[0, 1], 2.0)
-        self.assertEqual(served["c"].attrs[BIRTH_ATTR], _day(2))
+        assert set(served.data_vars) == {"a", "c"}
+        assert served.sizes["over_time"] == 2
+        assert np.isnan(served["c"].values[0, 0])
+        assert served["c"].values[0, 1] == 2.0
+        assert served["c"].attrs[BIRTH_ATTR] == _day(2)
         # the untouched column's history continues
-        self.assertEqual(list(served["a"].values[0]), [1.0, 2.0])
+        assert list(served["a"].values[0]) == [1.0, 2.0]
 
     def test_removed_column_goes_dormant_and_resumes(self):
         rv_a, rv_b = _result_float("a"), _result_float("b")
         self.load(["a", "b"], 1, [rv_a, rv_b])
         served = self.load(["a"], 2, [rv_a])
         # projection: consumers see exactly the current config's columns
-        self.assertEqual(set(served.data_vars), {"a"})
+        assert set(served.data_vars) == {"a"}
         # storage: nothing deleted
         record = self.collector.get_history_cache()[self.key]
-        self.assertIn("b", record["dataset"].data_vars)
+        assert "b" in record["dataset"].data_vars
         # returning with the same identity resumes the old trend
         served = self.load(["a", "b"], 3, [rv_a, rv_b])
         b_vals = served["b"].values[0]
-        self.assertEqual(b_vals[0], 1.0)
-        self.assertTrue(np.isnan(b_vals[1]))
-        self.assertEqual(b_vals[2], 3.0)
+        assert b_vals[0] == 1.0
+        assert np.isnan(b_vals[1])
+        assert b_vals[2] == 3.0
 
     def test_meaning_version_bump_retires_and_restarts_column(self):
         self.load(["a"], 1, [_result_float("a")])
         self.load(["a"], 2, [_result_float("a")])
         served = self.load(["a"], 3, [_result_float("a", meaning_version=2)])
         a_vals = served["a"].values[0]
-        self.assertTrue(np.isnan(a_vals[0]) and np.isnan(a_vals[1]))
-        self.assertEqual(a_vals[2], 3.0)
-        self.assertEqual(served["a"].attrs[BIRTH_ATTR], _day(3))
+        assert np.isnan(a_vals[0])
+        assert np.isnan(a_vals[1])
+        assert a_vals[2] == 3.0
+        assert served["a"].attrs[BIRTH_ATTR] == _day(3)
         record = self.collector.get_history_cache()[self.key]
         retired = [name for name in record["dataset"].data_vars if "__retired_" in name]
-        self.assertEqual(len(retired), 1)
-        self.assertEqual(list(record["dataset"][retired[0]].values[0][:2]), [1.0, 2.0])
+        assert len(retired) == 1
+        assert list(record["dataset"][retired[0]].values[0][:2]) == [1.0, 2.0]
 
     def test_no_dead_columns_no_phantom_dims(self):
         """The two plan-09 D2 corruption modes must be structurally impossible."""
@@ -273,8 +262,8 @@ class TestReconcilerLifecycle(ReconcilerBase):
         self.load(["duration"], 1, [rv_old])
         served = self.load(["latency"], 2, [rv_new])
         # rename == remove+add: no dead 'duration' column in what consumers see
-        self.assertEqual(set(served.data_vars), {"latency"})
-        self.assertEqual(set(served.dims), {"repeat", "over_time"})
+        assert set(served.data_vars) == {"latency"}
+        assert set(served.dims) == {"repeat", "over_time"}
 
     def test_incompatible_dims_discarded_not_broadcast(self):
         cache = self.collector.get_history_cache()
@@ -284,16 +273,16 @@ class TestReconcilerLifecycle(ReconcilerBase):
         )
         cache[self.key] = {"format": 1, "dataset": alien, "columns": {}, "retired": {}}
         served = self.load(["a"], 3, [_result_float("a")])
-        self.assertNotIn("speed", served.dims)
-        self.assertEqual(served.sizes["over_time"], 1)
+        assert "speed" not in served.dims
+        assert served.sizes["over_time"] == 1
 
     def test_plain_dataset_record_adopted(self):
         cache = self.collector.get_history_cache()
         cache[self.key] = _run_ds(["a"], 1)
         served = self.load(["a"], 2, [_result_float("a")])
-        self.assertEqual(list(served["a"].values[0]), [1.0, 2.0])
+        assert list(served["a"].values[0]) == [1.0, 2.0]
         # adopted columns have no fabricated birth
-        self.assertNotIn(BIRTH_ATTR, served["a"].attrs)
+        assert BIRTH_ATTR not in served["a"].attrs
 
 
 class TestSentinelRestore(ReconcilerBase):
@@ -315,20 +304,20 @@ class TestSentinelRestore(ReconcilerBase):
         )
         s_vals, r_vals = served["s"].values[0], served["r"].values[0]
         # pre-gap real values intact
-        self.assertEqual(s_vals[0], "hello")
-        self.assertEqual(r_vals[0], 3)
+        assert s_vals[0] == "hello"
+        assert r_vals[0] == 3
         # the dormant-run gap holds exactly the proper sentinel
-        self.assertEqual(s_vals[1], "NAN")
-        self.assertEqual(r_vals[1], -1)
-        self.assertTrue(result_is_missing(rv_s, s_vals[1]))
-        self.assertTrue(result_is_missing(rv_r, r_vals[1]))
+        assert s_vals[1] == "NAN"
+        assert r_vals[1] == -1
+        assert result_is_missing(rv_s, s_vals[1])
+        assert result_is_missing(rv_r, r_vals[1])
         # returned real values
-        self.assertEqual(s_vals[2], "world")
-        self.assertEqual(r_vals[2], 7)
+        assert s_vals[2] == "world"
+        assert r_vals[2] == 7
         # dtype preserved: object stays object; reference round-trips to int -1
-        self.assertEqual(served["s"].dtype, object)
-        self.assertTrue(np.issubdtype(served["r"].dtype, np.integer))
-        self.assertEqual(served["r"].values[0, 1], -1)
+        assert served["s"].dtype == object
+        assert np.issubdtype(served["r"].dtype, np.integer)
+        assert served["r"].values[0, 1] == -1
 
     def test_born_object_and_reference_columns_backfill_sentinel(self):
         rv_a, rv_s, rv_r = _result_float("a"), _result_string("s"), _result_reference("r")
@@ -340,15 +329,15 @@ class TestSentinelRestore(ReconcilerBase):
             [rv_a, rv_s, rv_r],
         )
         # the pre-birth backfill is the sentinel, not raw NaN
-        self.assertEqual(served["s"].values[0, 0], "NAN")
-        self.assertEqual(served["r"].values[0, 0], -1)
-        self.assertTrue(result_is_missing(rv_s, served["s"].values[0, 0]))
-        self.assertTrue(result_is_missing(rv_r, served["r"].values[0, 0]))
-        self.assertEqual(served["s"].dtype, object)
-        self.assertTrue(np.issubdtype(served["r"].dtype, np.integer))
+        assert served["s"].values[0, 0] == "NAN"
+        assert served["r"].values[0, 0] == -1
+        assert result_is_missing(rv_s, served["s"].values[0, 0])
+        assert result_is_missing(rv_r, served["r"].values[0, 0])
+        assert served["s"].dtype == object
+        assert np.issubdtype(served["r"].dtype, np.integer)
         # the newly measured values are intact
-        self.assertEqual(served["s"].values[0, 1], "v")
-        self.assertEqual(served["r"].values[0, 1], 5)
+        assert served["s"].values[0, 1] == "v"
+        assert served["r"].values[0, 1] == 5
 
 
 class TestLegacyRecordDormancy(ReconcilerBase):
@@ -363,44 +352,44 @@ class TestLegacyRecordDormancy(ReconcilerBase):
         self._seed_legacy()
         cache = self.collector.get_history_cache()
         record_before = cache[self.key]  # bare xr.Dataset (format 0)
-        with self.assertRaises(HistoryResetError):
+        with pytest.raises(HistoryResetError):
             self.load(["a"], 2, [_result_float("a")], on_history_reset="error")
         record_after = cache[self.key]
         # the raise happens before persist: the bare record is untouched
-        self.assertIsInstance(record_after, xr.Dataset)
+        assert isinstance(record_after, xr.Dataset)
         xr.testing.assert_identical(record_before, record_after)
 
     def test_legacy_missing_column_warn_records_dormant_stub(self):
         self._seed_legacy()
         with self.assertLogs("bencher.history", level=logging.WARNING) as logs:
             served = self.load(["a"], 2, [_result_float("a")])
-        self.assertTrue(any("'b'" in line and "predat" in line for line in logs.output))
-        self.assertEqual(set(served.data_vars), {"a"})
+        assert any("'b'" in line and "predat" in line for line in logs.output)
+        assert set(served.data_vars) == {"a"}
         record = self.collector.get_history_cache()[self.key]
         stub = record["columns"]["b"]
-        self.assertTrue(stub["dormant"])
-        self.assertIsNone(stub["identity"])
+        assert stub["dormant"]
+        assert stub["identity"] is None
         # data retained, not deleted
-        self.assertIn("b", record["dataset"].data_vars)
+        assert "b" in record["dataset"].data_vars
 
     def test_legacy_column_resumes_without_retire_or_duplicate(self):
         self._seed_legacy()
         self.load(["a"], 2, [_result_float("a")])  # b -> dormant (warns)
         with self.assertNoLogs("bencher.history", level=logging.WARNING):
             served = self.load(["a", "b"], 3, [_result_float("a"), _result_float("b")])
-        self.assertEqual(set(served.data_vars), {"a", "b"})
+        assert set(served.data_vars) == {"a", "b"}
         b_vals = served["b"].values[0]
-        self.assertEqual(b_vals[0], 10.0)  # legacy history served
-        self.assertTrue(np.isnan(b_vals[1]))  # gap while dormant
-        self.assertEqual(b_vals[2], 3.0)  # returned value
+        assert b_vals[0] == 10.0  # legacy history served
+        assert np.isnan(b_vals[1])  # gap while dormant
+        assert b_vals[2] == 3.0  # returned value
         # adopt-in-place resume: no fabricated birth
-        self.assertNotIn(BIRTH_ATTR, served["b"].attrs)
+        assert BIRTH_ATTR not in served["b"].attrs
         # no retired mangled column and no phantom duplicate of 'b'
         record = self.collector.get_history_cache()[self.key]
         data_vars = list(record["dataset"].data_vars)
-        self.assertFalse(any("__retired_" in name for name in data_vars))
-        self.assertEqual(len(data_vars), 2)
-        self.assertEqual(record["retired"], {})
+        assert not any("__retired_" in name for name in data_vars)
+        assert len(data_vars) == 2
+        assert record["retired"] == {}
 
 
 class TestResetPolicy(ReconcilerBase):
@@ -411,23 +400,23 @@ class TestResetPolicy(ReconcilerBase):
         ls_key = legacy_last_seen_key(self.kwargs["bench_name"], self.kwargs["tag"])
         record_before = cache[self.key]
         last_before = cache.get(ls_key)
-        with self.assertRaises(HistoryResetError):
+        with pytest.raises(HistoryResetError):
             self.load(["a"], 2, [rv_a], on_history_reset="error")
         record_after = cache[self.key]
         last_after = cache.get(ls_key)
         # column + retire metadata, dataset values, and the last-seen index
         # entry must all be byte-identical: an erroring run advances nothing.
-        self.assertEqual(record_before["columns"], record_after["columns"])
-        self.assertEqual(record_before["retired"], record_after["retired"])
+        assert record_before["columns"] == record_after["columns"]
+        assert record_before["retired"] == record_after["retired"]
         xr.testing.assert_identical(record_before["dataset"], record_after["dataset"])
-        self.assertEqual(last_before, last_after)
+        assert last_before == last_after
 
     def test_warn_policy_names_the_change(self):
         rv_a, rv_b = _result_float("a"), _result_float("b")
         self.load(["a", "b"], 1, [rv_a, rv_b])
         with self.assertLogs("bencher.history", level=logging.WARNING) as logs:
             self.load(["a"], 2, [rv_a])
-        self.assertTrue(any("'b' removed" in line for line in logs.output))
+        assert any("'b' removed" in line for line in logs.output)
 
     def test_ignore_policy_is_quiet(self):
         rv_a, rv_b = _result_float("a"), _result_float("b")
@@ -448,7 +437,7 @@ class TestResetPolicy(ReconcilerBase):
         changed = {**self.kwargs["config_summary"], "inputs": [("x", "FloatSweep", "ul")]}
         with self.assertLogs("bencher.history", level=logging.WARNING) as logs:
             self.load(["a"], 2, [_result_float("a")], config_summary=changed)
-        self.assertTrue(any("orphaned under the old key" in line for line in logs.output))
+        assert any("orphaned under the old key" in line for line in logs.output)
 
     def test_born_column_is_not_lossy(self):
         self.load(["a"], 1, [_result_float("a")])
@@ -467,17 +456,17 @@ class TestResetPolicy(ReconcilerBase):
         into the correctly-spelled *valid* policy, silently turning this
         assertion into one that can never fail.
         """
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError, match="is not a valid OnHistoryReset"):
             self.load(["a"], 1, [_result_float("a")], on_history_reset="silently-ignore")
         # nothing was persisted: the bad-config run advanced no history state
         cache = self.collector.get_history_cache()
-        self.assertNotIn(self.key, cache)
+        assert self.key not in cache
         ls_key = legacy_last_seen_key(self.kwargs["bench_name"], self.kwargs["tag"])
-        self.assertIsNone(cache.get(ls_key))
+        assert cache.get(ls_key) is None
 
     def test_enum_policy_value_accepted(self):
         served = self.load(["a"], 1, [_result_float("a")], on_history_reset=OnHistoryReset.ERROR)
-        self.assertEqual(set(served.data_vars), {"a"})
+        assert set(served.data_vars) == {"a"}
 
 
 class TestEventKindLossiness(unittest.TestCase):
@@ -506,26 +495,26 @@ class TestEventKindLossiness(unittest.TestCase):
     )
 
     def test_partition_covers_every_kind(self):
-        self.assertEqual(self.LOSSY | self.NON_LOSSY, set(HistoryEventKind))
-        self.assertEqual(self.LOSSY & self.NON_LOSSY, set())
+        assert set(HistoryEventKind) == self.LOSSY | self.NON_LOSSY
+        assert set() == self.LOSSY & self.NON_LOSSY
 
     def test_lossy_kinds_raise_under_error_policy(self):
         for kind in self.LOSSY:
             with self.subTest(kind=kind):
                 event = HistoryEvent(kind, f"synthetic {kind} event")
-                self.assertTrue(event.lossy)
-                with self.assertRaises(HistoryResetError):
+                assert event.lossy
+                with pytest.raises(HistoryResetError):
                     apply_policy([event], "error")
 
     def test_non_lossy_kinds_pass_under_error_policy(self):
         for kind in self.NON_LOSSY:
             with self.subTest(kind=kind):
                 event = HistoryEvent(kind, f"synthetic {kind} event")
-                self.assertFalse(event.lossy)
+                assert not event.lossy
                 apply_policy([event], "error")  # must not raise
 
     def test_apply_policy_rejects_unknown_policy_even_with_no_events(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError, match="is not a valid OnHistoryReset"):
             apply_policy([], "silently-ignore")
 
     def test_raw_string_kinds_are_parsed_to_members(self):
@@ -533,15 +522,15 @@ class TestEventKindLossiness(unittest.TestCase):
         for kind in HistoryEventKind:
             with self.subTest(kind=kind):
                 event = HistoryEvent(str(kind), "from a raw string")
-                self.assertIs(event.kind, kind)
-                self.assertEqual(event.lossy, HistoryEvent(kind, "x").lossy)
+                assert event.kind is kind
+                assert event.lossy == HistoryEvent(kind, "x").lossy
 
     def test_unknown_kind_raises_naming_the_value(self):
         """A bad kind is a ValueError naming it, not the misdirecting
         "Expected code to be unreachable" of a reached assert_never arm."""
-        with self.assertRaises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="is not a valid HistoryEventKind") as ctx:
             HistoryEvent("not_a_real_kind", "detail")
-        self.assertIn("not_a_real_kind", str(ctx.exception))
+        assert "not_a_real_kind" in str(ctx.value)
 
 
 class _CountingSweep(bn.ParametrizedSweep):
@@ -561,7 +550,7 @@ class TestPolicyVocabularySingleSource(unittest.TestCase):
     """The policy vocabulary is defined once, by OnHistoryReset (plan 23 §9)."""
 
     def setUp(self):
-        self._old_cwd = os.getcwd()
+        self._old_cwd = Path.cwd()
         self._tmp = tempfile.mkdtemp()
         os.chdir(self._tmp)
         _CountingSweep.calls = []
@@ -579,12 +568,12 @@ class TestPolicyVocabularySingleSource(unittest.TestCase):
         drifting definition of the vocabulary.
         """
         objects = list(BenchRunCfg.param.on_history_reset.objects)
-        self.assertEqual(objects, list(OnHistoryReset))
+        assert objects == list(OnHistoryReset)
         for obj in objects:
-            self.assertIsInstance(obj, OnHistoryReset)
+            assert isinstance(obj, OnHistoryReset)
 
     def test_run_cfg_default_is_an_enum_member(self):
-        self.assertIs(BenchRunCfg().on_history_reset, OnHistoryReset.WARN)
+        assert BenchRunCfg().on_history_reset is OnHistoryReset.WARN
 
     def test_plot_sweep_normalizes_a_string_policy_to_a_member(self):
         """plot_sweep assigns the member back, so downstream readers see the enum.
@@ -597,8 +586,8 @@ class TestPolicyVocabularySingleSource(unittest.TestCase):
         bench = bn.Bench("policy-normalize", _CountingSweep())
         run_cfg = BenchRunCfg(over_time=True, repeats=1, on_history_reset="ignore")
         bench.plot_sweep(input_vars=[_CountingSweep.param.x], run_cfg=run_cfg)
-        self.assertIs(run_cfg.on_history_reset, OnHistoryReset.IGNORE)
-        self.assertTrue(_CountingSweep.calls, "the sweep should have run")
+        assert run_cfg.on_history_reset is OnHistoryReset.IGNORE
+        assert _CountingSweep.calls, "the sweep should have run"
 
     def test_bad_policy_raises_before_any_sample_is_collected(self):
         """A bad policy must never cost a fully-collected run.
@@ -618,11 +607,9 @@ class TestPolicyVocabularySingleSource(unittest.TestCase):
             p.check_on_set = False
         self.addCleanup(lambda: [setattr(p, "check_on_set", True) for p in run_params])
         run_cfg.on_history_reset = "silently-ignore"
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError, match="is not a valid OnHistoryReset"):
             bench.plot_sweep(input_vars=[_CountingSweep.param.x], run_cfg=run_cfg)
-        self.assertEqual(
-            _CountingSweep.calls, [], "samples were collected before the policy was parsed"
-        )
+        assert _CountingSweep.calls == [], "samples were collected before the policy was parsed"
 
 
 class TestYoungBaselineGating(unittest.TestCase):
@@ -652,19 +639,19 @@ class TestYoungBaselineGating(unittest.TestCase):
 
     def test_mature_baseline_blocks(self):
         report = self._detect([1.0, 1.0, 10.0], min_history=2)
-        self.assertTrue(report.has_regressions)
-        self.assertTrue(report.has_blocking_regressions)
+        assert report.has_regressions
+        assert report.has_blocking_regressions
 
     def test_young_baseline_notifies_but_does_not_block(self):
         report = self._detect([1.0, 1.0, 10.0], birth_idx=1, min_history=2)
-        self.assertTrue(report.has_regressions)
-        self.assertFalse(report.has_blocking_regressions)
-        self.assertTrue(all(r.young_baseline for r in report.regressed_variables))
-        self.assertIn("young baseline", report.summary())
+        assert report.has_regressions
+        assert not report.has_blocking_regressions
+        assert all(r.young_baseline for r in report.regressed_variables)
+        assert "young baseline" in report.summary()
 
     def test_default_min_history_preserves_existing_behavior(self):
         report = self._detect([1.0, 1.0, 10.0], birth_idx=1, min_history=1)
-        self.assertTrue(report.has_blocking_regressions)
+        assert report.has_blocking_regressions
 
     def test_per_var_min_history_override(self):
         report = self._detect(
@@ -673,16 +660,16 @@ class TestYoungBaselineGating(unittest.TestCase):
             min_history=1,
             overrides={"m": {"min_history": 3}},
         )
-        self.assertTrue(report.has_regressions)
-        self.assertFalse(report.has_blocking_regressions)
+        assert report.has_regressions
+        assert not report.has_blocking_regressions
 
     def test_young_baseline_in_dict_export(self):
         report = self._detect([1.0, 1.0, 10.0], birth_idx=1, min_history=2)
         exported = [r.to_dict() for r in report.regressed_variables]
-        self.assertTrue(all(entry.get("young_baseline") for entry in exported))
+        assert all(entry.get("young_baseline") for entry in exported)
         mature = self._detect([1.0, 1.0, 10.0], min_history=1)
         exported = [r.to_dict() for r in mature.regressed_variables]
-        self.assertTrue(all("young_baseline" not in entry for entry in exported))
+        assert all("young_baseline" not in entry for entry in exported)
 
 
 class TestOverTimeDtypeGuard(unittest.TestCase):
@@ -716,28 +703,28 @@ class TestOverTimeDtypeGuard(unittest.TestCase):
         naive = self._over_time_dataset(datetime(2000, 1, 1))
         aware = self._over_time_dataset(datetime(2000, 1, 1, 0, 0, 1, tzinfo=UTC))
         reason = incompatible_reason(naive, aware)
-        self.assertIsNotNone(reason)
-        self.assertIn("over_time dtype changed", reason)
+        assert reason is not None
+        assert "over_time dtype changed" in reason
 
     def test_naive_to_naive_over_time_is_compatible(self):
         """Control: two naive runs still merge, so the guard is not firing on everything."""
         first = self._over_time_dataset(datetime(2000, 1, 1))
         second = self._over_time_dataset(datetime(2000, 1, 1, 0, 0, 1))
-        self.assertIsNone(incompatible_reason(first, second))
+        assert incompatible_reason(first, second) is None
 
     def test_aware_to_aware_over_time_is_compatible(self):
         """An always-tz-aware caller has a mergeable history: object matches object."""
         first = self._over_time_dataset(datetime(2000, 1, 1, tzinfo=UTC))
         second = self._over_time_dataset(datetime(2000, 1, 1, 0, 0, 1, tzinfo=UTC))
-        self.assertIsNone(incompatible_reason(first, second))
+        assert incompatible_reason(first, second) is None
 
     def test_aware_to_naive_over_time_is_incompatible(self):
         """...and one naive run destroys it, which is why the warning must not ask for one."""
         aware = self._over_time_dataset(datetime(2000, 1, 1, tzinfo=UTC))
         naive = self._over_time_dataset(datetime(2000, 1, 1, 0, 0, 1))
         reason = incompatible_reason(aware, naive)
-        self.assertIsNotNone(reason)
-        self.assertIn("over_time dtype changed", reason)
+        assert reason is not None
+        assert "over_time dtype changed" in reason
 
 
 class TestDataVarColumns(unittest.TestCase):
@@ -745,7 +732,7 @@ class TestDataVarColumns(unittest.TestCase):
         vec = bn.ResultVec(2, units="m")
         vec.name = "pos"
         cols = data_var_columns([vec, _result_float("a")])
-        self.assertEqual(set(cols), {"pos_x", "pos_y", "a"})
+        assert set(cols) == {"pos_x", "pos_y", "a"}
 
 
 if __name__ == "__main__":

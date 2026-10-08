@@ -6,12 +6,68 @@ line-length = 100
 exclude = ["*.md"]
 
 [lint]
+# Every stable rule is on, and ruff is the only linter (it replaced pylint). A rule is
+# switched off below only with a reason; new rules in a ruff bump arrive enabled, so a
+# bump that adds findings shows up as a CI failure rather than passing silently.
+select = ["ALL"]
 ignore = [
-    # E501 is not in ruff's default rule set, so this entry is inert today. It is kept
-    # as a guard: the long strings it would flag are example `description=` prose and
-    # embedded URLs that cannot be wrapped, so anyone widening `select` to cover E5
-    # should decide about those 400-odd lines deliberately rather than by accident.
+    # --- Conflicts with `ruff format` (ruff's docs list these as formatter-incompatible).
+    "COM812", # Trailing comma missing: the formatter owns trailing commas.
+    # E501: the formatter wraps code at 100 columns. What is left over is long string
+    # literals, mostly example `description=` prose and embedded URLs, which the
+    # formatter will not split and which read worse broken into fragments.
     "E501", # Line longer than `line-length` (100).
+
+    # --- Policy choices.
+    "CPY001", # Missing copyright notice: the project licence lives in LICENSE, not per file.
+    # D100-D107: docstring *format* is enforced (google convention, below) but a docstring
+    # on every public module, class and method is not required. Forcing one yields
+    # filler that restates the name.
+    "D100", # Missing docstring in public module.
+    "D101", # Missing docstring in public class.
+    "D102", # Missing docstring in public method.
+    "D103", # Missing docstring in public function.
+    "D104", # Missing docstring in public package.
+    "D105", # Missing docstring in magic method.
+    "D106", # Missing docstring in public nested class.
+    "D107", # Missing docstring in `__init__`.
+    "ANN401", # `Any` annotation: bencher handles arbitrary user param values; Any is honest.
+    # FBT001/FBT002: boolean positional parameters are part of the published API
+    # (`plot_sweep(..., run_cfg, ...)`, `bch.p(...)`); making them keyword-only breaks
+    # callers. FBT003 flags the matching call sites, including param's own signatures.
+    "FBT001", # Boolean-typed positional argument in function definition.
+    "FBT002", # Boolean default positional argument in function definition.
+    "FBT003", # Boolean positional value in function call.
+    # TRY003/EM101/EM102 want every exception message hoisted into a `msg` variable
+    # before `raise`. The messages here are the documentation of the failure; moving them
+    # away from the raise makes the code longer without making it clearer.
+    "TRY003", # Long messages outside the exception class.
+    "EM101", # Raw string in exception.
+    "EM102", # f-string in exception.
+    "G004", # Logging f-string: kept from the pylint config (logging-fstring-interpolation).
+    # PLC0415: imports inside functions are deliberate. They keep optional extras (rerun,
+    # optuna, plotly) optional and keep `import bencher` cheap (test/test_import_cost.py).
+    "PLC0415", # `import` should be at the top-level of a file.
+    # Complexity thresholds: kept from the pylint config, which disabled too-many-*.
+    "C901",    # Too complex.
+    "PLR0911", # Too many return statements.
+    "PLR0912", # Too many branches.
+    "PLR0913", # Too many arguments.
+    "PLR0915", # Too many statements.
+    "PLR0917", # Too many positional arguments.
+    # S603 fires on every subprocess call made without shell=True, i.e. on the safe form.
+    # The argv lists here are built from constants and repo paths, never user input.
+    "S603", # `subprocess` call: check for execution of untrusted input.
+    # PD003/PD004/PD011 assume every `.isnull()`/`.notnull()`/`.values` is pandas; here most
+    # are xarray (which has no `.isna()`/`.notna()`, so PD003/PD004's autofix breaks it).
+    "PD003", # `.isna` is preferred to `.isnull`.
+    "PD004", # `.notna` is preferred to `.notnull`.
+    "PD011", # Use `.to_numpy()` instead of `.values`.
+    # TD002/TD003/FIX002: a TODO is allowed and needs no author or issue link. TD004-TD007
+    # (TODO formatting) stay on.
+    "TD002", # Missing author in TODO.
+    "TD003", # Missing issue link for TODO.
+    "FIX002", # Line contains TODO.
     # DTZ001/DTZ005: bencher's time axis is deliberately naive local wall-clock time.
     # The `over_time` dimension is stored as a numpy datetime64 xarray coordinate, which
     # has no timezone concept — passing tz-aware datetimes degrades the coordinate to
@@ -21,13 +77,16 @@ ignore = [
     "DTZ005", # `datetime.datetime.now()` without tz.
 ]
 
+# σ (standard deviation), × (dimensions) and – (ranges) are the intended glyphs in
+# user-facing labels and the tests that pin them.
+allowed-confusables = ["σ", "×", "–"]
+
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-# Ignore `E402` (import violations) in all `__init__.py` files, and in `path/to/file.py`.
 [lint.per-file-ignores]
-"__init__.py" = ["E402", "F401"]
-"**/{tests,docs,tools}/*" = ["E402"]
+# E402: the warnings filter must run before the imports that would emit the warning.
+"bencher/__init__.py" = ["E402"]
 # RUF023: `__slots__` order is load-bearing here, not cosmetic. `_hash_slots` in this
 # module hashes slot values in declaration order, so sorting __slots__ silently changes
 # every BenchCfg.hash_persistent() value and strands all on-disk benchmark and over_time
@@ -35,3 +94,23 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # file only — every other module is still checked. See the golden hash guard in
 # test/test_hash_persistent.py.
 "bencher/variables/results.py" = ["RUF023"]
+# Tests: pytest asserts are the point (S101); private access, magic numbers and
+# throwaway fixtures/mocks are normal in tests; annotations and docstrings are not
+# required there. S301: the tests pickle bencher's own objects to prove they round-trip.
+"test/**" = ["S101", "SLF001", "PLR2004", "ARG", "ANN", "D", "INP001", "S301"]
+# Examples are user-facing tutorial scripts (and generated from templates): they print,
+# use literal sweep values, and are not annotated or documented like library code.
+# SLF001: setting a private knob such as `_time_offset` between over_time snapshots is
+# the documented idiom (docs/over_time.md).
+"bencher/example/**" = ["ANN", "D", "T201", "PLR2004", "INP001", "S311", "NPY002", "SLF001"]
+"scripts/**" = ["ANN", "D", "T201", "INP001"]
+"docs/**" = ["ANN", "D", "INP001"]
+
+[lint.pydocstyle]
+convention = "google"
+
+# Keep `from m import (A as A, B as B)` grouped. The package `__init__.py` files re-export
+# their public API with redundant aliases (PEP 484 explicit re-exports, which F401
+# accepts), and without this isort splits every aliased name onto its own import line.
+[lint.isort]
+combine-as-imports = true

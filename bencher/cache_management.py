@@ -37,14 +37,19 @@ import logging
 import pickle
 import shutil
 import time
-from collections.abc import Iterable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
 from diskcache import Cache
 
 from bencher.blob_store import DEFAULT_CACHE_DIR, blob_name
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from numpy.typing import ArrayLike
 
 logger = logging.getLogger(__name__)
 
@@ -157,14 +162,16 @@ def ensure_cache_version(cachedir: str = DEFAULT_CACHE_DIR) -> None:
 # ---------------------------------------------------------------------------
 
 
+_KB = 1_000
+_MB = 1_000_000
+_GB = 1_000_000_000
+
+
 def _fmt_size(n: int) -> str:
     """Format a byte count as a human-readable string."""
-    if n >= 1_000_000_000:
-        return f"{n / 1_000_000_000:.1f} GB"
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f} MB"
-    if n >= 1_000:
-        return f"{n / 1_000:.1f} KB"
+    for scale, unit in ((_GB, "GB"), (_MB, "MB"), (_KB, "KB")):
+        if n >= scale:
+            return f"{n / scale:.1f} {unit}"
     return f"{n} B"
 
 
@@ -197,16 +204,13 @@ class CacheStats:
         lines = ["Cache Statistics", "=" * 60]
         if self.managed:
             lines.append("Managed caches (diskcache):")
-            for s in self.managed:
-                lines.append(s.summary_line())
+            lines.extend(s.summary_line() for s in self.managed)
         if self.media:
             lines.append("Media directories:")
-            for s in self.media:
-                lines.append(s.summary_line())
+            lines.extend(s.summary_line() for s in self.media)
         if self.content:
             lines.append("Content-addressed stores:")
-            for s in self.content:
-                lines.append(s.summary_line())
+            lines.extend(s.summary_line() for s in self.content)
         lines.append("-" * 60)
         lines.append(f"  Total: {_fmt_size(self.total_bytes)}")
         return "\n".join(lines)
@@ -264,7 +268,7 @@ def cache_stats(cachedir: str = DEFAULT_CACHE_DIR) -> CacheStats:
 
 def print_cache_stats(cachedir: str = DEFAULT_CACHE_DIR) -> None:
     """Print a human-readable cache statistics summary."""
-    print(cache_stats(cachedir).summary())
+    print(cache_stats(cachedir).summary())  # noqa: T201 - CLI report output
 
 
 # ---------------------------------------------------------------------------
@@ -359,10 +363,10 @@ def _collect_sample_cache_keys(cachedir: str) -> set[str]:
         c = Cache(str(cache_path))
         keys = set(c.iterkeys())
         c.close()
-        return keys
     except (OSError, ValueError) as exc:
         logger.warning("Could not open sample cache: %s", exc)
         return set()
+    return keys
 
 
 def clean_orphaned_media(
@@ -478,7 +482,7 @@ class BlobReachability:
         return not self.unreadable
 
 
-def _collect_array_blob_names(values, names: set[str]) -> None:
+def _collect_array_blob_names(values: ArrayLike, names: set[str]) -> None:
     """Add every blob name appearing in a numpy array of dataset cells."""
     arr = np.asarray(values)
     # Cells holding paths are object or unicode dtype; numeric dtypes (including
@@ -510,7 +514,7 @@ def _collect_xarray_blob_names(obj: xr.Dataset | xr.DataArray, names: set[str]) 
             _collect_array_blob_names(coord.values, names)
 
 
-def _walk_blob_references(value, names: set[str], seen: set[int], depth: int = 0) -> None:
+def _walk_blob_references(value: object, names: set[str], seen: set[int], depth: int = 0) -> None:
     """Recursively add every blob name reachable from *value*.
 
     Descends through the shapes that actually hold cached datasets: containers,
@@ -539,7 +543,7 @@ def _walk_blob_references(value, names: set[str], seen: set[int], depth: int = 0
             _walk_blob_references(item, names, seen, depth + 1)
 
 
-def _blob_reference_children(value) -> Iterable:
+def _blob_reference_children(value: object) -> Iterable:
     """The sub-values of *value* worth recursing into, empty for a leaf."""
     if isinstance(value, dict):
         return value.values()
@@ -554,12 +558,12 @@ def _scan_cache_for_blob_names(cache_path: Path, names: set[str], unreadable: li
     """Walk every value in one diskcache, recording roots that cannot be read."""
     try:
         cache = Cache(str(cache_path))
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # noqa: BLE001
         unreadable.append(f"{cache_path}: cannot open ({type(exc).__name__}: {exc})")
         return
     try:
         keys = list(cache.iterkeys())
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # noqa: BLE001
         unreadable.append(f"{cache_path}: cannot enumerate ({type(exc).__name__}: {exc})")
         cache.close()
         return
@@ -570,7 +574,7 @@ def _scan_cache_for_blob_names(cache_path: Path, names: set[str], unreadable: li
             except KeyError:
                 # Evicted between listing and reading: it references nothing now.
                 continue
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # noqa: BLE001
                 unreadable.append(
                     f"{cache_path}[{key!r}]: cannot deserialize ({type(exc).__name__}: {exc})"
                 )
@@ -637,8 +641,8 @@ def blob_reachability(
     for path in _extra_root_files(extra_roots, unreadable):
         try:
             with path.open("rb") as fh:
-                value = pickle.load(fh)
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                value = pickle.load(fh)  # noqa: S301 - caller-named roots of our own cache
+        except Exception as exc:  # noqa: BLE001
             unreadable.append(f"{path}: cannot load ({type(exc).__name__}: {exc})")
             continue
         _walk_blob_references(value, names, set())
@@ -784,6 +788,10 @@ def clean_orphaned_blobs(
     return _unreferenced_blobs(cachedir, reachability, dry_run, min_age_seconds)
 
 
+# The blob GC report lists this many orphan paths, then a count of the rest.
+_MAX_ORPHANS_LISTED = 20
+
+
 def print_orphaned_blobs(
     cachedir: str = DEFAULT_CACHE_DIR,
     dry_run: bool = True,
@@ -798,20 +806,20 @@ def print_orphaned_blobs(
     """
     reachability = blob_reachability(cachedir, extra_roots=extra_roots)
     if not reachability.complete:
-        print("Blob GC aborted: these cache roots could not be scanned, so no blob")
-        print("can be proven unreferenced. Nothing was deleted.")
+        print("Blob GC aborted: these cache roots could not be scanned, so no blob")  # noqa: T201 - CLI report output
+        print("can be proven unreferenced. Nothing was deleted.")  # noqa: T201 - CLI report output
         for line in reachability.unreadable:
-            print(f"  {line}")
+            print(f"  {line}")  # noqa: T201 - CLI report output
         return
 
     orphans, freed = _unreferenced_blobs(cachedir, reachability, dry_run, min_age_seconds)
     verb = "Would reclaim" if dry_run else "Reclaimed"
-    print(f"Blob store: {Path(cachedir) / _BLOBS_FOLDER}")
-    print(f"  live references: {len(reachability.names)}")
-    print(f"  {verb} {len(orphans)} unreferenced blobs ({_fmt_size(freed)})")
-    for path in orphans[:20]:
-        print(f"    {path}")
-    if len(orphans) > 20:
-        print(f"    ... and {len(orphans) - 20} more")
+    print(f"Blob store: {Path(cachedir) / _BLOBS_FOLDER}")  # noqa: T201 - CLI report output
+    print(f"  live references: {len(reachability.names)}")  # noqa: T201 - CLI report output
+    print(f"  {verb} {len(orphans)} unreferenced blobs ({_fmt_size(freed)})")  # noqa: T201 - CLI report output
+    for path in orphans[:_MAX_ORPHANS_LISTED]:
+        print(f"    {path}")  # noqa: T201 - CLI report output
+    if len(orphans) > _MAX_ORPHANS_LISTED:
+        print(f"    ... and {len(orphans) - _MAX_ORPHANS_LISTED} more")  # noqa: T201 - CLI report output
     if dry_run and orphans:
-        print("  Dry run: nothing deleted. Re-run with dry_run=False to reclaim.")
+        print("  Dry run: nothing deleted. Re-run with dry_run=False to reclaim.")  # noqa: T201 - CLI report output

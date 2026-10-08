@@ -81,8 +81,7 @@ These sit in the same directory but are imported rather than run:
   produced by `bencher/example/meta/generate_examples.py`.
 - `bencher/example/meta/` — the generators themselves, plus `BenchMeta`, the
   self-describing benchmark that `example_levels.py` sweeps.
-- `bencher/example/experimental/` and `bencher/example/shelved/` — work in progress and
-  retired examples; not part of the documented surface.
+- `bencher/example/experimental/` — work in progress; not part of the documented surface.
 
 ## Generated galleries by category
 

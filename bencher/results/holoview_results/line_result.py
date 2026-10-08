@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 from functools import partial
+from typing import TYPE_CHECKING, Any
 
 import panel as pn
-import xarray as xr
-from param import Parameter
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
-from bencher.results.holoview_results.holoview_result import HoloviewResult
-from bencher.results.holoview_results.holoview_result import use_tap as _USE_TAP
+from bencher.results.holoview_results.holoview_result import (
+    HoloviewResult,
+    use_tap as _use_tap_default,
+)
 from bencher.results.hvplot_accessor import hvplot_of
 from bencher.utils import label_with_units
 from bencher.variables.results import SCALAR_RESULT_TYPES
+
+if TYPE_CHECKING:
+    import holoviews as hv
+    import xarray as xr
+    from param import Parameter
 
 
 class LineResult(HoloviewResult):
@@ -24,19 +30,19 @@ class LineResult(HoloviewResult):
     about specific data points.
     """
 
-    def to_plot(self, **kwargs) -> pn.panel | None:
+    def to_plot(self, **kwargs: Any) -> pn.panel | None:
         """Generates a line plot. See ``to_line`` for parameters."""
         return self.to_line(**kwargs)
 
     def to_line(
         self,
         result_var: Parameter | None = None,
-        tap_var=None,
+        tap_var: Parameter | list[Parameter] | None = None,
         tap_container: pn.pane.panel = None,
-        target_dimension=2,
+        target_dimension: int = 2,
         override: bool = True,
-        use_tap: bool = _USE_TAP,
-        **kwargs,
+        use_tap: bool = _use_tap_default,
+        **kwargs: Any,
     ) -> pn.panel | None:
         """Generates a line plot from benchmark data.
 
@@ -92,7 +98,9 @@ class LineResult(HoloviewResult):
             **kwargs,
         )
 
-    def to_line_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs):
+    def to_line_ds(
+        self, dataset: xr.Dataset, result_var: Parameter, **kwargs: Any
+    ) -> hv.core.Dimensioned | pn.viewable.Viewable | None:
         """Creates a basic line plot from the provided dataset.
 
         When over_time is active with multiple time points, creates an hv.HoloMap
@@ -134,8 +142,7 @@ class LineResult(HoloviewResult):
                 widget_location="bottom",
                 **kwargs,
             )
-            plot = self._apply_opts(plot, xrotation=30)
-            return plot
+            return self._apply_opts(plot, xrotation=30)
 
         # No float vars and over_time was squeezed (single time point) — no x-axis
         if not self.plt_cnt_cfg.float_vars:
@@ -152,7 +159,7 @@ class LineResult(HoloviewResult):
 
         if self._use_holomap_for_time(dataset):
 
-            def make_line(ds_t):
+            def make_line(ds_t: xr.Dataset) -> hv.core.Dimensioned | pn.viewable.Viewable | None:
                 # When _std exists (e.g. after _mean_over_time aggregation),
                 # delegate to the curve overlay which renders Spread bands.
                 std_var = f"{result_var.name}_std"
@@ -176,7 +183,7 @@ class LineResult(HoloviewResult):
         result_var: Parameter,
         result_var_plots: list[Parameter] | None = None,
         container: pn.pane.panel = pn.pane.panel,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.Row:
         """Creates an interactive line plot with tap functionality.
 

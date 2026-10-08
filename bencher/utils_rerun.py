@@ -20,13 +20,18 @@ Displaying rerun data inside a Panel/Bokeh report requires two pieces:
    the same HTTP origin (no CORS, no extra ports).
 """
 
+from pathlib import Path
+from types import ModuleType
+from typing import Any
+
+import panel as pn
 import rerun as rr
 
 from .utils import gen_rerun_data_path
 from .utils_rrd import rrd_file_to_pane
 
 
-def _ensure_rerun_init():  # pragma: no cover
+def _ensure_rerun_init() -> None:  # pragma: no cover
     """Ensure a rerun recording exists, creating one if needed."""
     if rr.get_global_data_recording() is None:
         rr.init("bencher")
@@ -43,21 +48,20 @@ def capture_rerun_rrd(recording: rr.RecordingStream | None = None) -> str:  # pr
     rec = recording or rr.get_global_data_recording()
     rrd_bytes = rec.memory_recording().drain_as_bytes()
     file_path = gen_rerun_data_path()
-    with open(file_path, "wb") as f:
-        f.write(rrd_bytes)
+    Path(file_path).write_bytes(rrd_bytes)
     return file_path
 
 
 def rerun_to_pane(
     width: int = 950, height: int = 712, recording: rr.RecordingStream | None = None
-):  # pragma: no cover
+) -> pn.pane.HTML | pn.pane.Markdown:  # pragma: no cover
     """Render the current rerun recording as an inline HTML pane."""
     file_path = capture_rerun_rrd(recording=recording)
     return rrd_file_to_pane(file_path, width=width, height=height)
 
 
 def capture_rerun_window(
-    recording: rr.RecordingStream | None = None, **_kwargs
+    recording: rr.RecordingStream | None = None, **_kwargs: Any
 ) -> str:  # pragma: no cover
     """Capture the current rerun recording and return the .rrd file path.
 
@@ -82,7 +86,7 @@ def capture_rerun_window(
     return capture_rerun_rrd(recording=recording)
 
 
-def rerun_chunk_api():
+def rerun_chunk_api() -> ModuleType:
     """The module the installed rerun keeps ``Chunk`` and ``RrdReader`` in.
 
     rerun 0.38 moved both out of ``rerun.experimental`` into ``rerun.chunk``, left the

@@ -40,13 +40,13 @@ def test_update_options_provided_default():
 
 def test_update_options_invalid_default():
     cfg = DummyCfg()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Provided default 'bar' is not in new options"):
         cfg.param.state_id.load_values_dynamically(["foo"], default="bar")
 
 
 def test_update_options_empty_list():
     cfg = DummyCfg()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="passed to load_values_dynamically is empty"):
         cfg.param.state_id.load_values_dynamically([])
 
 

@@ -42,12 +42,13 @@ class TestComposableContainerDataset:
         c.append(_make_da(2.0))
         c.append(_make_da(4.0))
         result = c.render()
+        assert isinstance(result, xr.DataArray)
         assert "overlay" not in result.dims
         np.testing.assert_allclose(result.values, 3.0)
 
     def test_empty_raises(self):
         c = ComposableContainerDataset(compose_method=ComposeType.right)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Cannot render an empty ComposableContainerDataset"):
             c.render()
 
     def test_single_item_passthrough(self):

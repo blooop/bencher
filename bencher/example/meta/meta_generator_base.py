@@ -111,7 +111,7 @@ if __name__ == "__main__":
             import_lines.append(f"from {benchable_module} import {benchable_class}")
 
         # Separate stdlib imports from third-party for correct ordering
-        _KNOWN_STDLIB = frozenset(
+        known_stdlib = frozenset(
             {
                 "math",
                 "random",
@@ -131,7 +131,7 @@ if __name__ == "__main__":
         def _is_stdlib(line):
             parts = line.split()
             if parts[0] in ("import", "from"):
-                return parts[1].split(".")[0] in _KNOWN_STDLIB
+                return parts[1].split(".")[0] in known_stdlib
             return False
 
         stdlib = [line for line in import_lines if _is_stdlib(line)]

@@ -64,7 +64,6 @@ class _Spy(BenchResultBase):
     under test is exactly the code being bypassed if this were a fake.
     """
 
-    # pylint: disable=super-init-not-called
     def __init__(self, over_time: bool = True) -> None:
         self.bench_cfg = type("_Cfg", (), {"over_time": over_time})()
         self.object_index = []
@@ -87,7 +86,7 @@ def _over_time_dataset(var_name: str, values) -> xr.Dataset:
 def _render(result_var, values) -> tuple[_Spy, object]:
     spy = _Spy()
     dataset = _over_time_dataset(result_var.name, values)
-    rendered = spy._to_panes_da(  # pylint: disable=protected-access
+    rendered = spy._to_panes_da(
         dataset,
         plot_callback=spy.callback,
         target_dimension=0,
@@ -160,7 +159,7 @@ def test_numeric_types_keep_the_whole_over_time_dimension():
         {"v": (("over_time",), np.asarray([1.0, 2.0]))},
         coords={"over_time": pd.to_datetime(["2000-01-01", "2000-01-02"])},
     )
-    spy._to_panes_da(  # pylint: disable=protected-access
+    spy._to_panes_da(
         dataset,
         plot_callback=spy.callback,
         target_dimension=0,
@@ -187,7 +186,7 @@ def test_single_time_point_is_unchanged_for_pane_types():
         {"v": (("over_time",), np.asarray(["a"], dtype=object))},
         coords={"over_time": pd.to_datetime(["2000-01-01"])},
     )
-    spy._to_panes_da(  # pylint: disable=protected-access
+    spy._to_panes_da(
         dataset,
         plot_callback=spy.callback,
         target_dimension=0,

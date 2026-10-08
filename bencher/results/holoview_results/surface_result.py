@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import panel as pn
 import plotly.graph_objs as go
-import xarray as xr
-from param import Parameter
 
 from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.results.bench_result_base import ReduceType
@@ -13,8 +13,15 @@ from bencher.results.holoview_results.holoview_result import (
 )
 from bencher.variables.results import ResultFloat
 
+if TYPE_CHECKING:
+    import numpy as np
+    import xarray as xr
+    from param import Parameter
 
-def _da_to_sorted_grid(da: xr.DataArray, x_name: str, y_name: str):
+
+def _da_to_sorted_grid(
+    da: xr.DataArray, x_name: str, y_name: str
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Extract sorted x/y coordinate arrays and a 2D z grid from a DataArray.
 
     Sorts the DataArray along both axes so the resulting grid has monotonically
@@ -38,7 +45,7 @@ class SurfaceResult(HoloviewResult):
     """
 
     def to_plot(
-        self, result_var: Parameter | None = None, override: bool = True, **kwargs
+        self, result_var: Parameter | None = None, override: bool = True, **kwargs: Any
     ) -> pn.pane.Pane | None:
         """Generates a 3D surface plot from benchmark data.
 
@@ -60,7 +67,7 @@ class SurfaceResult(HoloviewResult):
         result_var: Parameter | None = None,
         override: bool = True,
         target_dimension: int = 2,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.pane.Pane | None:
         """Generates a 3D surface plot from benchmark data.
 

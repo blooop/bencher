@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from bencher.example.example_scorecard import example_scorecard
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_example_renders_page(tmp_path: Path):

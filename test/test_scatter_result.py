@@ -82,54 +82,54 @@ class TestScatterResult(unittest.TestCase):
     def test_to_scatter_ds_returns_scatter_pane(self):
         ds = self.res_cat.to_dataset()
         rv = self.res_cat.bench_cfg.result_vars[0]
-        result = self.res_cat._to_scatter_ds(ds, rv)  # pylint: disable=protected-access
-        self.assertIsInstance(result, pn.pane.HoloViews)
-        self.assertIsInstance(result.object, hv.Scatter)
+        result = self.res_cat._to_scatter_ds(ds, rv)
+        assert isinstance(result, pn.pane.HoloViews)
+        assert isinstance(result.object, hv.Scatter)
 
     def test_to_scatter_ds_dims_and_title(self):
         """Input var on kdims, result var on vdims, title from to_plot_title."""
         ds = self.res_cat.to_dataset()
         rv = self.res_cat.bench_cfg.result_vars[0]
-        result = self.res_cat._to_scatter_ds(ds, rv)  # pylint: disable=protected-access
+        result = self.res_cat._to_scatter_ds(ds, rv)
         element = result.object
-        self.assertEqual(element.kdims[0].name, "method")
-        self.assertEqual(element.vdims[0].name, "score")
-        self.assertEqual(element.opts.get().kwargs["title"], "score vs method")
+        assert element.kdims[0].name == "method"
+        assert element.vdims[0].name == "score"
+        assert element.opts.get().kwargs["title"] == "score vs method"
 
     def test_to_scatter_full_path_with_result_var(self):
         """The public to_scatter path produces a Row of Scatter panes for ResultVar."""
         result = self.res_legacy.to_scatter()
-        self.assertIsInstance(result, pn.Row)
-        self.assertGreater(len(result), 0)
-        self.assertIsInstance(result[0], pn.pane.HoloViews)
-        self.assertIsInstance(result[0].object, hv.Scatter)
+        assert isinstance(result, pn.Row)
+        assert len(result) > 0
+        assert isinstance(result[0], pn.pane.HoloViews)
+        assert isinstance(result[0].object, hv.Scatter)
 
     def test_to_plot_delegates_to_scatter(self):
         result = ScatterResult.to_plot(self.res_legacy)
-        self.assertIsInstance(result, pn.Row)
-        self.assertIsInstance(result[0].object, hv.Scatter)
+        assert isinstance(result, pn.Row)
+        assert isinstance(result[0].object, hv.Scatter)
 
     def test_to_scatter_result_float_returns_none(self):
         """Documents current behavior: result_types=(ResultVar,) excludes plain
         ResultFloat results, so the public to_scatter path yields no panes."""
-        self.assertIsNone(self.res_cat.to_scatter())
+        assert self.res_cat.to_scatter() is None
 
     def test_to_scatter_ds_nan_does_not_crash(self):
         ds = self.res_nan.to_dataset()
         rv = self.res_nan.bench_cfg.result_vars[0]
-        self.assertTrue(any(math.isnan(v) for v in ds["score"].values.ravel()))
-        result = self.res_nan._to_scatter_ds(ds, rv)  # pylint: disable=protected-access
-        self.assertIsInstance(result, pn.pane.HoloViews)
-        self.assertIsInstance(result.object, hv.Scatter)
+        assert any(math.isnan(v) for v in ds["score"].values.ravel())
+        result = self.res_nan._to_scatter_ds(ds, rv)
+        assert isinstance(result, pn.pane.HoloViews)
+        assert isinstance(result.object, hv.Scatter)
 
     def test_to_scatter_ds_groups_by_extra_cats(self):
         """With >1 categorical input, the scatter groups by the remaining cats."""
         ds = self.res_2cat.to_dataset()
         rv = self.res_2cat.bench_cfg.result_vars[0]
-        result = self.res_2cat._to_scatter_ds(ds, rv)  # pylint: disable=protected-access
-        self.assertIsInstance(result, pn.pane.HoloViews)
-        self.assertIsInstance(result.object, hv.NdOverlay)
-        self.assertEqual(result.object.kdims[0].name, "backend")
+        result = self.res_2cat._to_scatter_ds(ds, rv)
+        assert isinstance(result, pn.pane.HoloViews)
+        assert isinstance(result.object, hv.NdOverlay)
+        assert result.object.kdims[0].name == "backend"
 
     def test_to_scatter_rejects_float_sweep(self):
         """A float input sweep fails the float_range=(0,0) filter when override=False.
@@ -137,6 +137,6 @@ class TestScatterResult(unittest.TestCase):
         The filter returns None (or a Markdown debug panel), never a scatter pane.
         """
         result = self.res_float.to_scatter(override=False)
-        self.assertNotIsInstance(result, (pn.Row, pn.pane.HoloViews))
+        assert not isinstance(result, (pn.Row, pn.pane.HoloViews))
         if result is not None:
-            self.assertIsInstance(result, pn.pane.Markdown)
+            assert isinstance(result, pn.pane.Markdown)

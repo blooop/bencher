@@ -1,25 +1,31 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING, Any
 
 import optuna
 import panel as pn
-import param
 
 # NOTE: `optuna.visualization` pulls in sklearn's fANOVA evaluator (~3s at
 # import). It is only needed by param_importance(), so import it lazily there.
-from bencher.bench_cfg import BenchCfg
 from bencher.results.render_failure import report_render_failure
 from bencher.variables.inputs import BoolSweep, EnumSweep, FloatSweep, IntSweep, StringSweep
-from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.time import TimeEvent, TimeSnapshot
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import param
+
+    from bencher.bench_cfg import BenchCfg
+    from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 logger = logging.getLogger(__name__)
 
 
 # BENCH_CFG
 def optuna_grid_search(bench_cfg: BenchCfg, trial_vars: list | None = None) -> optuna.Study:
-    """use optuna to perform a grid search
+    """Use optuna to perform a grid search.
 
     Args:
         bench_cfg (BenchCfg): setting for grid search
@@ -37,16 +43,13 @@ def optuna_grid_search(bench_cfg: BenchCfg, trial_vars: list | None = None) -> o
         for iv in bench_cfg.all_vars:
             if getattr(iv, "optimize", True):
                 search_space[iv.name] = iv.values()
-    directions = []
-    for rv in bench_cfg.optuna_targets(True):
-        directions.append(rv.direction)
+    directions = [rv.direction for rv in bench_cfg.optuna_targets(True)]
 
-    study = optuna.create_study(
+    return optuna.create_study(
         sampler=optuna.samplers.GridSampler(search_space),
         directions=directions,
         study_name=bench_cfg.title,
     )
-    return study
 
 
 # BENCH_CFG
@@ -58,7 +61,7 @@ def param_importance(
     col_importance = pn.Column()
     for idx, tgt in enumerate(bench_cfg.optuna_targets()):
 
-        def _target(t, i=idx):
+        def _target(t: optuna.trial.FrozenTrial, i: int = idx) -> float:
             return t.values[i]
 
         fig = plot_param_importances(study, target=_target, target_name=tgt)
@@ -75,7 +78,7 @@ def param_importance(
 
 # BENCH_CFG
 def summarise_trial(trial: optuna.trial, bench_cfg: BenchCfg) -> list[str]:
-    """Given a trial produce a string summary of the best results
+    """Given a trial produce a string summary of the best results.
 
     Args:
         trial (optuna.trial): trial to summarise
@@ -97,7 +100,7 @@ def summarise_trial(trial: optuna.trial, bench_cfg: BenchCfg) -> list[str]:
 
 
 def sweep_var_to_optuna_dist(var: param.Parameter) -> optuna.distributions.BaseDistribution:
-    """Convert a sweep var to an optuna distribution
+    """Convert a sweep var to an optuna distribution.
 
     Args:
         var (param.Parameter): A sweep var
@@ -108,7 +111,6 @@ def sweep_var_to_optuna_dist(var: param.Parameter) -> optuna.distributions.BaseD
     Returns:
         optuna.distributions.BaseDistribution: Optuna representation of a sweep var
     """
-
     if isinstance(var, IntSweep):
         return optuna.distributions.IntDistribution(var.sweep_bounds[0], var.sweep_bounds[1])
     if isinstance(var, FloatSweep):
@@ -126,7 +128,7 @@ def sweep_var_to_optuna_dist(var: param.Parameter) -> optuna.distributions.BaseD
 
 
 def sweep_var_to_suggest(iv: ParametrizedSweep, trial: optuna.trial) -> object:
-    """Converts from a sweep var to an optuna
+    """Convert a sweep var to an optuna suggestion on *trial*.
 
     Args:
         iv (ParametrizedSweep): A parametrized sweep input variable
@@ -180,7 +182,9 @@ def cfg_from_optuna_trial(
 _EXPECTED_PLOT_FAILURES = (RuntimeError, ValueError, TypeError, AttributeError)
 
 
-def _plot_failure_pane(plot_fn, exc: Exception, *, unexpected: bool = False):
+def _plot_failure_pane(
+    plot_fn: Callable, exc: Exception, *, unexpected: bool = False
+) -> pn.pane.Markdown:
     """Build the error pane that replaces a plot that failed to render.
 
     *unexpected* marks an exception outside ``_EXPECTED_PLOT_FAILURES``; it gets
@@ -198,7 +202,7 @@ def _plot_failure_pane(plot_fn, exc: Exception, *, unexpected: bool = False):
     return report_render_failure(f"Optuna plot '{fn_name}'", exc)
 
 
-def _append_safe(row, plot_fn, *args, **kwargs):
+def _append_safe(row: pn.layout.ListPanel, plot_fn: Callable, *args: Any, **kwargs: Any) -> None:
     """Append a plot to *row*, surfacing any exception instead of propagating.
 
     Nothing is ever re-raised: this runs while the report is being built, after
@@ -210,11 +214,13 @@ def _append_safe(row, plot_fn, *args, **kwargs):
         row.append(plot_fn(*args, **kwargs))
     except _EXPECTED_PLOT_FAILURES as exc:
         row.append(_plot_failure_pane(plot_fn, exc))
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # noqa: BLE001
         row.append(_plot_failure_pane(plot_fn, exc, unexpected=True))
 
 
-def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
+def _append_safe_sized(
+    row: pn.layout.ListPanel, plot_fn: Callable, width: int, *args: Any, **kwargs: Any
+) -> None:
     """Like _append_safe but sets a consistent width on the resulting plotly figure."""
     try:
         fig = plot_fn(*args, **kwargs)
@@ -223,5 +229,5 @@ def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
         row.append(fig)
     except _EXPECTED_PLOT_FAILURES as exc:
         row.append(_plot_failure_pane(plot_fn, exc))
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # noqa: BLE001
         row.append(_plot_failure_pane(plot_fn, exc, unexpected=True))

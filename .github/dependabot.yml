@@ -15,7 +15,6 @@ updates:
         patterns:
           - "check-manifest"
           - "prek"
-          - "pylint"
           - "pytest"
           - "pytest-cov"
           - "hypothesis"
@@ -32,7 +31,6 @@ updates:
           - "*"
         exclude-patterns:
           - "pre-commit"
-          - "pylint"
           - "pytest"
           - "pytest-cov"
           - "hypothesis"

@@ -126,13 +126,13 @@ class TestPaneGroupPlacement(unittest.TestCase):
 
     def test_the_pane_group_comes_before_the_aggregated_view(self):
         plots, at = self._panes_at()
-        self.assertTrue(at, "the pane group rendered nowhere")
-        self.assertLess(at[0], _heading_index(plots))
+        assert at, "the pane group rendered nowhere"
+        assert at[0] < _heading_index(plots)
 
     def test_the_pane_group_renders_exactly_once(self):
         """Rendering it early is worth nothing if the grid draws it again below."""
         _, at = self._panes_at()
-        self.assertEqual(len(at), 1)
+        assert len(at) == 1
 
     def test_the_pane_group_follows_the_sweep_summary_and_extra_panels(self):
         """Regression is a warning and extra_panels is the caller's own injection, so
@@ -140,29 +140,29 @@ class TestPaneGroupPlacement(unittest.TestCase):
         injected = pn.pane.Markdown("### Injected")
         plots = list(self.res.to_auto_plots(extra_panels=[injected]))
         at = _sections_holding(plots, PANE_MARKER)
-        self.assertTrue(at)
-        self.assertGreater(at[0], plots.index(injected))
+        assert at
+        assert at[0] > plots.index(injected)
 
     def test_a_caller_removing_the_pane_group_gets_none_of_it(self):
         """The downstream workaround this replaces passed exactly this, to stop a
         double render; resurrecting the pane group here would undo the caller."""
         _, at = self._panes_at(remove_plots=[PANES_PLUGIN_NAME])
-        self.assertEqual(at, [])
+        assert at == []
 
     def test_a_caller_restricting_plot_list_to_a_chart_gets_none_of_it(self):
         _, at = self._panes_at(plot_list=["line"])
-        self.assertEqual(at, [])
+        assert at == []
 
     def test_a_numeric_only_caller_gets_none_of_it(self):
         _, at = self._panes_at(numeric_only=True)
-        self.assertEqual(at, [])
+        assert at == []
 
     def test_a_caller_asking_only_for_the_pane_group_gets_it_once_and_no_placeholder(self):
         """The grid is empty once the pane group is lifted out of it, and its "nothing
         to show" placeholder would be a lie about a report that just showed something."""
         plots, at = self._panes_at(plot_list=[PANES_PLUGIN_NAME])
-        self.assertEqual(len(at), 1)
-        self.assertEqual(_sections_holding(plots, NO_PLOTTERS_MESSAGE), [])
+        assert len(at) == 1
+        assert _sections_holding(plots, NO_PLOTTERS_MESSAGE) == []
 
 
 class TestRealRenderer(unittest.TestCase):
@@ -172,28 +172,27 @@ class TestRealRenderer(unittest.TestCase):
     def test_the_images_come_before_the_aggregated_heading(self):
         plots = list(_run(PaneAndMetric, aggregate=["x"]).to_auto_plots())
         images = _sections_holding_type(plots, pn.pane.PNG)
-        self.assertTrue(images, "no image section rendered, so nothing was ordered")
-        self.assertLess(images[0], _heading_index(plots))
+        assert images, "no image section rendered, so nothing was ordered"
+        assert images[0] < _heading_index(plots)
         # The first image section is the pane group, so it carries no chart. The grid
         # below holds images too -- the line plot's tap stream shows the hovered
         # sample -- which is why counting PNGs cannot stand in for counting sections.
-        self.assertNotIn(images[0], _sections_holding_type(plots, pn.pane.HoloViews))
+        assert images[0] not in _sections_holding_type(plots, pn.pane.HoloViews)
 
     def test_a_chart_only_sweep_keeps_its_layout(self):
         """Three sections, as before: sweep summary, chart grid, post-description. No
         empty pane section, no stray heading, no "nothing to show" placeholder."""
         plots = list(_run(MetricOnly).to_auto_plots())
-        self.assertEqual(len(plots), 3)
-        self.assertEqual(_sections_holding(plots, NO_PLOTTERS_MESSAGE), [])
-        self.assertEqual(_sections_holding_type(plots, pn.pane.HoloViews), [1])
+        assert len(plots) == 3
+        assert _sections_holding(plots, NO_PLOTTERS_MESSAGE) == []
+        assert _sections_holding_type(plots, pn.pane.HoloViews) == [1]
 
     def test_a_sweep_nothing_can_draw_still_says_so(self):
         """Dropping the empty grid is conditional on the pane group having drawn, so a
         report with nothing in it at all keeps its explanation."""
         plots = list(_run(MetricOnly).to_auto_plots(plot_list=["volume"]))
-        self.assertTrue(
-            _sections_holding(plots, NO_PLOTTERS_MESSAGE),
-            "the empty-report explanation went missing",
+        assert _sections_holding(plots, NO_PLOTTERS_MESSAGE), (
+            "the empty-report explanation went missing"
         )
 
 

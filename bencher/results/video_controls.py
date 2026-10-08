@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import panel as pn
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from param.parameterized import Event
 
 
 class VideoControls:
@@ -13,7 +18,9 @@ class VideoControls:
         # invert each video independently and never converge once they differ.
         self.loop_enabled: bool = True
 
-    def video_container(self, path, **kwargs):
+    def video_container(
+        self, path: str | Path | None, **kwargs: Any
+    ) -> pn.pane.Video | pn.pane.Markdown:
         if path is not None and Path(path).exists():
             vid = pn.pane.Video(path, autoplay=True, **kwargs)
             vid.loop = self.loop_enabled
@@ -21,17 +28,17 @@ class VideoControls:
             return vid
         return pn.pane.Markdown(f"video does not exist {path}")
 
-    def play_videos(self, _event=None) -> None:
+    def play_videos(self, _event: Event | None = None) -> None:
         """Unpause every registered video."""
         for vid in self.vid_p:
             vid.paused = False
 
-    def pause_videos(self, _event=None) -> None:
+    def pause_videos(self, _event: Event | None = None) -> None:
         """Pause every registered video."""
         for vid in self.vid_p:
             vid.paused = True
 
-    def toggle_looping(self, _event=None) -> None:
+    def toggle_looping(self, _event: Event | None = None) -> None:
         """Flip looping on/off for every registered video, together.
 
         Videos start looping (:meth:`video_container`), so the first press turns
@@ -43,7 +50,7 @@ class VideoControls:
         for vid in self.vid_p:
             vid.loop = self.loop_enabled
 
-    def reset_videos(self, _event=None) -> None:
+    def reset_videos(self, _event: Event | None = None) -> None:
         """Request a rewind to the start of every registered video, and play it.
 
         Unpausing is reliable. The rewind is a *request*: panel's client-side

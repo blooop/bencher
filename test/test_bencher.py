@@ -1,16 +1,16 @@
 import logging
-import os
 import random
 import subprocess
+import sys
 import unittest
 from copy import deepcopy
 from datetime import datetime
+from pathlib import Path
 from shutil import rmtree
 
 import pytest
 from diskcache import Cache
-from hypothesis import given, settings
-from hypothesis import strategies as st
+from hypothesis import given, settings, strategies as st
 
 from bencher import Bench, BenchCfg, BenchRunCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
@@ -22,7 +22,7 @@ def get_hash_isolated_process() -> bytes:
     """This sets up bencher in a new process and prints a hash of the input config to the terminal which is then returned by this function.  The purpose is to set up bench from two different python process and make sure the hashes match"""
     result = subprocess.run(
         [
-            "python3",
+            sys.executable,
             "-c",
             "'from bencher.example.benchmark_data import ExampleBenchCfg;import bencher as bn;cfg1 = bn.BenchCfg(input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noise_distribution],result_vars=[ExampleBenchCfg.param.out_sin],const_vars=[ExampleBenchCfg.param.noisy],repeats=5,over_time=False);print(cfg1.hash_persistent())'",
         ],
@@ -37,7 +37,7 @@ def clear_autofig_folder() -> None:
         rmtree("autofig")
     except FileNotFoundError as e:
         logger.debug(e)
-    os.mkdir("autofig")
+    Path("autofig").mkdir()
 
 
 # at the beginning of the test delete all the figures in the autofig folder.  At the end of the test they should be replaced with pixel perfect figures.  If the git repo is dirty at the end of the tests then CI will fail.
@@ -68,7 +68,7 @@ input_var_float_permutations = [
 input_var_cat_float_permutations = input_var_cat_permutations + input_var_float_permutations
 
 # Generating figures for the None case has some edge cases so make a separate variable to make it easier to debug
-input_var_and_none_permutations = [] + input_var_cat_permutations
+input_var_and_none_permutations = [*input_var_cat_permutations]
 
 result_var_permutations = [
     [ExampleBenchCfg.param.out_sin],
@@ -130,14 +130,13 @@ class TestBencher(unittest.TestCase):
             auto_plot=False,
         )
 
-        self.assertEqual(
-            cfg1.hash_persistent(include_repeats=True),
-            cfg2.hash_persistent(include_repeats=True),
+        assert cfg1.hash_persistent(include_repeats=True) == cfg2.hash_persistent(
+            include_repeats=True
         )
 
     def test_bench_cfg_hash_isolated(self):
         """hash values only seem to not match if run in a separate process, so run the hash test in separate processes"""
-        self.assertEqual(get_hash_isolated_process(), get_hash_isolated_process())
+        assert get_hash_isolated_process() == get_hash_isolated_process()
 
     # @pytest.mark.skip
     @settings(deadline=30000)
@@ -172,7 +171,7 @@ class TestBencher(unittest.TestCase):
             [[ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos]]
         ),
         repeats=st.sampled_from([20]),
-        # repeats=st.sampled_from([1, 2]), #TODO this fails at the moment
+        # TODO: sampling repeats from 1 and 2 fails at the moment.
     )
     def test_combinations(self, input_vars, result_vars, repeats) -> None:
         """check that up to 3 categorical and 1 float value without time can be plotted"""
@@ -222,7 +221,7 @@ class TestBencher(unittest.TestCase):
         input_vars=st.sampled_from(input_var_cat_permutations),
         result_vars=st.sampled_from(result_var_permutations),
         repeats=st.sampled_from([2]),
-        # repeats=st.sampled_from([1, 2]), #TODO this fails at the moment
+        # TODO: sampling repeats from 1 and 2 fails at the moment.
         over_time=st.booleans(),
     )
     def test_unique_file_names(self, input_vars, result_vars, repeats, over_time):
@@ -294,9 +293,7 @@ class TestBencher(unittest.TestCase):
             ),
         )
 
-        self.assertEqual(
-            bench.sample_cache.worker_wrapper_call_count, ExampleBenchCfg.param.theta.samples
-        )
+        assert bench.sample_cache.worker_wrapper_call_count == ExampleBenchCfg.param.theta.samples
 
         bench2 = self.create_bench()
         # run again without caching, the function should be called again
@@ -306,11 +303,8 @@ class TestBencher(unittest.TestCase):
             result_vars=rv,
             run_cfg=BenchRunCfg(over_time=over_time, cache_results=False, auto_plot=False),
         )
-        self.assertEqual(
-            bench2.sample_cache.worker_wrapper_call_count, ExampleBenchCfg.param.theta.samples
-        )
+        assert bench2.sample_cache.worker_wrapper_call_count == ExampleBenchCfg.param.theta.samples
 
-        # bench3 = self.create_bench()
         # run again with the cache turned on. The worker_wrapper_call_count should not increase because it loads cached results
         bench2.plot_sweep(
             title=title,
@@ -318,9 +312,7 @@ class TestBencher(unittest.TestCase):
             result_vars=rv,
             run_cfg=BenchRunCfg(over_time=over_time, cache_results=True, auto_plot=False),
         )
-        self.assertEqual(
-            bench2.sample_cache.worker_wrapper_call_count, ExampleBenchCfg.param.theta.samples
-        )
+        assert bench2.sample_cache.worker_wrapper_call_count == ExampleBenchCfg.param.theta.samples
 
     @settings(deadline=10000)
     @given(noisy=st.booleans())
@@ -347,11 +339,9 @@ class TestBencher(unittest.TestCase):
             ],
             run_cfg=BenchRunCfg(clear_cache=True, clear_history=True, auto_plot=False),
         )
-        self.assertEqual(
-            bench.sample_cache.worker_wrapper_call_count,
-            ExampleBenchCfg.param.theta.samples,
-            "no cache used so the function should sample again",
-        )
+        assert (
+            bench.sample_cache.worker_wrapper_call_count == ExampleBenchCfg.param.theta.samples
+        ), "no cache used so the function should sample again"
         logger.info("re-run and attempt to load from cache")
 
         bench2 = self.create_bench()
@@ -366,10 +356,8 @@ class TestBencher(unittest.TestCase):
             run_cfg=BenchRunCfg(cache_results=True, auto_plot=False),
         )
         # the result should be cached so the call count should be the same as before
-        self.assertEqual(
-            bench2.sample_cache.worker_wrapper_call_count,
-            0,
-            "the worker should not be sampled as it should be loaded from the cache",
+        assert bench2.sample_cache.worker_wrapper_call_count == 0, (
+            "the worker should not be sampled as it should be loaded from the cache"
         )
 
     def test_const_vars_hash_chains_accumulated_hash(self) -> None:
@@ -393,30 +381,28 @@ class TestBencher(unittest.TestCase):
             const_vars=[(ExampleBenchCfg.param.noisy, True)],
             auto_plot=False,
         )
-        self.assertNotEqual(
-            cfg_a.hash_persistent(include_repeats=True),
-            cfg_b.hash_persistent(include_repeats=True),
-            "Configs with different input_vars but same const_vars must have different hashes",
-        )
+        assert cfg_a.hash_persistent(include_repeats=True) != cfg_b.hash_persistent(
+            include_repeats=True
+        ), "Configs with different input_vars but same const_vars must have different hashes"
 
     def test_forgetting_to_use_param(self) -> None:
         bench = self.create_bench()
 
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             bench.plot_sweep(
                 title="test_param_usage",
                 input_vars=[ExampleBenchCfg.param.theta],
                 result_vars=[ExampleBenchCfg.out_sin],  # forgot to use param here
             )
 
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             bench.plot_sweep(
                 title="test_param_usage",
                 input_vars=[ExampleBenchCfg.theta],  # forgot to use param here
                 result_vars=[ExampleBenchCfg.param.out_sin],
             )
 
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             bench.plot_sweep(
                 title="test_param_usage",
                 input_vars=[ExampleBenchCfg.param.theta],
@@ -437,13 +423,10 @@ class TestBencher(unittest.TestCase):
             run_cfg=BenchRunCfg(cache_size=cache_size_mb, auto_plot=False),
         )
 
-        self.assertEqual(bench.cache_size, expected_bytes)
-        self.assertEqual(bench._executor.cache_size, expected_bytes)  # pylint: disable=protected-access
-        self.assertEqual(bench._collector.cache_size, expected_bytes)  # pylint: disable=protected-access
-        self.assertEqual(
-            bench._executor.sample_cache.size_limit,  # pylint: disable=protected-access
-            expected_bytes,
-        )
+        assert bench.cache_size == expected_bytes
+        assert bench._executor.cache_size == expected_bytes
+        assert bench._collector.cache_size == expected_bytes
+        assert bench._executor.sample_cache.size_limit == expected_bytes
 
 
 class TestBenchRunCfgWithDefaults(unittest.TestCase):
@@ -451,36 +434,36 @@ class TestBenchRunCfgWithDefaults(unittest.TestCase):
 
     def test_none_creates_fresh_instance(self):
         cfg = BenchRunCfg.with_defaults(None, repeats=5, subsampling_divisions=4)
-        self.assertEqual(cfg.repeats, 5)
-        self.assertEqual(cfg.subsampling_divisions, 4)
+        assert cfg.repeats == 5
+        assert cfg.subsampling_divisions == 4
 
     def test_defaults_applied_to_param_default_fields(self):
         cfg = BenchRunCfg()
         cfg = BenchRunCfg.with_defaults(cfg, repeats=5, subsampling_divisions=4)
-        self.assertEqual(cfg.repeats, 5)
-        self.assertEqual(cfg.subsampling_divisions, 4)
+        assert cfg.repeats == 5
+        assert cfg.subsampling_divisions == 4
 
     def test_caller_set_fields_not_overwritten(self):
         cfg = BenchRunCfg(repeats=10)
         cfg = BenchRunCfg.with_defaults(cfg, repeats=5, subsampling_divisions=4)
-        self.assertEqual(cfg.repeats, 10)  # caller's value preserved
-        self.assertEqual(cfg.subsampling_divisions, 4)  # default still applied
+        assert cfg.repeats == 10  # caller's value preserved
+        assert cfg.subsampling_divisions == 4  # default still applied
 
     def test_multiple_defaults_in_one_call(self):
         cfg = BenchRunCfg(subsampling_divisions=2)
         cfg = BenchRunCfg.with_defaults(cfg, repeats=3, subsampling_divisions=7, headless=True)
-        self.assertEqual(cfg.repeats, 3)  # was at default, so applied
-        self.assertEqual(cfg.subsampling_divisions, 2)  # caller set, so preserved
-        self.assertTrue(cfg.headless)  # was at default, so applied
+        assert cfg.repeats == 3  # was at default, so applied
+        assert cfg.subsampling_divisions == 2  # caller set, so preserved
+        assert cfg.headless  # was at default, so applied
 
     def test_does_not_mutate_original(self):
         original = BenchRunCfg()
         original_repeats = original.repeats
         result = BenchRunCfg.with_defaults(original, repeats=99)
-        self.assertEqual(result.repeats, 99)
-        self.assertEqual(original.repeats, original_repeats)  # unchanged
-        self.assertIsNot(result, original)
+        assert result.repeats == 99
+        assert original.repeats == original_repeats  # unchanged
+        assert result is not original
 
     def test_unknown_key_raises(self):
-        with self.assertRaises(ValueError, msg="Unknown BenchRunCfg parameter"):
+        with pytest.raises(ValueError, match="Unknown BenchRunCfg parameter"):
             BenchRunCfg.with_defaults(None, not_a_real_param=42)

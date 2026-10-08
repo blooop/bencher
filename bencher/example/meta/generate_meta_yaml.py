@@ -14,14 +14,14 @@ from .generate_examples import GENERATED_DIR
 EXAMPLE_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = "yaml"
 
-# (source_py_name, dest_py_name, yaml_data_files)
+# Each entry holds the source file name, the destination file name and the YAML data files.
 YAML_EXAMPLES = [
     ("yaml_sweep_list.py", "example_yaml_sweep_list.py", ["yaml_sweep_list.yaml"]),
     ("yaml_sweep_dict.py", "example_yaml_sweep_dict.py", ["yaml_sweep_dict.yaml"]),
 ]
 
 
-def example_meta_yaml(run_cfg: bn.BenchRunCfg | None = None) -> None:  # pylint: disable=unused-argument
+def example_meta_yaml(run_cfg: bn.BenchRunCfg | None = None) -> None:  # noqa: ARG001 - shared example_* signature
     """Copy YAML sweep examples into the generated directory."""
     dest = GENERATED_DIR / OUTPUT_DIR
     dest.mkdir(parents=True, exist_ok=True)

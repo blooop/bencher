@@ -9,6 +9,7 @@ from enum import auto
 
 import holoviews as hv
 import numpy as np
+import pytest
 from param import Number
 from strenum import StrEnum
 
@@ -148,16 +149,16 @@ class TestDataIntegrity(unittest.TestCase):
     """Verify that ResultBool data is stored and aggregated correctly."""
 
     def setUp(self):
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+        BoolBenchAlternating._call_count = 0
 
     def test_bool_values_stored_as_float(self):
         """Bool values should be stored as float64 with values 0.0/1.0."""
         res = _run_sweep(BoolBenchDeterministic, ["cat"], repeats=1)
         ds = res.to_dataset()
         da = ds["out"]
-        self.assertEqual(da.dtype, np.float64)
+        assert da.dtype == np.float64
         for val in da.values.flat:
-            self.assertIn(float(val), (0.0, 1.0))
+            assert float(val) in (0.0, 1.0)
 
     def test_bool_aggregation_mean_with_repeats(self):
         """After REDUCE, mean should be in [0,1] and _std should exist."""
@@ -165,41 +166,41 @@ class TestDataIntegrity(unittest.TestCase):
         ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         da_mean = ds["out"]
         for val in da_mean.values.flat:
-            self.assertGreaterEqual(float(val), 0.0)
-            self.assertLessEqual(float(val), 1.0)
-        self.assertIn("out_std", ds.data_vars)
+            assert float(val) >= 0.0
+            assert float(val) <= 1.0
+        assert "out_std" in ds.data_vars
 
     def test_bool_squeeze_removes_repeat_dim(self):
         """SQUEEZE should drop the 'repeat' dimension."""
         res = _run_sweep(BoolBenchDeterministic, ["cat"], repeats=1)
         ds = res.to_hv_dataset(reduce=bn.ReduceType.SQUEEZE).data
-        self.assertNotIn("repeat", ds.dims)
+        assert "repeat" not in ds.dims
 
     def test_bool_all_true_mean(self):
         """All-True benchmark with repeats should give mean=1.0."""
         res = _run_sweep(BoolBenchAllTrue, ["cat"], repeats=3)
         ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out"].values.flat:
-            self.assertAlmostEqual(float(val), 1.0)
+            assert float(val) == pytest.approx(1.0, abs=1e-7)
 
     def test_bool_all_false_mean(self):
         """All-False benchmark with repeats should give mean=0.0."""
         res = _run_sweep(BoolBenchAllFalse, ["cat"], repeats=3)
         ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out"].values.flat:
-            self.assertAlmostEqual(float(val), 0.0)
+            assert float(val) == pytest.approx(0.0, abs=1e-7)
 
     def test_result_bool_bounds(self):
         """ResultBool.bounds should be (0, 1)."""
-        self.assertEqual(BoolBenchDeterministic.param.out.bounds, (0, 1))
+        assert BoolBenchDeterministic.param.out.bounds == (0, 1)
 
     def test_result_bool_default(self):
         """ResultBool.default should be NaN (an unrecorded repeat is missing, not False)."""
-        self.assertTrue(np.isnan(BoolBenchDeterministic.param.out.default))
+        assert np.isnan(BoolBenchDeterministic.param.out.default)
 
     def test_result_bool_units(self):
         """ResultBool.units should be 'ratio'."""
-        self.assertEqual(BoolBenchDeterministic.param.out.units, "ratio")
+        assert BoolBenchDeterministic.param.out.units == "ratio"
 
 
 # ===========================================================================
@@ -211,22 +212,22 @@ class TestBarResult(unittest.TestCase):
     """BarResult has explicit ResultBool scenarios so these should all produce plots."""
 
     def setUp(self):
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+        BoolBenchAlternating._call_count = 0
 
     def test_bar_1cat_1repeat(self):
         res = _run_sweep(BoolBenchDeterministic, ["cat"], repeats=1)
         plot = res.to(BarResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
     def test_bar_1cat_multi_repeat(self):
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         plot = res.to(BarResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
     def test_bar_2cat_1repeat(self):
         res = _run_sweep(BoolBenchDeterministic, ["cat", "x"], repeats=1)
         plot = res.to(BarResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
 
 # ===========================================================================
@@ -240,12 +241,12 @@ class TestLineResult(unittest.TestCase):
     def test_line_1float_1repeat(self):
         res = _run_sweep(BoolBenchDeterministic, ["x"], repeats=1)
         plot = res.to(LineResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
     def test_line_1float_1cat_1repeat(self):
         res = _run_sweep(BoolBenchDeterministic, ["x", "cat"], repeats=1)
         plot = res.to(LineResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
 
 # ===========================================================================
@@ -257,17 +258,17 @@ class TestCurveResult(unittest.TestCase):
     """CurveResult includes ResultBool in result_types."""
 
     def setUp(self):
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+        BoolBenchAlternating._call_count = 0
 
     def test_curve_1float_multi_repeat(self):
         res = _run_sweep(BoolBenchAlternating, ["x"], repeats=4)
         plot = res.to(CurveResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
     def test_curve_1float_1cat_multi_repeat(self):
         res = _run_sweep(BoolBenchAlternating, ["x", "cat"], repeats=4)
         plot = res.to(CurveResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
 
 # ===========================================================================
@@ -282,7 +283,7 @@ class TestHeatmapResult(unittest.TestCase):
         """Heatmap should produce a plot for ResultBool data."""
         res = _run_sweep(BoolBenchDeterministic, ["x", "cat"], repeats=1)
         plot = res.to(HeatmapResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
 
 # ===========================================================================
@@ -297,7 +298,7 @@ class TestSurfaceResult(unittest.TestCase):
         """Surface should produce a plot for ResultBool data."""
         res = _run_sweep(TwoFloatBool, ["x1", "x2"], repeats=2)
         plot = res.to(SurfaceResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
 
 # ===========================================================================
@@ -312,7 +313,7 @@ class TestVolumeResult(unittest.TestCase):
         """Volume should produce a plot for ResultBool data."""
         res = _run_sweep(ThreeFloatBool, ["x1", "x2", "x3"], repeats=2)
         plot = res.to(VolumeResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
 
 # ===========================================================================
@@ -325,25 +326,25 @@ class TestDistributionResult(unittest.TestCase):
     all support ResultBool via inheritance from ResultFloat."""
 
     def setUp(self):
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+        BoolBenchAlternating._call_count = 0
 
     def test_violin_1cat_multi_repeat(self):
         """Violin should produce a plot for ResultBool data."""
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         plot = res.to(ViolinResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
     def test_boxwhisker_1cat_multi_repeat(self):
         """BoxWhisker should produce a plot for ResultBool data."""
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         plot = res.to(BoxWhiskerResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
     def test_scatter_jitter_1cat_multi_repeat(self):
         """ScatterJitter should produce a plot for ResultBool data."""
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         plot = res.to(ScatterJitterResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
 
 # ===========================================================================
@@ -359,7 +360,7 @@ class TestScatterResult(unittest.TestCase):
         # ScatterResult.to_plot doesn't accept result_var, just call it
         try:
             res.to(ScatterResult)
-        except Exception as e:  # pylint: disable=broad-exception-caught  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             self.fail(f"ScatterResult raised {type(e).__name__}: {e}")
 
 
@@ -372,22 +373,22 @@ class TestTableResult(unittest.TestCase):
     """TableResult and TabulatorResult have no result_types filter."""
 
     def setUp(self):
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+        BoolBenchAlternating._call_count = 0
 
     def test_table_1cat_1repeat(self):
         res = _run_sweep(BoolBenchDeterministic, ["cat"], repeats=1)
         plot = res.to(TableResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
     def test_tabulator_1cat_1repeat(self):
         res = _run_sweep(BoolBenchDeterministic, ["cat"], repeats=1)
         plot = res.to(TabulatorResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
     def test_tabulator_1cat_multi_repeat(self):
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         plot = res.to(TabulatorResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
 
 # ===========================================================================
@@ -399,13 +400,13 @@ class TestHistogramResult(unittest.TestCase):
     """HistogramResult supports ResultBool via inheritance from ResultFloat."""
 
     def setUp(self):
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+        BoolBenchAlternating._call_count = 0
 
     def test_histogram_0input_multi_repeat(self):
         """Histogram should produce a plot for ResultBool data."""
         res = _run_sweep(BoolBenchAlternating, [], repeats=4)
         plot = res.to(HistogramResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
 
 # ===========================================================================
@@ -422,7 +423,7 @@ class TestNoneHandling(unittest.TestCase):
         ds = res.to_dataset()
         da = ds["out"]
         for val in da.values.flat:
-            self.assertTrue(np.isnan(val))
+            assert np.isnan(val)
 
 
 class TestBinomialSEWithMissingRepeats(unittest.TestCase):
@@ -439,17 +440,17 @@ class TestBinomialSEWithMissingRepeats(unittest.TestCase):
         # Inject a known pattern with one missing (NaN) repeat into a cell so the
         # valid count (3) differs from the repeat-dim size (4).
         res.ds["out"][{"cat": 0}] = np.array([1.0, 0.0, 1.0, np.nan])
-        res._to_dataset_cache.clear()  # pylint: disable=protected-access
+        res._to_dataset_cache.clear()
 
         ds = res.to_dataset(reduce=bn.ReduceType.REDUCE)
         p = float(ds["out"][{"cat": 0}])
         se = float(ds["out_std"][{"cat": 0}])
 
-        self.assertAlmostEqual(p, 2.0 / 3.0)  # skipna mean over 3 valid samples
+        assert p == pytest.approx(2.0 / 3.0, abs=1e-7)  # skipna mean over 3 valid samples
         n_valid = 3
-        self.assertAlmostEqual(se, float(np.sqrt(p * (1 - p) / n_valid)))
+        assert se == pytest.approx(float(np.sqrt(p * (1 - p) / n_valid)), abs=1e-7)
         # The full-dim-size SE would be measurably smaller; ensure we didn't use it.
-        self.assertNotAlmostEqual(se, float(np.sqrt(p * (1 - p) / 4)))
+        assert se != pytest.approx(float(np.sqrt(p * (1 - p) / 4)), abs=1e-7)
 
 
 # ===========================================================================
@@ -463,27 +464,27 @@ class TestResultBoolClass(unittest.TestCase):
     def test_isinstance_hierarchy(self):
         """ResultBool is a ResultFloat (and therefore also a Number)."""
         rb = ResultBool()
-        self.assertIsInstance(rb, Number)
-        self.assertIsInstance(rb, ResultFloat)
+        assert isinstance(rb, Number)
+        assert isinstance(rb, ResultFloat)
 
     def test_as_dim_returns_hv_dimension(self):
         """as_dim() should return an hv.Dimension.
         Note: param Parameters get their name from the class attribute, so
         we use the param descriptor from a fixture class."""
         dim = BoolBenchDeterministic.param.out.as_dim()
-        self.assertIsInstance(dim, hv.Dimension)
+        assert isinstance(dim, hv.Dimension)
 
     def test_hash_persistent_stable(self):
         """hash_persistent should return the same value for identical instances."""
         rb1 = ResultBool(units="ratio")
         rb2 = ResultBool(units="ratio")
-        self.assertEqual(rb1.hash_persistent(), rb2.hash_persistent())
+        assert rb1.hash_persistent() == rb2.hash_persistent()
 
     def test_hash_persistent_differs_for_different_units(self):
         """hash_persistent should differ when units differ."""
         rb1 = ResultBool(units="ratio")
         rb2 = ResultBool(units="percent")
-        self.assertNotEqual(rb1.hash_persistent(), rb2.hash_persistent())
+        assert rb1.hash_persistent() != rb2.hash_persistent()
 
 
 # ===========================================================================
@@ -495,38 +496,38 @@ class TestAutoReduction(unittest.TestCase):
     """Verify that distribution plots auto-reduce ResultBool repeats to proportions."""
 
     def setUp(self):
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+        BoolBenchAlternating._call_count = 0
 
     def test_violin_shows_proportions_not_raw(self):
         """Violin with ResultBool should auto-reduce: no 'repeat' dim in rendered dataset."""
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         # Get the hv_dataset that would be passed to distribution plots (ReduceType.NONE)
         hv_ds_none = res.to_hv_dataset(reduce=bn.ReduceType.NONE)
-        self.assertIn("repeat", hv_ds_none.data.dims)
+        assert "repeat" in hv_ds_none.data.dims
         # After auto-reduction, the dataset should be reduced
         hv_ds_reduced = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE)
-        self.assertNotIn("repeat", hv_ds_reduced.data.dims)
+        assert "repeat" not in hv_ds_reduced.data.dims
         # Confirm the plot still works
         plot = res.to(ViolinResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
     def test_boxwhisker_shows_proportions(self):
         """BoxWhisker with ResultBool should auto-reduce."""
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         plot = res.to(BoxWhiskerResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
     def test_scatter_jitter_shows_proportions(self):
         """ScatterJitter with ResultBool should auto-reduce."""
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         plot = res.to(ScatterJitterResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
     def test_histogram_shows_proportions(self):
         """Histogram with ResultBool should auto-reduce."""
         res = _run_sweep(BoolBenchAlternating, [], repeats=4)
         plot = res.to(HistogramResult)
-        self.assertIsNotNone(plot)
+        assert plot is not None
 
 
 # ===========================================================================
@@ -539,7 +540,7 @@ class TestBinomialSE(unittest.TestCase):
 
     def test_binomial_se_value(self):
         """For alternating True/False (p=0.5), SE should be sqrt(0.5*0.5/n)."""
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+        BoolBenchAlternating._call_count = 0
         n = 4
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=n)
         ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
@@ -547,7 +548,7 @@ class TestBinomialSE(unittest.TestCase):
             p = float(val)
             expected_se = np.sqrt(p * (1 - p) / n)
             actual_se = float(ds["out_std"].sel(cat=ds["out"].coords["cat"].values[0]).values)
-            self.assertAlmostEqual(actual_se, expected_se, places=10)
+            assert actual_se == pytest.approx(expected_se, abs=1e-10)
             break  # one check is enough to validate the formula
 
     def test_all_true_binomial_se_is_zero(self):
@@ -555,21 +556,21 @@ class TestBinomialSE(unittest.TestCase):
         res = _run_sweep(BoolBenchAllTrue, ["cat"], repeats=4)
         ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out_std"].values.flat:
-            self.assertAlmostEqual(float(val), 0.0)
+            assert float(val) == pytest.approx(0.0, abs=1e-7)
 
     def test_all_false_binomial_se_is_zero(self):
         """If p=0.0, binomial SE should be 0.0."""
         res = _run_sweep(BoolBenchAllFalse, ["cat"], repeats=4)
         ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out_std"].values.flat:
-            self.assertAlmostEqual(float(val), 0.0)
+            assert float(val) == pytest.approx(0.0, abs=1e-7)
 
 
 def test_result_var_deprecation_warning():
     """ResultVar still works but emits a DeprecationWarning."""
     import warnings
 
-    from bencher.variables.results import ResultVar  # pylint: disable=reimported
+    from bencher.variables.results import ResultVar
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")

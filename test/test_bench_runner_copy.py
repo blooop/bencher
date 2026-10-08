@@ -54,7 +54,7 @@ class TestRunCfgMutationSafety(unittest.TestCase):
         br.run(subsampling_divisions=3, repeats=1, cache_samples=False, over_time=True)
 
         for k, v in snapshot.items():
-            self.assertEqual(getattr(br.run_cfg, k), v, f"self.run_cfg.{k} was mutated")
+            assert getattr(br.run_cfg, k) == v, f"self.run_cfg.{k} was mutated"
 
     def test_run_does_not_mutate_explicit_run_cfg(self):
         """run(run_cfg=cfg) must not mutate the caller's cfg object."""
@@ -67,7 +67,7 @@ class TestRunCfgMutationSafety(unittest.TestCase):
         br.run(run_cfg=explicit_cfg, subsampling_divisions=2, repeats=1)
 
         for k, v in snapshot.items():
-            self.assertEqual(getattr(explicit_cfg, k), v, f"explicit run_cfg.{k} was mutated")
+            assert getattr(explicit_cfg, k) == v, f"explicit run_cfg.{k} was mutated"
 
 
 class TestPerIterationIsolation(unittest.TestCase):
@@ -86,10 +86,10 @@ class TestPerIterationIsolation(unittest.TestCase):
         br.add(capturing_benchmark)
         br.run(subsampling_divisions=2, max_subsampling_divisions=3, repeats=1)
 
-        self.assertEqual(len(received_cfgs), 2)
-        self.assertIsNot(received_cfgs[0], received_cfgs[1])
-        self.assertEqual(received_cfgs[0].subsampling_divisions, 2)
-        self.assertEqual(received_cfgs[1].subsampling_divisions, 3)
+        assert len(received_cfgs) == 2
+        assert received_cfgs[0] is not received_cfgs[1]
+        assert received_cfgs[0].subsampling_divisions == 2
+        assert received_cfgs[1].subsampling_divisions == 3
 
     def test_subsampling_divisions_repeats_combinations(self):
         """Multi-subsampling_divisions, multi-repeat runs must produce the exact (subsampling_divisions, repeats) pairs."""
@@ -106,7 +106,7 @@ class TestPerIterationIsolation(unittest.TestCase):
 
         # repeats is outer loop, subsampling_divisions is inner loop
         expected = [(2, 1), (3, 1), (2, 2), (3, 2)]
-        self.assertEqual(combos, expected)
+        assert combos == expected
 
 
 class TestSetupRunCfg(unittest.TestCase):
@@ -120,16 +120,16 @@ class TestSetupRunCfg(unittest.TestCase):
         BenchRunner.setup_run_cfg(original, subsampling_divisions=2, cache_samples=False)
 
         for k, v in snapshot.items():
-            self.assertEqual(getattr(original, k), v, f"input run_cfg.{k} was mutated")
+            assert getattr(original, k) == v, f"input run_cfg.{k} was mutated"
 
     def test_setup_run_cfg_returns_new_object(self):
         """setup_run_cfg must always return a new object, never the input."""
         cfg = bn.BenchRunCfg()
         result = BenchRunner.setup_run_cfg(cfg)
-        self.assertIsNot(result, cfg)
+        assert result is not cfg
 
         result_none = BenchRunner.setup_run_cfg(None)
-        self.assertIsInstance(result_none, bn.BenchRunCfg)
+        assert isinstance(result_none, bn.BenchRunCfg)
 
 
 class TestCopyStrategyGuards(unittest.TestCase):
@@ -139,7 +139,7 @@ class TestCopyStrategyGuards(unittest.TestCase):
         original = bn.BenchRunCfg(time_event_metadata={"code": {"commit": "abc"}})
         copied = BenchRunner.setup_run_cfg(original)
         copied.time_event_metadata["code"]["commit"] = "def"
-        self.assertEqual(original.time_event_metadata, {"code": {"commit": "abc"}})
+        assert original.time_event_metadata == {"code": {"commit": "abc"}}
 
     def test_benchruncfg_has_no_mutable_param_fields(self):
         """Guard: BenchRunCfg must only have primitive/immutable param fields.
@@ -155,11 +155,9 @@ class TestCopyStrategyGuards(unittest.TestCase):
                 continue  # built-in param.Parameterized attribute
             if name in REVIEWED_MUTABLE_FIELDS:
                 continue  # copy behaviour reviewed + isolation-tested (see above)
-            self.assertNotIsInstance(
-                p,
-                MUTABLE_PARAM_TYPES,
+            assert not isinstance(p, MUTABLE_PARAM_TYPES), (
                 f"BenchRunCfg.{name} is {type(p).__name__}, a mutable param type. "
-                f"Review the copy strategy in BenchRunner.run() before proceeding.",
+                f"Review the copy strategy in BenchRunner.run() before proceeding."
             )
 
     def test_reviewed_mutable_fields_have_immutable_defaults(self):
@@ -171,7 +169,7 @@ class TestCopyStrategyGuards(unittest.TestCase):
         """
         params = bn.BenchRunCfg.param.objects()
         for name in REVIEWED_MUTABLE_FIELDS:
-            self.assertIsNone(params[name].default, f"BenchRunCfg.{name} default must be None")
+            assert params[name].default is None, f"BenchRunCfg.{name} default must be None"
 
     def test_regression_overrides_dict_is_isolated_by_copy(self):
         """The overrides dict — including nested specs — must not be shared
@@ -181,17 +179,15 @@ class TestCopyStrategyGuards(unittest.TestCase):
         )
 
         copied = BenchRunner.setup_run_cfg(original, subsampling_divisions=2)
-        self.assertIsNot(copied.regression_overrides, original.regression_overrides)
-        self.assertIsNot(
-            copied.regression_overrides["latency"], original.regression_overrides["latency"]
+        assert copied.regression_overrides is not original.regression_overrides
+        assert (
+            copied.regression_overrides["latency"] is not original.regression_overrides["latency"]
         )
 
         copied.regression_overrides["success"] = 0.0
         copied.regression_overrides["latency"]["percentage"] = 99.0
         copied.regression_overrides["extra"] = 2.0
-        self.assertEqual(
-            original.regression_overrides, {"success": 1.0, "latency": {"percentage": 20.0}}
-        )
+        assert original.regression_overrides == {"success": 1.0, "latency": {"percentage": 20.0}}
 
 
 class TestCopyElimination(unittest.TestCase):
@@ -206,7 +202,7 @@ class TestCopyElimination(unittest.TestCase):
         br.run(subsampling_divisions=2, repeats=1)  # 1 bench_fn, 1 level, 1 repeat
 
         # Expected: 1 at entry (copy self.run_cfg) + 1 per-iteration = 2 total
-        self.assertEqual(mock_dc.call_count, 2)
+        assert mock_dc.call_count == 2
 
     @patch("bencher.bench_runner.deepcopy", wraps=deepcopy)
     def test_deepcopy_count_with_explicit_run_cfg(self, mock_dc):
@@ -218,4 +214,4 @@ class TestCopyElimination(unittest.TestCase):
 
         # Expected: 1 call in setup_run_cfg + 1 per-iteration = 2 total
         # Before optimization this was also 2 (no redundant copy when run_cfg is provided)
-        self.assertEqual(mock_dc.call_count, 2)
+        assert mock_dc.call_count == 2

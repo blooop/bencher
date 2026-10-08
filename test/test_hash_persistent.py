@@ -164,7 +164,7 @@ class TestHashPersistentDifferentiation:
     """Classes with different units values must produce different hashes."""
 
     @pytest.mark.parametrize(
-        "cls,units_a,units_b",
+        ("cls", "units_a", "units_b"),
         [
             (ResultImage, "path", "custom"),
             (ResultVideo, "path", "custom"),
@@ -420,7 +420,7 @@ class TestCrossProcessDeterminism:
     @pytest.mark.parametrize("cls_name", _CROSS_PROCESS_CLASSES)
     def test_hash_stable_across_two_processes(
         self,
-        cross_process_hashes,  # pylint: disable=redefined-outer-name
+        cross_process_hashes,
         cls_name,
     ):
         hashes_a, hashes_b = cross_process_hashes
@@ -431,7 +431,7 @@ class TestCrossProcessDeterminism:
 
     def test_bench_cfg_hash_stable_across_processes(
         self,
-        cross_process_hashes,  # pylint: disable=redefined-outer-name
+        cross_process_hashes,
     ):
         """End-to-end: BenchCfg cache key must be identical across processes."""
         hashes_a, hashes_b = cross_process_hashes

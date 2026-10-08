@@ -53,17 +53,19 @@ def test_yaml_sweep_requires_mapping(tmp_path):
     invalid = tmp_path / "invalid.yaml"
     invalid.write_text("- one\n- two\n", encoding="utf-8")
 
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match="requires the YAML file to contain a mapping at the top level"
+    ):
         bn.YamlSweep(invalid)
 
 
 def test_yaml_sweep_sampling_zero_samples():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="samples must be greater than 0"):
         bn.YamlSweep(EXAMPLE_YAML, samples=0)
 
 
 def test_yaml_sweep_sampling_negative_samples():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="samples must be greater than 0"):
         bn.YamlSweep(EXAMPLE_YAML, samples=-1)
 
 
@@ -73,7 +75,7 @@ def test_yaml_sweep_sampling_too_many_samples():
 
 
 def test_yaml_sweep_invalid_default_key_raises():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Default key 'nonexistent_key' not found"):
         bn.YamlSweep(EXAMPLE_YAML, default_key="nonexistent_key")
 
 
@@ -81,7 +83,7 @@ def test_yaml_sweep_empty_mapping_raises(tmp_path):
     empty = tmp_path / "empty.yaml"
     empty.write_text("{}\n", encoding="utf-8")
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="requires at least one top-level key"):
         bn.YamlSweep(empty)
 
 

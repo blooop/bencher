@@ -1,6 +1,3 @@
-# pylint: disable=duplicate-code
-
-
 import numpy as np
 
 import bencher as bn
@@ -56,7 +53,7 @@ surf_x_max = 0.5
 surf_y_max = -0.2
 
 
-def example_floats2D_workflow(run_cfg: bn.BenchRunCfg, bench: bn.Bench | None = None) -> bn.Bench:
+def example_floats2D_workflow(run_cfg: bn.BenchRunCfg, bench: bn.Bench | None = None) -> bn.Bench:  # noqa: N802 - public example name
     """Example of how to perform a 3D floating point parameter sweep
 
     Args:
@@ -91,7 +88,7 @@ def example_floats2D_workflow(run_cfg: bn.BenchRunCfg, bench: bn.Bench | None = 
     return bench
 
 
-def example_floats3D_workflow(run_cfg: bn.BenchRunCfg, bench: bn.Bench | None = None) -> bn.Bench:
+def example_floats3D_workflow(run_cfg: bn.BenchRunCfg, bench: bn.Bench | None = None) -> bn.Bench:  # noqa: N802 - public example name
     """Example of how to perform a 3D floating point parameter sweep
 
     Args:

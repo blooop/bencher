@@ -4,22 +4,16 @@ import logging
 import os
 import tempfile
 import warnings
-from collections.abc import Callable
 from concurrent.futures import as_completed
 from contextlib import suppress
 from copy import deepcopy
-from datetime import datetime
 from functools import partial
 from itertools import combinations, product
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import numpy as np
 import optuna
 import panel as pn
-import param
-import xarray as xr
-from param import Parameter
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, DimsCfg
 from bencher.bench_plot_server import BenchPlotServer
@@ -27,8 +21,7 @@ from bencher.bench_report import BenchReport
 from bencher.blob_store import collect_cache_dir, record_blob_cache_dir
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
 from bencher.execution import current_execution
-from bencher.history import OnHistoryReset
-from bencher.history import config_summary as history_config_summary
+from bencher.history import OnHistoryReset, config_summary as history_config_summary
 from bencher.job import (
     Executors,
     FutureCache,
@@ -52,11 +45,21 @@ from bencher.variables.inputs import IntSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import ResultHmap
 from bencher.variables.sweep_base import hash_sha1
-from bencher.variables.time import TimeBase
 from bencher.worker_job import WorkerJob
 
 # Import helper classes
 from bencher.worker_manager import WorkerManager
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from datetime import datetime
+
+    import numpy as np
+    import param
+    import xarray as xr
+    from param import Parameter
+
+    from bencher.variables.time import TimeBase
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +81,7 @@ PARETO_RANK = "pareto_rank"
 WARM_STARTED = "bencher_warm_started"
 
 
-def _pareto_design(trial, searched: list) -> dict:
+def _pareto_design(trial: optuna.trial.FrozenTrial, searched: list) -> dict:
     """The searched inputs of *trial*, which is the design it stands for.
 
     Not ``trial.params``: a warm-started trial is built from every variable the
@@ -119,19 +122,19 @@ class _ParetoFrontWorker:
     # instance is its address -- and that reaches plot-filter keys.
     __name__ = "pareto_front_worker"
 
-    def __init__(self, worker: Callable, designs: list[dict]):
+    def __init__(self, worker: Callable, designs: list[dict]) -> None:
         self.worker = worker
         self.designs = designs
 
-    def __call__(self, **kwargs) -> dict:
+    def __call__(self, **kwargs: Any) -> dict:
         return self.worker(**self.designs[kwargs.pop(PARETO_RANK)], **kwargs)
 
 
-def _agg_job_args(kwargs, agg_vars, combo):
+def _agg_job_args(kwargs: dict, agg_vars: list | None, combo: tuple) -> dict:
     """Build job_args dict by merging Optuna-suggested kwargs with aggregate combo values."""
     job_args = dict(kwargs)
     if agg_vars:
-        for v, val in zip(agg_vars, combo):
+        for v, val in zip(agg_vars, combo, strict=True):
             job_args[v.name] = val
     return job_args
 
@@ -298,26 +301,26 @@ class Bench(BenchPlotServer):
         self._collector.close_caches()
 
     @property
-    def sample_cache(self):
+    def sample_cache(self) -> FutureCache | None:
         """Access the sample cache from the executor (for backward compatibility)."""
         return self._executor.sample_cache
 
     @sample_cache.setter
-    def sample_cache(self, value):
+    def sample_cache(self, value: FutureCache | None) -> None:
         """Set the sample cache on the executor (for backward compatibility)."""
         self._executor.sample_cache = value
 
     @property
-    def ds_dynamic(self):
+    def ds_dynamic(self) -> dict:
         """Access the dynamic dataset from the collector (for backward compatibility)."""
         return self._collector.ds_dynamic
 
     @ds_dynamic.setter
-    def ds_dynamic(self, value):
+    def ds_dynamic(self, value: dict) -> None:
         """Set the dynamic dataset on the collector (for backward compatibility)."""
         self._collector.ds_dynamic = value
 
-    def add_plot_callback(self, callback: Callable[[BenchResult], pn.panel], **kwargs) -> None:
+    def add_plot_callback(self, callback: Callable[[BenchResult], pn.panel], **kwargs: Any) -> None:
         """Add a plotting callback to be called on benchmark results.
 
         This method registers a plotting function that will be automatically called on any
@@ -385,9 +388,9 @@ class Bench(BenchPlotServer):
     def sweep_sequential(
         self,
         title: str = "",
-        input_vars: list[ParametrizedSweep] | None = None,
-        result_vars: list[ParametrizedSweep] | None = None,
-        const_vars: list[ParametrizedSweep] | None = None,
+        input_vars: list[param.Parameter | str | dict[str, Any] | tuple] | None = None,
+        result_vars: list[param.Parameter | str | dict[str, Any] | tuple] | None = None,
+        const_vars: list[tuple] | dict[str, Any] | None = None,
         optimise_var: ParametrizedSweep | None = None,
         run_cfg: BenchRunCfg | None = None,
         group_size: int = 1,
@@ -404,10 +407,10 @@ class Bench(BenchPlotServer):
 
         Args:
             title (str, optional): Base title for all the benchmark sweeps. Defaults to "".
-            input_vars (list[ParametrizedSweep], optional): Input variables to sweep through.
+            input_vars (list, optional): Input variables to sweep through.
                 If None, defaults to all input variables from the worker class instance.
-            result_vars (list[ParametrizedSweep], optional): Result variables to collect. Defaults to None.
-            const_vars (list[ParametrizedSweep], optional): Variables to keep constant. Defaults to None.
+            result_vars (list, optional): Result variables to collect. Defaults to None.
+            const_vars (list[tuple] | dict, optional): Variables to keep constant. Defaults to None.
             optimise_var (ParametrizedSweep, optional): Variable to optimize on each sweep iteration.
                 The optimal value will be used as constant input for subsequent sweeps. Defaults to None.
             run_cfg (BenchRunCfg, optional): Run configuration. Defaults to None.
@@ -417,6 +420,10 @@ class Bench(BenchPlotServer):
                 Defaults to itertools.combinations if None.
             plot_callbacks (list[Callable] | bool, optional): Callbacks for plotting or bool to enable/disable.
                 Defaults to None.
+            aggregate (bool | int | list[str], optional): Input dimensions to aggregate over,
+                see :func:`bencher.utils.resolve_aggregate`. Defaults to None.
+            agg_fn (AggFn | str, optional): Function that aggregates the dimensions.
+                Defaults to the mean.
 
         Returns:
             list[BenchResult]: A list of results from all the sweep runs
@@ -452,9 +459,9 @@ class Bench(BenchPlotServer):
     def plot_sweep(
         self,
         title: str | None = None,
-        input_vars: list[ParametrizedSweep] | None = None,
-        result_vars: list[ParametrizedSweep] | None = None,
-        const_vars: list[ParametrizedSweep] | None = None,
+        input_vars: list[param.Parameter | str | dict[str, Any] | tuple] | None = None,
+        result_vars: list[param.Parameter | str | dict[str, Any] | tuple] | None = None,
+        const_vars: list[tuple] | dict[str, Any] | None = None,
         time_src: datetime | None = None,
         description: str | None = None,
         post_description: str | None = None,
@@ -481,13 +488,13 @@ class Bench(BenchPlotServer):
         Args:
             title (str, optional): The title of the benchmark. If None, a title will be
                 generated based on the input variables. Defaults to None.
-            input_vars (list[ParametrizedSweep], optional): Variables to sweep through in the benchmark.
+            input_vars (list, optional): Variables to sweep through in the benchmark.
                 If None and worker_class_instance exists, auto-discovers all input sweep
                 variables from the class. Defaults to None.
-            result_vars (list[ParametrizedSweep], optional): Variables to collect results for.
+            result_vars (list, optional): Variables to collect results for.
                 If None and worker_class_instance exists, auto-discovers all result
                 variables from the class. Defaults to None.
-            const_vars (list[ParametrizedSweep], optional): Variables to keep constant with specified values.
+            const_vars (list[tuple] | dict, optional): Variables to keep constant with specified values.
                 If None and worker_class_instance exists, uses default input values. Defaults to None.
             time_src (datetime, optional): The timestamp for the benchmark. Used for time-series benchmarks.
                 Defaults to None, which will use the current time.
@@ -497,11 +504,17 @@ class Bench(BenchPlotServer):
             pass_repeat (bool, optional): If True, passes the 'repeat' parameter to the worker function.
                 Defaults to False.
             tag (str, optional): Tag to group different benchmarks together. Defaults to "".
+            series_id (str, optional): The over_time series this run appends to
+                (``BenchCfg.series``). Defaults to None.
             run_cfg (BenchRunCfg, optional): Configuration for how the benchmarks are run.
                 If None, uses the instance's run_cfg or creates a default one. Defaults to None.
             plot_callbacks (list[Callable] | bool, optional): Callbacks for plotting results.
                 If True, uses default plotting. If False, disables plotting.
                 If a list, uses the provided callbacks. Defaults to None.
+            aggregate (bool | int | list[str], optional): Input dimensions to aggregate over,
+                see :func:`bencher.utils.resolve_aggregate`. Defaults to None.
+            agg_fn (AggFn | str, optional): Function that aggregates the dimensions.
+                Defaults to the mean.
             sample_order (SampleOrder, optional): Controls the traversal order of sampling only.
                 Defaults to SampleOrder.INORDER. Plotting and dataset dimension order are unchanged.
             auto_plot (bool, optional): Whether to build the holoviews/panel report
@@ -525,7 +538,6 @@ class Bench(BenchPlotServer):
             TypeError: If variable parameters are not of the correct type
             FileNotFoundError: If only_plot=True and no cached results exist
         """
-
         if self.worker_class_instance is not None:
             if input_vars is not None:
                 input_vars_in = deepcopy(input_vars)
@@ -553,11 +565,10 @@ class Bench(BenchPlotServer):
 
             if const_vars is not None:
                 const_vars_in = deepcopy(const_vars)
+            elif self.const_vars is None:
+                const_vars_in = self.worker_class_instance.get_input_defaults()
             else:
-                if self.const_vars is None:
-                    const_vars_in = self.worker_class_instance.get_input_defaults()
-                else:
-                    const_vars_in = deepcopy(self.const_vars)
+                const_vars_in = deepcopy(self.const_vars)
         else:
             input_vars_in = deepcopy(input_vars) if input_vars is not None else []
             result_vars_in = deepcopy(result_vars) if result_vars is not None else []
@@ -678,8 +689,10 @@ class Bench(BenchPlotServer):
             inputs = []
             logger.debug("Input vars prior to subsampling_divisions adjustment: %s", input_vars_in)
             if len(input_vars_in) > 0:
-                for i in input_vars_in:
-                    inputs.append(i.with_subsampling_divisions(run_cfg.subsampling_divisions))
+                inputs.extend(
+                    i.with_subsampling_divisions(run_cfg.subsampling_divisions)
+                    for i in input_vars_in
+                )
                 input_vars_in = inputs
                 logger.info(
                     "subsampling_divisions=%d → %d samples per variable",
@@ -766,7 +779,7 @@ class Bench(BenchPlotServer):
 
         return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
 
-    def collect(self, *args, **kwargs) -> BenchResult:
+    def collect(self, *args: Any, **kwargs: Any) -> BenchResult:
         """Run a sweep and collect results WITHOUT building any plots.
 
         Equivalent to :meth:`plot_sweep` with ``auto_plot=False``: it executes the sweep,
@@ -1153,6 +1166,8 @@ class Bench(BenchPlotServer):
             time_src (datetime | str): Timestamp or event name for the benchmark run
             bench_cfg_sample_hash (str): Hash of the benchmark configuration without repeats
             bench_run_cfg (BenchRunCfg): Configuration for how the benchmark should be executed
+            sample_order (SampleOrder, optional): Traversal order of the samples.
+                Defaults to SampleOrder.INORDER.
             timings (SweepTimings, optional): Timing collector to populate. Defaults to None.
 
         Returns:
@@ -1189,6 +1204,7 @@ class Bench(BenchPlotServer):
                 for idx_ord, val_ord in zip(
                     product(*[dim_indices[i] for i in iter_order]),
                     product(*[dim_values[i] for i in iter_order]),
+                    strict=True,
                 ):
                     idx_orig = [None] * total_dims
                     val_orig = [None] * total_dims
@@ -1261,15 +1277,12 @@ class Bench(BenchPlotServer):
             # sample submits nothing, and a positional zip would then pair every
             # later job with the wrong future.
             submitted: list[tuple] = []
-            for job, cache_job in zip(jobs, cache_jobs):
+            for job, cache_job in zip(jobs, cache_jobs, strict=True):
                 # No `if catch:` branch: `except ()` matches nothing, so the default
                 # empty tuple is already fail-fast. One call site rather than two
                 # identical ones that could drift apart.
                 try:
                     result = self.sample_cache.submit(cache_job, prefetched=prefetched)
-                # catch is a runtime tuple of exception types, which pylint
-                # cannot see into.
-                # pylint: disable-next=catching-non-exception
                 except catch as exc:
                     # The serial executor runs the worker *inside* submit(), so on
                     # the default executor a raising sample never reaches
@@ -1342,7 +1355,7 @@ class Bench(BenchPlotServer):
         self._collector.report_results(bench_res, print_xarray, print_pandas)
 
     def clear_call_counts(self) -> None:
-        """Clear the worker and cache call counts, to help debug and assert caching is happening properly"""
+        """Clear the worker and cache call counts, to help debug and assert caching works."""
         self.sample_cache.clear_call_counts()
 
     def get_result(self, index: int = -1) -> BenchResult:
@@ -1388,8 +1401,7 @@ class Bench(BenchPlotServer):
         return self.report.publish(remote_callback, branch_name=branch_name)
 
     def get_result_vars(self, as_str: bool = True) -> list[str] | list[Parameter]:
-        """
-        Retrieve the result variables from the worker class instance.
+        """Retrieve the result variables from the worker class instance.
 
         Args:
             as_str (bool): If True, the result variables are returned as strings.
@@ -1418,9 +1430,9 @@ class Bench(BenchPlotServer):
     def optimize(
         self,
         title: str | None = None,
-        input_vars=None,
-        result_vars=None,
-        const_vars=None,
+        input_vars: list | None = None,
+        result_vars: list | None = None,
+        const_vars: list | dict | None = None,
         n_trials: int = 100,
         sampler: optuna.samplers.BaseSampler | None = None,
         warm_start: bool = True,
@@ -1432,7 +1444,7 @@ class Bench(BenchPlotServer):
         plot: bool = True,
         catch: tuple[type[Exception], ...] = (),
     ) -> OptimizeResult | None:
-        """Run optuna optimization directly — no full grid sweep required.
+        r"""Run optuna optimization directly — no full grid sweep required.
 
         **Objectives and direction.** The objectives are the result variables that declare
         an optimisation direction (``OptDir.minimize`` / ``OptDir.maximize``); variables
@@ -1443,7 +1455,7 @@ class Bench(BenchPlotServer):
         **Single vs multi-objective.** One directional result variable creates a
         single-objective study, and :attr:`OptimizeResult.best_params` /
         :attr:`OptimizeResult.best_value` are available. Two or more create a
-        multi-objective optuna study whose directions are those variables' ``OptDir``\\ s
+        multi-objective optuna study whose directions are those variables' ``OptDir``\ s
         in order; there is then no single best trial, so ``best_params``/``best_value``
         raise ``RuntimeError`` and :attr:`OptimizeResult.best_trials` returns the
         Pareto front instead. :meth:`OptimizeResult.summary` follows the same split,
@@ -1514,12 +1526,9 @@ class Bench(BenchPlotServer):
         optuna_vars, agg_vars = self._split_optuna_and_agg_vars(input_vars_in, aggregate)
 
         needs_agg = bool(agg_vars) or repeats > 1
-        if needs_agg:
-            # normalize_agg_fn raises ValueError on an unknown value — the same
-            # behaviour this site always had, now shared with the plotting path.
-            agg_callable = AGG_FN_MAP[normalize_agg_fn(agg_fn)]
-        else:
-            agg_callable = None
+        # normalize_agg_fn raises ValueError on an unknown value — the same
+        # behaviour this site always had, now shared with the plotting path.
+        agg_callable = AGG_FN_MAP[normalize_agg_fn(agg_fn)] if needs_agg else None
 
         if title is None:
             title = "Optimize " + " vs ".join(iv.name for iv in input_vars_in)
@@ -1860,7 +1869,13 @@ class Bench(BenchPlotServer):
     # Private helpers for optimize()
     # ------------------------------------------------------------------
 
-    def _resolve_optimize_vars(self, input_vars, result_vars, const_vars, run_cfg):
+    def _resolve_optimize_vars(
+        self,
+        input_vars: list | None,
+        result_vars: list | None,
+        const_vars: list | dict | None,
+        run_cfg: BenchRunCfg,
+    ) -> tuple[list, list, list[tuple[param.Parameter, Any]]]:
         """Deep-copy and convert variable lists to param.Parameter objects."""
         input_vars_in = deepcopy(input_vars)
         result_vars_in = deepcopy(result_vars)
@@ -1911,7 +1926,7 @@ class Bench(BenchPlotServer):
             result_vars_in = result_vars_in or []
             const_vars_in = const_vars_in or []
 
-        def _convert_seq(seq, kind):
+        def _convert_seq(seq: list, kind: str) -> list[param.Parameter]:
             return [self.convert_vars_to_params(v, kind, run_cfg) for v in seq]
 
         input_vars_in = _convert_seq(input_vars_in, "input")
@@ -1959,7 +1974,7 @@ class Bench(BenchPlotServer):
                         trial.user_attrs[WARM_STARTED] = True
                     study.add_trials(trials)
                     added += len(trials)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 logger.debug("Failed to warm-start from result", exc_info=True)
         return added
 
@@ -1983,7 +1998,7 @@ class Bench(BenchPlotServer):
         for iv in input_vars:
             try:
                 vals = list(iv.values())
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 # Not every sweep var can enumerate its values (e.g. dynamically
                 # populated selectors); skip it rather than aborting the whole grid.
                 logger.debug("Skipping input var %s: values() failed", iv.name, exc_info=True)
@@ -1998,7 +2013,7 @@ class Bench(BenchPlotServer):
         resolved_tag = bench_cfg.tag
 
         for combo in product(*iv_grid_values):
-            input_dict = dict(zip(iv_names, combo))
+            input_dict = dict(zip(iv_names, combo, strict=True))
             input_dict.update(constant_inputs)
             input_dict["repeat"] = 1
 
@@ -2018,7 +2033,7 @@ class Bench(BenchPlotServer):
                 if skip:
                     continue
 
-                params = dict(zip(iv_names, combo))
+                params = dict(zip(iv_names, combo, strict=True))
                 try:
                     trial = optuna.trial.create_trial(
                         params=params,
@@ -2028,7 +2043,7 @@ class Bench(BenchPlotServer):
                     )
                     study.add_trial(trial)
                     added += 1
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     logger.debug("Failed to warm-start trial from cache", exc_info=True)
 
         return added
@@ -2049,7 +2064,9 @@ class Bench(BenchPlotServer):
         return added
 
     @staticmethod
-    def _split_optuna_and_agg_vars(input_vars, aggregate):
+    def _split_optuna_and_agg_vars(
+        input_vars: list[param.Parameter], aggregate: bool | int | list[str] | None
+    ) -> tuple[list[param.Parameter], list[param.Parameter]]:
         """Partition *input_vars* into Optuna-tuned and aggregated lists."""
         input_var_names = [iv.name for iv in input_vars]
         agg_over_dims = resolve_aggregate(aggregate, input_var_names)
@@ -2062,7 +2079,14 @@ class Bench(BenchPlotServer):
             agg_vars = []
         return optuna_vars, agg_vars
 
-    def _run_optuna_job(self, trial, job_args, repeat, constant_inputs, tag):
+    def _run_optuna_job(
+        self,
+        trial: optuna.trial.Trial,
+        job_args: dict,
+        repeat: int,
+        constant_inputs: dict,
+        tag: str,
+    ) -> dict:
         """Submit a single worker evaluation and return the result dict."""
         full_input = dict(job_args)
         full_input.update(constant_inputs)
@@ -2097,17 +2121,17 @@ class Bench(BenchPlotServer):
 
     def _make_optuna_objective(
         self,
-        input_vars,
-        constant_inputs,
-        target_names,
-        tag,
-        agg_vars=None,
+        input_vars: list[param.Parameter],
+        constant_inputs: dict,
+        target_names: list[str],
+        tag: str,
+        agg_vars: list[param.Parameter] | None = None,
         agg_callable: Callable | None = None,
-        repeats=1,
-    ):
+        repeats: int = 1,
+    ) -> Callable[[optuna.trial.Trial], Any]:
         """Return an objective function compatible with ``study.optimize()``."""
 
-        def objective(trial: optuna.trial.Trial):
+        def objective(trial: optuna.trial.Trial) -> Any:
             kwargs = {iv.name: sweep_var_to_suggest(iv, trial) for iv in input_vars}
 
             # Non-None exactly when `needs_agg` held at the caller (agg_vars or repeats>1),
@@ -2137,7 +2161,6 @@ class Bench(BenchPlotServer):
         override: bool = True,
         **kwargs: Any,
     ) -> BenchResult:
-        # return
         """Return the current instance of BenchResult.
 
         Returns:
@@ -2153,5 +2176,5 @@ class Bench(BenchPlotServer):
         result_var: Parameter | None = None,
         override: bool = True,
         **kwargs: Any,
-    ):
+    ) -> None:
         self.report.append(self.to(result_type, result_var=result_var, override=override, **kwargs))

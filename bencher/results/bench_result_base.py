@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import inspect
 import logging
-import os
 from collections import defaultdict
-from collections.abc import Callable
 from copy import deepcopy
 from enum import Enum, auto
 from functools import partial
+from pathlib import Path
 from textwrap import wrap
-from typing import Any, Literal, assert_never
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, assert_never
 
 import holoviews as hv
 import numpy as np
@@ -18,7 +17,6 @@ import panel as pn
 import xarray as xr
 from param import Parameter
 
-from bencher.bench_cfg import BenchCfg
 from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.plotting.plt_cnt_cfg import PltCntCfg
 from bencher.results.composable_container.composable_container_base import (
@@ -41,7 +39,6 @@ from bencher.variables.inputs import (
     leading_subsampling_divisions,
     with_subsampling_divisions,
 )
-from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import (
     PANEL_TYPES,
     OptDir,
@@ -55,6 +52,12 @@ from bencher.variables.results import (
     result_is_missing,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator, Sequence
+
+    from bencher.bench_cfg import BenchCfg
+    from bencher.variables.parametrised_sweep import ParametrizedSweep
+
 logger = logging.getLogger(__name__)
 
 # Shared defaults for BenchResultBase.filter(). VarRange is frozen, so a single
@@ -62,7 +65,7 @@ logger = logging.getLogger(__name__)
 _ANY_COUNT = VarRange.unbounded()
 _AT_LEAST_ONE = VarRange.at_least(1)
 
-# todo add plugins
+# TODO: add plugins
 # https://gist.github.com/dorneanu/cce1cd6711969d581873a88e0257e312
 # https://kaleidoescape.github.io/decorated-plugins/
 
@@ -90,28 +93,31 @@ ResolvedReduceType = Literal[
 ]
 
 
-class EmptyContainer:
-    """A wrapper for list like containers that only appends if the item is not None"""
+_PaneT = TypeVar("_PaneT", bound=pn.layout.ListPanel)
 
-    def __init__(self, pane) -> None:
+
+class EmptyContainer(Generic[_PaneT]):
+    """A wrapper for list like containers that only appends if the item is not None."""
+
+    def __init__(self, pane: _PaneT) -> None:
         self.pane = pane
 
-    def append(self, child):
+    def append(self, child: Any) -> None:
         if child is not None:
             self.pane.append(child)
 
-    def get(self):
+    def get(self) -> _PaneT | None:
         return self.pane if len(self.pane) > 0 else None
 
 
 def convert_dataset_bool_dims_to_str(dataset: xr.Dataset) -> xr.Dataset:
-    """Given a dataarray that contains boolean coordinates, convert them to strings so that holoviews loads the data properly
+    """Convert boolean coordinates to strings so that holoviews loads the data properly.
 
     Args:
-        dataarray (xr.DataArray): dataarray with boolean coordinates
+        dataset (xr.Dataset): dataset with boolean coordinates
 
     Returns:
-        xr.DataArray: dataarray with boolean coordinates converted to strings
+        xr.Dataset: dataset with boolean coordinates converted to strings
     """
     bool_coords = {}
     for c in dataset.coords:
@@ -189,11 +195,14 @@ class BenchResultBase:
     def to_xarray(self) -> xr.Dataset:
         return self.ds
 
-    def setup_object_index(self):
+    def setup_object_index(self) -> None:
         self.object_index = []
 
-    def to_pandas(self, reset_index=True) -> pd.DataFrame:
-        """Get the xarray results as a pandas dataframe
+    def to_pandas(self, reset_index: bool = True) -> pd.DataFrame:
+        """Get the xarray results as a pandas dataframe.
+
+        Args:
+            reset_index (bool): Move the index levels into columns. Defaults to True.
 
         Returns:
             pd.DataFrame: The xarray results array as a pandas dataframe
@@ -201,7 +210,7 @@ class BenchResultBase:
         ds = self.to_xarray().to_dataframe()
         return ds.reset_index() if reset_index else ds
 
-    def wrap_long_time_labels(self, bench_cfg):
+    def wrap_long_time_labels(self, bench_cfg: BenchCfg) -> BenchCfg:
         """Takes a benchCfg and formats over_time coordinate labels for display.
 
         For discrete TimeEvent labels, wraps long strings for readability.
@@ -211,7 +220,7 @@ class BenchResultBase:
         sub-second timestamps to collide into fewer slider positions.
 
         Args:
-            bench_cfg (BenchCfg):
+            bench_cfg (BenchCfg): config whose over_time labels are formatted
 
         Returns:
             BenchCfg: updated config with wrapped labels
@@ -240,7 +249,7 @@ class BenchResultBase:
                         ]
         return bench_cfg
 
-    def post_setup(self):
+    def post_setup(self) -> None:
         self.plt_cnt_cfg = PltCntCfg.generate_plt_cnt_cfg(self.bench_cfg, self.ds)
         self.bench_cfg = self.wrap_long_time_labels(self.bench_cfg)
         self.ds = convert_dataset_bool_dims_to_str(self.ds)
@@ -275,11 +284,16 @@ class BenchResultBase:
 
         Args:
             reduce (ReduceType, optional): Optionally perform reduce options on the dataset.  By default the returned dataset will calculate the mean and standard deviation over the "repeat" dimension so that the dataset plays nicely with most of the holoviews plot types.  Reduce.Sqeeze is used if there is only 1 repeat and you want the "reduce" variable removed from the dataset. ReduceType.None returns an unaltered dataset. Defaults to ReduceType.AUTO.
+            result_var (ResultFloat, optional): Restrict the dataset to this result variable.
+            subsampling_divisions (int, optional): Subsample input dims to this resolution.
+            agg_over_dims (list[str], optional): Dimensions to aggregate away.
+            agg_fn (AggFn | str, optional): Aggregation applied over *agg_over_dims*.
+            repeat_subsampling_divisions (int, optional): Subsample the ``repeat`` dimension
+                to this resolution. Defaults to None (every repeat kept).
 
         Returns:
             hv.Dataset: results in the form of a holoviews dataset
         """
-
         if reduce == ReduceType.NONE:
             ds_out = self.to_dataset(
                 reduce,
@@ -380,6 +394,11 @@ class BenchResultBase:
 
         Args:
             reduce (ReduceType, optional): Optionally perform reduce options on the dataset.  By default the returned dataset will calculate the mean and standard deviation over the "repeat" dimension so that the dataset plays nicely with most of the holoviews plot types.  Reduce.Sqeeze is used if there is only 1 repeat and you want the "reduce" variable removed from the dataset. ReduceType.None returns an unaltered dataset. Defaults to ReduceType.AUTO.
+            result_var (ResultFloat | str, optional): Restrict the dataset to this result
+                variable, given as the variable or its name.
+            subsampling_divisions (int, optional): Subsample input dims to this resolution.
+            agg_over_dims (list[str], optional): Dimensions to aggregate away.
+            agg_fn (AggFn | str, optional): Aggregation applied over *agg_over_dims*.
             deep (bool, optional): If True (default), return a deep copy that is safe
                 to mutate. Pass False to get the cached object directly for read-only
                 use (avoids the copy cost).
@@ -433,11 +452,9 @@ class BenchResultBase:
                 )
             ds_out = ds_out[var_name].to_dataset(name=var_name)
 
-        def rename_ds(dataset: xr.Dataset, suffix: str):
-            # var_name =
+        def rename_ds(dataset: xr.Dataset, suffix: str) -> xr.Dataset:
             rename_dict = {var: f"{var}_{suffix}" for var in dataset.data_vars}
-            ds = dataset.rename_vars(rename_dict)
-            return ds
+            return dataset.rename_vars(rename_dict)
 
         match reduce:
             case ReduceType.REDUCE:
@@ -457,7 +474,7 @@ class BenchResultBase:
                 for var in ds_reduce_std.data_vars:
                     ds_reduce_mean[f"{var}_std"] = ds_reduce_std[var]
                 ds_out = ds_reduce_mean
-            case ReduceType.MINMAX:  # TODO, need to pass mean, center of minmax, and minmax
+            case ReduceType.MINMAX:  # TODO: need to pass mean, center of minmax, and minmax
                 ds_reduce_mean = ds_out.mean(dim="repeat", skipna=True, keep_attrs=True)
                 ds_reduce_min = ds_out.min(dim="repeat", skipna=True)
                 ds_reduce_max = ds_out.max(dim="repeat", skipna=True)
@@ -568,7 +585,6 @@ class BenchResultBase:
         Returns:
             list[Any]: A vector of optimal values for the desired input vector
         """
-
         da = self.get_optimal_value_indices(result_var)
         output = []
         for iv in input_vars:
@@ -583,7 +599,7 @@ class BenchResultBase:
         return output
 
     def get_optimal_value_indices(self, result_var: ParametrizedSweep) -> xr.DataArray:
-        """Get an xarray mask of the values with the best values found during a parameter sweep
+        """Get an xarray mask of the values with the best values found during a parameter sweep.
 
         Args:
             result_var (bn.ParametrizedSweep): Optimal value of this result variable
@@ -592,10 +608,7 @@ class BenchResultBase:
             xr.DataArray: xarray mask of optimal values
         """
         result_da = self.ds[result_var.name]
-        if result_var.direction == OptDir.maximize:
-            opt_val = result_da.max()
-        else:
-            opt_val = result_da.min()
+        opt_val = result_da.max() if result_var.direction == OptDir.maximize else result_da.min()
         indices = result_da.where(result_da == opt_val, drop=True).squeeze()
         logger.info(f"optimal value of {result_var.name}: {opt_val.values}")
         return indices
@@ -606,7 +619,7 @@ class BenchResultBase:
         keep_existing_consts: bool = True,
         as_dict: bool = False,
     ) -> list[tuple[Parameter, Any]] | dict[Parameter, Any]:
-        """Get a list of tuples of optimal variable names and value pairs, that can be fed in as constant values to subsequent parameter sweeps
+        """Get a list of tuples of optimal variable names and value pairs, that can be fed in as constant values to subsequent parameter sweeps.
 
         Args:
             result_var (bn.ParametrizedSweep): Optimal values of this result variable
@@ -619,14 +632,10 @@ class BenchResultBase:
             ``ParametrizedSweep`` instances.
         """
         da = self.get_optimal_value_indices(result_var)
-        if keep_existing_consts:
-            # `or []`: const_vars is a param List, so it reads as `list | None`.
-            output = deepcopy(self.bench_cfg.const_vars) or []
-        else:
-            output = []
+        # `or []`: const_vars is a param List, so it reads as `list | None`.
+        output = (deepcopy(self.bench_cfg.const_vars) or []) if keep_existing_consts else []
 
         for iv in self.bench_cfg.input_vars:
-            # assert da.coords[iv.name].values.size == (1,)
             if da.coords[iv.name].values.size == 1:
                 # https://stackoverflow.com/questions/773030/why-are-0d-arrays-in-numpy-not-considered-scalar
                 # use [()] to convert from a 0d numpy array to a scalar
@@ -640,10 +649,10 @@ class BenchResultBase:
             return dict(output)
         return output
 
-    def describe_sweep(self):
+    def describe_sweep(self) -> pn.pane.Markdown | pn.Column:
         return self.bench_cfg.describe_sweep()
 
-    def get_hmap(self, name: str | None = None):
+    def get_hmap(self, name: str | None = None) -> dict[Any, Any] | None:
         try:
             if name is None:
                 name = self.result_hmaps[0].name
@@ -660,7 +669,7 @@ class BenchResultBase:
             return f"{self.bench_cfg.result_vars[0].name} vs {self.bench_cfg.input_vars[0].name}"
         return ""
 
-    def title_from_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs):
+    def title_from_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs: Any) -> str:
         if "title" in kwargs:
             return kwargs["title"]
 
@@ -698,10 +707,12 @@ class BenchResultBase:
         return row.get()
 
     @staticmethod
-    def zip_results1D(args):  # pragma: no cover
+    def zip_results1D(  # pragma: no cover  # noqa: N802 - public method name, kept for API compatibility
+        args: Sequence[Sequence[Any]],
+    ) -> pn.Column:
         first_el = [a[0] for a in args]
         out = pn.Column()
-        for a in zip(*first_el):
+        for a in zip(*first_el, strict=False):
             row = pn.Row()
             row.append(a[0])
             for a1 in range(1, len(a[1])):
@@ -710,12 +721,14 @@ class BenchResultBase:
         return out
 
     @staticmethod
-    def zip_results1D1(panel_list):  # pragma: no cover
+    def zip_results1D1(  # pragma: no cover  # noqa: N802 - public method name, kept for API compatibility
+        panel_list: Sequence[Sequence[Any]],
+    ) -> pn.Column:
         container_args = {"styles": {}}
         container_args["styles"]["border-bottom"] = f"{2}px solid grey"
-        print(panel_list)
+        logger.debug(panel_list)
         out = pn.Column()
-        for a in zip(*panel_list):
+        for a in zip(*panel_list, strict=False):
             row = pn.Row(**container_args)
             row.append(a[0][0])
             for a1 in range(len(a)):
@@ -724,13 +737,15 @@ class BenchResultBase:
         return out
 
     @staticmethod
-    def zip_results1D2(panel_list):  # pragma: no cover
+    def zip_results1D2(  # pragma: no cover  # noqa: N802 - public method name, kept for API compatibility
+        panel_list: pn.layout.ListPanel | None,
+    ) -> Any:
         if panel_list is not None:
-            print(panel_list)
+            logger.debug(panel_list)
             primary = panel_list[0]
             secondary = panel_list[1:]
             for i in range(len(primary)):
-                print(type(primary[i]))
+                logger.debug(type(primary[i]))
                 if isinstance(primary[i], (pn.Column, pn.Row)):
                     for j in range(len(secondary)):
                         primary[i].append(secondary[j][i][1])
@@ -739,14 +754,14 @@ class BenchResultBase:
 
     def map_sample_panes(
         self,
-        result_types,
+        result_types: type | tuple[type, ...],
         container: Callable | None = None,
         result_var: Parameter | None = None,
-        hv_dataset=None,
+        hv_dataset: hv.Dataset | xr.Dataset | None = None,
         target_dimension: int = 0,
         subsampling_divisions: int | None = None,
         repeat_subsampling_divisions: int | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.pane.panel | None:
         """One pane per sample of every result whose type is in *result_types*.
 
@@ -780,12 +795,12 @@ class BenchResultBase:
         hv_dataset: hv.Dataset | None = None,
         target_dimension: int = 2,
         result_var: ResultFloat | None = None,
-        result_types=None,
+        result_types: type | tuple[type, ...] | None = None,
         pane_collection: pn.pane = None,
-        zip_results=False,
+        zip_results: bool = False,
         reduce: ReduceType | None = None,
         pane_layout: PaneLayout = PaneLayout.grid,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.Row | None:
         if hv_dataset is None:
             hv_dataset = self.to_hv_dataset(reduce=reduce)
@@ -809,8 +824,8 @@ class BenchResultBase:
 
         if needs_axiswise:
 
-            def _make_axiswise_cb(inner):
-                def _axiswise_cb(**cb_kwargs):
+            def _make_axiswise_cb(inner: Callable[..., Any]) -> Callable[..., Any]:
+                def _axiswise_cb(**cb_kwargs: Any) -> Any:
                     result = inner(**cb_kwargs)
                     if result is not None:
                         if hasattr(result, "opts"):
@@ -856,14 +871,14 @@ class BenchResultBase:
         reduce: ReduceType = ReduceType.AUTO,
         target_dimension: int = 2,
         result_var: ResultFloat | None = None,
-        result_types=None,
+        result_types: type | tuple[type, ...] | None = None,
         pane_collection: pn.pane = None,
-        override=False,
+        override: bool = False,
         hv_dataset: hv.Dataset | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: AggFn | str = AggFn.MEAN,
         pane_layout: PaneLayout = PaneLayout.grid,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.panel | None:
         # VarRange is frozen, so these defaults are safe to share between calls.
         plot_filter = PlotFilter(
@@ -938,8 +953,8 @@ class BenchResultBase:
         plot_callback: Callable | None = None,
         target_dimension: int = 1,
         pane_layout: PaneLayout = PaneLayout.grid,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> pn.panel:
         dims = len(hv_dataset.dimensions())
         # Exclude over_time from the dimension count used for layout decisions
         pane_dims = dims
@@ -969,8 +984,14 @@ class BenchResultBase:
         return pane_layout
 
     def _iter_pane_slices(
-        self, dataset, selected_dim, plot_callback, target_dimension, result_var, child_layout
-    ):
+        self,
+        dataset: xr.Dataset,
+        selected_dim: str,
+        plot_callback: Callable,
+        target_dimension: int,
+        result_var: Parameter | None,
+        child_layout: PaneLayout,
+    ) -> Iterator[tuple[Any, pn.panel]]:
         """Yield (label_val, panes) for each slice along selected_dim."""
         for i in range(dataset.sizes[selected_dim]):
             sliced = dataset.isel({selected_dim: i})
@@ -989,11 +1010,11 @@ class BenchResultBase:
         self,
         dataset: xr.Dataset,
         plot_callback: Callable,
-        target_dimension=1,
-        horizontal=False,
-        result_var=None,
+        target_dimension: int = 1,
+        horizontal: bool = False,
+        result_var: Parameter | None = None,
         pane_layout: PaneLayout = PaneLayout.grid,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.panel:
         # str(), because xarray types dim names as `Hashable`: these feed both
         # `dataset.sel()` (which takes either) and the container `name=` strings below.
@@ -1089,7 +1110,7 @@ class BenchResultBase:
     def _pane_over_time_slider(
         self,
         dataset: xr.Dataset,
-        result_var,
+        result_var: ResultVideo | ResultImage | ResultRerun,
     ) -> pn.Column:
         """Create a Panel slider widget for over_time with pane-type results.
 
@@ -1115,7 +1136,7 @@ class BenchResultBase:
         if is_rerun:
             from bencher.utils_rrd import rrd_file_to_pane
 
-        _NO_DATA_HTML = (
+        no_data_html = (
             '<div style="background:#eee;padding:20px;text-align:center;color:#999">'
             "No data for this time point</div>"
         )
@@ -1123,15 +1144,14 @@ class BenchResultBase:
         for idx, _t in enumerate(time_vals):
             filepath = self._over_time_filepath(dataset, result_var, idx)
             if filepath is None:
-                html_list.append(_NO_DATA_HTML)
+                html_list.append(no_data_html)
                 continue
             if is_rerun:
                 pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
                 html_list.append(pane.object)
             else:
                 mime = "video/mp4" if is_video else "image/png"
-                with open(filepath, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode()
+                b64 = base64.b64encode(Path(filepath).read_bytes()).decode()
                 if is_video:
                     html_list.append(
                         f'<video controls src="data:{mime};base64,{b64}" style="background:white"/>'
@@ -1163,7 +1183,9 @@ class BenchResultBase:
 
         return pn.Column(pn.pane.Bokeh(div), pn.pane.Bokeh(bokeh_slider))
 
-    def _over_time_filepath(self, dataset: xr.Dataset, result_var, idx: int) -> str | None:
+    def _over_time_filepath(
+        self, dataset: xr.Dataset, result_var: Parameter, idx: int
+    ) -> str | None:
         """Resolve the on-disk filepath for a file-backed result var at an over_time index.
 
         Returns None when the entry is missing/unrecorded (per ``result_is_missing``)
@@ -1174,14 +1196,14 @@ class BenchResultBase:
         if result_is_missing(result_var, value):
             return None
         filepath = str(value)
-        if not os.path.isfile(filepath):
+        if not Path(filepath).is_file():
             return None
         return filepath
 
     def _pane_over_time_grid(
         self,
         dataset: xr.Dataset,
-        result_var,
+        result_var: ResultRerun,
         pane_layout: PaneLayout = PaneLayout.grid,
     ) -> pn.Row | pn.Tabs | pn.pane.Markdown:
         """Render over_time pane results as labelled panels, one per time point.
@@ -1225,9 +1247,9 @@ class BenchResultBase:
     def _pane_over_time_samples(
         self,
         dataset: xr.Dataset,
-        result_var,
+        result_var: Parameter,
         plot_callback: Callable,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.Row | None:
         """Render a pane-typed result over_time as a row of labelled per-time panes.
 
@@ -1280,7 +1302,7 @@ class BenchResultBase:
         return pn.Row(*items)
 
     def zero_dim_da_to_val(self, da_ds: xr.DataArray | xr.Dataset) -> Any:
-        # todo this is really horrible, need to improve
+        # TODO: this is really horrible, need to improve
         dim = None
         if isinstance(da_ds, xr.Dataset):
             dim = next(iter(da_ds.keys()))
@@ -1328,8 +1350,12 @@ class BenchResultBase:
                 return candidate
         return None
 
-    def _dataset_sample_to_container(  # pylint: disable=too-many-return-statements
-        self, val: Any, result_var: Parameter, container, legacy_trusted: bool = True
+    def _dataset_sample_to_container(
+        self,
+        val: Any,
+        result_var: Parameter,
+        container: Callable[..., Any] | None,
+        legacy_trusted: bool = True,
     ) -> Any:
         """Render one stored ``ResultDataSet`` cell, whichever generation stored it.
 
@@ -1372,7 +1398,7 @@ class BenchResultBase:
                     getattr(self, "blob_cache_dir", None),
                     fallback_cache_dirs=blob_cache_dir_hints(self.ds),
                 )
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "ResultDataSet '%s': failed to load blob %r (%s: %s)",
                     result_var.name,
@@ -1439,13 +1465,13 @@ class BenchResultBase:
         resolved = container or self.declared_container(ref, result_var)
         return resolved(ref.obj) if resolved is not None else ref.obj
 
-    def ds_to_container(  # pylint: disable=too-many-return-statements
+    def ds_to_container(
         self,
         dataset: xr.Dataset,
         result_var: Parameter,
-        container,
+        container: Callable[..., Any] | None,
         legacy_trusted: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> Any:
         """Render one sample of *result_var* out of *dataset*.
 
@@ -1504,7 +1530,7 @@ class BenchResultBase:
             if to_container is not None:
                 return to_container(val)
         except AttributeError as _:
-            # TODO make sure all vars have to_container method
+            # TODO: make sure all vars have to_container method
             pass
         return val
 
@@ -1516,7 +1542,10 @@ class BenchResultBase:
         exclude_names: list[str] | None = None,
         repeat_subsampling_divisions: int | None = None,
     ) -> xr.Dataset:
-        """Given a dataset, return a reduced dataset that only contains data from a specified subsampling_divisions.  By default all types of variables are filtered at the specified subsampling_divisions.  If you only want to get a reduced subsampling_divisions for some types of data you can pass in a list of types to get filtered, You can also pass a list of variables names to exclude from getting filtered
+        """Given a dataset, return a reduced dataset that only contains data from a specified subsampling_divisions.
+
+        By default all types of variables are filtered at the specified subsampling_divisions.  If you only want to get a reduced subsampling_divisions for some types of data you can pass in a list of types to get filtered, You can also pass a list of variables names to exclude from getting filtered.
+
         Args:
             dataset (xr.Dataset): dataset to filter
             subsampling_divisions (int): desired data resolution subsampling_divisions
@@ -1592,7 +1621,7 @@ class BenchResultBase:
         )
 
     # MAPPING TO LOWER LEVEL BENCHCFG functions so they are available at a top level.
-    def to_sweep_summary(self, **kwargs):
+    def to_sweep_summary(self, **kwargs: Any) -> pn.Column:
         return self.bench_cfg.to_sweep_summary(**kwargs)
 
     def to_title(self, panel_name: str | None = None) -> pn.pane.Markdown:
@@ -1601,7 +1630,7 @@ class BenchResultBase:
     def to_description(self, width: int = 800) -> pn.pane.Markdown:
         return self.bench_cfg.to_description(width)
 
-    def set_plot_size(self, **kwargs) -> dict:
+    def set_plot_size(self, **kwargs: Any) -> dict:
         if "width" not in kwargs:
             if self.bench_cfg.plot_size is not None:
                 kwargs["width"] = self.bench_cfg.plot_size

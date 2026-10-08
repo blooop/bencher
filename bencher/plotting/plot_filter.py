@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import assert_never
+from typing import TYPE_CHECKING, Any, assert_never
 
 import panel as pn
 
-from bencher.plotting.plt_cnt_cfg import PltCntCfg
+if TYPE_CHECKING:
+    from bencher.plotting.plt_cnt_cfg import PltCntCfg
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +204,7 @@ class PlotFilter:
 
 
 class PlotMatchesResult:
-    """Stores information about which properties match the requirements of a particular plotter"""
+    """Stores information about which properties match the requirements of a particular plotter."""
 
     def __init__(
         self,
@@ -249,7 +250,7 @@ class PlotMatchesResult:
         # if self.plt_cnt_cfg.print_debug:
         logger.info(self.matches_info)
 
-    def to_panel(self, **kwargs) -> pn.pane.Markdown | None:
+    def to_panel(self, **kwargs: Any) -> pn.pane.Markdown | None:
         """Convert match information to a Panel Markdown pane if debug mode is enabled.
 
         Args:

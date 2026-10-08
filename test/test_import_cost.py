@@ -120,11 +120,13 @@ def test_every_accessor_use_goes_through_the_helper() -> None:
     for path in package.rglob("*.py"):
         if path == helper:
             continue
-        for node in ast.walk(ast.parse(path.read_text())):
+        offenders.extend(
+            f"{path.relative_to(package).as_posix()}:{node.lineno}"
+            for node in ast.walk(ast.parse(path.read_text()))
             # `x.hvplot` as an attribute load, i.e. the accessor -- not `import
             # hvplot.pandas`, which is an Import node and is caught by the test above.
-            if isinstance(node, ast.Attribute) and node.attr == "hvplot":
-                offenders.append(f"{path.relative_to(package).as_posix()}:{node.lineno}")
+            if isinstance(node, ast.Attribute) and node.attr == "hvplot"
+        )
     assert not offenders, (
         f"{offenders} reach the `.hvplot` accessor directly. Whether that works "
         "depends on whether something else already imported hvplot in the same "

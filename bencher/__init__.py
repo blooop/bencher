@@ -7,140 +7,171 @@ import warnings
 # this package -- it is import-order noise for anyone importing bencher.
 warnings.filterwarnings("ignore", message="Unable to import Axes3D", category=UserWarning)
 
-from bencher.results.dataset_result import DataSetResult
-from bencher.results.explorer_result import ExplorerResult
-from bencher.results.histogram_result import HistogramResult
-from bencher.results.holoview_results.band_result import BandResult
-from bencher.results.holoview_results.bar_result import BarResult
-from bencher.results.holoview_results.curve_result import CurveResult
-from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult
-from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
-    ScatterJitterResult,
-)
-from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
-from bencher.results.holoview_results.heatmap_result import HeatmapResult
-from bencher.results.holoview_results.line_result import LineResult
-from bencher.results.holoview_results.scatter_result import ScatterResult
-from bencher.results.holoview_results.surface_result import SurfaceResult
-from bencher.results.holoview_results.table_result import TableResult
-from bencher.results.holoview_results.tabular_spec import TabularSpec
-from bencher.results.holoview_results.tabulator_result import TabulatorResult
-from bencher.results.holoview_results.xy_curve_result import XYCurveResult, xy_curve
-from bencher.results.holoview_results.xy_hexbin_result import XYHexbinResult, xy_hexbin
-from bencher.results.holoview_results.xy_histogram_result import (
-    XYHistogramResult,
-    xy_histogram,
-)
-from bencher.results.holoview_results.xy_scatter_result import XYScatterResult, xy_scatter
-from bencher.results.volume_result import VolumeResult
+from typing import Any
 
-from .bench_cfg import ShowMode
-from .bench_plot_server import BenchPlotServer
-from .bench_runner import BenchRunner
-from .bencher import Bench, BenchCfg, BenchRunCfg, SampleErrorPolicyError
-from .complete_report import verify_report
-from .example.benchmark_data import ExampleBenchCfg
-from .execution import Execution, execution_context
-from .file_server import run_file_server
+from bencher.results.dataset_result import DataSetResult as DataSetResult
+from bencher.results.explorer_result import ExplorerResult as ExplorerResult
+from bencher.results.histogram_result import HistogramResult as HistogramResult
+from bencher.results.holoview_results.band_result import BandResult as BandResult
+from bencher.results.holoview_results.bar_result import BarResult as BarResult
+from bencher.results.holoview_results.curve_result import CurveResult as CurveResult
+from bencher.results.holoview_results.distribution_result.box_whisker_result import (
+    BoxWhiskerResult as BoxWhiskerResult,
+)
+from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
+    ScatterJitterResult as ScatterJitterResult,
+)
+from bencher.results.holoview_results.distribution_result.violin_result import (
+    ViolinResult as ViolinResult,
+)
+from bencher.results.holoview_results.heatmap_result import HeatmapResult as HeatmapResult
+from bencher.results.holoview_results.line_result import LineResult as LineResult
+from bencher.results.holoview_results.scatter_result import ScatterResult as ScatterResult
+from bencher.results.holoview_results.surface_result import SurfaceResult as SurfaceResult
+from bencher.results.holoview_results.table_result import TableResult as TableResult
+from bencher.results.holoview_results.tabular_spec import TabularSpec as TabularSpec
+from bencher.results.holoview_results.tabulator_result import TabulatorResult as TabulatorResult
+from bencher.results.holoview_results.xy_curve_result import (
+    XYCurveResult as XYCurveResult,
+    xy_curve as xy_curve,
+)
+from bencher.results.holoview_results.xy_hexbin_result import (
+    XYHexbinResult as XYHexbinResult,
+    xy_hexbin as xy_hexbin,
+)
+from bencher.results.holoview_results.xy_histogram_result import (
+    XYHistogramResult as XYHistogramResult,
+    xy_histogram as xy_histogram,
+)
+from bencher.results.holoview_results.xy_scatter_result import (
+    XYScatterResult as XYScatterResult,
+    xy_scatter as xy_scatter,
+)
+from bencher.results.volume_result import VolumeResult as VolumeResult
+
+from .bench_cfg import ShowMode as ShowMode
+from .bench_plot_server import BenchPlotServer as BenchPlotServer
+from .bench_runner import BenchRunner as BenchRunner
+from .bencher import (
+    Bench as Bench,
+    BenchCfg as BenchCfg,
+    BenchRunCfg as BenchRunCfg,
+    SampleErrorPolicyError as SampleErrorPolicyError,
+)
+from .complete_report import verify_report as verify_report
+from .example.benchmark_data import ExampleBenchCfg as ExampleBenchCfg
+from .execution import Execution as Execution, execution_context as execution_context
+from .file_server import run_file_server as run_file_server
 from .identity import (
-    EXCLUDED_FIELDS,
-    IDENTITY_FIELDS,
-    SweepIdentity,
-    config_summary,
-    diff_identities,
-    identity_of,
-    sweep_identity,
+    EXCLUDED_FIELDS as EXCLUDED_FIELDS,
+    IDENTITY_FIELDS as IDENTITY_FIELDS,
+    SweepIdentity as SweepIdentity,
+    config_summary as config_summary,
+    diff_identities as diff_identities,
+    identity_of as identity_of,
+    sweep_identity as sweep_identity,
 )
 from .job import (
-    SampleFailure,
-    WorkerContractError,
-    WorkerContractWarning,
-    WorkerReturnedNothingError,
+    SampleFailure as SampleFailure,
+    WorkerContractError as WorkerContractError,
+    WorkerContractWarning as WorkerContractWarning,
+    WorkerReturnedNothingError as WorkerReturnedNothingError,
 )
-from .publication_target import PublicationFailed, PublicationTarget
-from .render import load_result, render_report, save_result, save_results
+from .publication_target import (
+    PublicationFailed as PublicationFailed,
+    PublicationTarget as PublicationTarget,
+)
+from .render import (
+    load_result as load_result,
+    render_report as render_report,
+    save_result as save_result,
+    save_results as save_results,
+)
 from .report_export import (
-    compare_results,
-    comparison_to_json,
-    result_to_dict,
-    result_to_json,
-    series_for_var,
+    compare_results as compare_results,
+    comparison_to_json as comparison_to_json,
+    result_to_dict as result_to_dict,
+    result_to_json as result_to_json,
+    series_for_var as series_for_var,
 )
 from .results.composable_container.composable_container_base import (
-    Axis,
-    ComposableContainerBase,
-    ComposeType,
-    PaneLayout,
+    Axis as Axis,
+    ComposableContainerBase as ComposableContainerBase,
+    ComposeType as ComposeType,
+    PaneLayout as PaneLayout,
 )
 from .results.composable_container.composable_container_dataframe import (
-    ComposableContainerDataset,
+    ComposableContainerDataset as ComposableContainerDataset,
 )
 from .results.composable_container.composable_container_panel import (
-    ComposableContainerPanel,
+    ComposableContainerPanel as ComposableContainerPanel,
 )
 from .results.composable_container.composable_container_video import (
-    ComposableContainerVideo,
-    RenderCfg,
+    ComposableContainerVideo as ComposableContainerVideo,
+    RenderCfg as RenderCfg,
 )
 from .scorecard import (
-    Chrome,
-    ReportLayout,
-    ScorecardConfig,
-    generate_scorecard,
+    Chrome as Chrome,
+    ReportLayout as ReportLayout,
+    ScorecardConfig as ScorecardConfig,
+    generate_scorecard as generate_scorecard,
 )
-from .sparkline import sparkline_svg
-from .sweep_spec import SweepSpec, diff_specs
+from .sparkline import sparkline_svg as sparkline_svg
+from .sweep_spec import SweepSpec as SweepSpec, diff_specs as diff_specs
 from .utils import (
-    gen_image_path,
-    gen_path,
-    gen_rerun_data_path,
-    gen_video_path,
-    get_nearest_coords,
-    github_content,
-    hmap_canonical_input,
-    lerp,
-    make_namedtuple,
-    publish_file,
-    tabs_in_markdown,
+    gen_image_path as gen_image_path,
+    gen_path as gen_path,
+    gen_rerun_data_path as gen_rerun_data_path,
+    gen_video_path as gen_video_path,
+    get_nearest_coords as get_nearest_coords,
+    github_content as github_content,
+    hmap_canonical_input as hmap_canonical_input,
+    lerp as lerp,
+    make_namedtuple as make_namedtuple,
+    publish_file as publish_file,
+    tabs_in_markdown as tabs_in_markdown,
 )
 from .utils_rrd import (
-    publish_and_view_rrd,
-    rrd_file_to_pane,
-    rrd_to_pane,
+    publish_and_view_rrd as publish_and_view_rrd,
+    rrd_file_to_pane as rrd_file_to_pane,
+    rrd_to_pane as rrd_to_pane,
 )
 from .variables.inputs import (
-    BoolSweep,
-    EnumSweep,
-    FloatSweep,
-    IntSweep,
-    StringSweep,
-    SweepBase,
-    YamlSweep,
-    box,
-    p,
-    sweep,
-    with_subsampling_divisions,
+    BoolSweep as BoolSweep,
+    EnumSweep as EnumSweep,
+    FloatSweep as FloatSweep,
+    IntSweep as IntSweep,
+    StringSweep as StringSweep,
+    SweepBase as SweepBase,
+    YamlSweep as YamlSweep,
+    box as box,
+    p as p,
+    sweep as sweep,
+    with_subsampling_divisions as with_subsampling_divisions,
 )
 from .variables.results import (
-    SCALAR_RESULT_TYPES,
-    OptDir,
-    ResultBool,
-    ResultContainer,
-    ResultDataSet,
-    ResultFloat,
-    ResultHmap,
-    ResultImage,
-    ResultPath,
-    ResultReference,
-    ResultRerun,
-    ResultString,
-    ResultVar,
-    ResultVec,
-    ResultVideo,
-    curve,
+    SCALAR_RESULT_TYPES as SCALAR_RESULT_TYPES,
+    OptDir as OptDir,
+    ResultBool as ResultBool,
+    ResultContainer as ResultContainer,
+    ResultDataSet as ResultDataSet,
+    ResultFloat as ResultFloat,
+    ResultHmap as ResultHmap,
+    ResultImage as ResultImage,
+    ResultPath as ResultPath,
+    ResultReference as ResultReference,
+    ResultRerun as ResultRerun,
+    ResultString as ResultString,
+    ResultVar as ResultVar,
+    ResultVec as ResultVec,
+    ResultVideo as ResultVideo,
+    curve as curve,
 )
-from .variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, hash_sha1
-from .variables.time import TimeSnapshot
+from .variables.sweep_base import (
+    SUBSAMPLING_DIVISIONS_SAMPLES as SUBSAMPLING_DIVISIONS_SAMPLES,
+    hash_sha1 as hash_sha1,
+)
+from .variables.time import TimeSnapshot as TimeSnapshot
 
 
 def _requires_rerun(name: str) -> type:
@@ -169,7 +200,7 @@ def _requires_rerun(name: str) -> type:
         "installed. Install it with `pip install rerun-sdk`."
     )
 
-    def __init__(self, *_args, **_kwargs):
+    def __init__(_self: object, *_args: Any, **_kwargs: Any) -> None:  # noqa: N807 - becomes the placeholder class's __init__ via type()
         raise ImportError(message)
 
     return type(
@@ -194,33 +225,38 @@ except ModuleNotFoundError:
     rerun_to_pane = _requires_rerun("rerun_to_pane")
 
 from .cache_management import (
-    DEFAULT_CACHE_SIZE_BYTES,
-    BlobReachability,
-    CacheDirStats,
-    CacheStats,
-    blob_reachability,
-    cache_stats,
-    clean_orphaned_blobs,
-    clean_orphaned_media,
-    cleanup_job_media,
-    clear_all,
-    clear_media,
-    ensure_cache_version,
-    print_cache_stats,
-    print_orphaned_blobs,
+    DEFAULT_CACHE_SIZE_BYTES as DEFAULT_CACHE_SIZE_BYTES,
+    BlobReachability as BlobReachability,
+    CacheDirStats as CacheDirStats,
+    CacheStats as CacheStats,
+    blob_reachability as blob_reachability,
+    cache_stats as cache_stats,
+    clean_orphaned_blobs as clean_orphaned_blobs,
+    clean_orphaned_media as clean_orphaned_media,
+    cleanup_job_media as cleanup_job_media,
+    clear_all as clear_all,
+    clear_media as clear_media,
+    ensure_cache_version as ensure_cache_version,
+    print_cache_stats as print_cache_stats,
+    print_orphaned_blobs as print_orphaned_blobs,
 )
-from .git_info import git_time_event
-from .history import HistoryEvent, HistoryEventKind, HistoryResetError, OnHistoryReset
-from .perf_tracker import PerfReport, PerfTracker
-from .plotting.plot_filter import PlotFilter, VarRange
+from .git_info import git_time_event as git_time_event
+from .history import (
+    HistoryEvent as HistoryEvent,
+    HistoryEventKind as HistoryEventKind,
+    HistoryResetError as HistoryResetError,
+    OnHistoryReset as OnHistoryReset,
+)
+from .perf_tracker import PerfReport as PerfReport, PerfTracker as PerfTracker
+from .plotting.plot_filter import PlotFilter as PlotFilter, VarRange as VarRange
 from .regression import (
-    MethodCells,
-    RegressionError,
-    RegressionReport,
-    RegressionResult,
-    method_cells,
+    MethodCells as MethodCells,
+    RegressionError as RegressionError,
+    RegressionReport as RegressionReport,
+    RegressionResult as RegressionResult,
+    method_cells as method_cells,
 )
-from .results.bench_result import BenchResult
+from .results.bench_result import BenchResult as BenchResult
 
 # These three rerun names, plus RerunResult/RerunSummaryResult/RerunTimelineResult a few
 # lines down -- six in all -- are imported unconditionally, which is a statement of fact rather than optimism.
@@ -234,40 +270,53 @@ from .results.bench_result import BenchResult
 # to be read, and this one advertised a fallback that did not exist.
 # (Kept apart by import sorting; test_optional_extra_exports pins the premise.)
 from .results.composable_container.composable_container_rerun import (
-    ComposableContainerRerun,
-    RerunRecording,
-    RerunViewKind,
+    ComposableContainerRerun as ComposableContainerRerun,
+    RerunRecording as RerunRecording,
+    RerunViewKind as RerunViewKind,
 )
-from .results.optimize_result import OptimizeResult
+from .results.optimize_result import OptimizeResult as OptimizeResult
 from .results.pane_result import PaneResult
-from .results.render_failure import RenderFailedWarning
-from .results.rerun_result import RerunResult
-from .results.rerun_summary import RerunSummaryResult
-from .results.rerun_timeline import RerunTimelineResult, TimelineIndex
-from .sample_order import SampleOrder
-from .variables.parametrised_sweep import ParametrizedSweep
-from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
+from .results.render_failure import RenderFailedWarning as RenderFailedWarning
+from .results.rerun_result import RerunResult as RerunResult
+from .results.rerun_summary import RerunSummaryResult as RerunSummaryResult
+from .results.rerun_timeline import (
+    RerunTimelineResult as RerunTimelineResult,
+    TimelineIndex as TimelineIndex,
+)
+from .sample_order import SampleOrder as SampleOrder
+from .variables.parametrised_sweep import ParametrizedSweep as ParametrizedSweep
+from .variables.singleton_parametrized_sweep import (
+    ParametrizedSweepSingleton as ParametrizedSweepSingleton,
+)
 
 VideoResult = PaneResult
-from .bench_report import BenchReport, GithubPagesCfg, Publisher
-from .class_enum import ClassEnum, ExampleEnum
-from .factories import create_bench, create_bench_runner
-from .job import Executors
-from .plugins import (
-    BenchData,
-    CacheHandle,
-    PlotPlugin,
-    PluginRegistry,
-    RunMeta,
-    get_registry,
-    plot_plugin,
-    register_plugin,
-    unregister_plugin,
+from .bench_report import (
+    BenchReport as BenchReport,
+    GithubPagesCfg as GithubPagesCfg,
+    Publisher as Publisher,
 )
-from .results.holoview_results.holoview_result import HoloviewResult, PlotResult, ReduceType
-from .run import run
-from .sweep_timings import SweepTimings
-from .video_writer import VideoWriter, add_image
+from .class_enum import ClassEnum as ClassEnum, ExampleEnum as ExampleEnum
+from .factories import create_bench as create_bench, create_bench_runner as create_bench_runner
+from .job import Executors as Executors
+from .plugins import (
+    BenchData as BenchData,
+    CacheHandle as CacheHandle,
+    PlotPlugin as PlotPlugin,
+    PluginRegistry as PluginRegistry,
+    RunMeta as RunMeta,
+    get_registry as get_registry,
+    plot_plugin as plot_plugin,
+    register_plugin as register_plugin,
+    unregister_plugin as unregister_plugin,
+)
+from .results.holoview_results.holoview_result import (
+    HoloviewResult as HoloviewResult,
+    PlotResult as PlotResult,
+    ReduceType as ReduceType,
+)
+from .run import run as run
+from .sweep_timings import SweepTimings as SweepTimings
+from .video_writer import VideoWriter as VideoWriter, add_image as add_image
 
 _DEPRECATED_ALIASES = {
     "LEVEL_SAMPLES": "SUBSAMPLING_DIVISIONS_SAMPLES",
@@ -275,7 +324,7 @@ _DEPRECATED_ALIASES = {
 }
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     import sys
 
     new_name = _DEPRECATED_ALIASES.get(name)

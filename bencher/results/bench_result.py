@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 import panel as pn
-from param import Parameter
 
 from bencher.results.bench_result_base import EmptyContainer, ReduceType
 from bencher.results.composable_container.composable_container_base import (
@@ -21,7 +19,7 @@ try:
     from bencher.results.rerun_result import RerunResult
 except ModuleNotFoundError:
 
-    class RerunResult:  # pylint: disable=missing-class-docstring
+    class RerunResult:
         pass
 
 
@@ -69,6 +67,11 @@ from bencher.utils import AggFn, listify, resolve_aggregate
 if TYPE_CHECKING:
     # Runtime import would be circular: identity imports bench_cfg, which this
     # module's own import chain pulls in.
+    from collections.abc import Callable, Sequence
+
+    from param import Parameter
+
+    from bencher.bench_cfg import BenchCfg
     from bencher.identity import SweepIdentity
     from bencher.regression import RegressionResult
 
@@ -80,7 +83,7 @@ logger = logging.getLogger(__name__)
 NO_PLOTTERS_MESSAGE = "No Plotters are able to represent these results"
 
 
-def _says_nothing_to_show(panes) -> bool:
+def _says_nothing_to_show(panes: pn.layout.ListPanel) -> bool:
     """Whether a ``to_auto`` result is only its "nothing to show" placeholder."""
     return (
         len(panes) == 1
@@ -122,10 +125,10 @@ class BenchResult(
     RerunTimelineResult,
     DataSetResult,
     OptunaResult,
-):  # pylint: disable=too-many-ancestors
-    """Contains the results of the benchmark and has methods to cast the results to various datatypes and graphical representations"""
+):
+    """Contains the results of the benchmark and has methods to cast the results to various datatypes and graphical representations."""
 
-    def __init__(self, bench_cfg) -> None:
+    def __init__(self, bench_cfg: BenchCfg) -> None:
         """Initialize a BenchResult instance.
 
         Args:
@@ -133,7 +136,6 @@ class BenchResult(
         """
         VolumeResult.__init__(self, bench_cfg)
         HoloviewResult.__init__(self, bench_cfg)
-        # DataSetResult.__init__(self.bench_cfg)
         self.timings = None  # Populated by Bench.run_sweep() with SweepTimings
         # Samples that failed without aborting the sweep: raised and tolerated
         # because of run_cfg.catch, or dropped for breaking the worker contract
@@ -342,11 +344,11 @@ class BenchResult(
         self,
         plot_list: list[callable | str] | None = None,
         remove_plots: list[callable | str] | None = None,
-        default_container=pn.Column,
+        default_container: Callable[[], pn.layout.ListPanel] = pn.Column,
         override: bool = False,  # false so that plots that are not supported are not shown
         numeric_only: bool = False,
         backend: str | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.layout.ListPanel:
         """Automatically generate plots by dispatching through the plot plugin registry.
 
@@ -394,12 +396,12 @@ class BenchResult(
         ):
             try:
                 row.append(plugin.render(data))
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # noqa: BLE001
                 row.append(report_render_failure(f"Plot plugin '{plugin.name}'", exc))
         for plot_callback in extra_callbacks:
             try:
                 row.append(plot_callback(self, override=override, **kwargs))
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # noqa: BLE001
                 row.append(report_render_failure(f"Plot callback '{plot_callback.__name__}'", exc))
 
         self.plt_cnt_cfg.print_debug = True
@@ -442,7 +444,8 @@ class BenchResult(
 
         Known callbacks translate to their plugin names; unknown callables keep
         working through the legacy direct-call path. None means "no restriction"
-        (all registered plugins participate)."""
+        (all registered plugins participate).
+        """
         if plot_list is None:
             return None, []
         include_names: list[str] = []
@@ -481,7 +484,7 @@ class BenchResult(
         self,
         extra_panels: Sequence[Callable[[BenchResult], pn.viewable.Viewable] | pn.viewable.Viewable]
         | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.panel:
         """Given the dataset result of a benchmark run, automatically deduce how to plot the data based on the types of variables that were sampled.
 
@@ -525,7 +528,7 @@ class BenchResult(
                         plot_cols.append(ep(self))
                     else:
                         plot_cols.append(ep)
-                except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                except Exception as exc:  # noqa: BLE001
                     name = getattr(ep, "__name__", repr(ep))
                     plot_cols.append(report_render_failure(f"Extra panel '{name}'", exc))
 
@@ -735,7 +738,7 @@ class BenchResult(
         for r in results:
             try:
                 pane = pn.pane.HoloViews(r.render_overlay(**overlay_kwargs), name=r.variable)
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # noqa: BLE001
                 pane = report_render_failure(f"Regression overlay for '{r.variable}'", exc)
             container.append((r.variable, pane) if use_tabs else pane)
         return container.render()

@@ -39,5 +39,4 @@ def test_construction_raises_no_deprecation_warning(make):
 
 def test_timebase_rejects_positional_options_after_objects():
     with pytest.raises(TypeError):
-        # pylint: disable-next=too-many-function-args
         TimeBase(["a", "b"], None, False, True)  # ty: ignore[too-many-positional-arguments]

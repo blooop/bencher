@@ -23,5 +23,5 @@ class TestFormatFloat(unittest.TestCase):
 
         for expected, given in test:
             output = ff8(given)
-            self.assertEqual(len(output), width, msg=output)
-            self.assertEqual(output, expected, msg=given)
+            assert len(output) == width, output
+            assert output == expected, given

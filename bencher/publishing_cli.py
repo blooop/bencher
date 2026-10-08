@@ -6,7 +6,7 @@ from pathlib import Path
 
 from bencher.publication_pointers import PointerFailed
 from bencher.publication_target import PublicationTarget, publish_frozen_report, receipt_json
-from bencher.publishing import Published, PublishFailed
+from bencher.publishing import PublishFailed
 
 
 def main(argv: list[str]) -> int:
@@ -44,19 +44,20 @@ def main(argv: list[str]) -> int:
         # Persists the committed report's receipt before its separate pointer update.
         outcome = publish_frozen_report(args.directory, target, publisher)
         if isinstance(outcome, PublishFailed):
-            print(
+            print(  # noqa: T201 - CLI output
                 f"publish failed: {outcome.reason} ({outcome.key or args.directory})",
                 file=sys.stderr,
             )
             return 1
-        assert isinstance(outcome, Published)
-        print(receipt_json(outcome.receipt))
+        print(receipt_json(outcome.receipt))  # noqa: T201 - CLI output
         if args.pointer:
             pointed = publisher.point(outcome.receipt, args.pointer)
             if isinstance(pointed, PointerFailed):
-                print(f"report committed, pointer update failed: {pointed.reason}", file=sys.stderr)
+                print(  # noqa: T201 - CLI output
+                    f"report committed, pointer update failed: {pointed.reason}", file=sys.stderr
+                )
                 return 1
     except (OSError, ValueError) as exc:
-        print(f"publish failed: {exc}", file=sys.stderr)
+        print(f"publish failed: {exc}", file=sys.stderr)  # noqa: T201 - CLI output
         return 1
     return 0

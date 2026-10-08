@@ -4,6 +4,8 @@ import inspect
 import os
 import warnings
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from pandas import Timestamp
 from param import Selector
@@ -12,7 +14,11 @@ from bencher.variables.sweep_base import SweepBase, shared_slots
 
 # The package directory, not its parent: every frame under it is bencher's own,
 # so the first frame outside it is the caller whose time_src caused the warning.
-_BENCHER_PACKAGE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep
+_BENCHER_PACKAGE_DIR = str(Path(__file__).resolve().parent.parent) + os.sep
+
+# Level 1 of a warn() stacklevel is our own caller, so the first frame that can be
+# the user's is level 2.
+_FIRST_CALLER_LEVEL = 2
 
 
 def _caller_stacklevel() -> int:
@@ -29,10 +35,10 @@ def _caller_stacklevel() -> int:
     while frame is not None and frame.f_back is not None:
         frame = frame.f_back
         level += 1
-        filename = os.path.abspath(frame.f_code.co_filename)
-        if level >= 2 and not filename.startswith(_BENCHER_PACKAGE_DIR):
+        filename = str(Path(frame.f_code.co_filename).resolve())
+        if level >= _FIRST_CALLER_LEVEL and not filename.startswith(_BENCHER_PACKAGE_DIR):
             break
-    return max(level, 2)
+    return max(level, _FIRST_CALLER_LEVEL)
 
 
 # Split because only the first half is unconditionally true. The object coordinate
@@ -66,15 +72,15 @@ class TimeBase(SweepBase, Selector):
 
     def __init__(
         self,
-        objects=None,
+        objects: list | None = None,
         *,
-        default=None,
-        instantiate=False,
-        check_on_set=None,
-        allow_None=None,
-        empty_default=False,
-        **params,
-    ):
+        default: Any = None,
+        instantiate: bool = False,
+        check_on_set: bool | None = None,
+        allow_None: bool | None = None,  # noqa: N803 - mirrors param.Selector's keyword
+        empty_default: bool = False,
+        **params: Any,
+    ) -> None:
         super().__init__(
             objects=objects,
             default=default,
@@ -88,7 +94,7 @@ class TimeBase(SweepBase, Selector):
     __slots__ = shared_slots
 
     def values(self) -> list[str]:
-        """return all the values for a parameter sweep.  If debug is true return a reduced list"""
+        """Return all the values for a parameter sweep."""
         return self.objects
 
 
@@ -112,8 +118,8 @@ class TimeSnapshot(TimeBase):
         samples: int | None = None,
         *,
         history_axis: bool = False,
-        **params,
-    ):
+        **params: Any,
+    ) -> None:
         """Build a single-timestamp sweep variable.
 
         Args:
@@ -123,6 +129,7 @@ class TimeSnapshot(TimeBase):
             history_axis: True when this snapshot is the ``over_time`` axis a
                 stored history series is reconciled against, which is the only
                 case where a tz-aware timestamp can cost you that history.
+            **params: Passed on to ``param.Selector``.
         """
         if isinstance(datetime_src, str):
             TimeBase.__init__(self, [datetime_src], instantiate=True, **params)
@@ -147,7 +154,12 @@ class TimeSnapshot(TimeBase):
 
 
 class TimeEvent(TimeBase):
-    """A class to represent a discrete event in time where the data was captured i.e a series of pull requests.  Here time is discrete and can't be interpolated, to represent time as a continuous value use the TimeSnapshot class.  The distinction is because holoview and plotly code makes different assumptions about discrete vs continuous variables"""
+    """A discrete event in time where the data was captured, i.e. a series of pull requests.
+
+    Here time is discrete and can't be interpolated. To represent time as a continuous
+    value use the TimeSnapshot class. The distinction is because holoviews and plotly
+    code makes different assumptions about discrete vs continuous variables.
+    """
 
     __slots__ = shared_slots
 
@@ -156,8 +168,8 @@ class TimeEvent(TimeBase):
         time_event: str,
         units: str = "event",
         samples: int | None = None,
-        **params,
-    ):
+        **params: Any,
+    ) -> None:
         TimeBase.__init__(
             self,
             objects=[time_event],

@@ -240,7 +240,7 @@ class TestLoadBlobFailureModes:
         blobs.mkdir()
         bad = blobs / f"abcdef0123456789{ext}"
         bad.write_bytes(b"")
-        with pytest.raises(Exception):  # noqa: B017 - any failure is acceptable here
+        with pytest.raises(Exception):  # noqa: B017, PT011 - any failure is acceptable for a corrupt blob
             load_blob(bad, tmp_path)
 
     @pytest.mark.parametrize("ext", [".parquet", ".nc", ".pkl"])
@@ -251,7 +251,7 @@ class TestLoadBlobFailureModes:
         data = (tmp_path / "blobs" / blob_basename(good)).read_bytes()
         bad = tmp_path / "blobs" / f"abcdef0123456789{ext}"
         bad.write_bytes(data[: max(1, len(data) // 2)])
-        with pytest.raises(Exception):  # noqa: B017
+        with pytest.raises(Exception):  # noqa: B017, PT011 - any failure is acceptable for a corrupt blob
             load_blob(bad, tmp_path)
 
     def test_empty_bin_is_valid_and_not_an_error(self, tmp_path):
@@ -351,7 +351,6 @@ class TestReachabilityWalkRobustness:
             cache["record"] = node
 
         calls = 0
-        # pylint: disable=protected-access  # the walk's internals are the subject here
         real_children = cache_management._blob_reference_children
 
         def counting_children(value):

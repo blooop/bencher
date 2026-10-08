@@ -1,5 +1,4 @@
 # THIS IS NOT A WORKING EXAMPLE YET
-# pylint: disable=duplicate-code
 import bencher as bn
 from bencher.example.benchmark_data import ExampleBenchCfg
 

@@ -8,6 +8,7 @@ import mimetypes
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import quote, urlsplit
 
 from bencher.complete_report import safe_path, verify_report
@@ -20,6 +21,19 @@ from bencher.object_store import (
     WriteFailed,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from bencher.publication_pointers import (
+        PointerCandidate,
+        PointerFailed,
+        PointerUnchanged,
+        PointerUpdated,
+    )
+
+# Characters below this code point are ASCII control characters.
+_FIRST_PRINTABLE_ASCII = 32
+
 
 def http_base(value: str) -> str:
     parts = urlsplit(value)
@@ -29,7 +43,7 @@ def http_base(value: str) -> str:
         parts.scheme not in {"http", "https"}
         or invalid_authority
         or invalid_suffix
-        or any(ord(char) < 32 for char in value)
+        or any(ord(char) < _FIRST_PRINTABLE_ASCII for char in value)
     ):
         raise ValueError("HTTP base must be an absolute http(s) URL without credentials or query")
     return value.rstrip("/")
@@ -96,7 +110,7 @@ class CompleteReportPublisher:
         http_root: str,
         *,
         minimum_remaining_seconds: float = 0,
-        clock=time.time,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         safe_path(storage_root)
         if minimum_remaining_seconds < 0:
@@ -115,7 +129,14 @@ class CompleteReportPublisher:
             return PublishFailed("required object lifetime is not verified; run maintenance", key)
         return None
 
-    def point(self, receipt: PublicationReceipt, key: str, *, candidate=None, attempts: int = 5):
+    def point(
+        self,
+        receipt: PublicationReceipt,
+        key: str,
+        *,
+        candidate: PointerCandidate | None = None,
+        attempts: int = 5,
+    ) -> PointerUpdated | PointerUnchanged | PointerFailed:
         """Point at a committed report, rechecking its dependencies before each CAS attempt."""
         from bencher.publication_pointers import PointerCandidate, update_pointer
 
@@ -123,7 +144,7 @@ class CompleteReportPublisher:
         if candidate.target != receipt.url:
             raise ValueError("pointer target does not match the publication receipt")
 
-        def verify_target():
+        def verify_target() -> str | None:
             outcome = self.verify(receipt)
             return outcome.reason if isinstance(outcome, PublishFailed) else None
 
@@ -131,7 +152,9 @@ class CompleteReportPublisher:
             self.store, key, candidate, attempts=attempts, verify_target=verify_target
         )
 
-    def _equal(self, value, data: bytes, key: str) -> PublishFailed | None:
+    def _equal(
+        self, value: Present | Absent | ReadFailed, data: bytes, key: str
+    ) -> PublishFailed | None:
         if isinstance(value, ReadFailed):
             return PublishFailed(value.reason, key)
         if isinstance(value, Absent):
@@ -156,9 +179,7 @@ class CompleteReportPublisher:
         # Written, Conflict and unknown submission outcomes all require read-back.
         return self._equal(self.store.read(key), data, key)
 
-    def publish(  # pylint: disable=too-many-return-statements
-        self, directory: str | Path
-    ) -> Published | PublishFailed:
+    def publish(self, directory: str | Path) -> Published | PublishFailed:
         root = Path(directory)
         try:
             manifest = verify_report(root)
@@ -203,9 +224,7 @@ class CompleteReportPublisher:
         verified = self.verify(receipt)
         return verified if isinstance(verified, PublishFailed) else Published(receipt.url, receipt)
 
-    def verify(  # pylint: disable=too-many-return-statements
-        self, receipt: PublicationReceipt
-    ) -> dict | PublishFailed:
+    def verify(self, receipt: PublicationReceipt) -> dict | PublishFailed:
         """Check the committed inventory, including entry bytes, before making new references."""
         safe_path(receipt.prefix)
         manifest_key = f"{receipt.prefix}/report.json"

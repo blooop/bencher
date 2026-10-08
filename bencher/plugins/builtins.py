@@ -27,14 +27,18 @@ backends implementing the *same* chart type, which is what makes
 from __future__ import annotations
 
 import inspect
-from collections.abc import Callable
 from dataclasses import dataclass
-
-import panel as pn
+from typing import TYPE_CHECKING
 
 from bencher.plotting.plot_filter import PlotFilter
-from bencher.plugins.bench_data import BenchData
 from bencher.plugins.registry import register_plugin
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import panel as pn
+
+    from bencher.plugins.bench_data import BenchData
 
 
 @dataclass(frozen=True)
@@ -61,11 +65,13 @@ class LegacyResultPlugin:
 
 
 def _declared_kwargs(callback: Callable) -> frozenset[str] | None:
-    """The keyword names a fixed-signature callback accepts, or None when it takes
-    **kwargs or its signature cannot be introspected (no filtering in either case).
+    """The keyword names a fixed-signature callback accepts.
+
+    Returns None when it takes **kwargs or its signature cannot be introspected (no filtering in either case).
     Deliberately uncached: an lru_cache here would pin every callback — including
     per-run closures and bound methods with their captured data — for process
-    lifetime, and would crash on unhashable callables."""
+    lifetime, and would crash on unhashable callables.
+    """
     try:
         params = inspect.signature(callback).parameters
     except (TypeError, ValueError):  # C-extension/builtin callables, odd wrappers
@@ -113,11 +119,13 @@ def _builtin_specs() -> list[tuple[str, str, Callable, PlotFilter]]:
 
 
 def _named_only_specs() -> list[tuple[str, str, Callable]]:
-    """(name, backend, callback) for chart types that are never auto-selected but can
-    be requested by name in ``plot_list`` (A1 Phase 3). Plotly appears only where a
+    """(name, backend, callback) for chart types that are never auto-selected.
+
+    They can be requested by name in ``plot_list`` (A1 Phase 3). Plotly appears only where a
     plot already required it (surface, like volume above); rerun is its own backend
     and imports the rerun SDK lazily inside the renderer, so registration is safe
-    without the package installed."""
+    without the package installed.
+    """
     from bencher.results.dataset_result import DataSetResult
     from bencher.results.holoview_results.band_result import BandResult
     from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (

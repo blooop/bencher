@@ -3,10 +3,10 @@ from __future__ import annotations
 import importlib.util
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import panel as pn
-import xarray as xr
 from param import Number, Parameter
 
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
@@ -19,7 +19,18 @@ from bencher.variables.results import (
     result_is_missing,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from types import ModuleType
+
+    import xarray as xr
+    from rerun import RecordingStream
+    from rerun.blueprint import Blueprint, Container, View
+
 logger = logging.getLogger(__name__)
+
+# The most dims one rr.Tensor shows (a volume); a deeper sweep peels float dims first.
+_MAX_TENSOR_DIMS = 3
 
 
 class RerunResult(BenchResultBase):
@@ -245,11 +256,10 @@ class RerunResult(BenchResultBase):
         # Write the recording to an .rrd file and serve via the Panel static route.
         rrd_path = gen_rerun_data_path(bench_name)
         rrd_data = recording.memory_recording().drain_as_bytes()
-        with open(rrd_path, "wb") as f:
-            f.write(rrd_data)
+        Path(rrd_path).write_bytes(rrd_data)
         return rrd_file_to_pane(rrd_path, width=width, height=height)
 
-    def to_rerun_plots(self, **kwargs) -> pn.panel:  # pragma: no cover
+    def to_rerun_plots(self, **kwargs: Any) -> pn.panel:  # pragma: no cover
         """Plot callback for the rerun backend — drop-in replacement for ``to_auto_plots``.
 
         Renders the sweep summary, the rerun viewer, and the post-description,
@@ -263,14 +273,14 @@ class RerunResult(BenchResultBase):
         return plot_cols
 
 
-def _rv_name_and_path(entity_path: str, rv) -> tuple[str, str]:
+def _rv_name_and_path(entity_path: str, rv: Parameter | str) -> tuple[str, str]:
     """Return (rv_name, entity_path/rv_name) for a result variable."""
-    rv_name = rv.name if hasattr(rv, "name") else str(rv)
+    rv_name = str(rv.name) if hasattr(rv, "name") else str(rv)
     path = f"{entity_path}/{rv_name}" if entity_path else rv_name
     return rv_name, path
 
 
-def _extract_scalar(dataset: xr.Dataset, rv_name: str, sel: dict | None = None):
+def _extract_scalar(dataset: xr.Dataset, rv_name: str, sel: dict | None = None) -> Any:
     """Extract a scalar value from *dataset[rv_name]*, optionally slicing first."""
     da = dataset[rv_name]
     if sel:
@@ -282,8 +292,8 @@ def _extract_scalar(dataset: xr.Dataset, rv_name: str, sel: dict | None = None):
 
 
 def _log_to_rerun(
-    rr,
-    recording,
+    rr: ModuleType,
+    recording: RecordingStream,
     dataset: xr.Dataset,
     entity_path: str,
     result_vars: list,
@@ -291,7 +301,7 @@ def _log_to_rerun(
     cat_dims: list[str],
     time_dim: str | None,
     inside_time_iteration: bool = False,
-):
+) -> None:
     """Recursively map N-dimensional data to rerun entity paths and timelines.
 
     Phase 0: iterate over_time as the sole rerun timeline (``log_tick``).
@@ -362,7 +372,7 @@ def _log_to_rerun(
         all_dims.append(cat_dims[0])
 
     # Peel extra float dims until <= 3
-    if len(all_dims) > 3:
+    if len(all_dims) > _MAX_TENSOR_DIMS:
         dim = float_dims[-1]
         remaining_float = float_dims[:-1]
         for val in dataset.coords[dim].values:
@@ -407,7 +417,14 @@ def _log_to_rerun(
             _log_tensor(rr, recording, dataset, entity_path, rv, list(float_dims))
 
 
-def _log_line_graph(rr, recording, dataset: xr.Dataset, entity_path: str, rv, float_dim: str):
+def _log_line_graph(
+    rr: ModuleType,
+    recording: RecordingStream,
+    dataset: xr.Dataset,
+    entity_path: str,
+    rv: Parameter,
+    float_dim: str,
+) -> None:
     """Log a 1D float sweep as a line graph by iterating the float dim as log_tick."""
     rv_name, path = _rv_name_and_path(entity_path, rv)
     try:
@@ -423,7 +440,14 @@ def _log_line_graph(rr, recording, dataset: xr.Dataset, entity_path: str, rv, fl
         logger.warning("Could not log line graph for %s at %r: %s", rv_name, path, e)
 
 
-def _log_bar_chart(rr, recording, dataset: xr.Dataset, entity_path: str, rv, cat_dim: str):
+def _log_bar_chart(
+    rr: ModuleType,
+    recording: RecordingStream,
+    dataset: xr.Dataset,
+    entity_path: str,
+    rv: Parameter,
+    cat_dim: str,
+) -> None:
     """Log a result variable as a BarChart over a categorical dimension."""
     rv_name, path = _rv_name_and_path(entity_path, rv)
     try:
@@ -438,7 +462,14 @@ def _log_bar_chart(rr, recording, dataset: xr.Dataset, entity_path: str, rv, cat
         logger.warning("Could not log bar chart for %s at %r: %s", rv_name, path, e)
 
 
-def _log_tensor(rr, recording, dataset: xr.Dataset, entity_path: str, rv, dims: list[str]):
+def _log_tensor(
+    rr: ModuleType,
+    recording: RecordingStream,
+    dataset: xr.Dataset,
+    entity_path: str,
+    rv: Parameter,
+    dims: list[str],
+) -> None:
     """Log a result variable as an N-D Tensor (heatmap for 2D, volume for 3D)."""
     rv_name, path = _rv_name_and_path(entity_path, rv)
     try:
@@ -471,7 +502,9 @@ def _log_tensor(rr, recording, dataset: xr.Dataset, entity_path: str, rv, dims: 
         logger.warning("Could not log tensor for %s at %r: %s", rv_name, path, e)
 
 
-def _log_result_var(rr, recording, dataset: xr.Dataset, entity_path: str, rv):
+def _log_result_var(
+    rr: ModuleType, recording: RecordingStream, dataset: xr.Dataset, entity_path: str, rv: Parameter
+) -> None:
     """Log a single result variable to rerun at the current entity path."""
     rv_name, path = _rv_name_and_path(entity_path, rv)
 
@@ -513,7 +546,14 @@ def _log_result_var(rr, recording, dataset: xr.Dataset, entity_path: str, rv):
         logger.warning("Could not log result var %s at %r: %s", rv_name, path, e)
 
 
-def _build_blueprint(rrb, result_vars, float_dims, cat_dims, time_dim, dim_values):
+def _build_blueprint(
+    rrb: ModuleType,
+    result_vars: list[Parameter],
+    float_dims: list[str],
+    cat_dims: list[str],
+    time_dim: str | None,
+    dim_values: dict[str, list[str]],
+) -> Blueprint:
     """Build a rerun Blueprint with typed views matching the data layout."""
     root = _build_blueprint_contents(
         rrb=rrb,
@@ -528,29 +568,40 @@ def _build_blueprint(rrb, result_vars, float_dims, cat_dims, time_dim, dim_value
     return rrb.Blueprint(root, collapse_panels=True)
 
 
-def _peel_dim_as_grid(rrb, entity_path, dim, dim_values, build_child):
+def _peel_dim_as_grid(
+    rrb: ModuleType,
+    entity_path: str,
+    dim: str,
+    dim_values: dict[str, list[str]],
+    build_child: Callable[[str], View | Container],
+) -> Container:
     """Build a Grid by peeling *dim* and calling *build_child* for each value."""
-    children = []
-    for val in dim_values.get(dim, []):
-        children.append(build_child(f"{entity_path}/{dim}/{val}"))
+    children = [build_child(f"{entity_path}/{dim}/{val}") for val in dim_values.get(dim, [])]
     if not children:
         return rrb.Vertical()
     return rrb.Grid(*children, grid_columns=len(children), name=dim)
 
 
 def _build_blueprint_contents(
-    rrb,
+    rrb: ModuleType,
     entity_path: str,
-    result_vars: list,
+    result_vars: list[Parameter],
     float_dims: list[str],
     cat_dims: list[str],
     time_dim: str | None,
     dim_values: dict[str, list[str]],
     inside_time_iteration: bool = False,
-):
+) -> View | Container:
     """Recursively build blueprint containers/views mirroring _log_to_rerun structure."""
 
-    def _recurse(ep, *, fd=float_dims, cd=cat_dims, td=None, it=inside_time_iteration):
+    def _recurse(
+        ep: str,
+        *,
+        fd: list[str] = float_dims,
+        cd: list[str] = cat_dims,
+        td: str | None = None,
+        it: bool = inside_time_iteration,
+    ) -> View | Container:
         return _build_blueprint_contents(rrb, ep, result_vars, fd, cd, td, dim_values, it)
 
     # --- Phase 0: over_time -> just mark inside_time_iteration ---
@@ -586,7 +637,7 @@ def _build_blueprint_contents(
         all_dims.append(cat_dims[0])
 
     # Peel extra float dims until <= 3
-    if len(all_dims) > 3:
+    if len(all_dims) > _MAX_TENSOR_DIMS:
         dim = float_dims[-1]
         rf = float_dims[:-1]
         return _peel_dim_as_grid(
@@ -607,7 +658,14 @@ def _build_blueprint_contents(
     return rrb.Vertical(*views)
 
 
-def _make_leaf_view(rrb, entity_path, rv, all_dims, cat_dims, inside_time_iteration):
+def _make_leaf_view(
+    rrb: ModuleType,
+    entity_path: str,
+    rv: Parameter | str,
+    all_dims: list[str],
+    cat_dims: list[str],
+    inside_time_iteration: bool,
+) -> View:
     """Build a single typed rerun view for a result variable."""
     rv_name = rv.name if hasattr(rv, "name") else str(rv)
     _, path = _rv_name_and_path(entity_path, rv_name)

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import panel as pn
-import xarray as xr
-from param import Parameter
+from typing import TYPE_CHECKING, Any
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
@@ -10,6 +8,11 @@ from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.hvplot_accessor import hvplot_of
 from bencher.utils import label_with_units
 from bencher.variables.results import ResultVar
+
+if TYPE_CHECKING:
+    import panel as pn
+    import xarray as xr
+    from param import Parameter
 
 
 class ScatterResult(HoloviewResult):
@@ -20,12 +23,12 @@ class ScatterResult(HoloviewResult):
     that can be grouped by categorical variables.
     """
 
-    def to_plot(self, **kwargs) -> pn.panel | None:
+    def to_plot(self, **kwargs: Any) -> pn.panel | None:
         """Creates a scatter plot. See ``to_scatter`` for parameters."""
         return self.to_scatter(**kwargs)
 
     def to_scatter(
-        self, result_var: Parameter | None = None, override: bool = True, **kwargs
+        self, result_var: Parameter | None = None, override: bool = True, **kwargs: Any
     ) -> pn.panel | None:
         """Creates a standard scatter plot from benchmark data.
 
@@ -50,7 +53,7 @@ class ScatterResult(HoloviewResult):
         )
 
     def _to_scatter_ds(
-        self, dataset: xr.Dataset, result_var: Parameter, **kwargs
+        self, dataset: xr.Dataset, result_var: Parameter, **kwargs: Any
     ) -> pn.panel | None:
         """Creates a scatter plot from the provided dataset.
 

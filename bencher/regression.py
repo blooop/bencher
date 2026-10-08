@@ -12,13 +12,22 @@ import logging
 import math
 import numbers
 from dataclasses import dataclass, field
-from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import xarray as xr
 
 from bencher.history import BIRTH_ATTR
 from bencher.variables.results import SCALAR_RESULT_TYPES, OptDir
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import holoviews as hv
+    import xarray as xr
+
+    from bencher.bench_cfg import BenchCfg, BenchRunCfg
+    from bencher.bench_report import BenchReport
+    from bencher.results.bench_result import BenchResult
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +45,12 @@ _DRIFT_FRAC = 0.85
 
 # Hampel filter cutoff (in MAD units) used to drop outliers from the slope fit.
 _HAMPEL_K = 5.0
+
+# Fewest points that have a step between them (for a diff or an extrapolation).
+_MIN_POINTS_FOR_STEP = 2
+
+# Fewest history points for which the median + MAD noise scale is trusted.
+_MIN_ROBUST_HISTORY = 4
 
 # Marker appended to a young-baseline regression's Variable cell in the markdown
 # table (young regressions are reported but never block — see young_baseline).
@@ -99,8 +114,8 @@ class RegressionResult:
         self,
         historical: np.ndarray | None = None,
         current: np.ndarray | float | None = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> hv.Element | hv.Overlay:
         """Build a :class:`holoviews.Overlay` of this result (see :func:`build_regression_overlay`).
 
         Sizing keywords (``width``, ``height``, ``fig_inches``) pass straight
@@ -184,8 +199,7 @@ class RegressionReport:
             lines.append(f"**{len(regressed)} regression(s) detected**\n")
             lines.append("| Variable | Change | Baseline | Current | Method | Threshold |")
             lines.append("|----------|-------:|----------:|--------:|--------|----------:|")
-            for r in regressed:
-                lines.append(_format_markdown_row(r))
+            lines.extend(_format_markdown_row(r) for r in regressed)
             if any(r.young_baseline for r in regressed):
                 lines.append("")
                 lines.append(f"*{_YOUNG_MARKER} young baseline — notify only, does not block*")
@@ -213,11 +227,11 @@ class RegressionReport:
             "results": [r.to_dict() for r in self.results],
         }
 
-    def append_to_report(self, report) -> None:
+    def append_to_report(self, report: BenchReport) -> None:
         """Append a formatted regression summary to a :class:`BenchReport`."""
         report.append_markdown(self.to_markdown(), name="Regression Report")
 
-    def prepend_to_result(self, report, bench_res) -> None:
+    def prepend_to_result(self, report: BenchReport, bench_res: BenchResult) -> None:
         """Insert a formatted regression summary at the top of *bench_res*'s tab."""
         import panel as pn
 
@@ -249,7 +263,7 @@ class MethodCells:
         baseline: Baseline column (markdown) — em-dash for absolute (no
             historical baseline exists).
         threshold: Threshold column (markdown) — carries the gate's native
-            units (``±T%``, ``Tσ``, ``±T``, or a direction-aware inequality).
+            units (``±T%``, ``T sigma``, ``±T``, or a direction-aware inequality).
         summary_lead: First clause of the summary line, before the details
             parenthesis. Captures the gated quantity in sentence form.
         summary_standalone: When True, the summary line skips the
@@ -311,7 +325,7 @@ def method_cells(r: RegressionResult) -> MethodCells:
             summary_lead=f"Δ={delta:+.4g}",
         )
     if r.method == "adaptive":
-        # Threshold is MAD-sigma units, not percent — flag σ so the threshold
+        # Threshold is MAD-sigma units, not percent — flag sigma so the threshold
         # isn't read as a bare percent next to the change_percent value.
         return MethodCells(
             change=f"{r.change_percent:+.1f}%",
@@ -415,7 +429,7 @@ def _regression_plot_spec(
     elif len(hist_x) > 0:
         # Extrapolate one step beyond the last history point.
         if np.issubdtype(hist_x.dtype, np.datetime64):
-            if len(hist_x) >= 2:
+            if len(hist_x) >= _MIN_POINTS_FOR_STEP:
                 x_current = hist_x[-1] + (hist_x[-1] - hist_x[-2])
             else:
                 # Single datetime point — nudge forward by a small timedelta so
@@ -453,7 +467,8 @@ def _regression_plot_spec(
         Stored bands are symmetric around the baseline, but for directional
         metrics only one side flags a regression. Minimize only trips on
         values above baseline; maximize only trips on values below. None
-        flags either side, so the full symmetric band stays."""
+        flags either side, so the full symmetric band stays.
+        """
         if band is None:
             return None
         lo, hi = band
@@ -553,9 +568,9 @@ def _ensure_matplotlib_backend_loaded() -> None:
     already configured a backend (e.g., Jupyter's inline backend), that choice
     is left alone.
     """
-    import matplotlib
+    import matplotlib as mpl
 
-    matplotlib.use("Agg", force=False)
+    mpl.use("Agg", force=False)
 
     import holoviews as hv
 
@@ -574,7 +589,7 @@ def build_regression_overlay(
     width: int = 700,
     height: int = 350,
     fig_inches: tuple[float, float] = (7.0, 3.5),
-):
+) -> hv.Element | hv.Overlay:
     """Build a :class:`holoviews.Overlay` diagnostic of a regression result.
 
     Opts are applied per-backend so the same overlay renders correctly under
@@ -589,7 +604,8 @@ def build_regression_overlay(
             Falls back to ``result.historical`` if omitted.
         current: Optional current-run sample array (or scalar). Falls back to
             ``result.current_samples`` / ``result.current_value``.
-        width, height: Pixel dimensions for the bokeh backend.
+        width: Pixel width for the bokeh backend.
+        height: Pixel height for the bokeh backend.
         fig_inches: Figure size in inches for the matplotlib backend.
     """
     import holoviews as hv
@@ -619,7 +635,9 @@ def build_regression_overlay(
         # band render in whatever matplotlib colour-cycled next — so a
         # non-regressed acceptance band rendered pink. Setting facecolor on
         # the PolyCollection via a hook is the only path that actually sticks.
-        def _area_color_hook(plot, _element, _fc=color, _alpha=alpha):
+        def _area_color_hook(
+            plot: Any, _element: hv.Element, _fc: str = color, _alpha: float = alpha
+        ) -> None:
             artist = plot.handles.get("artist")
             if artist is not None:
                 artist.set_facecolor(_fc)
@@ -663,7 +681,7 @@ def build_regression_overlay(
     if spec["hist_scatter_x"] is not None and spec["hist_scatter_y"] is not None:
         layers.append(
             hv.Scatter(
-                list(zip(spec["hist_scatter_x"], spec["hist_scatter_y"])),
+                list(zip(spec["hist_scatter_x"], spec["hist_scatter_y"], strict=True)),
                 spec["xlabel"],
                 spec["ylabel"],
             ).opts(
@@ -686,7 +704,7 @@ def build_regression_overlay(
     if len(hist) > 0:
         layers.append(
             hv.Curve(
-                list(zip(hist_x, hist)),
+                list(zip(hist_x, hist, strict=True)),
                 spec["xlabel"],
                 spec["ylabel"],
                 label="history",
@@ -772,7 +790,7 @@ def build_regression_overlay(
     for layer in layers[1:]:
         overlay = overlay * layer
 
-    # Compact font sizing — the PNGs render at ~4–9 inches wide so the default
+    # Compact font sizing — the PNGs render at ~4-9 inches wide so the default
     # matplotlib font sizes overflow the figure. Bokeh accepts the same dict.
     fontsize = {"title": 9, "labels": 8, "xticks": 6, "yticks": 7, "legend": 6}
 
@@ -788,7 +806,7 @@ def build_regression_overlay(
     baseline = spec["baseline"]
     hist_len = len(hist)
     legend_entries: list = []
-    for lo, hi, color, alpha, band_label in spec["band_layers"]:
+    for _lo, _hi, color, alpha, band_label in spec["band_layers"]:
         legend_entries.append(Patch(facecolor=color, alpha=alpha, label=band_label))
     legend_entries.append(
         Line2D([], [], color="#555555", alpha=0.7, linestyle="--", label=f"baseline={baseline:.3g}")
@@ -812,14 +830,14 @@ def build_regression_overlay(
     legend_handles = tuple(legend_entries)
 
     def _fill_fig_hook(
-        plot,
-        _element,
-        _title=title,
-        _title_color=verdict_color,
-        _title_fs=fontsize["title"],
-        _legend_fs=fontsize["legend"],
-        _legend=legend_handles,
-    ):
+        plot: Any,
+        _element: hv.Element,
+        _title: str = title,
+        _title_color: str = verdict_color,
+        _title_fs: int = fontsize["title"],
+        _legend_fs: int = fontsize["legend"],
+        _legend: tuple = legend_handles,
+    ) -> None:
         ax = plot.handles["axis"]
         ax.set_aspect("auto")
         # left 0.15 leaves room for y-label + ticks, top 0.86 leaves room for
@@ -854,7 +872,12 @@ def build_regression_overlay(
         xticks_pairs = spec["xticks"]
         xtick_fontsize = fontsize["xticks"]
 
-        def _mpl_xticks_hook(plot, _element, _pairs=xticks_pairs, _fs=xtick_fontsize):
+        def _mpl_xticks_hook(
+            plot: Any,
+            _element: hv.Element,
+            _pairs: list[tuple[int, str]] = xticks_pairs,
+            _fs: int = xtick_fontsize,
+        ) -> None:
             ax = plot.handles["axis"]
             positions = [p for p, _ in _pairs]
             labels = [lbl for _, lbl in _pairs]
@@ -1033,7 +1056,7 @@ def _residual_sigma(values: np.ndarray) -> float:
     when ``trend`` is non-stationary. This prevents a gradual drift from
     inflating its own noise estimate and masking itself.
     """
-    if len(values) < 2:
+    if len(values) < _MIN_POINTS_FOR_STEP:
         return 0.0
     diffs = np.diff(values)
     mad = float(np.median(np.abs(diffs - np.median(diffs))))
@@ -1060,10 +1083,10 @@ def detect_adaptive(
 
     * **Short-term step** — flags if ``(current_mean - baseline) / noise_floor``
       exceeds ``regression_mad`` in the regression direction.
-    * **Long-term drift** — fits a Theil–Sen slope on the historical time-point
+    * **Long-term drift** — fits a Theil-Sen slope on the historical time-point
       means (after a Hampel filter removes isolated outliers) and flags if the
       total projected drift, scaled by ``noise_floor``, exceeds
-      ``drift_threshold`` and a Mann–Kendall test confirms monotonic trend
+      ``drift_threshold`` and a Mann-Kendall test confirms monotonic trend
       with ``p < mk_alpha``.
 
     Args:
@@ -1075,7 +1098,7 @@ def detect_adaptive(
         drift_threshold: Drift-test threshold in MAD-sigma units. If ``None``,
             defaults to ``_DRIFT_FRAC * regression_mad`` so users need to tune
             only one knob.
-        mk_alpha: Significance level for the Mann–Kendall trend guard.
+        mk_alpha: Significance level for the Mann-Kendall trend guard.
         direction: Optimization direction from the result variable.
         historical_samples: Optional flat array of all historical samples
             (not per-time means). Used for the sparse-history fallback so the
@@ -1104,7 +1127,7 @@ def detect_adaptive(
     # Not enough history for a robust scale — fall back to a percentage
     # check. Use the full per-sample history when available so the fallback
     # behaves like a direct call to detect_percentage.
-    if len(hist_clean) < 4:
+    if len(hist_clean) < _MIN_ROBUST_HISTORY:
         if not sparse_fallback:
             return None
         fallback_hist = (
@@ -1138,12 +1161,12 @@ def detect_adaptive(
     z_step = (curr_mean - baseline) / noise_floor
     step_mad = _is_regression(z_step, direction) and abs(z_step) > regression_mad
 
-    # Drift test — Theil–Sen slope on Hampel-filtered history, MK significance.
+    # Drift test — Theil-Sen slope on Hampel-filtered history, MK significance.
     # Use residual (detrended) noise as the denominator so a real drift can't
     # inflate its own noise estimate and mask itself.
     deviations = np.abs(hist_clean - baseline)
     keep = deviations <= _HAMPEL_K * max(mad_sigma, 1e-12)
-    filtered = hist_clean[keep] if keep.sum() >= 4 else hist_clean
+    filtered = hist_clean[keep] if keep.sum() >= _MIN_ROBUST_HISTORY else hist_clean
     indices = np.arange(len(filtered), dtype=float)
 
     resid_sigma = _residual_sigma(filtered)
@@ -1318,7 +1341,7 @@ def _compute_history_arrays(
     a 1-D series; the scatter arrays preserve per-repeat spread broadcast
     against the historical over_time coords.
     """
-    if da.sizes.get("over_time", 0) < 2:
+    if da.sizes.get("over_time", 0) < _MIN_POINTS_FOR_STEP:
         return None, None, None
 
     reduce_dims = [d for d in da.dims if d != "over_time"]
@@ -1375,7 +1398,7 @@ _METHOD_THRESHOLD_ATTR = {
 _HISTORY_FREE_METHODS = frozenset({"absolute"})
 
 
-def _valid_threshold(value) -> float | None:
+def _valid_threshold(value: object) -> float | None:
     """Return ``value`` as a finite float, or ``None`` if it isn't one.
 
     Rejects bools (``True`` would silently become 1.0) and non-finite numbers
@@ -1389,7 +1412,7 @@ def _valid_threshold(value) -> float | None:
     return value if math.isfinite(value) else None
 
 
-def _normalize_overrides(overrides) -> tuple[dict, dict]:
+def _normalize_overrides(overrides: Any) -> tuple[dict, dict]:
     """Validate ``run_cfg.regression_overrides`` into ``{var: {method: threshold}}``.
 
     A bare number is shorthand for ``{"absolute": value}``. Malformed entries
@@ -1532,7 +1555,9 @@ def _history_points_since_birth(dataset: xr.Dataset, da: xr.DataArray) -> int:
     return max(n_time - start - 1, 0)
 
 
-def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionReport:
+def detect_regressions(
+    dataset: xr.Dataset, bench_cfg: BenchCfg, run_cfg: BenchRunCfg
+) -> RegressionReport:
     """Run regression detection on a dataset with over_time dimension.
 
     For each numeric result variable, dispatches to the detector chosen by
@@ -1599,7 +1624,7 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
 
     # With no history yet, only history-free checks can possibly run — skip
     # the per-variable work entirely when no spec contains one.
-    if dataset.sizes["over_time"] < 2:
+    if dataset.sizes["over_time"] < _MIN_POINTS_FOR_STEP:
         specs = [primary_checks, *overrides.values()]
         if not any(m in _HISTORY_FREE_METHODS for spec in specs for m in spec):
             return report

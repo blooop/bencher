@@ -8,13 +8,12 @@ from __future__ import annotations
 
 import logging
 import math
-import os
 import warnings
-from collections.abc import MutableMapping
 from contextlib import suppress
 from datetime import datetime
 from itertools import product
-from typing import Any, Self
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
 import xarray as xr
@@ -63,12 +62,18 @@ from bencher.variables.results import (
     result_missing_fill,
 )
 from bencher.variables.time import TimeBase, TimeEvent, TimeSnapshot
-from bencher.worker_job import WorkerJob
+
+if TYPE_CHECKING:
+    from collections.abc import MutableMapping
+
+    import param
+
+    from bencher.worker_job import WorkerJob
 
 logger = logging.getLogger(__name__)
 
 
-def _sentinel_for_result_var(rv):
+def _sentinel_for_result_var(rv: param.Parameter) -> Any:
     """Return the sentinel value used for 'missing' entries of this result type.
 
     Thin wrapper over the single source of truth in ``bencher.variables.results``
@@ -77,7 +82,7 @@ def _sentinel_for_result_var(rv):
     return result_missing_fill(rv)[0]
 
 
-def _null_old_entries(dataset, rv, var_limit):
+def _null_old_entries(dataset: xr.Dataset, rv: param.Parameter, var_limit: int | None) -> list[str]:
     """Null out over_time entries older than *var_limit* for a single result variable.
 
     **Mutates *dataset* in-place** by writing sentinel values directly into
@@ -97,10 +102,7 @@ def _null_old_entries(dataset, rv, var_limit):
     is_media = isinstance(rv, _MEDIA_RESULT_TYPES)
     files_to_delete = []
 
-    if isinstance(rv, ResultVec):
-        var_names = rv.index_names()
-    else:
-        var_names = [rv.name]
+    var_names = rv.index_names() if isinstance(rv, ResultVec) else [rv.name]
 
     for vname in var_names:
         if vname not in dataset:
@@ -110,9 +112,11 @@ def _null_old_entries(dataset, rv, var_limit):
         for t_idx in range(null_count):
             if is_media:
                 old_slice = da.isel(over_time=t_idx).values
-                for val in np.asarray(old_slice).flat:
-                    if val != sentinel and isinstance(val, str) and os.path.isfile(val):
-                        files_to_delete.append(val)
+                files_to_delete.extend(
+                    val
+                    for val in np.asarray(old_slice).flat
+                    if val != sentinel and isinstance(val, str) and Path(val).is_file()
+                )
             da.values[..., t_idx] = sentinel
 
     return files_to_delete
@@ -152,7 +156,7 @@ def _set_result_value(
         set_xarray_multidim(bench_res.ds[name], idx, value)
 
 
-def _materialize_result_value(rv, value):
+def _materialize_result_value(rv: param.Parameter, value: Any) -> Any:
     """Convert deferred result artifacts into their cacheable stored representation."""
     if isinstance(rv, ResultRerun):
         from bencher.results.composable_container.composable_container_rerun import (
@@ -164,7 +168,7 @@ def _materialize_result_value(rv, value):
     return value
 
 
-def _materialize_dataset_value(result_value) -> str:
+def _materialize_dataset_value(result_value: Any) -> str:
     """Reduce a worker-returned ``ResultDataSet`` sample to a blob name (plan 22, D2).
 
     The payload is serialized under ``cachedir/blobs/`` and the returned blob
@@ -192,7 +196,7 @@ def _materialize_dataset_value(result_value) -> str:
         else:
             try:
                 return materialize_blob(payload, cache_dir)
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "ResultDataSet sample: per-sample container %r could not be "
                     "pickled (%s: %s); storing the bare payload without it — a "
@@ -251,7 +255,7 @@ class ResultCollector:
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *exc_info) -> None:
+    def __exit__(self, *exc_info: object) -> None:
         self.close_caches()
 
     def setup_dataset(
@@ -286,7 +290,9 @@ class ResultCollector:
 
         dims_cfg = DimsCfg(bench_cfg)
         total_jobs = math.prod(dims_cfg.dims_size)
-        function_inputs = zip(product(*dims_cfg.dim_ranges_index), product(*dims_cfg.dim_ranges))
+        function_inputs = zip(
+            product(*dims_cfg.dim_ranges_index), product(*dims_cfg.dim_ranges), strict=True
+        )
         # xarray stores K N-dimensional arrays of data.
         # Each array is named and in this case we have an ND array for each result variable
         data_vars = {}
@@ -481,8 +487,6 @@ class ResultCollector:
                 bench_res, job_result.job.job_id, worker_job.function_input, exc
             )
             return
-        # catch is a runtime tuple of exception types, which pylint cannot see into.
-        # pylint: disable-next=catching-non-exception
         except catch as exc:
             self.record_caught_sample(
                 bench_res, job_result.job.job_id, worker_job.function_input, exc
@@ -782,6 +786,9 @@ class ResultCollector:
                 nothing; the index is skipped only when ``bench_name`` is None too.
             config_summary (dict | None): ``bencher.history.config_summary`` of the
                 current config, stored in the last-seen index and diffed on resets.
+            namespace (str): Prefix that keys this run's entries in the history cache.
+            event_metadata (dict | None): Execution metadata stored against this run's
+                over_time event.
 
         Returns:
             xr.Dataset: The current config's view of the accumulated history —
@@ -896,7 +903,7 @@ class ResultCollector:
 
         for fpath in pending_deletes:
             try:
-                os.remove(fpath)
+                Path(fpath).unlink()
                 logger.debug("Deleted nulled media file: %s", fpath)
             except OSError as exc:
                 logger.warning("Failed to delete media file %s: %s", fpath, exc)
@@ -924,7 +931,7 @@ class ResultCollector:
                     bench_res.ds[rv.index_name(i)].attrs["units"] = rv.units
                     bench_res.ds[rv.index_name(i)].attrs["long_name"] = rv.name
             else:
-                pass  # todo
+                pass  # TODO: add units and long_name for the other result types
 
         dsvar = bench_res.ds[input_var.name]
         dsvar.attrs["long_name"] = input_var.name

@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import pandas as pd
 import panel as pn
 import xarray as xr
-from param import Parameter
 
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
+if TYPE_CHECKING:
+    from param import Parameter
+
 
 class TabulatorResult(HoloviewResult):
-    def to_plot(self, **kwargs) -> pn.widgets.Tabulator | None:  # pylint:disable=unused-argument
+    def to_plot(self, **kwargs: Any) -> pn.widgets.Tabulator | None:
         """Create an interactive table visualization of the data.
 
         Passes the data to the panel Tabulator type to display an interactive table.
@@ -25,7 +29,7 @@ class TabulatorResult(HoloviewResult):
         return self.to_tabulator(**kwargs)
 
     def to_tabulator(
-        self, result_var: Parameter | None = None, **kwargs
+        self, result_var: Parameter | None = None, **kwargs: Any
     ) -> pn.widgets.Tabulator | None:
         """Generates a Tabulator widget from benchmark data.
 
@@ -45,7 +49,7 @@ class TabulatorResult(HoloviewResult):
         )
 
     def to_tabulator_ds(
-        self, dataset: xr.Dataset, result_var: Parameter, **kwargs
+        self, dataset: xr.Dataset, result_var: Parameter, **kwargs: Any
     ) -> pn.widgets.Tabulator | None:
         """Creates a Tabulator widget from the provided dataset.
 
@@ -59,7 +63,6 @@ class TabulatorResult(HoloviewResult):
         Returns:
             pn.widgets.Tabulator: An interactive table widget.
         """
-
         # Assume input is an xarray.Dataset. Keep Dataset throughout.
         ds: xr.Dataset = dataset if isinstance(dataset, xr.Dataset) else xr.Dataset(dataset)
 

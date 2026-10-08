@@ -4,6 +4,7 @@ import textwrap
 import unittest
 from functools import partial
 
+import pytest
 import xarray as xr
 
 import bencher as bn
@@ -31,26 +32,24 @@ class TestBencherUtils(unittest.TestCase):
         ex_instance = ExampleClass()
         inputs = ex_instance.get_inputs_only()
 
-        print(inputs)
-
-        self.assertEqual(len(inputs), 1)
-        self.assertEqual(inputs[0].name, "iv1")
+        assert len(inputs) == 1
+        assert inputs[0].name == "iv1"
 
     def test_get_results(self) -> None:
         ex_instance = ExampleClass()
         results = ex_instance.get_results_only()
 
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].name, "rv1")
+        assert len(results) == 1
+        assert results[0].name == "rv1"
 
     def test_get_inputs_and_results(self) -> None:
         ex_instance = ExampleClass()
         inputs, results = ex_instance.get_input_and_results()
 
-        self.assertEqual(len(inputs), 1)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(inputs["iv1"].name, "iv1")
-        self.assertEqual(results["rv1"].name, "rv1")
+        assert len(inputs) == 1
+        assert len(results) == 1
+        assert inputs["iv1"].name == "iv1"
+        assert results["rv1"].name == "rv1"
 
     def test_get_results_values_as_dict(self) -> None:
         ex_instance = ExampleClass()
@@ -59,52 +58,49 @@ class TestBencherUtils(unittest.TestCase):
 
         res = ex_instance.get_results_values_as_dict()
 
-        self.assertEqual(res["rv1"], 3)
+        assert res["rv1"] == 3
 
         # Tests that a named tuple with fields of different data types is created successfully
 
     def test_different_datatypes_namedtuple(self):
         result = bn.make_namedtuple("Test", field1=1, field2="value2", field3=True)
-        self.assertEqual(result.field1, 1)
-        self.assertEqual(result.field2, "value2")
-        self.assertEqual(result.field3, True)
+        assert result.field1 == 1
+        assert result.field2 == "value2"
+        assert result.field3 is True
 
         # Tests that the function returns an empty tuple when an empty dictionary is passed as input
 
     def test_edge_case_empty_dictionary(self) -> None:
         input_dict = {}
         expected_output = ()
-        self.assertEqual(bn.hmap_canonical_input(input_dict), expected_output)
+        assert bn.hmap_canonical_input(input_dict) == expected_output
 
     def test_dictionary_order(self) -> None:
         dic1 = {"x": 1, "y": 2}
         dic2 = {"y": 2, "x": 1}
 
-        self.assertEqual(
-            bn.hmap_canonical_input(dic1),
-            bn.hmap_canonical_input(dic2),
-        )
+        assert bn.hmap_canonical_input(dic1) == bn.hmap_canonical_input(dic2)
 
     def test_mult_tuple(self) -> None:
-        self.assertTupleEqual(mult_tuple((1, 2, 3), 2), (2, 4, 6))
+        assert mult_tuple((1, 2, 3), 2) == (2, 4, 6)
 
     # Tests that the function returns the nearest coordinate name value pair for a dataset containing multiple coordinates
     def test_multiple_coordinates(self):
         ds = xr.Dataset({"x": [1, 2, 3], "y": [4, 5, 6]})
         result = get_nearest_coords(ds, x=2.5, y=5.5)
-        self.assertEqual(result, {"x": 3, "y": 6})
+        assert result == {"x": 3, "y": 6}
 
     def test_capitalise_words(self):
-        self.assertEqual("Camel Case", capitalise_words("camel case"))
+        assert capitalise_words("camel case") == "Camel Case"
 
     def test_int_to_col(self):
-        self.assertEqual(int_to_col(0), (0.95, 0.475, 0.475))
-        self.assertEqual(int_to_col(0, alpha=1), (0.95, 0.475, 0.475, 1))
+        assert int_to_col(0) == (0.95, 0.475, 0.475)
+        assert int_to_col(0, alpha=1) == (0.95, 0.475, 0.475, 1)
 
     def test_nearest_coords(self):
-        self.assertEqual(get_nearest_coords1D(1, [0, 1, 2]), 1)
-        self.assertEqual(get_nearest_coords1D(100, [0, 1, 2]), 2)
-        self.assertEqual(get_nearest_coords1D("b", ["a", "b", "c"]), "b")
+        assert get_nearest_coords1D(1, [0, 1, 2]) == 1
+        assert get_nearest_coords1D(100, [0, 1, 2]) == 2
+        assert get_nearest_coords1D("b", ["a", "b", "c"]) == "b"
 
     def test_returns_name_of_original_function_for_partial_function(self):
         # Arrange
@@ -117,7 +113,7 @@ class TestBencherUtils(unittest.TestCase):
         result = callable_name(partial_function)
 
         # Assert
-        self.assertEqual(result, "original_function")
+        assert result == "original_function"
 
     # The function returns the name of a given callable function.
     def test_returns_name_of_callable_function(self) -> None:
@@ -129,57 +125,57 @@ class TestBencherUtils(unittest.TestCase):
         result = callable_name(my_function)
 
         # Assert
-        self.assertEqual(result, "my_function")
+        assert result == "my_function"
 
     def test_callable_name_incorrect(self) -> None:
-        self.assertEqual(callable_name("lol"), "lol")
+        assert callable_name("lol") == "lol"
 
     def test_lerp(self):
         # Given valid input values, the function should return the expected output.
         result = lerp(5, 0, 10, 0, 100)
-        self.assertEqual(result, 50)
+        assert result == 50
 
         # When the input value is equal to the input_low, the function should return output_low.
         result = lerp(0, 0, 10, 0, 100)
-        self.assertEqual(result, 0)
+        assert result == 0
 
         # When the input value is equal to the input_high, the function should return output_high.
         result = lerp(10, 0, 10, 0, 100)
-        self.assertEqual(result, 100)
+        assert result == 100
 
         # When the input value is None, the function should raise a TypeError.
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             lerp(None, 0, 10, 0, 100)
 
         # When the input_low is None, the function should raise a TypeError.
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             lerp(5, None, 10, 0, 100)
 
         # When the input_high is None, the function should raise a TypeError.
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             lerp(5, 0, None, 0, 100)
 
     def test_listify(self):
         obj = "a"
-        self.assertEqual([obj], listify(obj))
-        self.assertEqual([obj], listify([obj]))
-        self.assertEqual([obj], listify(obj))
-        self.assertEqual(None, listify(None))
+        assert [obj] == listify(obj)
+        assert [obj] == listify([obj])
+        assert [obj] == listify(obj)
+        assert listify(None) is None
 
     def test_converts_single_tab_to_nbsp(self):
         input_str = "This is\ta test"
         expected_output = "This is&nbsp;&nbsp;a test"
-        self.assertEqual(tabs_in_markdown(input_str), expected_output)
+        assert tabs_in_markdown(input_str) == expected_output
 
     def test_converts_multi_tab_to_nbsp(self):
         input_str = "This is\ta test"
         expected_output = "This is&nbsp;&nbsp;&nbsp;&nbsp;a test"
-        self.assertEqual(tabs_in_markdown(input_str, 4), expected_output)
+        assert tabs_in_markdown(input_str, 4) == expected_output
 
     def test_handles_empty_string(self):
         input_str = ""
         expected_output = ""
-        self.assertEqual(tabs_in_markdown(input_str), expected_output)
+        assert tabs_in_markdown(input_str) == expected_output
 
 
 class TestPublishFileContract(unittest.TestCase):
@@ -194,10 +190,10 @@ class TestPublishFileContract(unittest.TestCase):
 
     def test_return_annotation_is_none(self):
         annotation = inspect.signature(publish_file).return_annotation
-        self.assertIn(annotation, (None, "None"), f"publish_file claims -> {annotation}")
+        assert annotation in (None, "None"), f"publish_file claims -> {annotation}"
 
     def test_body_has_no_return_value(self):
         # No `return <expr>` anywhere: nothing for a caller to consume.
         tree = ast.parse(textwrap.dedent(inspect.getsource(publish_file)))
         returns = [n for n in ast.walk(tree) if isinstance(n, ast.Return) and n.value is not None]
-        self.assertEqual(returns, [])
+        assert returns == []

@@ -1,11 +1,8 @@
-# pylint: skip-file  #this is experimental still
-
-
 import holoviews as hv
 import pandas as pd
 import panel as pn
 from bokeh.models import HoverTool
-from hvplot import pandas  # noqa
+from hvplot import pandas  # noqa: F401 - registers the .hvplot accessor
 
 datadict = {
     "x": [1, 5],
@@ -39,7 +36,3 @@ hvds = hv.Dataset(df_test)
 pt = hv.Scatter(hvds, kdims=["x"], vdims=["y"], hover_cols=["img"], tools=[hover])
 
 pn.Row(pt).show()
-
-# pt =df_test.hvplot.scatter(x="x", y="y", hover_cols=["img"], tools=[hover])
-
-# pt.show()

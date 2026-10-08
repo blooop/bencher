@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import panel as pn
+import pytest
 import xarray as xr
 
 import bencher as bn
@@ -184,9 +185,9 @@ class TestDataSetResult(unittest.TestCase):
 
     def test_to_plot_returns_viewable(self):
         viewer = self.res.to(DataSetResult)
-        self.assertIsNotNone(viewer)
-        self.assertIsInstance(viewer, pn.viewable.Viewable)
-        self.assertGreater(len(viewer), 0)
+        assert viewer is not None
+        assert isinstance(viewer, pn.viewable.Viewable)
+        assert len(viewer) > 0
 
     def test_path_cells_round_trip_worker_frames(self):
         """Every worker-produced DataFrame is stored as a blob and recoverable unchanged.
@@ -194,11 +195,11 @@ class TestDataSetResult(unittest.TestCase):
         Since plan 22 the cell stores a path into the blob store rather than an
         index into dataset_list, which stays empty (it is the legacy read path).
         """
-        self.assertEqual(len(self.res.dataset_list), 0)
+        assert len(self.res.dataset_list) == 0
         ds = self.res.to_dataset()
         for scale in SCALES:
             cell = ds["table"].sel(scale=scale).values.item()
-            self.assertIsInstance(cell, str)
+            assert isinstance(cell, str)
             pd.testing.assert_frame_equal(load_blob(cell), expected_frame(scale))
 
     def test_ds_to_container_returns_underlying_frame(self):
@@ -244,11 +245,11 @@ class TestOnlyDataSetResultsAreClaimed(unittest.TestCase):
         )
 
     def test_dataset_view_declines_a_sweep_with_no_stored_payload(self):
-        self.assertIsNone(self.res.to(DataSetResult))
+        assert self.res.to(DataSetResult) is None
 
     def test_panes_view_still_renders_it(self):
         """Guard on the fixture: the result is renderable, just not by this view."""
-        self.assertIsInstance(self.res.to_panes(), pn.viewable.Viewable)
+        assert isinstance(self.res.to_panes(), pn.viewable.Viewable)
 
 
 class TestSharedRenderPath(unittest.TestCase):
@@ -266,22 +267,18 @@ class TestSharedRenderPath(unittest.TestCase):
     def _claimed_types(self, render) -> tuple:
         with unittest.mock.patch.object(BenchResultBase, "map_sample_panes", autospec=True) as spy:
             render()
-        self.assertEqual(spy.call_count, 1, "the view must delegate, not reimplement")
+        assert spy.call_count == 1, "the view must delegate, not reimplement"
         return spy.call_args.args[1]
 
     def test_dataset_view_claims_only_stored_payloads(self):
-        self.assertEqual(
-            self._claimed_types(lambda: self.res.to(DataSetResult)), (bn.ResultDataSet,)
-        )
+        assert self._claimed_types(lambda: self.res.to(DataSetResult)) == (bn.ResultDataSet,)
 
     def test_panes_view_claims_every_pane_type(self):
-        self.assertEqual(self._claimed_types(self.res.to_panes), PANEL_TYPES)
+        assert self._claimed_types(self.res.to_panes) == PANEL_TYPES
 
     def test_chart_types_reuse_the_same_path(self):
         """A chart type composes the shared path rather than adding a parallel one."""
-        self.assertEqual(
-            self._claimed_types(lambda: render_data_samples(self.res)), (bn.ResultDataSet,)
-        )
+        assert self._claimed_types(lambda: render_data_samples(self.res)) == (bn.ResultDataSet,)
 
 
 class TestArbitraryPayload(unittest.TestCase):
@@ -293,16 +290,15 @@ class TestArbitraryPayload(unittest.TestCase):
 
     def test_payload_round_trips_without_tabular_coercion(self):
         ds = self.res.to_dataset()
-        self.assertEqual(
-            [load_blob(ds["table"].sel(scale=scale).values.item()) for scale in SCALES],
-            [arbitrary_payload(scale) for scale in SCALES],
-        )
+        assert [load_blob(ds["table"].sel(scale=scale).values.item()) for scale in SCALES] == [
+            arbitrary_payload(scale) for scale in SCALES
+        ]
 
     def test_declared_renderer_receives_the_original_payload(self):
-        self.assertEqual(
-            container_output(self.res.to(DataSetResult)),
-            ["payload scale=1 samples=2", "payload scale=2 samples=2"],
-        )
+        assert container_output(self.res.to(DataSetResult)) == [
+            "payload scale=1 samples=2",
+            "payload scale=2 samples=2",
+        ]
 
 
 class TestDeclaredContainer(unittest.TestCase):
@@ -318,24 +314,24 @@ class TestDeclaredContainer(unittest.TestCase):
     def test_declared_container_replaces_raw_frame(self):
         rv = self.res.bench_cfg.result_vars[0]
         pane = self.res.ds_to_container(self._point(SCALES[1]), rv, container=None)
-        self.assertIsInstance(pane, pn.pane.Markdown)
-        self.assertEqual(pane.object, "declared rows=3 sum=12")
+        assert isinstance(pane, pn.pane.Markdown)
+        assert pane.object == "declared rows=3 sum=12"
 
     def test_explicit_container_beats_declared(self):
         """A renderer that is given a container keeps using it."""
         rv = self.res.bench_cfg.result_vars[0]
         pane = self.res.ds_to_container(self._point(SCALES[0]), rv, container=explicit_container)
-        self.assertEqual(pane.object, "explicit rows=3")
+        assert pane.object == "explicit rows=3"
 
     def test_dataset_view_renders_through_container(self):
         """The dataset viewer shows the container output, not the raw table."""
         rendered = container_output(self.res.to(DataSetResult))
-        self.assertEqual(rendered, ["declared rows=3 sum=6", "declared rows=3 sum=12"])
+        assert rendered == ["declared rows=3 sum=6", "declared rows=3 sum=12"]
 
     def test_panes_view_renders_through_container(self):
         """ResultDataSet is a panel type, so the auto panes pass picks it up too."""
         rendered = container_output(self.res.to_auto(plot_list=["panes"]))
-        self.assertEqual(rendered, ["declared rows=3 sum=6", "declared rows=3 sum=12"])
+        assert rendered == ["declared rows=3 sum=6", "declared rows=3 sum=12"]
 
     def test_stored_frame_is_untouched(self):
         """Rendering is a view: the container never rewrites what was measured."""
@@ -350,7 +346,7 @@ class TestPerSampleContainer(unittest.TestCase):
         res = run_sweep(PerSampleContainerSweep(), "test_dataset_per_sample_container")
         rv = res.bench_cfg.result_vars[0]
         pane = res.ds_to_container(res.to_dataset().sel(scale=SCALES[0]), rv, container=None)
-        self.assertEqual(pane.object, "per-sample rows=3")
+        assert pane.object == "per-sample rows=3"
 
 
 class TestContainerIsNotData(unittest.TestCase):
@@ -360,13 +356,13 @@ class TestContainerIsNotData(unittest.TestCase):
         plain = bn.ResultDataSet(doc="d")
         with_container = bn.ResultDataSet(container=declared_container, doc="d")
         other_container = bn.ResultDataSet(container=explicit_container, doc="d")
-        self.assertEqual(plain.hash_persistent(), with_container.hash_persistent())
-        self.assertEqual(with_container.hash_persistent(), other_container.hash_persistent())
+        assert plain.hash_persistent() == with_container.hash_persistent()
+        assert with_container.hash_persistent() == other_container.hash_persistent()
 
     def test_declared_container_survives_pickling(self):
         """It rides in BenchCfg, which the result cache and split render both pickle."""
         rv = pickle.loads(pickle.dumps(DeclaredContainerSweep.param.table))
-        self.assertIs(rv.container, declared_container)
+        assert rv.container is declared_container
 
     def test_unset_slot_falls_back_to_raw_frame(self):
         """A result pickled before the slot existed unpickles with it unset, and still renders.
@@ -405,29 +401,25 @@ class TestOverTimeHistory(unittest.TestCase):
 
     def test_history_accumulated(self):
         """Guard on the fixture: with a single event there is no regression to catch."""
-        self.assertEqual(self.res.to_dataset().sizes["over_time"], OVER_TIME_RUNS)
+        assert self.res.to_dataset().sizes["over_time"] == OVER_TIME_RUNS
 
     def test_panes_pass_renders_every_run(self):
-        self.assertEqual(
-            container_output(self.res.to_auto(plot_list=["panes"])), self.expected_panes()
-        )
+        assert container_output(self.res.to_auto(plot_list=["panes"])) == self.expected_panes()
 
     def test_dataset_view_renders_every_run(self):
-        self.assertEqual(container_output(self.res.to(DataSetResult)), self.expected_panes())
+        assert container_output(self.res.to(DataSetResult)) == self.expected_panes()
 
     def test_one_pane_per_sample_per_event(self):
         """The D4 payoff: history multiplies the panes, one per stored payload."""
-        self.assertEqual(
-            len(container_output(self.res.to(DataSetResult))), len(SCALES) * OVER_TIME_RUNS
-        )
+        assert len(container_output(self.res.to(DataSetResult))) == len(SCALES) * OVER_TIME_RUNS
 
     def test_scalar_results_keep_their_history(self):
         """Slicing the tables must not cost the metrics their over_time series."""
         magnitude = self.res.to_dataset()["magnitude"]
-        self.assertEqual(magnitude.sizes["over_time"], OVER_TIME_RUNS)
+        assert magnitude.sizes["over_time"] == OVER_TIME_RUNS
         for run in range(OVER_TIME_RUNS):
             observed = magnitude.isel(over_time=run).sel(scale=SCALES[0]).values.squeeze()
-            self.assertAlmostEqual(float(observed), SCALES[0] + run)
+            assert float(observed) == pytest.approx(SCALES[0] + run, abs=1e-7)
 
 
 class TestOverTimeWithoutContainer(unittest.TestCase):
@@ -436,8 +428,8 @@ class TestOverTimeWithoutContainer(unittest.TestCase):
         rv = res.bench_cfg.result_vars[0]
         point = res.to_dataset().isel(over_time=-1).sel(scale=SCALES[0])
         frame = res.ds_to_container(point, rv, container=None)
-        self.assertEqual(frame["run"].tolist(), [1, 1])
-        self.assertIsInstance(res.to(DataSetResult), pn.viewable.Viewable)
+        assert frame["run"].tolist() == [1, 1]
+        assert isinstance(res.to(DataSetResult), pn.viewable.Viewable)
 
 
 class TestSinglePointGuard(unittest.TestCase):
@@ -454,10 +446,10 @@ class TestSinglePointGuard(unittest.TestCase):
         naming neither the result variable nor the dimension.
         """
         rv = self.res.bench_cfg.result_vars[0]
-        with self.assertRaises(ValueError) as raised:
+        with pytest.raises(ValueError, match="were neither selected nor reduced") as raised:
             self.res.ds_to_container(self.res.to_dataset(), rv, container=None)
-        self.assertIn("scale", str(raised.exception))
-        self.assertIn("table", str(raised.exception))
+        assert "scale" in str(raised.value)
+        assert "table" in str(raised.value)
 
     def test_length_one_dimensions_collapse_to_a_value(self):
         """A point that kept its length-1 dimensions is one value, not an array."""
@@ -467,8 +459,8 @@ class TestSinglePointGuard(unittest.TestCase):
             coords={"over_time": [0], "repeat": [0]},
         )
         value = self.res.zero_dim_da_to_val(da)
-        self.assertNotIsInstance(value, np.ndarray)
-        self.assertEqual(float(value), 4.0)
+        assert not isinstance(value, np.ndarray)
+        assert float(value) == 4.0
 
 
 if __name__ == "__main__":

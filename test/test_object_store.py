@@ -59,11 +59,13 @@ def test_local_pagination_is_bounded_and_resumable(tmp_path):
     first = store.list("a/", limit=2)
     assert isinstance(first, Listed)
     assert [item.key for item in first.items] == ["a/1", "a/2"]
-    assert not first.complete and first.next_token
+    assert not first.complete
+    assert first.next_token
     second = LocalStore(tmp_path).list("a/", token=first.next_token, limit=2)
     assert isinstance(second, Listed)
     assert [item.key for item in second.items] == ["a/3"]
-    assert second.complete and second.next_token is None
+    assert second.complete
+    assert second.next_token is None
     with pytest.raises(ValueError, match="token"):
         store.list("b/", token=first.next_token)
 
@@ -76,12 +78,14 @@ def test_local_expiry_is_explicit_and_renewal_preserves_content(tmp_path):
     now[0] = 60
     renewed = store.renew("a", first.version)
     assert isinstance(renewed, Renewed)
-    assert renewed.created_at == 60 and renewed.expires_at == 150
+    assert renewed.created_at == 60
+    assert renewed.expires_at == 150
     assert renewed.version != first.version
     assert isinstance(store.renew("a", first.version), Conflict)
     current = store.read("a")
     assert isinstance(current, Present)
-    assert current.data == b"original" and current.metadata == {"cacheControl": "no-cache"}
+    assert current.data == b"original"
+    assert current.metadata == {"cacheControl": "no-cache"}
     now[0] = 100
     assert isinstance(store.read("a"), Present)
     now[0] = 151
@@ -95,5 +99,5 @@ def test_local_expiry_is_explicit_and_renewal_preserves_content(tmp_path):
 
 @pytest.mark.parametrize("key", ["", "/a", "../a", "a/../b", "a//b", "a\\b", "a\x00b"])
 def test_local_rejects_unsafe_keys(tmp_path, key):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unsafe inventory path"):
         LocalStore(tmp_path).read(key)

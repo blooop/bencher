@@ -31,14 +31,14 @@ class TestExtraPanels(unittest.TestCase):
             return marker
 
         plots = res.to_auto_plots(extra_panels=[my_panel])
-        self.assertIn(marker, list(plots))
+        assert marker in list(plots)
 
     def test_extra_panels_static(self):
         """Static panel objects are inserted directly."""
         res = self._make_result()
         marker = pn.pane.Markdown("### Static Panel")
         plots = res.to_auto_plots(extra_panels=[marker])
-        self.assertIn(marker, list(plots))
+        assert marker in list(plots)
 
     def test_extra_panels_plain_string(self):
         """A plain `str` is neither callable nor Viewable, so it must be appended as-is.
@@ -52,13 +52,11 @@ class TestExtraPanels(unittest.TestCase):
         # Checked first and separately: a failure pane names the panel via `repr(ep)`,
         # which for a str contains the string, so the assertion below would be satisfied
         # by the very failure this test rules out.
-        self.assertFalse(
-            any("failed to render" in o for o in objs),
-            f"the plain string was routed into the failure path rather than appended: {objs}",
+        assert not any("failed to render" in o for o in objs), (
+            f"the plain string was routed into the failure path rather than appended: {objs}"
         )
-        self.assertTrue(
-            any("A plain markdown string" in o for o in objs),
-            f"plain string was not coerced into a pane by Column.append: {objs}",
+        assert any("A plain markdown string" in o for o in objs), (
+            f"plain string was not coerced into a pane by Column.append: {objs}"
         )
 
     def test_extra_panels_holoviews_element(self):
@@ -72,13 +70,11 @@ class TestExtraPanels(unittest.TestCase):
         curve = hv.Curve([(0, 0), (1, 1)], label="ExtraPanelCurve")
         plots = res.to_auto_plots(extra_panels=[curve])
         objs = [str(getattr(p, "object", "")) for p in plots]
-        self.assertFalse(
-            any("failed to render" in o for o in objs),
-            f"the hv element was routed into the failure path rather than appended: {objs}",
+        assert not any("failed to render" in o for o in objs), (
+            f"the hv element was routed into the failure path rather than appended: {objs}"
         )
-        self.assertTrue(
-            any(getattr(p, "object", None) is curve for p in plots),
-            "hv element was not wrapped into a pane holding the original object",
+        assert any(getattr(p, "object", None) is curve for p in plots), (
+            "hv element was not wrapped into a pane holding the original object"
         )
 
     def test_extra_panels_none_is_default(self):
@@ -86,7 +82,7 @@ class TestExtraPanels(unittest.TestCase):
         res = self._make_result()
         default_plots = res.to_auto_plots()
         explicit_none = res.to_auto_plots(extra_panels=None)
-        self.assertEqual(len(default_plots), len(explicit_none))
+        assert len(default_plots) == len(explicit_none)
 
     def test_extra_panels_before_auto(self):
         """Extra panels appear after sweep summary but before auto plots."""
@@ -95,9 +91,9 @@ class TestExtraPanels(unittest.TestCase):
         plots = list(res.to_auto_plots(extra_panels=[marker]))
         idx = plots.index(marker)
         # Should be after the sweep summary (index 0)
-        self.assertGreater(idx, 0)
+        assert idx > 0
         # Should be before the last element (post_description)
-        self.assertLess(idx, len(plots) - 1)
+        assert idx < len(plots) - 1
 
     def test_extra_panels_callable_error_is_surfaced(self):
         """A failing callable is surfaced, and does not crash to_auto_plots."""
@@ -115,19 +111,17 @@ class TestExtraPanels(unittest.TestCase):
             plots = res.to_auto_plots(extra_panels=[bad_panel])
 
         # The rest of the output is still produced.
-        self.assertGreater(len(plots), 0)
+        assert len(plots) > 0
         # Verify the error was actually logged.
-        self.assertTrue(any("bad_panel" in msg for msg in cm.output))
+        assert any("bad_panel" in msg for msg in cm.output)
         # A caller that never configured logging still sees the failure.
-        self.assertTrue(
-            any(issubclass(w.category, RenderFailedWarning) for w in caught),
-            "expected a RenderFailedWarning for the failing panel",
+        assert any(issubclass(w.category, RenderFailedWarning) for w in caught), (
+            "expected a RenderFailedWarning for the failing panel"
         )
         # The broken panel leaves a visible marker rather than vanishing.
         objs = [str(getattr(p, "object", "")) for p in plots]
-        self.assertTrue(
-            any("bad_panel" in o and "failed to render" in o for o in objs),
-            "expected a visible failure pane naming the failing panel",
+        assert any("bad_panel" in o and "failed to render" in o for o in objs), (
+            "expected a visible failure pane naming the failing panel"
         )
 
     def test_extra_panels_in_plot_callback(self):
@@ -138,7 +132,7 @@ class TestExtraPanels(unittest.TestCase):
         rendered = res.to_auto_plots(extra_panels=[lambda r: marker])
         all_panes = list(rendered)
         found = any(_find_marker(p, marker) for p in all_panes)
-        self.assertTrue(found, "Marker panel not found in rendered output")
+        assert found, "Marker panel not found in rendered output"
 
 
 def _find_marker(pane, marker):

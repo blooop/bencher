@@ -55,7 +55,8 @@ def test_newer_writer_during_render_is_not_overwritten(tmp_path, monkeypatch):
 
     monkeypatch.setattr(store, "write", competing)
     result = update_pointer(store, "latest", candidate(10))
-    assert isinstance(result, PointerUnchanged) and result.target == candidate(20).target
+    assert isinstance(result, PointerUnchanged)
+    assert result.target == candidate(20).target
     assert read_pointer(store.read("latest").data) == candidate(20)
 
 
@@ -83,7 +84,8 @@ def test_cas_retry_budget_is_bounded(tmp_path, monkeypatch):
 
     monkeypatch.setattr(store, "write", always_conflict)
     result = update_pointer(store, "latest", candidate(10), attempts=3)
-    assert isinstance(result, PointerFailed) and len(writes) == 3
+    assert isinstance(result, PointerFailed)
+    assert len(writes) == 3
 
 
 def test_lost_ack_resolves_without_rewriting(tmp_path, monkeypatch):

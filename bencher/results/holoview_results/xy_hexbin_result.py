@@ -19,17 +19,21 @@ Two ways in, same renderer:
 
 from __future__ import annotations
 
-from collections.abc import Hashable
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import holoviews as hv
-import panel as pn
-from param import Parameter
 
 from bencher.results.dataset_result import render_data_samples
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.holoview_results.tabular_spec import TabularSpec
+
+if TYPE_CHECKING:
+    from collections.abc import Hashable
+
+    import pandas as pd
+    import panel as pn
+    from param import Parameter
 
 
 @dataclass(frozen=True)
@@ -48,7 +52,7 @@ class XYHexbin(TabularSpec):
     min_count: int | None = None
     colorbar: bool = True
 
-    def build(self, df) -> hv.HexTiles:
+    def build(self, df: pd.DataFrame) -> hv.HexTiles:
         x_col, y_col = self.axes(df, self.x, self.y)
         plot_df, names = self.frame(df, [x_col, y_col])
         x_name, y_name = names[x_col], names[y_col]
@@ -157,7 +161,7 @@ class XYHexbinResult(HoloviewResult):
         xlabel: str | None = None,
         ylabel: str | None = None,
         opts: dict[str, Any] | None = None,
-        hv_dataset=None,
+        hv_dataset: hv.Dataset | None = None,
         target_dimension: int = 0,
         subsampling_divisions: int | None = None,
         **kwargs: Any,

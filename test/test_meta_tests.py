@@ -20,38 +20,25 @@ class TestBenchMeta(unittest.TestCase):
             "repeats", input_vars=[BenchableObject.param.float1], run_cfg=bn.BenchRunCfg(repeats=2)
         )
 
-        self.assertTrue(
-            res1.to_dataset(bn.ReduceType.NONE).identical(res1_eq.to_dataset(bn.ReduceType.NONE)),
-            "created with identical settings so should be equal",
-        )
+        assert res1.to_dataset(bn.ReduceType.NONE).identical(
+            res1_eq.to_dataset(bn.ReduceType.NONE)
+        ), "created with identical settings so should be equal"
 
-        self.assertFalse(
-            res1.to_dataset(bn.ReduceType.NONE).identical(res2.to_dataset(bn.ReduceType.NONE)),
-            "different number of repeats so should not be equal",
-        )
+        assert not res1.to_dataset(bn.ReduceType.NONE).identical(
+            res2.to_dataset(bn.ReduceType.NONE)
+        ), "different number of repeats so should not be equal"
 
         res1_ds = res1.to_dataset(bn.ReduceType.SQUEEZE)
         res2_ds = res2.to_dataset(bn.ReduceType.REDUCE)
 
-        self.assertFalse(
-            res1_ds.identical(res2_ds), "should not be equal because of std_dev column"
-        )
+        assert not res1_ds.identical(res2_ds), "should not be equal because of std_dev column"
 
         res2_ds = res2_ds.drop_vars("distance_std")
         res2_ds = res2_ds.drop_vars("sample_noise_std")
 
-        print(res1_ds)
-        print(res2_ds)
-        print(res1_ds["distance"].attrs)
-        print(res2_ds["distance"].attrs)
+        assert res1_ds.equals(res2_ds), "should be equal because of removed std_dev column"
 
-        self.assertTrue(
-            res1_ds.equals(res2_ds), "should be equal because of removed std_dev column"
-        )
-
-        self.assertTrue(
-            res1_ds.identical(res2_ds), "should be equal because of removed std_dev column"
-        )
+        assert res1_ds.identical(res2_ds), "should be equal because of removed std_dev column"
 
     def test_visual_distinction(self):
         """Verify different category combinations produce different output values."""
@@ -72,8 +59,4 @@ class TestBenchMeta(unittest.TestCase):
                     obj()
                     values.add(round(obj.distance, 6))
         # All 8 combinations (2 wave * 2 variant * 2 transform) should produce distinct values
-        self.assertEqual(
-            len(values),
-            8,
-            f"Expected 8 distinct values, got {len(values)}: {values}",
-        )
+        assert len(values) == 8, f"Expected 8 distinct values, got {len(values)}: {values}"

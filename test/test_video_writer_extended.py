@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 import numpy as np
+import pytest
 from PIL import Image
 
 from bencher.video_writer import VideoWriter
@@ -13,14 +14,14 @@ from bencher.video_writer import VideoWriter
 class TestVideoWriterCreateLabel(unittest.TestCase):
     def test_create_label_default_width(self):
         img = VideoWriter.create_label("hello")
-        self.assertIsInstance(img, Image.Image)
-        self.assertEqual(img.size[0], len("hello") * 10)
-        self.assertEqual(img.size[1], 16)
+        assert isinstance(img, Image.Image)
+        assert img.size[0] == len("hello") * 10
+        assert img.size[1] == 16
 
     def test_create_label_custom_size(self):
         img = VideoWriter.create_label("test", width=200, height=32)
-        self.assertIsInstance(img, Image.Image)
-        self.assertEqual(img.size, (200, 32))
+        assert isinstance(img, Image.Image)
+        assert img.size == (200, 32)
 
 
 class TestVideoWriterLabelImage(unittest.TestCase):
@@ -32,10 +33,10 @@ class TestVideoWriterLabelImage(unittest.TestCase):
             img.save(path)
 
             result = VideoWriter.label_image(path, "Test Label")
-            self.assertIsInstance(result, Image.Image)
+            assert isinstance(result, Image.Image)
             # Height should be original height + padding (default=20)
-            self.assertEqual(result.size[0], 100)
-            self.assertEqual(result.size[1], 80 + 20)
+            assert result.size[0] == 100
+            assert result.size[1] == 80 + 20
 
 
 class TestVideoWriterConvertAndExtract(unittest.TestCase):
@@ -54,12 +55,12 @@ class TestVideoWriterConvertAndExtract(unittest.TestCase):
     def test_write_and_extract_frame(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             video_path = self._create_test_video(tmpdir)
-            self.assertTrue(Path(video_path).exists())
+            assert Path(video_path).exists()
 
             # Extract a frame
             output = VideoWriter.extract_frame(video_path, time=0.0)
-            self.assertTrue(Path(output).exists())
-            self.assertTrue(output.endswith(".png"))
+            assert Path(output).exists()
+            assert output.endswith(".png")
 
     def test_extract_frame_default_time(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -67,7 +68,7 @@ class TestVideoWriterConvertAndExtract(unittest.TestCase):
 
             # Extract frame with default time (last frame)
             output = VideoWriter.extract_frame(video_path)
-            self.assertTrue(Path(output).exists())
+            assert Path(output).exists()
 
     def test_extract_frame_custom_output(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -75,16 +76,16 @@ class TestVideoWriterConvertAndExtract(unittest.TestCase):
             output_path = Path(tmpdir) / "custom_frame.png"
 
             output = VideoWriter.extract_frame(video_path, time=0.0, output_path=str(output_path))
-            self.assertEqual(output, output_path.as_posix())
-            self.assertTrue(output_path.exists())
+            assert output == output_path.as_posix()
+            assert output_path.exists()
 
     def test_extract_frame_nonexistent_source(self):
-        with self.assertRaises(OSError):
+        with pytest.raises(OSError, match="not found"):
             VideoWriter.extract_frame("/nonexistent/path/video.mp4", time=0.0)
 
     def test_convert_to_compatible_format(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             video_path = self._create_test_video(tmpdir)
             new_path = VideoWriter.convert_to_compatible_format(video_path)
-            self.assertTrue(Path(new_path).exists())
-            self.assertIn("_fixed", new_path)
+            assert Path(new_path).exists()
+            assert "_fixed" in new_path

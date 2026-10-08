@@ -163,7 +163,7 @@ def _serialize(obj: Any) -> tuple[bytes, str]:
             buffer = io.BytesIO()
             obj.to_parquet(buffer)
             return buffer.getvalue(), ".parquet"
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "blob_store: DataFrame payload could not be serialized to parquet "
                 "(%s: %s); falling back to pickle",
@@ -188,7 +188,7 @@ def _serialize(obj: Any) -> tuple[bytes, str]:
                 # to_netcdf() with no target returns the serialized bytes
                 # (memoryview on newer xarray versions).
                 return bytes(obj.to_netcdf()), extension
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "blob_store: %s payload could not be serialized to netCDF "
                     "(%s: %s); falling back to pickle",
@@ -207,7 +207,7 @@ def _load_bytes(path: Path) -> bytes:
 
 
 def _load_pickle(path: Path) -> Any:
-    return pickle.loads(path.read_bytes())
+    return pickle.loads(path.read_bytes())  # noqa: S301 - reads bencher's own local cache blobs
 
 
 @dataclass(frozen=True)
@@ -382,7 +382,7 @@ def resolve_blob(
     list does not cover should pass *cache_dir* rather than rely on one recorded
     by a process that has since gone away.
 
-    Raises
+    Raises:
     ------
     ValueError
         If *cell* is not a blob reference at all.
@@ -461,7 +461,7 @@ def materialize_blob(obj: Any, cache_dir: str | Path) -> str:
         Root cache directory; blobs live in its ``blobs/`` subdirectory,
         which is created if needed.
 
-    Returns
+    Returns:
     -------
     str
         The blob's filename, which is what a dataset cell stores.  Join it onto
@@ -482,11 +482,12 @@ def materialize_blob(obj: Any, cache_dir: str | Path) -> str:
             # age-based GC grace period protects the blob a concurrent sweep
             # just deduplicated onto, exactly as it protects one just written.
             os.utime(blob_path)
-            return blob_path.name
         except OSError:
             # The blob vanished between the existence check and the touch
             # (e.g. a concurrent GC collected it): fall through and rewrite.
             pass
+        else:
+            return blob_path.name
 
     # Write via a unique temp file + atomic rename so concurrent workers
     # materializing the same payload never observe a partial blob.
@@ -523,7 +524,7 @@ def load_blob(
     there is no second dispatch here that could fail on a name already approved
     as a blob reference.
 
-    Raises
+    Raises:
     ------
     ValueError
         If *path* is not a blob reference.
