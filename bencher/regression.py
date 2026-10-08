@@ -563,7 +563,7 @@ def _ensure_matplotlib_backend_loaded() -> None:
         return
     prev_backend = hv.Store.current_backend
     hv.extension("matplotlib", logo=False)
-    if prev_backend and hv.Store.current_backend != prev_backend:
+    if hv.Store.current_backend != prev_backend:
         hv.Store.set_current_backend(prev_backend)
 
 
