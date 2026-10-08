@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`TimeSnapshot` and `TimeEvent` raised a `ParamDeprecationWarning` on every
   construction.** `TimeBase` forwarded `compute_default_fn=None` to `param.Selector`,
   and param warns whenever that argument is not `Undefined`, so an explicit `None`
-  warned too. The argument is no longer declared or forwarded.
+  warned too. The argument is no longer declared or forwarded, and `TimeBase` options
+  after `objects` are now keyword-only, so an old positional call raises `TypeError`.
 
 ## [1.136.0] - 2026-09-25
 

@@ -7,7 +7,7 @@ from datetime import datetime
 import pytest
 
 import bencher as bn
-from bencher.variables.time import TimeEvent, TimeSnapshot
+from bencher.variables.time import TimeBase, TimeEvent, TimeSnapshot
 
 
 class _Colour(enum.Enum):
@@ -35,3 +35,9 @@ def test_construction_raises_no_deprecation_warning(make):
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
         make()
+
+
+def test_timebase_rejects_positional_options_after_objects():
+    with pytest.raises(TypeError):
+        # pylint: disable-next=too-many-function-args
+        TimeBase(["a", "b"], None, False, True)  # ty: ignore[too-many-positional-arguments]

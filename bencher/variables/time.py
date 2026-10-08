@@ -67,6 +67,7 @@ class TimeBase(SweepBase, Selector):
     def __init__(
         self,
         objects=None,
+        *,
         default=None,
         instantiate=False,
         check_on_set=None,
