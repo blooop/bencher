@@ -24,9 +24,8 @@ from __future__ import annotations
 
 import json
 import warnings
-from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import xarray as xr
@@ -38,6 +37,11 @@ from bencher.regression import (
 from bencher.variables.results import SCALAR_RESULT_TYPES, OptDir
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    import param
+
+    from bencher.bench_cfg import BenchRunCfg
     from bencher.results.bench_result import BenchResult
 
 SCHEMA_VERSION = 1
@@ -56,7 +60,7 @@ def _provenance(bench_res: BenchResult) -> dict:
     return prov
 
 
-def _metric_entry(bench_res: BenchResult, rv) -> dict:
+def _metric_entry(bench_res: BenchResult, rv: param.Parameter) -> dict:
     """Per-metric summary: identity + optimal value/inputs when computable."""
     entry: dict = {
         "variable": rv.name,
@@ -79,7 +83,7 @@ def _metric_entry(bench_res: BenchResult, rv) -> dict:
     return entry
 
 
-def _coord_scalar(values):
+def _coord_scalar(values: np.ndarray) -> Any:
     """Coerce an optimal-input coordinate to a JSON-safe scalar."""
     arr = np.asarray(values).ravel()
     if arr.size == 0:
@@ -304,7 +308,9 @@ def _percent_improved(reg: Mapping[str, object]) -> bool:
     return _beneficial(change_percent, reg.get("direction")) and abs(change_percent) >= threshold
 
 
-def compare_results(baseline: BenchResult, candidate: BenchResult, *, run_cfg=None) -> dict:
+def compare_results(
+    baseline: BenchResult, candidate: BenchResult, *, run_cfg: BenchRunCfg | None = None
+) -> dict:
     """Diff two independently-collected results into an A/B comparison contract.
 
     Stacks *baseline* and *candidate* on a synthetic 2-point ``over_time`` axis
@@ -389,7 +395,7 @@ def comparison_to_json(
     candidate: BenchResult,
     path: str | Path,
     *,
-    run_cfg=None,
+    run_cfg: BenchRunCfg | None = None,
     indent: int = 2,
 ) -> Path:
     """Write :func:`compare_results` for the two results to *path* as JSON."""

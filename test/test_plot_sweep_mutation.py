@@ -11,6 +11,8 @@ import random
 import unittest
 from copy import deepcopy
 
+import pytest
+
 import bencher as bn
 from bencher import Bench, BenchRunCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
@@ -35,7 +37,7 @@ class TestSelfVarsMutationSafety(unittest.TestCase):
         )
 
         assert len(self.bench.input_vars) == len(snapshot)
-        for orig, snap in zip(self.bench.input_vars, snapshot):
+        for orig, snap in zip(self.bench.input_vars, snapshot, strict=True):
             assert orig.name == snap.name
             assert orig.default == snap.default
 
@@ -50,7 +52,7 @@ class TestSelfVarsMutationSafety(unittest.TestCase):
         )
 
         assert len(self.bench.result_vars) == len(snapshot)
-        for orig, snap in zip(self.bench.result_vars, snapshot):
+        for orig, snap in zip(self.bench.result_vars, snapshot, strict=True):
             assert orig.name == snap.name
 
     def test_plot_sweep_does_not_mutate_self_const_vars(self):
@@ -65,7 +67,7 @@ class TestSelfVarsMutationSafety(unittest.TestCase):
         )
 
         assert len(self.bench.const_vars) == len(snapshot)
-        for orig, snap in zip(self.bench.const_vars, snapshot):
+        for orig, snap in zip(self.bench.const_vars, snapshot, strict=True):
             assert orig[0].name == snap[0].name
             assert orig[1] == snap[1]
 
@@ -90,7 +92,7 @@ class TestCallerVarsMutationSafety(unittest.TestCase):
         )
 
         assert len(caller_input_vars) == len(snapshot)
-        for orig, snap in zip(caller_input_vars, snapshot):
+        for orig, snap in zip(caller_input_vars, snapshot, strict=True):
             assert orig.name == snap.name
             assert orig.default == snap.default
 
@@ -106,7 +108,7 @@ class TestCallerVarsMutationSafety(unittest.TestCase):
         )
 
         assert len(caller_result_vars) == len(snapshot)
-        for orig, snap in zip(caller_result_vars, snapshot):
+        for orig, snap in zip(caller_result_vars, snapshot, strict=True):
             assert orig.name == snap.name
 
     def test_plot_sweep_does_not_mutate_caller_const_vars(self):
@@ -122,7 +124,7 @@ class TestCallerVarsMutationSafety(unittest.TestCase):
         )
 
         assert len(caller_const_vars) == len(snapshot)
-        for orig, snap in zip(caller_const_vars, snapshot):
+        for orig, snap in zip(caller_const_vars, snapshot, strict=True):
             assert orig[0].name == snap[0].name
             assert orig[1] == snap[1]
 
@@ -204,8 +206,8 @@ class TestBoundsAPI(unittest.TestCase):
         )
         assert res.result_samples() == 6
         theta_coords = res.ds.coords["theta"].values
-        self.assertAlmostEqual(float(theta_coords.min()), 0.0)
-        self.assertAlmostEqual(float(theta_coords.max()), 1.0)
+        assert float(theta_coords.min()) == pytest.approx(0.0, abs=1e-7)
+        assert float(theta_coords.max()) == pytest.approx(1.0, abs=1e-7)
 
     def test_callable_bounds_default_samples(self):
         """Cfg.param.theta(bounds=(lo, hi)) keeps default sample count."""
@@ -227,8 +229,8 @@ class TestBoundsAPI(unittest.TestCase):
         )
         assert res.result_samples() == 4
         theta_coords = res.ds.coords["theta"].values
-        self.assertAlmostEqual(float(theta_coords.min()), 0.0)
-        self.assertAlmostEqual(float(theta_coords.max()), 1.0)
+        assert float(theta_coords.min()) == pytest.approx(0.0, abs=1e-7)
+        assert float(theta_coords.max()) == pytest.approx(1.0, abs=1e-7)
 
     def test_sweep_string_bounds_default_samples(self):
         """bn.sweep("theta", bounds=(lo, hi)) keeps default sample count."""

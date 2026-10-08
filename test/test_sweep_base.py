@@ -58,22 +58,8 @@ class TestSweepBase(unittest.TestCase):
         consts = explorer.get_input_defaults()
         const_override = explorer.get_input_defaults([AllSweepVars.param.var_float.with_const(2)])
 
-        # const_override_class = AllSweepVars.get_input_defaults(
-        #     [AllSweepVars.param.var_float.with_const(2)]
-        # )
-
-        # const_override_instance = explorer.get_input_defaults(
-        #     [explorer.param.var_float.with_const(2)]
-        # )
-
-        print(consts)
-        print("overridden")
-        print(const_override)
-
         assert consts[0][1] == 5
         assert const_override[0][1] == 2
-        # self.assertEqual(const_override_class[0][1], 2)
-        # self.assertEqual(const_override_instance[0][1], 2)
 
         assert consts != const_override
         assert len(consts) == len(const_override)
@@ -84,10 +70,6 @@ class TestSweepBase(unittest.TestCase):
         class_defaults = AllSweepVars.get_input_defaults(
             [AllSweepVars.param.var_float.with_const(3)]
         )
-
-        # class_defaults_over = AllSweepVars.get_input_defaults_override(var_float=3)
-
-        # self.assertEqual(class_defaults, class_defaults_over)
 
         assert class_defaults[0][1] == 3
 
@@ -105,7 +87,7 @@ class TestSweepBase(unittest.TestCase):
         override = AllSweepVars.get_input_defaults_override(var_float=1)
         after = AllSweepVars.get_input_defaults()
 
-        self.assertListEqual(initial, after)
+        assert initial == after
         assert override != override_defaults
 
     def test_with_sample_values(self):
@@ -123,18 +105,18 @@ class TestSweepBase(unittest.TestCase):
     def test_bool_as_dim(self):
         res = AllSweepVars.param.var_bool.as_dim(True)
 
-        self.assertSequenceEqual(res.values, [True, False])
+        assert list(res.values) == [True, False]
 
         res = AllSweepVars.param.var_bool.as_dim(False)
-        self.assertSequenceEqual(res.values, [True, False])
+        assert list(res.values) == [True, False]
 
     def test_float_as_dim(self):
         res = AllSweepVars.param.var_float.as_dim(True)
 
-        self.assertListEqual(res.values, list(AllSweepVars.param.var_float.values()))
+        assert res.values == list(AllSweepVars.param.var_float.values())
 
         res = AllSweepVars.param.var_float.as_dim(False)
-        self.assertSequenceEqual(res.range, (0, 10))
+        assert tuple(res.range) == (0, 10)
 
     def test_float_step(self):
         step = 0.0001
@@ -151,9 +133,9 @@ class TestSweepBase(unittest.TestCase):
 
     def test_with_subsampling_divisions_invalid_raises(self):
         sw = bn.FloatSweep(bounds=[0, 1])
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="subsampling_divisions must be >= 1"):
             sw.with_subsampling_divisions(0)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="subsampling_divisions must be >= 1"):
             sw.with_subsampling_divisions(-1)
 
     def sweep_up_to(self, var, var_type, subsampling_divisions=7):
@@ -161,12 +143,9 @@ class TestSweepBase(unittest.TestCase):
         for i in range(2, subsampling_divisions):
             res = var.with_subsampling_divisions(i)
             new_vals = res.values()
-            print(res_old.values(), new_vals)
-            for i in res_old.values():
-                assert isinstance(i, var_type)
-                assert i in new_vals
-                for n in new_vals:
-                    print("\t", i == n)
+            for val in res_old.values():
+                assert isinstance(val, var_type)
+                assert val in new_vals
             res_old = res
 
     @given(st.floats(min_value=0.1, allow_nan=False, allow_infinity=False))
@@ -210,11 +189,6 @@ class TestSweepBase(unittest.TestCase):
         )
         assert res.result_samples() == 3, "the number of samples should be limited to 3"
 
-    # @given(st.integers(min_value=0), st.integers(min_value=1,max_value=10))
-    # def test_levels_int(self, start, var_range):
-    #     var_int = bn.IntSweep(default=start, bounds=(start, start + var_range))
-    #     self.sweep_up_to(var_int, int, subsampling_divisions=5)
-
     def test_callable_sweep_values(self):
         vals = AllSweepVars.param.var_float([0, 1, 5]).values()
         assert vals == [0, 1, 5]
@@ -242,8 +216,8 @@ class TestSweepBase(unittest.TestCase):
         result = bn.sweep(AllSweepVars.param.var_float, bounds=(0, 5), samples=3)
         assert isinstance(result, bn.SweepBase)
         assert len(result.values()) == 3
-        self.assertAlmostEqual(result.values()[0], 0.0)
-        self.assertAlmostEqual(result.values()[-1], 5.0)
+        assert result.values()[0] == pytest.approx(0.0, abs=1e-7)
+        assert result.values()[-1] == pytest.approx(5.0, abs=1e-7)
 
     def test_sweep_with_string_bounds(self):
         result = bn.sweep("var_float", bounds=(0, 5), samples=3)
@@ -255,8 +229,8 @@ class TestSweepBase(unittest.TestCase):
         result = AllSweepVars.param.var_float(bounds=(0, 5), samples=3)
         assert isinstance(result, bn.SweepBase)
         assert len(result.values()) == 3
-        self.assertAlmostEqual(result.values()[0], 0.0)
-        self.assertAlmostEqual(result.values()[-1], 5.0)
+        assert result.values()[0] == pytest.approx(0.0, abs=1e-7)
+        assert result.values()[-1] == pytest.approx(5.0, abs=1e-7)
 
     def test_with_bounds_direct(self):
         """Directly test SweepBase.with_bounds() for immutability, bounds, samples, and step."""
@@ -292,7 +266,7 @@ class TestSweepBase(unittest.TestCase):
 
     def test_with_bounds_invalid_range(self):
         """with_bounds(low > high) raises ValueError."""
-        with self.assertRaises(ValueError, msg="low must not exceed high"):
+        with pytest.raises(ValueError, match="low must not exceed high"):
             AllSweepVars.param.var_float.with_bounds(10.0, 2.0)
 
     def test_with_bounds_zero_width_is_one_sample(self):
@@ -307,19 +281,12 @@ class TestSweepBase(unittest.TestCase):
 
     def test_with_bounds_zero_width_rejects_multiple_samples(self):
         """samples > 1 over a zero-width range is a contradiction."""
-        with self.assertRaises(ValueError, msg="zero-width"):
+        with pytest.raises(ValueError, match="zero-width"):
             AllSweepVars.param.var_float.with_bounds(5.0, 5.0, samples=5)
 
     def test_callable_conflicts_raise(self):
         """Passing values together with bounds or samples raises ValueError."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Cannot combine 'values' with 'bounds' or 'samples'"):
             AllSweepVars.param.var_float([1, 2], bounds=(0, 5))
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Cannot combine 'values' with 'bounds' or 'samples'"):
             AllSweepVars.param.var_float([1, 2], samples=3)
-
-
-if __name__ == "__main__":
-    # TestSweepBase().test_override_defaults()
-    pass
-
-    # TestSweepBase().test_levels_int(0, 10)

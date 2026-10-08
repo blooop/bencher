@@ -137,7 +137,7 @@ class TestBuildCurveOverlayGroupby:
         overlay = _overlay(stub, ds, rv)
 
         curves = [el for el in overlay if isinstance(el, hv.Curve)]
-        # 2 backends × 3 algos = 6 curves
+        # 2 backends x 3 algos = 6 curves
         assert len(curves) == 6, f"Expected 6 curves, got {len(curves)}"
         # Labels should contain comma-separated values
         labels = [el.label for el in overlay if isinstance(el, hv.Curve)]

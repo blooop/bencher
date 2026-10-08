@@ -4,15 +4,18 @@ import logging
 import warnings
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
-from enum import Enum
 from pathlib import Path
-from typing import Any, overload
+from typing import TYPE_CHECKING, Any, Self, overload
 
 import numpy as np
 import yaml
 from param import Integer, Number, Selector
 
 from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, SweepBase, shared_slots
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +24,12 @@ logger = logging.getLogger(__name__)
 # will be populated dynamically at runtime. Prefer using this constant instead of magic
 # strings like "__initialising__".
 class _DynamicValuesSentinel(str):
-    def __new__(cls):  # pragma: no cover - trivial
+    __slots__ = ()
+
+    def __new__(cls) -> Self:  # pragma: no cover - trivial
         return super().__new__(cls, "<dynamic values loading>")
 
-    def __repr__(self):  # pragma: no cover - trivial
+    def __repr__(self) -> str:  # pragma: no cover - trivial
         return "LoadValuesDynamically"
 
 
@@ -45,8 +50,8 @@ class SweepSelector(Selector, SweepBase):
     __slots__ = shared_slots
 
     def __init__(
-        self, units: str = "ul", samples: int | None = None, optimize: bool = True, **params
-    ):
+        self, units: str = "ul", samples: int | None = None, optimize: bool = True, **params: Any
+    ) -> None:
         SweepBase.__init__(self)
         Selector.__init__(self, **params)
 
@@ -86,7 +91,7 @@ class SweepSelector(Selector, SweepBase):
           a deterministic ``__str__``/``__repr__``.
         """
 
-        def _obj_fingerprint(o):
+        def _obj_fingerprint(o: Any) -> Any:
             hook = getattr(o, "__bencher_hash__", None)
             if callable(hook):
                 return hook()
@@ -105,7 +110,7 @@ class SweepSelector(Selector, SweepBase):
             obj_tuple = tuple(_obj_fingerprint(o) for o in objects)
         else:
             obj_tuple = ()
-        return super()._sweep_identity() + (obj_tuple,)
+        return (*super()._sweep_identity(), obj_tuple)
 
     # ------------------------------------------------------------------
     # Dynamic update helpers
@@ -222,8 +227,8 @@ class BoolSweep(SweepSelector):
         samples: int | None = None,
         default: bool = True,
         optimize: bool = True,
-        **params,
-    ):
+        **params: Any,
+    ) -> None:
         SweepSelector.__init__(
             self,
             units=units,
@@ -252,8 +257,8 @@ class StringSweep(SweepSelector):
         units: str = "ul",
         samples: int | None = None,
         optimize: bool = True,
-        **params,
-    ):
+        **params: Any,
+    ) -> None:
         SweepSelector.__init__(
             self,
             objects=string_list,
@@ -276,7 +281,7 @@ class StringSweep(SweepSelector):
         placeholder: str | None = None,
         units: str = "ul",
         doc: str | None = None,
-        **params,
+        **params: Any,
     ) -> StringSweep:
         """Create a StringSweep intended for later population.
 
@@ -320,8 +325,8 @@ class EnumSweep(SweepSelector):
         units: str = "ul",
         samples: int | None = None,
         optimize: bool = True,
-        **params,
-    ):
+        **params: Any,
+    ) -> None:
         # The enum can either be an Enum type or a list of enums
         list_of_enums = isinstance(enum_type, list)
         selector_list = enum_type if list_of_enums else list(enum_type)
@@ -356,7 +361,7 @@ class YamlSelection(str):
 
     __slots__ = ("_value",)
 
-    def __new__(cls, key: str, value: Any):
+    def __new__(cls, key: str, value: Any) -> Self:
         obj = super().__new__(cls, key)
         obj._value = value
         return obj
@@ -377,6 +382,10 @@ class YamlSelection(str):
             return self.key() == other
         return NotImplemented
 
+    # Defining __eq__ makes Python set __hash__ to None; state that explicitly so the
+    # class stays unhashable, as it has always been.
+    __hash__ = None  # type: ignore[assignment]
+
     def __lt__(self, other: Any) -> bool:
         if isinstance(other, YamlSelection):
             return self.key() < other.key()
@@ -384,10 +393,10 @@ class YamlSelection(str):
             return self.key() < other
         return NotImplemented
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Any]:
         return iter((self.key(), self.value()))
 
-    def __reduce__(self):
+    def __reduce__(self) -> tuple[type[YamlSelection], tuple[str, Any]]:
         return (YamlSelection, (self.key(), self.value()))
 
     def __bencher_hash__(self) -> tuple[str, Any]:
@@ -406,7 +415,7 @@ class YamlSweep(SweepSelector):
     content via the ``value`` attribute (and dict-like helpers).
     """
 
-    __slots__ = shared_slots + ["yaml_path", "_entries", "default_key"]
+    __slots__ = [*shared_slots, "yaml_path", "_entries", "default_key"]
     # ``objects`` already carries the fingerprint of every YAML entry (via
     # :meth:`YamlSelection.__bencher_hash__`), so these internal fields are
     # redundant for cache identity.
@@ -419,8 +428,8 @@ class YamlSweep(SweepSelector):
         samples: int | None = None,
         default_key: str | None = None,
         optimize: bool = True,
-        **params,
-    ):
+        **params: Any,
+    ) -> None:
         path = Path(yaml_path)
         if not path.exists():
             raise FileNotFoundError(f"YamlSweep could not find yaml file at {path}")
@@ -509,7 +518,7 @@ class IntSweep(Integer, SweepBase):
             generating them from bounds. If provided, overrides the samples parameter.
     """
 
-    __slots__ = shared_slots + ["sample_values"]
+    __slots__ = [*shared_slots, "sample_values"]
 
     def __init__(
         self,
@@ -517,8 +526,8 @@ class IntSweep(Integer, SweepBase):
         samples: int | None = None,
         sample_values: list[int] | None = None,
         optimize: bool = True,
-        **params,
-    ):
+        **params: Any,
+    ) -> None:
         SweepBase.__init__(self)
         # Redirect bounds -> softbounds so param doesn't hard-enforce them
         user_bounds = params.pop("bounds", None)
@@ -543,13 +552,13 @@ class IntSweep(Integer, SweepBase):
             if "default" not in params:
                 self.default = self.sample_values[0]
 
-    def _coerce_bound(self, value):
+    def _coerce_bound(self, value: float) -> int:
         return int(value)
 
     def _sweep_identity(self) -> tuple:
         """Include bounds and sample_values so a reshaped sweep busts the cache."""
         sample_values = tuple(self.sample_values) if self.sample_values is not None else None
-        return super()._sweep_identity() + (self.sweep_bounds, sample_values)
+        return (*super()._sweep_identity(), self.sweep_bounds, sample_values)
 
     def values(self) -> list[int]:
         """Return all the values for the parameter sweep.
@@ -568,8 +577,8 @@ class IntSweep(Integer, SweepBase):
 
         return self.indices_to_samples(self.samples, sample_values)
 
-    ###THESE ARE COPIES OF INTEGER VALIDATION BUT ALSO ALLOW NUMPY INT TYPES
-    def _validate_value(self, value, allow_None):
+    # These are copies of param.Integer validation that also allow numpy int types.
+    def _validate_value(self, value: Any, allow_None: bool) -> None:  # noqa: N803 - mirrors param.Integer's signature
         if callable(value):
             return
 
@@ -583,8 +592,8 @@ class IntSweep(Integer, SweepBase):
                 f"Integer parameter {self.name!r} must be an integer, not type {type(value)!r}."
             )
 
-    ###THESE ARE COPIES OF INTEGER VALIDATION BUT ALSO ALLOW NUMPY INT TYPES
-    def _validate_step(self, val, step):
+    # These are copies of param.Integer validation that also allow numpy int types.
+    def _validate_step(self, val: Any, step: Any) -> None:  # noqa: ARG002 - mirrors param.Integer's signature
         if step is not None and not isinstance(step, (int, np.integer)):
             raise ValueError(f"Step can only be None or an integer value, not type {type(step)!r}")
 
@@ -603,7 +612,7 @@ class FloatSweep(Number, SweepBase):
         step (float, optional): Step size between samples when generating values from bounds
     """
 
-    __slots__ = shared_slots + ["sample_values"]
+    __slots__ = [*shared_slots, "sample_values"]
 
     def __init__(
         self,
@@ -612,8 +621,8 @@ class FloatSweep(Number, SweepBase):
         sample_values: list[float] | None = None,
         step: float | None = None,
         optimize: bool = True,
-        **params,
-    ):
+        **params: Any,
+    ) -> None:
         SweepBase.__init__(self)
         # Redirect bounds -> softbounds so param doesn't hard-enforce them
         user_bounds = params.pop("bounds", None)
@@ -635,13 +644,13 @@ class FloatSweep(Number, SweepBase):
             if "default" not in params:
                 self.default = self.sample_values[0]
 
-    def _coerce_bound(self, value):
+    def _coerce_bound(self, value: float) -> float:
         return float(value)
 
     def _sweep_identity(self) -> tuple:
         """Include bounds, sample_values, and step so a reshaped sweep busts the cache."""
         sample_values = tuple(self.sample_values) if self.sample_values is not None else None
-        return super()._sweep_identity() + (self.sweep_bounds, sample_values, self.step)
+        return (*super()._sweep_identity(), self.sweep_bounds, sample_values, self.step)
 
     def values(self) -> list[float] | np.ndarray:
         """Return all the values for the parameter sweep.
@@ -753,6 +762,7 @@ def sweep(
         samples: The number of samples. Must be > 0 if provided.
         bounds: ``(low, high)`` tuple to override the sweep range.
         max_subsampling_divisions: The maximum subsampling_divisions. Must be > 0 if provided.
+        max_level: Deprecated alias for ``max_subsampling_divisions``.
 
     Returns:
         dict[str, Any] | SweepBase: A parameter dict (for string names) or configured sweep object.

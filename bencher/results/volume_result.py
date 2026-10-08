@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import panel as pn
 import plotly.graph_objs as go
-import xarray as xr
-from param import Parameter
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
 from bencher.results.holoview_results.holoview_result import DEFAULT_PLOT_SIZE
 from bencher.variables.results import ResultFloat
+
+if TYPE_CHECKING:
+    import xarray as xr
+    from param import Parameter
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +44,8 @@ class VolumeResult(BenchResultBase):
         result_var: Parameter | None = None,
         override: bool = True,
         target_dimension: int = 3,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> pn.viewable.Viewable | None:
         """Generates a 3D volume plot from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a volume plot
@@ -78,10 +80,11 @@ class VolumeResult(BenchResultBase):
         self,
         dataset: xr.Dataset,
         result_var: Parameter,
-        width=DEFAULT_PLOT_SIZE,
-        height=DEFAULT_PLOT_SIZE,
+        width: int = DEFAULT_PLOT_SIZE,
+        height: int = DEFAULT_PLOT_SIZE,
     ) -> pn.pane.Plotly | None:
-        """Given a benchCfg generate a 3D surface plot
+        """Generate a 3D volume plot from a benchCfg.
+
         Returns:
             pn.pane.Plotly: A 3d volume plot as a holoview in a pane
         """

@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -54,7 +54,7 @@ class RenderCfg:
 @dataclass
 class ComposableContainerVideo(ComposableContainerBase):
     def append(self, obj: VideoClip | ImageClip | str | np.ndarray) -> None:
-        """Appends an image or video to the container
+        """Append an image or video to the container.
 
         Args:
             obj (VideoClip | ImageClip | str | np.ndarray): Any representation of an image or video
@@ -64,7 +64,6 @@ class ComposableContainerVideo(ComposableContainerBase):
         """
         from moviepy import ImageClip, VideoClip, VideoFileClip
 
-        # print(f"append obj: {type(obj)}, {obj}")
         if obj is not None:
             if isinstance(obj, VideoClip):
                 self.container.append(obj)
@@ -78,14 +77,13 @@ class ComposableContainerVideo(ComposableContainerBase):
                 if extension in [".jpg", ".jepg", ".png"]:
                     self.container.append(ImageClip(obj))
                 elif extension in [".mpeg", ".mpg", ".mp4", ".webm"]:
-                    # print(obj)
                     self.container.append(VideoFileClip(obj))
                 else:
                     raise RuntimeWarning(f"unsupported filetype {extension}")
         else:
             raise RuntimeWarning("No data passed to ComposableContainerVideo.append()")
 
-    def calculate_duration(self, frames, render_cfg: RenderCfg):
+    def calculate_duration(self, frames: float, render_cfg: RenderCfg) -> tuple[float, float]:
         if render_cfg.duration_target:
             # calculate duration based on fps constraints
             duration = (
@@ -106,11 +104,13 @@ class ComposableContainerVideo(ComposableContainerBase):
 
         return duration, frame_duration
 
-    def render(self, render_cfg: RenderCfg | None = None, **kwargs) -> CompositeVideoClip:
-        """Composes the images/videos into a single image/video based on the type of compose method
+    def render(self, render_cfg: RenderCfg | None = None, **kwargs: Any) -> CompositeVideoClip:
+        """Compose the images/videos into a single image/video based on the compose method.
 
         Args:
-            compose_method (ComposeType, optional): optionally override the default compose type. Defaults to None.
+            render_cfg (RenderCfg | None, optional): The render options. Defaults to None,
+                which builds a RenderCfg from ``kwargs``.
+            **kwargs: RenderCfg fields, used only when ``render_cfg`` is None.
 
         Returns:
             CompositeVideoClip: A composite video clip containing the images/videos added via append()
@@ -160,7 +160,6 @@ class ComposableContainerVideo(ComposableContainerBase):
 
         label = self.label_formatter(render_cfg.var_name, render_cfg.var_value)
         if label is not None:
-            # print("adding label")
             label = ImageClip(
                 np.array(VideoWriter.create_label(label, color=render_cfg.background_col))
             )
@@ -185,17 +184,17 @@ class ComposableContainerVideo(ComposableContainerBase):
         self,
         render_args: RenderCfg | None = None,
     ) -> str:
-        """Returns the composite video clip as a webm file path
+        """Return the composite video clip as a webm file path.
 
         Returns:
             str: webm filepath
         """
         return VideoWriter().write_video_raw(self.render(render_args))
 
-    def deep(self):
+    def deep(self) -> ComposableContainerVideo:
         return deepcopy(self)
 
-    def extend_clip(self, clip: VideoClip, desired_duration: float):
+    def extend_clip(self, clip: VideoClip, desired_duration: float) -> VideoClip:
         from moviepy import ImageClip, concatenate_videoclips
 
         if clip.duration is None:

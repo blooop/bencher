@@ -12,6 +12,7 @@ not what the rerun viewer does with an .rrd.
 
 import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pandas as pd
 import panel as pn
@@ -24,7 +25,7 @@ SNAPSHOTS = 3
 
 def file_contents(path: str) -> pn.pane.Markdown:
     """A declared container that renders the file rather than the rerun viewer."""
-    with open(path, encoding="utf-8") as handle:
+    with Path(path).open(encoding="utf-8") as handle:
         return pn.pane.Markdown(f"contents: {handle.read()}")
 
 
@@ -43,7 +44,7 @@ class RerunSweep(bn.ParametrizedSweep):
             self.recording = f"{filename}.never-written"
             return
         self.recording = filename
-        with open(filename, "w", encoding="utf-8") as handle:
+        with Path(filename).open("w", encoding="utf-8") as handle:
             handle.write(f"sides {self.sides} run {self.offset}")
 
 
@@ -155,7 +156,7 @@ class TestRerunOverTimeTabs(unittest.TestCase):
         assert history_tabs(view) == []
         outer = [t for t in view.select(pn.Tabs) if len(t) == 2]
         assert len(outer) == 1
-        for tab, sides in zip(outer[0], (3, 4)):
+        for tab, sides in zip(outer[0], (3, 4), strict=True):
             assert sorted(recordings(tab)) == [
                 f"contents: sides {sides} run {i}" for i in range(SNAPSHOTS)
             ]

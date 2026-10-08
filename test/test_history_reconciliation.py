@@ -13,6 +13,7 @@ import unittest
 import uuid
 import warnings
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import ClassVar
 
 import numpy as np
@@ -187,7 +188,7 @@ class ReconcilerBase(unittest.TestCase):
     """Runs the collector against a throwaway cachedir."""
 
     def setUp(self):
-        self._old_cwd = os.getcwd()
+        self._old_cwd = Path.cwd()
         self._tmp = tempfile.mkdtemp()
         os.chdir(self._tmp)
         self.collector = ResultCollector()
@@ -246,7 +247,8 @@ class TestReconcilerLifecycle(ReconcilerBase):
         self.load(["a"], 2, [_result_float("a")])
         served = self.load(["a"], 3, [_result_float("a", meaning_version=2)])
         a_vals = served["a"].values[0]
-        assert np.isnan(a_vals[0]) and np.isnan(a_vals[1])
+        assert np.isnan(a_vals[0])
+        assert np.isnan(a_vals[1])
         assert a_vals[2] == 3.0
         assert served["a"].attrs[BIRTH_ATTR] == _day(3)
         record = self.collector.get_history_cache()[self.key]
@@ -454,7 +456,7 @@ class TestResetPolicy(ReconcilerBase):
         into the correctly-spelled *valid* policy, silently turning this
         assertion into one that can never fail.
         """
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="is not a valid OnHistoryReset"):
             self.load(["a"], 1, [_result_float("a")], on_history_reset="silently-ignore")
         # nothing was persisted: the bad-config run advanced no history state
         cache = self.collector.get_history_cache()
@@ -512,7 +514,7 @@ class TestEventKindLossiness(unittest.TestCase):
                 apply_policy([event], "error")  # must not raise
 
     def test_apply_policy_rejects_unknown_policy_even_with_no_events(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="is not a valid OnHistoryReset"):
             apply_policy([], "silently-ignore")
 
     def test_raw_string_kinds_are_parsed_to_members(self):
@@ -526,7 +528,7 @@ class TestEventKindLossiness(unittest.TestCase):
     def test_unknown_kind_raises_naming_the_value(self):
         """A bad kind is a ValueError naming it, not the misdirecting
         "Expected code to be unreachable" of a reached assert_never arm."""
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="is not a valid HistoryEventKind") as ctx:
             HistoryEvent("not_a_real_kind", "detail")
         assert "not_a_real_kind" in str(ctx.value)
 
@@ -548,7 +550,7 @@ class TestPolicyVocabularySingleSource(unittest.TestCase):
     """The policy vocabulary is defined once, by OnHistoryReset (plan 23 §9)."""
 
     def setUp(self):
-        self._old_cwd = os.getcwd()
+        self._old_cwd = Path.cwd()
         self._tmp = tempfile.mkdtemp()
         os.chdir(self._tmp)
         _CountingSweep.calls = []
@@ -605,7 +607,7 @@ class TestPolicyVocabularySingleSource(unittest.TestCase):
             p.check_on_set = False
         self.addCleanup(lambda: [setattr(p, "check_on_set", True) for p in run_params])
         run_cfg.on_history_reset = "silently-ignore"
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="is not a valid OnHistoryReset"):
             bench.plot_sweep(input_vars=[_CountingSweep.param.x], run_cfg=run_cfg)
         assert _CountingSweep.calls == [], "samples were collected before the policy was parsed"
 

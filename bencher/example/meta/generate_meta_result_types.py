@@ -89,14 +89,14 @@ def _build_log_formatter_code():
 def _build_report_exporter_code():
     """ReportExporter: writes a text report file."""
     return (
-        "import math",
+        "import math\nfrom pathlib import Path",
         "ReportExporter",
         '["file_result"]',
         {
             0: '["format_type"]',
             1: '["format_type"]',
         },
-        'class ReportExporter(bn.ParametrizedSweep):\n    """Writes a text report file in the requested format."""\n\n    format_type = bn.StringSweep(["summary", "detailed", "raw"], doc="Report format")\n\n    file_result = bn.ResultPath(doc="Generated report file")\n\n    def benchmark(self):\n        filename = bn.gen_path(self.format_type, suffix=".txt")\n        line_count = {"summary": 5, "detailed": 20, "raw": 50}[self.format_type]\n        with open(filename, "w", encoding="utf-8") as f:\n            f.writelines(\n                f"[{self.format_type}] line {i + 1}: value={math.sin(i):.4f}\\n"\n                for i in range(line_count)\n            )\n        self.file_result = filename',
+        'class ReportExporter(bn.ParametrizedSweep):\n    """Writes a text report file in the requested format."""\n\n    format_type = bn.StringSweep(["summary", "detailed", "raw"], doc="Report format")\n\n    file_result = bn.ResultPath(doc="Generated report file")\n\n    def benchmark(self):\n        filename = bn.gen_path(self.format_type, suffix=".txt")\n        line_count = {"summary": 5, "detailed": 20, "raw": 50}[self.format_type]\n        with Path(filename).open("w", encoding="utf-8") as f:\n            f.writelines(\n                f"[{self.format_type}] line {i + 1}: value={math.sin(i):.4f}\\n"\n                for i in range(line_count)\n            )\n        self.file_result = filename',
     )
 
 

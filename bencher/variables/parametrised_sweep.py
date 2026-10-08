@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import warnings
-from collections import namedtuple
 from copy import deepcopy
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import holoviews as hv
 import panel as pn
@@ -14,16 +13,30 @@ from bencher.factories import create_bench, create_bench_runner
 from bencher.utils import hash_sha1
 from bencher.variables.results import ALL_RESULT_TYPES, ResultHmap
 
-_InputResult = namedtuple("_InputResult", ["inputs", "results"])
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from bencher.bench_cfg import BenchRunCfg
+    from bencher.bench_report import BenchReport
+    from bencher.bench_runner import BenchRunner
+    from bencher.bencher import Bench
+    from bencher.results.optimize_result import OptimizeResult
+
+
+class _InputResult(NamedTuple):
+    inputs: dict
+    results: dict
+
+
 _input_result_cache: dict[tuple, _InputResult] = {}
 
 
 class ParametrizedSweep(Parameterized):
-    """Parent class for all Sweep types that need a custom hash"""
+    """Parent class for all Sweep types that need a custom hash."""
 
     @staticmethod
     def param_hash(param_type: Parameterized, hash_value: bool = True) -> int | str:
-        """A custom hash function for parametrised types with an option for hashing the value of the type
+        """Hash a parametrised type, optionally including the value of the type.
 
         Args:
             param_type (Parameterized): A parameter
@@ -48,13 +61,13 @@ class ParametrizedSweep(Parameterized):
         return curhash
 
     def hash_persistent(self) -> int | str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run.
+        """Hash deterministically, avoiding PYTHONHASHSEED's per-run hash randomisation.
 
         Inherits ``param_hash``'s ``0``-or-digest return; see there.
         """
         return ParametrizedSweep.param_hash(self, True)
 
-    def update_params_from_kwargs(self, **kwargs) -> None:
+    def update_params_from_kwargs(self, **kwargs: Any) -> None:
         """Given a dictionary of kwargs, set the parameters of the passed class 'self' to the values in the dictionary."""
         used_params = {}
         for key in self.param.objects():
@@ -65,10 +78,9 @@ class ParametrizedSweep(Parameterized):
 
     @classmethod
     def get_input_and_results(cls, include_name: bool = False) -> tuple[dict, dict]:
-        """Get dictionaries of input parameters and result parameters
+        """Get dictionaries of input parameters and result parameters.
 
         Args:
-            cls: A parametrised class
             include_name (bool): Include the name parameter that all parametrised classes have. Default False
 
         Returns:
@@ -109,13 +121,13 @@ class ParametrizedSweep(Parameterized):
         return result
 
     def get_inputs_as_dict(self) -> dict:
-        """Get the key:value pairs for all the input variables"""
+        """Get the key:value pairs for all the input variables."""
         inp = self.get_input_and_results().inputs
         vals = self.param.values()
         return {i: vals[i] for i, v in inp.items()}
 
-    def get_results_values_as_dict(self, holomap=None) -> dict:
-        """Get a dictionary of result variables with the name and the current value"""
+    def get_results_values_as_dict(self, holomap: hv.HoloMap | None = None) -> dict:
+        """Get a dictionary of result variables with the name and the current value."""
         values = self.param.values()
         output = {key: values[key] for key in self.get_input_and_results().results}
         if holomap is not None:
@@ -124,7 +136,7 @@ class ParametrizedSweep(Parameterized):
 
     @classmethod
     def get_inputs_only(cls) -> list[Parameter]:
-        """Return a list of input parameters
+        """Return a list of input parameters.
 
         Returns:
             list[param.Parameter]: A list of input parameters
@@ -132,7 +144,7 @@ class ParametrizedSweep(Parameterized):
         return list(cls.get_input_and_results().inputs.values())
 
     @staticmethod
-    def filter_fn(item, p_name):
+    def filter_fn(item: Parameter, p_name: str) -> bool:
         return item.name != p_name
 
     @classmethod
@@ -143,7 +155,10 @@ class ParametrizedSweep(Parameterized):
         inp = cls.get_inputs_only()
         if override_defaults is None:
             override_defaults = []
-        assert isinstance(override_defaults, list)
+        if not isinstance(override_defaults, list):
+            raise TypeError(
+                f"override_defaults must be a list, got {type(override_defaults).__name__}"
+            )
 
         for p in override_defaults:
             inp = filter(partial(ParametrizedSweep.filter_fn, p_name=p[0].name), inp)
@@ -151,22 +166,17 @@ class ParametrizedSweep(Parameterized):
         return override_defaults + [[i, i.default] for i in inp]
 
     @classmethod
-    def get_input_defaults_override(cls, **kwargs) -> dict[str, Any]:
+    def get_input_defaults_override(cls, **kwargs: Any) -> dict[str, Any]:
         inp = cls.get_inputs_only()
-        defaults: dict[str, Any] = {}
-        for i in inp:
-            # str(): param types `Parameter.name` as `str | None`, but a declared
-            # parameter always has one (plan 23 P12).
-            defaults[str(i.name)] = deepcopy(i.default)
-
-        for k, v in kwargs.items():
-            defaults[k] = v
-
+        # str(): param types `Parameter.name` as `str | None`, but a declared
+        # parameter always has one (plan 23 P12).
+        defaults: dict[str, Any] = {str(i.name): deepcopy(i.default) for i in inp}
+        defaults.update(kwargs)
         return defaults
 
     @classmethod
     def get_results_only(cls) -> list[Parameter]:
-        """Return a list of result parameters
+        """Return a list of result parameters.
 
         Returns:
             list[param.Parameter]: A list of result parameters
@@ -175,9 +185,9 @@ class ParametrizedSweep(Parameterized):
 
     @classmethod
     def get_inputs_as_dims(
-        self, compute_values=False, remove_dims: str | list[str] | None = None
+        cls, compute_values: bool = False, remove_dims: str | list[str] | None = None
     ) -> list[hv.Dimension]:
-        inputs = self.get_inputs_only()
+        inputs = cls.get_inputs_only()
 
         if remove_dims is not None:
             if isinstance(remove_dims, str):
@@ -189,8 +199,8 @@ class ParametrizedSweep(Parameterized):
 
     def to_dynamic_map(
         self,
-        callback=None,
-        name=None,
+        callback: Callable[..., dict] | None = None,
+        name: str | None = None,
         remove_dims: str | list[str] | None = None,
         result_var: str | None = None,
     ) -> hv.DynamicMap:
@@ -203,7 +213,7 @@ class ParametrizedSweep(Parameterized):
                 if isinstance(rv, ResultHmap):
                     result_var = k
 
-        def callback_wrapper(**kwargs):
+        def callback_wrapper(**kwargs: Any) -> Any:
             return callback(**kwargs)[result_var]
 
         return hv.DynamicMap(
@@ -212,13 +222,15 @@ class ParametrizedSweep(Parameterized):
             name=name,
         ).opts(shared_axes=False, framewise=True, width=1000, height=1000)
 
-    def to_gui(self, result_var: str | None = None, **kwargs):  # pragma: no cover
+    def to_gui(self, result_var: str | None = None, **kwargs: Any) -> None:  # pragma: no cover
         main = pn.Row(
             self.to_dynamic_map(result_var=result_var, **kwargs),
         )
         main.show()
 
-    def to_holomap(self, callback, remove_dims: str | list[str] | None = None) -> hv.HoloMap:
+    def to_holomap(
+        self, callback: Callable[..., Any], remove_dims: str | list[str] | None = None
+    ) -> hv.HoloMap:
         return hv.HoloMap(
             hv.DynamicMap(
                 callback=callback,
@@ -226,7 +238,7 @@ class ParametrizedSweep(Parameterized):
             )
         )
 
-    def __call__(self, **kwargs) -> dict:
+    def __call__(self, **kwargs: Any) -> dict:
         """Dispatch to benchmark() if overridden, otherwise use legacy path.
 
         Returns:
@@ -248,7 +260,7 @@ class ParametrizedSweep(Parameterized):
             warnings.warn(msg, UserWarning, stacklevel=2)
         return self.get_results_values_as_dict()
 
-    def benchmark(self):
+    def benchmark(self) -> None:
         """Override this with your benchmark logic.
 
         When called, all sweep parameters (self.x, etc.) are already set.
@@ -256,14 +268,21 @@ class ParametrizedSweep(Parameterized):
         No need to call update_params_from_kwargs or super().__call__().
         """
 
-    def plot_hmap(self, **kwargs):
+    def plot_hmap(self, **kwargs: Any) -> Any:
         return self.__call__(**kwargs)["hmap"]
 
-    def to_bench(self, run_cfg=None, report=None, name=None):
+    def to_bench(
+        self,
+        run_cfg: BenchRunCfg | None = None,
+        report: BenchReport | None = None,
+        name: str | None = None,
+    ) -> Bench:
         """Create a Bench instance from this ParametrizedSweep."""
         return create_bench(self, run_cfg=run_cfg, report=report, name=name)
 
-    def to_optimize(self, n_trials=100, run_cfg=None, **kwargs):
+    def to_optimize(
+        self, n_trials: int = 100, run_cfg: BenchRunCfg | None = None, **kwargs: Any
+    ) -> OptimizeResult | None:
         """Create a Bench and run optimization in one call.
 
         Args:
@@ -277,7 +296,9 @@ class ParametrizedSweep(Parameterized):
         bench = self.to_bench(run_cfg=run_cfg)
         return bench.optimize(n_trials=n_trials, run_cfg=run_cfg, **kwargs)
 
-    def to_bench_runner(self, run_cfg=None, name=None):
+    def to_bench_runner(
+        self, run_cfg: BenchRunCfg | None = None, name: str | None = None
+    ) -> BenchRunner:
         """Create a BenchRunner instance from this ParametrizedSweep.
 
         Enables fluent chaining like:

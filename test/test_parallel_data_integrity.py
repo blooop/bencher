@@ -19,15 +19,18 @@ from __future__ import annotations
 import math
 from enum import auto
 from functools import partial
+from typing import TYPE_CHECKING
 
 import numpy as np
-import xarray as xr
 from strenum import StrEnum
 
 import bencher as bn
 from bencher.bench_cfg import BenchCfg
 from bencher.job import Executors, FutureCache, Job
 from bencher.sweep_executor import worker_kwargs_wrapper
+
+if TYPE_CHECKING:
+    import xarray as xr
 
 # ---------------------------------------------------------------------------
 # Deterministic worker configs — no randomness so serial == parallel
@@ -414,7 +417,7 @@ class TestParallelCacheCorrectness:
             futures3.append(cache.submit(job))
         results3 = [f.result() for f in futures3]
 
-        for r2, r3 in zip(results2, results3):
+        for r2, r3 in zip(results2, results3, strict=True):
             assert r2 == r3, f"Cached values differ: {r2} vs {r3}"
 
         cache.clear_cache()
@@ -601,7 +604,7 @@ class TestBenchRunnerParallelIntegrity:
         parallel_results = parallel_runner.run(subsampling_divisions=2)
 
         assert len(serial_results) == len(parallel_results)
-        for serial_cfg, parallel_cfg in zip(serial_results, parallel_results):
+        for serial_cfg, parallel_cfg in zip(serial_results, parallel_results, strict=True):
             assert serial_cfg.ds is not None, "Serial BenchRunner dataset is unexpectedly None"
             assert parallel_cfg.ds is not None, "Parallel BenchRunner dataset is unexpectedly None"
             assert set(serial_cfg.ds.data_vars) == set(parallel_cfg.ds.data_vars)
@@ -626,7 +629,7 @@ class TestBenchRunnerParallelIntegrity:
         parallel_results = parallel_runner.run(subsampling_divisions=2)
 
         assert len(serial_results) == len(parallel_results)
-        for serial_cfg, parallel_cfg in zip(serial_results, parallel_results):
+        for serial_cfg, parallel_cfg in zip(serial_results, parallel_results, strict=True):
             assert serial_cfg.ds is not None
             assert parallel_cfg.ds is not None
             assert len(serial_cfg.ds.data_vars) >= 2, "MultiResultConfig should yield >=2 vars"

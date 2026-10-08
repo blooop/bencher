@@ -35,47 +35,47 @@ class TuringPattern(bn.ParametrizedSweep):
     img = bn.ResultImage()
     img_extracted = bn.ResultImage()
 
-    def laplacian(self, Z, dx):
-        Ztop = Z[0:-2, 1:-1]
-        Zleft = Z[1:-1, 0:-2]
-        Zbottom = Z[2:, 1:-1]
-        Zright = Z[1:-1, 2:]
-        Zcenter = Z[1:-1, 1:-1]
-        return (Ztop + Zleft + Zbottom + Zright - 4 * Zcenter) / dx**2
+    def laplacian(self, z, dx):
+        z_top = z[0:-2, 1:-1]
+        z_left = z[1:-1, 0:-2]
+        z_bottom = z[2:, 1:-1]
+        z_right = z[1:-1, 2:]
+        z_center = z[1:-1, 1:-1]
+        return (z_top + z_left + z_bottom + z_right - 4 * z_center) / dx**2
 
-    def update(self, U, V, dx):
+    def update(self, u, v, dx):
         # We compute the Laplacian of u and v.
-        deltaU = self.laplacian(U, dx)
-        deltaV = self.laplacian(V, dx)
+        delta_u = self.laplacian(u, dx)
+        delta_v = self.laplacian(v, dx)
         # We take the values of u and v inside the grid.
-        Uc = U[1:-1, 1:-1]
-        Vc = V[1:-1, 1:-1]
+        u_c = u[1:-1, 1:-1]
+        v_c = v[1:-1, 1:-1]
         # We update the variables.
-        U[1:-1, 1:-1], V[1:-1, 1:-1] = (
-            Uc + self.dt * (self.alpha * deltaU + Uc - Uc**3 - Vc + self.k),
-            Vc + self.dt * (self.beta * deltaV + Uc - Vc) / self.tau,
+        u[1:-1, 1:-1], v[1:-1, 1:-1] = (
+            u_c + self.dt * (self.alpha * delta_u + u_c - u_c**3 - v_c + self.k),
+            v_c + self.dt * (self.beta * delta_v + u_c - v_c) / self.tau,
         )
         # Neumann conditions: derivatives at the edges
         # are null.
-        for Z in (U, V):
-            Z[0, :] = Z[1, :]
-            Z[-1, :] = Z[-2, :]
-            Z[:, 0] = Z[:, 1]
-            Z[:, -1] = Z[:, -2]
+        for z in (u, v):
+            z[0, :] = z[1, :]
+            z[-1, :] = z[-2, :]
+            z[:, 0] = z[:, 1]
+            z[:, -1] = z[:, -2]
 
     def benchmark(self):
         n = int(self.time / self.dt)
         dx = 2.0 / self.size
 
-        U = np.random.rand(self.size, self.size)
-        V = np.random.rand(self.size, self.size)
+        u = np.random.rand(self.size, self.size)
+        v = np.random.rand(self.size, self.size)
 
         vid_writer = bn.VideoWriter()
         for i in range(n):
-            self.update(U, V, dx)
+            self.update(u, v, dx)
             if i % 500 == 0:
                 # Apply colormap to create RGB image
-                rgb = apply_colormap(U)
+                rgb = apply_colormap(u)
                 # Create PIL image with alpha channel
                 img = Image.fromarray(rgb, "RGB").convert("RGBA")
                 img = img.resize((200, 200), Image.Resampling.LANCZOS)

@@ -164,7 +164,7 @@ class TestHashPersistentDifferentiation:
     """Classes with different units values must produce different hashes."""
 
     @pytest.mark.parametrize(
-        "cls,units_a,units_b",
+        ("cls", "units_a", "units_b"),
         [
             (ResultImage, "path", "custom"),
             (ResultVideo, "path", "custom"),

@@ -130,8 +130,8 @@ class TestSweepVarToOptunaDist(unittest.TestCase):
         var = SweepCfg.param.float_var
         dist = sweep_var_to_optuna_dist(var)
         assert isinstance(dist, optuna.distributions.FloatDistribution)
-        self.assertAlmostEqual(dist.low, 0.0)
-        self.assertAlmostEqual(dist.high, 1.0)
+        assert dist.low == pytest.approx(0.0, abs=1e-7)
+        assert dist.high == pytest.approx(1.0, abs=1e-7)
 
     def test_enum_sweep(self):
         var = SweepCfg.param.enum_var
@@ -159,7 +159,7 @@ class TestSweepVarToOptunaDist(unittest.TestCase):
     def test_unsupported_type(self):
         # A plain param.Parameter is not supported
         var = param.Parameter()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="is not supported"):
             sweep_var_to_optuna_dist(var)
 
 
@@ -203,7 +203,7 @@ class TestSweepVarToSuggest(unittest.TestCase):
     def test_unsupported_type(self):
         trial = MagicMock()
         var = param.Parameter()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="is not supported"):
             sweep_var_to_suggest(var, trial)
 
 

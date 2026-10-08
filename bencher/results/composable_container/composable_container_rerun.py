@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, assert_never
+from typing import TYPE_CHECKING, Any, assert_never
 
 from strenum import StrEnum
 
@@ -11,6 +10,16 @@ from bencher.results.composable_container.composable_container_base import (
     ComposableContainerBase,
     ComposeType,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from types import ModuleType
+
+    import numpy as np
+    import pyarrow as pa
+    from rerun import RecordingStream
+    from rerun.blueprint import Container, View, VisibleTimeRange
+    from rerun.chunk import Chunk
 
 
 class RerunViewKind(StrEnum):
@@ -123,7 +132,7 @@ _VIEW_CLASS_NAMES = {
 }
 
 
-def _accepts_time_ranges(view_class) -> bool:
+def _accepts_time_ranges(view_class: type[View]) -> bool:
     """Whether a Blueprint view class takes a ``time_ranges``.
 
     Asked of the class rather than listed here: rerun adds the field to view types
@@ -139,8 +148,13 @@ def _accepts_time_ranges(view_class) -> bool:
 
 
 def views_for_kinds(
-    rrb, kinds: Iterable[RerunViewKind], *, origin: str, label: str, time_ranges=None
-):
+    rrb: ModuleType,
+    kinds: Iterable[RerunViewKind],
+    *,
+    origin: str,
+    label: str,
+    time_ranges: list[VisibleTimeRange] | None = None,
+) -> View | Container:
     """Build the view (or tab strip of views) that displays one entity origin.
 
     Shared with the sweep-timeline composition in
@@ -233,7 +247,7 @@ _RERUN_COMPOSE_SPECS: dict[ComposeType, _RerunComposeSpec] = {
 _SPLICE_GAP_NS = 1
 
 
-def _index_fields(batch) -> list:
+def _index_fields(batch: pa.RecordBatch) -> list[pa.Field]:
     """Return the timeline (index) fields of a chunk record batch."""
     return [
         arrow_field
@@ -242,7 +256,7 @@ def _index_fields(batch) -> list:
     ]
 
 
-def _batch_view_kinds(batch) -> set[RerunViewKind]:
+def _batch_view_kinds(batch: pa.RecordBatch) -> set[RerunViewKind]:
     """Infer which Blueprint view types can display the archetypes in a chunk."""
     kinds = set()
     for arrow_field in batch.schema:
@@ -256,7 +270,7 @@ def _batch_view_kinds(batch) -> set[RerunViewKind]:
     return kinds
 
 
-def _index_values(batch, name: str):
+def _index_values(batch: pa.RecordBatch, name: str) -> np.ndarray:
     """Return one timeline column as a numpy int64 array of raw index units."""
     import pyarrow as pa
 
@@ -264,7 +278,7 @@ def _index_values(batch, name: str):
     return column.cast(pa.int64()).to_numpy(zero_copy_only=False)
 
 
-def _batch_time_bounds(batch) -> dict[str, tuple[int, int]]:
+def _batch_time_bounds(batch: pa.RecordBatch) -> dict[str, tuple[int, int]]:
     """Return ``{timeline_name: (first, last)}`` in raw index units for one chunk."""
     bounds = {}
     for arrow_field in _index_fields(batch):
@@ -273,13 +287,13 @@ def _batch_time_bounds(batch) -> dict[str, tuple[int, int]]:
     return bounds
 
 
-def _shifted_chunks(chunk, offsets: dict[str, int]) -> list:
+def _shifted_chunks(chunk: Chunk, offsets: dict[str, int]) -> list[Chunk]:
     """Return ``chunk`` with each timeline column advanced by ``offsets[timeline]``."""
     import pyarrow as pa
 
     from bencher.utils_rerun import rerun_chunk_api
 
-    Chunk = rerun_chunk_api().Chunk
+    chunk_cls = rerun_chunk_api().Chunk
 
     batch = chunk.to_record_batch()
     columns = list(batch.columns)
@@ -294,7 +308,7 @@ def _shifted_chunks(chunk, offsets: dict[str, int]) -> list:
         shifted_any = True
     if not shifted_any:
         return [chunk]
-    return Chunk.from_record_batch(pa.RecordBatch.from_arrays(columns, schema=batch.schema))
+    return chunk_cls.from_record_batch(pa.RecordBatch.from_arrays(columns, schema=batch.schema))
 
 
 @dataclass
@@ -303,12 +317,12 @@ class _ComposedItem:
 
     prefix: str
     label: str
-    chunks: list = field(default_factory=list)
+    chunks: list[Chunk] = field(default_factory=list)
     view_kinds: set[RerunViewKind] = field(default_factory=set)
     time_bounds: dict[str, tuple[int, int]] = field(default_factory=dict)
     time_types: dict[str, Any] = field(default_factory=dict)
 
-    def add(self, chunk) -> None:
+    def add(self, chunk: Chunk) -> None:
         """Record a chunk and fold its archetypes and time range into the metadata."""
         self.chunks.append(chunk)
         batch = chunk.to_record_batch()
@@ -324,9 +338,7 @@ def _read_item(path: str | Path, *, prefix: str, label: str) -> _ComposedItem:
     """Decode one ``.rrd`` file, re-rooting every entity path under ``prefix``."""
     from bencher.utils_rerun import rerun_chunk_api
 
-    RrdReader = rerun_chunk_api().RrdReader
-
-    reader = RrdReader(path)
+    reader = rerun_chunk_api().RrdReader(path)
     stores = reader.recordings()
     if not stores:
         raise ValueError(f"RRD contains no recording stores: {path}")
@@ -359,7 +371,9 @@ def _splice_offsets(items: list[_ComposedItem]) -> list[dict[str, int]]:
     return offsets
 
 
-def _set_recording_time(recording, timeline: str, time_type, value: int) -> None:
+def _set_recording_time(
+    recording: RecordingStream, timeline: str, time_type: pa.DataType, value: int
+) -> None:
     """Set ``timeline`` to a raw index ``value``, matching the column's time type.
 
     ``value`` is in nanoseconds for duration and timestamp timelines, so numpy
@@ -449,11 +463,13 @@ class ComposableContainerRerun(ComposableContainerBase):
 
         return Path(gen_rerun_data_path("composed"))
 
-    def _views(self, rrb, kinds: Iterable[RerunViewKind], *, origin: str, label: str):
+    def _views(
+        self, rrb: ModuleType, kinds: Iterable[RerunViewKind], *, origin: str, label: str
+    ) -> View | Container:
         """Build the view (or vertical stack of views) that displays one origin."""
         return views_for_kinds(rrb, kinds, origin=origin, label=label)
 
-    def _layout(self, rrb, items: list[_ComposedItem]):
+    def _layout(self, rrb: ModuleType, items: list[_ComposedItem]) -> View | Container:
         """Map the compose method onto a Blueprint layout of per-item views."""
         match self._spec:
             case _SharedViewLayout():
@@ -487,12 +503,12 @@ class ComposableContainerRerun(ComposableContainerBase):
             items.append(item)
         return items
 
-    def _send_spliced(self, recording, items: list[_ComposedItem]) -> None:
+    def _send_spliced(self, recording: RecordingStream, items: list[_ComposedItem]) -> None:
         """Send items end to end in time, clearing each one as the next begins."""
         import rerun as rr
 
         offsets = _splice_offsets(items)
-        for index, (item, item_offsets) in enumerate(zip(items, offsets)):
+        for index, (item, item_offsets) in enumerate(zip(items, offsets, strict=True)):
             for chunk in item.chunks:
                 recording.send_chunks(_shifted_chunks(chunk, item_offsets))
             if index == len(items) - 1 or not item.time_bounds:

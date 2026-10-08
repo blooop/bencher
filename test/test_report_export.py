@@ -43,9 +43,9 @@ def _is_jsonable(obj) -> bool:
     """True if the object round-trips through strict JSON (no NaN/inf/numpy)."""
     try:
         json.loads(json.dumps(obj, allow_nan=False))
-        return True
     except (ValueError, TypeError):
         return False
+    return True
 
 
 class TestResultToDict(unittest.TestCase):
@@ -232,7 +232,7 @@ class TestCompareResults(unittest.TestCase):
     def test_no_shared_metric_raises(self):
         base = _collect(result_vars=[ExampleBenchCfg.param.out_sin])
         cand = _collect(result_vars=[ExampleBenchCfg.param.out_cos])
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="share no comparable scalar result variables"):
             compare_results(base, cand)
 
     def test_comparison_is_strict_json(self):

@@ -117,7 +117,7 @@ class TestCatch(unittest.TestCase):
         assert failure.job_id
 
     def test_an_unlisted_exception_type_still_aborts(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="x=1 is cursed"):
             _run(fail_at=(1,), exc_type=ValueError, catch=(RuntimeError,))
 
     def test_a_parent_class_in_catch_covers_a_subclass(self) -> None:
@@ -400,7 +400,7 @@ class TestRegressionBoundary(unittest.TestCase):
         # One repeat of the current sample was caught; the others are unchanged.
         result = detect_percentage("latency", hist, np.array([10.0, np.nan, 10.1]))
         assert not result.regressed
-        self.assertAlmostEqual(result.current_value, 10.05)
+        assert result.current_value == pytest.approx(10.05, abs=1e-7)
 
     def test_a_metric_whose_every_sample_failed_reports_no_measurement(self) -> None:
         """Fails safe (no false regression) but silent -- documented, not fixed here."""
@@ -432,7 +432,7 @@ class TestFailOnSampleError(unittest.TestCase):
             _run(fail_at=(1, 2), catch=(RuntimeError,), fail_on_sample_error=0.5)
 
     def test_an_out_of_range_threshold_is_rejected(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="fail_on_sample_error must be True/False or a float"):
             _run(fail_at=(2,), catch=(RuntimeError,), fail_on_sample_error=1.5)
 
     def test_an_out_of_range_threshold_is_rejected_even_when_nothing_failed(self) -> None:
@@ -443,7 +443,12 @@ class TestFailOnSampleError(unittest.TestCase):
         at the one moment the caller was trying to read a sample failure.
         """
         for bad in (1.5, 50, -0.2):
-            with self.subTest(threshold=bad), pytest.raises(ValueError):
+            with (
+                self.subTest(threshold=bad),
+                pytest.raises(
+                    ValueError, match="fail_on_sample_error must be True/False or a float"
+                ),
+            ):
                 _run(catch=(RuntimeError,), fail_on_sample_error=bad)
 
     def test_a_truthy_integer_is_rejected_rather_than_guessed_at(self) -> None:
@@ -454,7 +459,7 @@ class TestFailOnSampleError(unittest.TestCase):
         failed" that someone writing 1 (or feeding it from YAML) almost certainly
         meant. Floats stay unambiguous, so 1.0 still means 100%.
         """
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="got the integer 1, which is ambiguous") as ctx:
             _run(fail_at=(2,), catch=(RuntimeError,), fail_on_sample_error=1)
         assert "ambiguous" in str(ctx.value)
 

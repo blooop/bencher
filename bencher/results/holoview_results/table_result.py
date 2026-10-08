@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import holoviews as hv
 
 from bencher.results.bench_result_base import ReduceType
@@ -7,7 +9,7 @@ from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
 class TableResult(HoloviewResult):
-    def to_plot(self, **kwargs) -> hv.Table:
+    def to_plot(self, **_kwargs: Any) -> hv.Table:
         """Convert the dataset to a Table visualization.
 
         Returns:

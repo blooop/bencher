@@ -57,9 +57,13 @@ class TestSubsamplingDivisionsToSamples(unittest.TestCase):
         assert BenchRunCfg.subsampling_divisions_to_samples(12) == 1025
 
     def test_invalid_subsampling_divisions_raises(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValueError, match="subsampling_divisions must be between 1 and 13, got 0"
+        ):
             BenchRunCfg.subsampling_divisions_to_samples(0)
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValueError, match="subsampling_divisions must be between 1 and 13, got 99"
+        ):
             BenchRunCfg.subsampling_divisions_to_samples(99)
 
     def test_level_to_samples_backward_compat(self):

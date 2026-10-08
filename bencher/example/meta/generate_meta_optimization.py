@@ -35,10 +35,7 @@ class MetaOptimization(MetaGeneratorBase):
         else:
             result_vars_code = '["performance", "cost"]'
 
-        if self.input_dims == 1:
-            input_vars_code = '["cpu_cores"]'
-        else:
-            input_vars_code = '["cpu_cores", "memory_gb"]'
+        input_vars_code = '["cpu_cores"]' if self.input_dims == 1 else '["cpu_cores", "memory_gb"]'
 
         if self.n_objectives == 1:
             description = (
@@ -91,10 +88,7 @@ class MetaOptimizationOverTime(MetaGeneratorBase):
         filename = function_name
         title = f"Optimise Over Time: {self.input_dims}D input"
 
-        if self.input_dims == 1:
-            input_vars_code = '["cpu_cores"]'
-        else:
-            input_vars_code = '["cpu_cores", "memory_gb"]'
+        input_vars_code = '["cpu_cores"]' if self.input_dims == 1 else '["cpu_cores", "memory_gb"]'
 
         description = (
             f"Optimization over {self.input_dims}D input space with temporal drift. "

@@ -16,7 +16,7 @@ the run is driven.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, fields, replace
 from typing import Any
 
@@ -26,6 +26,9 @@ import param
 # and consts only: the dict branch of variable conversion calls with_samples /
 # with_bounds / with_sample_values, and result variables are not SweepBase.
 _SHAPING_KEYS = ("values", "bounds", "samples", "max_subsampling_divisions")
+
+# A const_vars entry is a (variable, value) pair.
+_CONST_PAIR_LEN = 2
 
 # Fields whose value is a mapping merged key-by-key rather than replaced.
 _MERGED_FIELDS = frozenset({"const_vars"})
@@ -84,7 +87,7 @@ def _normalise_consts(value: Any) -> tuple:
                 f"SweepSpec.const_vars list entries must be (variable, value) pairs, "
                 f"got {entry!r}. Use a mapping, or a list of 2-sequences."
             )
-        if len(entry) != 2:
+        if len(entry) != _CONST_PAIR_LEN:
             raise TypeError(f"SweepSpec.const_vars entries must be 2-sequences, got {entry!r}")
         _reject_callable("const_vars", entry[0])
         _reject_callable("const_vars", entry[1])
@@ -140,7 +143,7 @@ class SweepSpec:
             f.name: getattr(self, f.name) for f in fields(self) if getattr(self, f.name) is not None
         }
 
-    def with_(self, **overrides) -> SweepSpec:
+    def with_(self, **overrides: Any) -> SweepSpec:
         """A new spec with *overrides* applied, override winning.
 
         Precedence is per field *kind*, and the asymmetry is deliberate:
@@ -170,7 +173,7 @@ class SweepSpec:
                 resolved[name] = value
         return replace(self, **resolved)
 
-    def plus_result_vars(self, *result_vars) -> SweepSpec:
+    def plus_result_vars(self, *result_vars: Any) -> SweepSpec:
         """Append result variables to this spec's, keeping order.
 
         The explicit spelling for the additive case that :meth:`with_` refuses to
@@ -187,9 +190,10 @@ class SweepSpec:
                 flat.append(entry)
         return replace(self, result_vars=(*(self.result_vars or ()), *flat))
 
-    def plus_input_vars(self, *input_vars) -> SweepSpec:
-        """Append input variables. Order is the dimension layout, so appending
-        puts the new dimension last.
+    def plus_input_vars(self, *input_vars: Any) -> SweepSpec:
+        """Append input variables.
+
+        Order is the dimension layout, so appending puts the new dimension last.
         """
         flat = []
         for entry in input_vars:
@@ -257,7 +261,13 @@ class SweepSpec:
             for entry in entries:
                 self._resolved(worker, entry, var_type)
 
-    def _validate(self, worker: Any, inputs, results, consts):
+    def _validate(
+        self,
+        worker: Any,
+        inputs: list | None,
+        results: list | None,
+        consts: list[list] | None,
+    ) -> tuple[list | None, list | None, list[list] | None]:
         """Run ``plot_sweep``'s duplicate-variable validation at bind time.
 
         A spec is the main *source* of duplicates -- composing overlapping groups
@@ -274,7 +284,7 @@ class SweepSpec:
         """
         from bencher.sweep_executor import validate_declared_vars
 
-        def by_name(entries, var_type):
+        def by_name(entries: list | None, var_type: str) -> list:
             return [self._resolved(worker, e, var_type) for e in entries or ()]
 
         kept_inputs, kept_results, kept_consts = validate_declared_vars(
@@ -283,7 +293,9 @@ class SweepSpec:
             [[self._resolved(worker, pair[0], "const"), pair[1]] for pair in consts or ()],
         )
 
-        def survivors(entries, kept_names, name_of):
+        def survivors(
+            entries: list | None, kept_names: list[str], name_of: Callable[[Any], str]
+        ) -> list | None:
             """The caller's own entries, filtered to the names validation kept.
 
             Consumed from a list rather than a set so that when validation keeps one
@@ -300,13 +312,13 @@ class SweepSpec:
                     out.append(entry)
             return out
 
-        def input_name(entry):
+        def input_name(entry: Any) -> str:
             return self._resolved(worker, entry, "input").name
 
-        def result_name(entry):
+        def result_name(entry: Any) -> str:
             return self._resolved(worker, entry, "result").name
 
-        def const_name(pair):
+        def const_name(pair: Sequence) -> str:
             return self._resolved(worker, pair[0], "const").name
 
         return (

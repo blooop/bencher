@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 import panel as pn
-from param import Parameter
 
 from bencher.results.bench_result_base import EmptyContainer, ReduceType
 from bencher.results.composable_container.composable_container_base import (
@@ -69,6 +67,11 @@ from bencher.utils import AggFn, listify, resolve_aggregate
 if TYPE_CHECKING:
     # Runtime import would be circular: identity imports bench_cfg, which this
     # module's own import chain pulls in.
+    from collections.abc import Callable, Sequence
+
+    from param import Parameter
+
+    from bencher.bench_cfg import BenchCfg
     from bencher.identity import SweepIdentity
     from bencher.regression import RegressionResult
 
@@ -80,7 +83,7 @@ logger = logging.getLogger(__name__)
 NO_PLOTTERS_MESSAGE = "No Plotters are able to represent these results"
 
 
-def _says_nothing_to_show(panes) -> bool:
+def _says_nothing_to_show(panes: pn.layout.ListPanel) -> bool:
     """Whether a ``to_auto`` result is only its "nothing to show" placeholder."""
     return (
         len(panes) == 1
@@ -123,9 +126,9 @@ class BenchResult(
     DataSetResult,
     OptunaResult,
 ):
-    """Contains the results of the benchmark and has methods to cast the results to various datatypes and graphical representations"""
+    """Contains the results of the benchmark and has methods to cast the results to various datatypes and graphical representations."""
 
-    def __init__(self, bench_cfg) -> None:
+    def __init__(self, bench_cfg: BenchCfg) -> None:
         """Initialize a BenchResult instance.
 
         Args:
@@ -133,7 +136,6 @@ class BenchResult(
         """
         VolumeResult.__init__(self, bench_cfg)
         HoloviewResult.__init__(self, bench_cfg)
-        # DataSetResult.__init__(self.bench_cfg)
         self.timings = None  # Populated by Bench.run_sweep() with SweepTimings
         # Samples that failed without aborting the sweep: raised and tolerated
         # because of run_cfg.catch, or dropped for breaking the worker contract
@@ -342,11 +344,11 @@ class BenchResult(
         self,
         plot_list: list[callable | str] | None = None,
         remove_plots: list[callable | str] | None = None,
-        default_container=pn.Column,
+        default_container: Callable[[], pn.layout.ListPanel] = pn.Column,
         override: bool = False,  # false so that plots that are not supported are not shown
         numeric_only: bool = False,
         backend: str | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.layout.ListPanel:
         """Automatically generate plots by dispatching through the plot plugin registry.
 
@@ -482,7 +484,7 @@ class BenchResult(
         self,
         extra_panels: Sequence[Callable[[BenchResult], pn.viewable.Viewable] | pn.viewable.Viewable]
         | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.panel:
         """Given the dataset result of a benchmark run, automatically deduce how to plot the data based on the types of variables that were sampled.
 

@@ -165,11 +165,11 @@ class TestShowEnum(unittest.TestCase):
         from bencher.bench_cfg import normalize_show
 
         for bad in ("bogus", 2, [], object()):
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match="show must be one of"):
                 normalize_show(bad)
 
     def test_published_without_publish_raises(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="show='published' requires publish=True"):
             bn.run(example_simple_float, show="published", publish=False)
 
     def test_show_static_opens_browser_and_returns(self):
@@ -199,7 +199,10 @@ class TestAddRunDeprecation(unittest.TestCase):
     def test_add_run_emits_deprecation_warning(self):
         """add_run() emits a DeprecationWarning."""
         bench_runner = bn.BenchRunner("test_deprecation")
-        bench_fn = lambda run_cfg: None
+
+        def bench_fn(run_cfg):
+            return None
+
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             bench_runner.add_run(bench_fn)
@@ -210,7 +213,10 @@ class TestAddRunDeprecation(unittest.TestCase):
     def test_add_run_still_adds_function(self):
         """add_run() still adds the function despite deprecation."""
         bench_runner = bn.BenchRunner("test_deprecation")
-        bench_fn = lambda run_cfg: None
+
+        def bench_fn(run_cfg):
+            return None
+
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             bench_runner.add_run(bench_fn)
@@ -219,7 +225,10 @@ class TestAddRunDeprecation(unittest.TestCase):
     def test_add_does_not_emit_deprecation_warning(self):
         """add() does NOT emit a DeprecationWarning."""
         bench_runner = bn.BenchRunner("test_no_deprecation")
-        bench_fn = lambda run_cfg: None
+
+        def bench_fn(run_cfg):
+            return None
+
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             bench_runner.add(bench_fn)
@@ -229,7 +238,10 @@ class TestAddRunDeprecation(unittest.TestCase):
     def test_add_returns_self_for_chaining(self):
         """add() returns self for method chaining."""
         bench_runner = bn.BenchRunner("test_chaining")
-        bench_fn = lambda run_cfg: None
+
+        def bench_fn(run_cfg):
+            return None
+
         result = bench_runner.add(bench_fn)
         assert result is bench_runner
 
@@ -319,11 +331,11 @@ class TestSamplingContext(unittest.TestCase):
 
     def test_none_preserves_default_code_path(self):
         """sampling_context=None calls br.run() with the original show value."""
-        with patch("bencher.bench_runner.BenchRunner") as MockRunner:
+        with patch("bencher.bench_runner.BenchRunner") as mock_runner:
             mock_br = MagicMock()
             mock_br.run.return_value = []
             mock_br.servers = []
-            MockRunner.return_value = mock_br
+            mock_runner.return_value = mock_br
 
             bn.run(lambda run_cfg: None, show=False, sampling_context=None)
 
@@ -342,7 +354,7 @@ class TestSamplingContext(unittest.TestCase):
             yield
             exit_called = True
 
-        with patch("bencher.bench_runner.BenchRunner") as MockRunner:
+        with patch("bencher.bench_runner.BenchRunner") as mock_runner:
             mock_br = MagicMock()
             mock_br.run.return_value = []
             mock_br.servers = [MagicMock()]  # simulate a running server
@@ -352,7 +364,7 @@ class TestSamplingContext(unittest.TestCase):
                 assert exit_called, "__exit__ must run before show()"
 
             mock_br.show.side_effect = fake_show
-            MockRunner.return_value = mock_br
+            mock_runner.return_value = mock_br
 
             bn.run(lambda run_cfg: None, show=True, sampling_context=tracking_ctx())
 
@@ -371,11 +383,11 @@ class TestSamplingContext(unittest.TestCase):
             yield
             exit_called = True
 
-        with patch("bencher.bench_runner.BenchRunner") as MockRunner:
+        with patch("bencher.bench_runner.BenchRunner") as mock_runner:
             mock_br = MagicMock()
             mock_br.run.return_value = []
             mock_br.servers = []
-            MockRunner.return_value = mock_br
+            mock_runner.return_value = mock_br
 
             bn.run(lambda run_cfg: None, show=False, sampling_context=tracking_ctx())
 
@@ -394,11 +406,11 @@ class TestSamplingContext(unittest.TestCase):
             finally:
                 exit_called = True
 
-        with patch("bencher.bench_runner.BenchRunner") as MockRunner:
+        with patch("bencher.bench_runner.BenchRunner") as mock_runner:
             mock_br = MagicMock()
             mock_br.run.side_effect = RuntimeError("sampling exploded")
             mock_br.servers = []
-            MockRunner.return_value = mock_br
+            mock_runner.return_value = mock_br
 
             with pytest.raises(RuntimeError):
                 bn.run(lambda run_cfg: None, show=True, sampling_context=tracking_ctx())

@@ -419,7 +419,7 @@ class TestOverTimeHistory(unittest.TestCase):
         assert magnitude.sizes["over_time"] == OVER_TIME_RUNS
         for run in range(OVER_TIME_RUNS):
             observed = magnitude.isel(over_time=run).sel(scale=SCALES[0]).values.squeeze()
-            self.assertAlmostEqual(float(observed), SCALES[0] + run)
+            assert float(observed) == pytest.approx(SCALES[0] + run, abs=1e-7)
 
 
 class TestOverTimeWithoutContainer(unittest.TestCase):
@@ -446,7 +446,7 @@ class TestSinglePointGuard(unittest.TestCase):
         naming neither the result variable nor the dimension.
         """
         rv = self.res.bench_cfg.result_vars[0]
-        with pytest.raises(ValueError) as raised:
+        with pytest.raises(ValueError, match="were neither selected nor reduced") as raised:
             self.res.ds_to_container(self.res.to_dataset(), rv, container=None)
         assert "scale" in str(raised.value)
         assert "table" in str(raised.value)

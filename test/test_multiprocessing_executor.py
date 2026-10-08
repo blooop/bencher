@@ -395,7 +395,7 @@ class TestBenchCfgPickle:
             ]
         )
         restored = pickle.loads(pickle.dumps(cfg))
-        for orig, rest in zip(cfg.input_vars, restored.input_vars):
+        for orig, rest in zip(cfg.input_vars, restored.input_vars, strict=True):
             assert str(orig.values()) == str(rest.values())
 
     def test_bench_cfg_with_fidelitied_sweeps(self):
@@ -408,7 +408,7 @@ class TestBenchCfgPickle:
             ]
         )
         restored = pickle.loads(pickle.dumps(cfg))
-        for orig, rest in zip(cfg.input_vars, restored.input_vars):
+        for orig, rest in zip(cfg.input_vars, restored.input_vars, strict=True):
             assert rest.values() == orig.values()
 
     def test_bench_cfg_with_sampled_sweeps(self):
@@ -419,7 +419,7 @@ class TestBenchCfgPickle:
             ]
         )
         restored = pickle.loads(pickle.dumps(cfg))
-        for orig, rest in zip(cfg.input_vars, restored.input_vars):
+        for orig, rest in zip(cfg.input_vars, restored.input_vars, strict=True):
             assert rest.values() == orig.values()
 
     def test_bench_cfg_with_explicit_sample_values(self):
@@ -430,7 +430,7 @@ class TestBenchCfgPickle:
             ]
         )
         restored = pickle.loads(pickle.dumps(cfg))
-        for orig, rest in zip(cfg.input_vars, restored.input_vars):
+        for orig, rest in zip(cfg.input_vars, restored.input_vars, strict=True):
             assert rest.values() == orig.values()
 
     def test_bench_cfg_with_const_vars_containing_selectors(self):
@@ -608,13 +608,12 @@ class TestBenchMultiprocessingEndToEnd:
         run_cfg.cache_samples = False
         run_cfg.print_bench_inputs = False
         run_cfg.print_bench_results = False
-        res = bench.plot_sweep(
+        return bench.plot_sweep(
             "mp_sweep",
             input_vars=input_vars,
             run_cfg=run_cfg,
             plot_callbacks=False,
         )
-        return res
 
     def test_string_sweep_multiprocessing(self):
         """StringSweep — the primary type affected by PR #854."""
@@ -782,7 +781,7 @@ class TestBenchCfgDeepcopy:
             title="test",
         )
         cloned = deepcopy(cfg)
-        for orig, clone in zip(cfg.input_vars, cloned.input_vars):
+        for orig, clone in zip(cfg.input_vars, cloned.input_vars, strict=True):
             assert clone.values() == orig.values()
 
     def test_deepcopy_then_pickle(self):
@@ -798,7 +797,7 @@ class TestBenchCfgDeepcopy:
         )
         cloned = deepcopy(cfg)
         restored = pickle.loads(pickle.dumps(cloned))
-        for orig, rest in zip(cfg.input_vars, restored.input_vars):
+        for orig, rest in zip(cfg.input_vars, restored.input_vars, strict=True):
             assert rest.values() == orig.values()
 
     def test_multiple_deepcopies(self):

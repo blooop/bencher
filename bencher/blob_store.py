@@ -207,7 +207,7 @@ def _load_bytes(path: Path) -> bytes:
 
 
 def _load_pickle(path: Path) -> Any:
-    return pickle.loads(path.read_bytes())
+    return pickle.loads(path.read_bytes())  # noqa: S301 - reads bencher's own local cache blobs
 
 
 @dataclass(frozen=True)
@@ -482,11 +482,12 @@ def materialize_blob(obj: Any, cache_dir: str | Path) -> str:
             # age-based GC grace period protects the blob a concurrent sweep
             # just deduplicated onto, exactly as it protects one just written.
             os.utime(blob_path)
-            return blob_path.name
         except OSError:
             # The blob vanished between the existence check and the touch
             # (e.g. a concurrent GC collected it): fall through and rewrite.
             pass
+        else:
+            return blob_path.name
 
     # Write via a unique temp file + atomic rename so concurrent workers
     # materializing the same payload never observe a partial blob.

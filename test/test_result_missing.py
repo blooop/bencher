@@ -143,7 +143,7 @@ class TestEveryResultTypeIsStorable(unittest.TestCase):
     collected separately via ``bench_res.result_hmaps``.
     """
 
-    STORABLE = XARRAY_MULTIDIM_RESULT_TYPES + (ResultDataSet, ResultReference, ResultVec)
+    STORABLE = (*XARRAY_MULTIDIM_RESULT_TYPES, ResultDataSet, ResultReference, ResultVec)
 
     def test_all_result_types_have_a_collector_branch(self):
         for cls in ALL_RESULT_TYPES:

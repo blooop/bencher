@@ -185,7 +185,7 @@ class TestResultVarDispatch(unittest.TestCase):
         """A ResultPath must not fall through to float("/path/..."); it surfaces
         visibly as a warning and is skipped."""
         rec = _FakeRecording()
-        ds = xr.Dataset({"file_out": xr.DataArray("/tmp/result.csv")})
+        ds = xr.Dataset({"file_out": xr.DataArray("/tmp/result.csv")})  # noqa: S108 - never opened
         with self.assertLogs(LOGGER, level="WARNING") as cm:
             _log_result_var(_fake_rr(), rec, ds, "", _Vars.param.file_out)
         assert rec.logged == []

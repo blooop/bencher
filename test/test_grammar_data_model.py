@@ -102,7 +102,7 @@ class StrPayloadSweep(bn.ParametrizedSweep):
     table = bn.ResultDataSet(container=str_container, doc="path-string payload")
 
     def benchmark(self):
-        self.table = bn.ResultDataSet("/tmp/whatever.csv")
+        self.table = bn.ResultDataSet("/tmp/whatever.csv")  # noqa: S108 - path string only, no file
 
 
 def nested_frame() -> pd.DataFrame:
@@ -418,7 +418,7 @@ class TestSerializationRobustness(unittest.TestCase):
         res = run_sweep(StrPayloadSweep(), "test_grammar_str_payload")
         cell = res.to_dataset()["table"].sel(scale=SCALES[0]).values.item()
         assert cell.endswith(".pkl")
-        assert load_blob(cell) == "/tmp/whatever.csv"
+        assert load_blob(cell) == "/tmp/whatever.csv"  # noqa: S108 - path string only, no file
         rv = res.bench_cfg.result_vars[0]
         pane = res.ds_to_container(res.to_dataset().sel(scale=SCALES[0]), rv, container=None)
         assert pane.object == "declared str=/tmp/whatever.csv"

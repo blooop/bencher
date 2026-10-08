@@ -174,14 +174,18 @@ class TestXYScatterFactory(unittest.TestCase):
         assert style_opts(points)["alpha"] == 0.25
 
     def test_missing_column_names_what_is_available(self):
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(
+            ValueError, match="xy_scatter y='nope' is not a column of the result"
+        ) as ctx:
             xy_scatter(x="dx_mm", y="nope")(self.df)
         message = str(ctx.value)
         assert "nope" in message
         assert "dy_mm" in message, "the error should list the available columns"
 
     def test_missing_color_column_raises(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValueError, match="xy_scatter color='nope' is not a column of the result"
+        ):
             xy_scatter(x="dx_mm", y="dy_mm", color="nope")(self.df)
 
     def test_axes_inferred_from_numeric_columns(self):
@@ -193,7 +197,7 @@ class TestXYScatterFactory(unittest.TestCase):
         assert [d.name for d in points.kdims] == ["index", "dy_mm"]
 
     def test_inference_needs_two_numeric_columns(self):
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="xy_scatter needs two numeric columns") as ctx:
             xy_scatter()(pd.DataFrame({"a": [1.0], "label": ["x"]}))
         assert "x= and y=" in str(ctx.value)
 
@@ -239,7 +243,7 @@ class TestNonStringColumnLabels(unittest.TestCase):
         assert [d.name for d in points.kdims] == ["0", "1"]
 
     def test_missing_integer_label_raises(self):
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="xy_scatter y=9 is not a column of the result") as ctx:
             xy_scatter(x=0, y=9)(self.df)
         assert "9" in str(ctx.value)
 
@@ -251,7 +255,7 @@ class TestNonStringColumnLabels(unittest.TestCase):
 
     def test_labels_colliding_once_stringified_raise(self):
         df = pd.DataFrame({0: [1.0, 2.0], "0": [3.0, 4.0]})
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="labels collide once converted to strings") as ctx:
             xy_scatter(x=0, y="0")(df)
         assert "collide" in str(ctx.value)
 
@@ -266,7 +270,7 @@ class TestXYScatterResult(unittest.TestCase):
     def test_one_plot_per_sample(self):
         points = all_points(self.res.to(XYScatterResult, x="dx_mm", y="dy_mm"))
         assert len(points) == len(SPREADS)
-        for element, spread in zip(points, SPREADS):
+        for element, spread in zip(points, SPREADS, strict=True):
             assert len(element) == POINTS_PER_SAMPLE
             assert element["dx_mm"].max() == spread * (POINTS_PER_SAMPLE - 1)
 
@@ -294,7 +298,7 @@ class TestXYScatterResult(unittest.TestCase):
         assert len(points) == len(SPREADS)
 
     def test_bad_column_raises_rather_than_plotting_nothing(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="xy_scatter y='nope' is not a column of the result"):
             self.res.to(XYScatterResult, x="dx_mm", y="nope")
 
     def test_no_tabular_result_renders_nothing(self):
@@ -381,13 +385,11 @@ class TestOverTimeHistory(unittest.TestCase):
         """One scatter per (sample, event): samples peeled outermost, time innermost."""
         assert len(points) == len(SPREADS) * OVER_TIME_RUNS
         expected = [(spread, run) for spread in SPREADS for run in range(OVER_TIME_RUNS)]
-        for element, (spread, run) in zip(points, expected):
+        for element, (spread, run) in zip(points, expected, strict=True):
             assert len(element) == POINTS_PER_SAMPLE
-            self.assertAlmostEqual(element["dx_mm"].min(), RUN_OFFSET * run, places=6)
-            self.assertAlmostEqual(
-                element["dx_mm"].max(),
-                spread * (POINTS_PER_SAMPLE - 1) + RUN_OFFSET * run,
-                places=6,
+            assert element["dx_mm"].min() == pytest.approx(RUN_OFFSET * run, abs=1e-6)
+            assert element["dx_mm"].max() == pytest.approx(
+                spread * (POINTS_PER_SAMPLE - 1) + RUN_OFFSET * run, abs=1e-6
             )
 
     def test_history_accumulated(self):
@@ -411,7 +413,7 @@ class TestOverTimeHistory(unittest.TestCase):
         assert peak.sizes["over_time"] == OVER_TIME_RUNS
         for run in range(OVER_TIME_RUNS):
             observed = peak.isel(over_time=run).sel(spread=SPREADS[0]).values.squeeze()
-            self.assertAlmostEqual(float(observed), SPREADS[0] + run)
+            assert float(observed) == pytest.approx(SPREADS[0] + run, abs=1e-7)
 
 
 if __name__ == "__main__":

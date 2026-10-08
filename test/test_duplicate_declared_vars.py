@@ -113,7 +113,7 @@ class TestDuplicateInputVars(unittest.TestCase):
     """P4 — the xarray broadcasting error, replaced by a message about the cause."""
 
     def test_duplicate_input_raises_naming_the_variable_and_positions(self) -> None:
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="Input variable 'theta' is declared 2 times") as ctx:
             _sweep(input_vars=["theta", "theta"], result_vars=["out_sin"])
         msg = str(ctx.value)
         assert "'theta'" in msg
@@ -138,7 +138,7 @@ class TestDuplicateInputVars(unittest.TestCase):
         cfg.cache_samples = False
         bench = Probe().to_bench(cfg)
         try:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match="Input variable 'x' is declared 2 times"):
                 bench.plot_sweep(input_vars=["x", "x"], result_vars=["y"], plot_callbacks=False)
         finally:
             bench.close()
@@ -150,11 +150,14 @@ class TestDuplicateInputVars(unittest.TestCase):
             "str+spec": ["theta", bn.sweep("theta", samples=2)],
             "object+spec": [ExampleBenchCfg.param.theta, bn.sweep("theta", samples=2)],
         }.items():
-            with self.subTest(forms=label), pytest.raises(ValueError):
+            with (
+                self.subTest(forms=label),
+                pytest.raises(ValueError, match="Input variable 'theta' is declared 2 times"),
+            ):
                 _sweep(input_vars=decl, result_vars=["out_sin"])
 
     def test_three_occurrences_are_all_reported(self) -> None:
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="Input variable 'theta' is declared 3 times") as ctx:
             _sweep(input_vars=["theta", "theta", "theta"], result_vars=["out_sin"])
         assert "3 times" in str(ctx.value)
         assert "[0, 1, 2]" in str(ctx.value)
@@ -181,7 +184,9 @@ class TestDuplicateConstVars(unittest.TestCase):
         assert warns == []
 
     def test_conflicting_values_raise_naming_both(self) -> None:
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(
+            ValueError, match="Constant 'offset' is declared twice with different values"
+        ) as ctx:
             _sweep(
                 input_vars=["theta"],
                 result_vars=["out_sin"],

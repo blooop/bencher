@@ -8,24 +8,31 @@ import shutil
 import subprocess
 import tempfile
 from collections import namedtuple
-from collections.abc import Callable
 from colorsys import hsv_to_rgb
 from contextvars import ContextVar
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Self
 from uuid import uuid4
 
 import numpy as np
 import param
-import xarray as xr
 from strenum import StrEnum
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import xarray as xr
 
 logger = logging.getLogger(__name__)
 
 
 def hmap_canonical_input(dic: dict) -> tuple:
-    """From a dictionary of kwargs, return a hashable representation (tuple) that is always the same for the same inputs and retains the order of the input arguments.  e.g, {x=1,y=2} -> (1,2) and {y=2,x=1} -> (1,2).  This is used so that keywords arguments can be hashed and converted the the tuple keys that are used for holomaps
+    """Return a hashable tuple of kwargs values that is the same for the same inputs.
+
+    The values are ordered by key, e.g. {x=1,y=2} -> (1,2) and {y=2,x=1} -> (1,2).
+    This is used so that keywords arguments can be hashed and converted to the tuple
+    keys that are used for holomaps.
 
     Args:
         dic (dict): dictionary with keyword arguments and values in any order
@@ -36,19 +43,21 @@ def hmap_canonical_input(dic: dict) -> tuple:
     return tuple(value for _, value in sorted(dic.items()))
 
 
-def make_namedtuple(class_name: str, **fields) -> namedtuple:
-    """Convenience method for making a named tuple
+def make_namedtuple(class_name: str, **fields: Any) -> tuple:
+    """Make a named tuple instance from keyword arguments.
 
     Args:
         class_name (str): name of the named tuple
+        **fields: field names and their values
 
     Returns:
         namedtuple: a named tuple with the fields as values
     """
-    return namedtuple(class_name, fields)(*fields.values())
+    # The field names are only known at runtime, so typing.NamedTuple adds nothing.
+    return namedtuple(class_name, fields)(*fields.values())  # noqa: PYI024
 
 
-def get_nearest_coords(dataset: xr.Dataset, collapse_list: bool = False, **kwargs) -> dict:
+def get_nearest_coords(dataset: xr.Dataset, collapse_list: bool = False, **kwargs: Any) -> dict:
     """Find the nearest coordinates in an xarray dataset based on provided coordinate values.
 
     Given an xarray dataset and kwargs of key-value pairs of coordinate values, return a dictionary
@@ -74,7 +83,7 @@ def get_nearest_coords(dataset: xr.Dataset, collapse_list: bool = False, **kwarg
     return cd2
 
 
-def get_nearest_coords1D(val: Any, coords: list[Any]) -> Any:
+def get_nearest_coords1D(val: Any, coords: list[Any]) -> Any:  # noqa: N802 - public name, imported by callers
     """Find the closest coordinate to a given value in a list of coordinates.
 
     For numeric values, finds the value in coords that is closest to val.
@@ -96,7 +105,7 @@ def get_nearest_coords1D(val: Any, coords: list[Any]) -> Any:
 
 
 def hash_sha1(var: Any) -> str:
-    """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run.
+    """Hash a value without the PYTHONHASHSEED 'feature' that changes the hash per run.
 
     Converts input to a consistent SHA1 hash string.
 
@@ -108,7 +117,7 @@ def hash_sha1(var: Any) -> str:
     """
     if hasattr(var, "__bencher_hash__") and callable(var.__bencher_hash__):
         var = var.__bencher_hash__()
-    return hashlib.sha1(str(var).encode("ASCII")).hexdigest()
+    return hashlib.sha1(str(var).encode("ASCII"), usedforsecurity=False).hexdigest()
 
 
 def capitalise_words(message: str) -> str:
@@ -120,12 +129,11 @@ def capitalise_words(message: str) -> str:
     Returns:
         str: capitalised string where each word starts with an uppercase letter
     """
-    capitalized_message = " ".join([word.capitalize() for word in message.split(" ")])
-    return capitalized_message
+    return " ".join([word.capitalize() for word in message.split(" ")])
 
 
 def un_camel(camel: str) -> str:
-    """Given a snake_case string return a CamelCase string
+    """Given a snake_case string return a CamelCase string.
 
     Args:
         camel (str): camelcase string
@@ -150,7 +158,7 @@ def mult_tuple(inp: tuple[float, ...], val: float) -> tuple[float, ...]:
 
 
 def tabs_in_markdown(regular_str: str, spaces: int = 2) -> str:
-    """Given a string with tabs in the form \t convert the to &ensp; which is a double space in markdown
+    r"""Given a string with tabs in the form \t convert them to &nbsp; for markdown.
 
     Args:
         regular_str (str): A string with tabs in it
@@ -165,8 +173,9 @@ def tabs_in_markdown(regular_str: str, spaces: int = 2) -> str:
 def int_to_col(
     int_val: int, sat: float = 0.5, val: float = 0.95, alpha: float = -1
 ) -> tuple[float, float, float] | tuple[float, float, float, float]:
-    """Uses the golden angle to generate colors programmatically with minimum overlap between colors.
-    https://martin.ankerl.com/2009/12/09/how-to-create-random-colors-programmatically/
+    """Use the golden angle to generate colors with minimum overlap between colors.
+
+    See https://martin.ankerl.com/2009/12/09/how-to-create-random-colors-programmatically/
 
     Args:
         int_val (int): index of an object you want to color, this is mapped to hue in HSV
@@ -581,7 +590,8 @@ def publish_file(filepath: str, remote: str, branch_name: str) -> None:  # pragm
         # create a new git repo and add files to that.  Push the file to another arbitrary repo.  The aim of doing it this way is that no data needs to be downloaded.
 
         def git(*args: str) -> None:
-            subprocess.run(["git", *args], cwd=temp_dir, check=True)
+            # git is resolved from PATH like any other developer tool.
+            subprocess.run(["git", *args], cwd=temp_dir, check=True)  # noqa: S607
 
         git("init")
         git("branch", "-m", branch_name)
@@ -596,15 +606,15 @@ class _Unset:
 
     _instance = None
 
-    def __new__(cls):
+    def __new__(cls) -> Self:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<UNSET>"
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return False
 
 
@@ -670,7 +680,7 @@ def normalize_subsampling_divisions_kwargs(
     return resolved, max_subsampling_divisions, subsampling_divisions_was_set
 
 
-def github_content(remote: str, branch_name: str, filename: str):  # pragma: no cover
+def github_content(remote: str, branch_name: str, filename: str) -> str:  # pragma: no cover
     raw = remote.replace(".git", "").replace(
         "https://github.com/", "https://raw.githubusercontent.com/"
     )

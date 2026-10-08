@@ -1,7 +1,7 @@
 """Tests for bencher.regression module."""
 
 import math
-import os
+from pathlib import Path
 from typing import ClassVar
 
 import numpy as np
@@ -864,14 +864,13 @@ class TestDetectRegressions:
         """Create a synthetic dataset with over_time dimension."""
         if values is None:
             values = np.arange(n_times * n_repeats, dtype=float).reshape(n_times, n_repeats)
-        ds = xr.Dataset(
+        return xr.Dataset(
             {"metric": (["over_time", "repeat"], values)},
             coords={
                 "over_time": np.arange(n_times),
                 "repeat": np.arange(values.shape[1] if values.ndim > 1 else 1),
             },
         )
-        return ds
 
     def test_no_over_time_dim(self):
         ds = xr.Dataset({"x": (["repeat"], [1.0, 2.0])})
@@ -1738,7 +1737,8 @@ class TestEndToEnd:
         bench.sample_cache = None
         res = bench.plot_sweep(plot_callbacks=False)
 
-        assert res.regression_report is not None and res.regression_report.has_regressions
+        assert res.regression_report is not None
+        assert res.regression_report.has_regressions
         panel = res.to_auto_plots()
         md_panes = [p for p in panel if isinstance(p, pn.pane.Markdown)]
         report_panes = [p for p in md_panes if p.name == "Regression Report"]
@@ -1771,7 +1771,8 @@ class TestEndToEnd:
         bench.sample_cache = None
         res = bench.plot_sweep(plot_callbacks=False)
 
-        assert res.regression_report is not None and not res.regression_report.has_regressions
+        assert res.regression_report is not None
+        assert not res.regression_report.has_regressions
         panel = res.to_auto_plots()
         md_panes = [p for p in panel if isinstance(p, pn.pane.Markdown)]
         report_panes = [p for p in md_panes if p.name == "Regression Report"]
@@ -1796,7 +1797,8 @@ class TestEndToEnd:
         bench = bn.Bench("test_regression_first_run", _SimpleBench(), run_cfg=run_cfg)
         res = bench.plot_sweep(plot_callbacks=False)
 
-        assert res.regression_report is not None and not res.regression_report.has_regressions
+        assert res.regression_report is not None
+        assert not res.regression_report.has_regressions
         panel = res.to_auto_plots()
         md_panes = [p for p in panel if isinstance(p, pn.pane.Markdown)]
         assert [p for p in md_panes if p.name == "Regression Report"] == []
@@ -1875,7 +1877,8 @@ class TestEndToEnd:
         from bencher.results.holoview_results.holoview_result import DEFAULT_PLOT_SIZE
 
         res = self._two_metric_result("test_regression_layout_default_size")
-        assert res.bench_cfg.plot_size is None and res.bench_cfg.plot_width is None
+        assert res.bench_cfg.plot_size is None
+        assert res.bench_cfg.plot_width is None
         panel = res.to_auto_plots()
 
         rows = [p for p in panel if isinstance(p, pn.Row) and p.name == "Regression"]
@@ -1907,14 +1910,14 @@ class TestRenderRegressionPng:
         out = tmp_path / "idx.png"
         path = render_regression_png(r, path=str(out))
         assert path == str(out)
-        assert os.path.getsize(path) > 1000
+        assert Path(path).stat().st_size > 1000
 
     def test_png_datetime_axis(self, tmp_path):
         dates = np.array([np.datetime64("2024-01-01") + np.timedelta64(i, "D") for i in range(7)])
         r = _make_result(historical_x=dates, current_x=np.datetime64("2024-01-08"))
         out = tmp_path / "dt.png"
         path = render_regression_png(r, path=str(out))
-        assert os.path.getsize(path) > 1000
+        assert Path(path).stat().st_size > 1000
 
     def test_png_string_axis_git_time_event(self, tmp_path):
         """git_time_event() returns strings like '2024-06-15 abc1234d'."""
@@ -1922,7 +1925,7 @@ class TestRenderRegressionPng:
         r = _make_result(historical_x=labels, current_x="2024-06-22 xyz7890")
         out = tmp_path / "git.png"
         path = render_regression_png(r, path=str(out))
-        assert os.path.getsize(path) > 1000
+        assert Path(path).stat().st_size > 1000
 
     def test_png_method_alias(self, tmp_path):
         """RegressionResult.render_png delegates to the module function."""

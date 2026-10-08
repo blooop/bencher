@@ -111,6 +111,3 @@ class TestSampleCache(unittest.TestCase):
         """The sample cache function needs to be run twice because the first run can pass when there is no cache, but will fail the second time when the cache exists"""
         example_cache_context()
         example_cache_context()
-
-
-# TestSampleCache().sample_cache()

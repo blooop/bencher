@@ -86,7 +86,7 @@ class TestVolumeConstruction:
         trace = vol_pane.object["data"][0]
         xs, ys, zs, vals = list(trace.x), list(trace.y), list(trace.z), list(trace.value)
         assert len(vals) == 8  # 2 x 2 x 2 grid
-        for x, y, z, v in zip(xs, ys, zs, vals):
+        for x, y, z, v in zip(xs, ys, zs, vals, strict=True):
             assert v == pytest.approx(x + 10 * y + 100 * z)
         assert trace.isomin == pytest.approx(0.0)
         assert trace.isomax == pytest.approx(111.0)

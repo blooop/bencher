@@ -15,10 +15,13 @@ import shutil
 import subprocess
 import sys
 import tomllib
-from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = REPO_ROOT / "pyproject.toml"
@@ -129,14 +132,15 @@ class TestGateConfiguration:
         for block in _ty_config().get("overrides", []):
             if block.get("rules", {}).get(rule) != "ignore":
                 continue
-            for pattern in block.get("include", []):
-                # Silencing a rule for first-party package code is the regression; the
-                # generated-example tree and helper trees are allowed to be exempted, but
-                # must be listed explicitly rather than swept in by a `bencher/**` glob.
-                if pattern.startswith("bencher/") and not pattern.startswith(
-                    ("bencher/example/", "bencher/_vendor/")
-                ):
-                    offenders.append((pattern, rule))
+            # Silencing a rule for first-party package code is the regression; the
+            # generated-example tree and helper trees are allowed to be exempted, but
+            # must be listed explicitly rather than swept in by a `bencher/**` glob.
+            offenders.extend(
+                (pattern, rule)
+                for pattern in block.get("include", [])
+                if pattern.startswith("bencher/")
+                and not pattern.startswith(("bencher/example/", "bencher/_vendor/"))
+            )
         assert not offenders, (
             f"`{rule}` is disabled for first-party package code by an override block "
             f"({offenders}). It guards {MUST_NOT_BE_IGNORED[rule]}. Prefer a scoped "
@@ -307,7 +311,7 @@ class TestGateActuallyFires:
         probe = tmp_path / "probe.py"
         probe.write_text(source)
         result = subprocess.run(
-            ["ty", "check", "--python", sys.prefix, str(probe)],
+            ["ty", "check", "--python", sys.prefix, str(probe)],  # noqa: S607 - ty from the pixi env PATH
             capture_output=True,
             text=True,
             cwd=tmp_path,
@@ -384,7 +388,7 @@ def handle(k: Kind) -> str:
             "import pkg\n\n\ndef go() -> object:\n    return pkg.thing\n"
         )
         result = subprocess.run(
-            ["ty", "check", "--python", sys.prefix, str(tmp_path)],
+            ["ty", "check", "--python", sys.prefix, str(tmp_path)],  # noqa: S607 - ty from the pixi env PATH
             capture_output=True,
             text=True,
             cwd=tmp_path,

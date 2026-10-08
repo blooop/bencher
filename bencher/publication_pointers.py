@@ -5,9 +5,9 @@ from __future__ import annotations
 import html
 import json
 import re
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from bencher.complete_report import safe_path
 from bencher.object_store import (
@@ -20,6 +20,9 @@ from bencher.object_store import (
     Written,
 )
 from bencher.publishing import PublicationReceipt, http_base
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass(frozen=True)
@@ -36,7 +39,7 @@ class PointerCandidate:
     rank: tuple[int | str, ...]
     eligible: bool = True
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         http_base(self.target)
         if (
             not self.policy

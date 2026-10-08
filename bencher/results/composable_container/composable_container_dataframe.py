@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import assert_never
+from typing import Any, assert_never
 
 import xarray as xr
 
@@ -16,7 +16,7 @@ class ComposableContainerDataset(ComposableContainerBase):
     var_name: str | None = None
     var_value: str | None = None
 
-    def render(self, **kwargs):
+    def render(self, **_kwargs: Any) -> xr.Dataset | xr.DataArray:
         if len(self.container) == 0:
             raise ValueError("Cannot render an empty ComposableContainerDataset")
         if len(self.container) == 1:

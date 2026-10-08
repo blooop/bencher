@@ -618,6 +618,10 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
 
     def setUp(self):
         self.collector = ResultCollector()
+        # Nulling a media entry deletes the file it names, so the fake media paths
+        # point into a private directory rather than the shared /tmp.
+        self.media_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.media_dir, ignore_errors=True)
 
     def _make_mixed_dataset(self, n_slices):
         """Create a dataset with a float var and an object (path) var."""
@@ -626,7 +630,10 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
             ds = xr.Dataset(
                 {
                     "metric": (["x", "over_time"], [[float(i)]]),
-                    "media": (["x", "over_time"], np.array([[f"/tmp/file_{i}.rrd"]], dtype=object)),
+                    "media": (
+                        ["x", "over_time"],
+                        np.array([[f"{self.media_dir}/file_{i}.rrd"]], dtype=object),
+                    ),
                 }
             )
             slices.append(ds)
@@ -657,12 +664,11 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
         # media: oldest 3 entries should be sentinel "NAN", last 2 kept
         media_vals = list(result["media"].values[0])
         assert media_vals[:3] == ["NAN", "NAN", "NAN"]
-        assert media_vals[3] == "/tmp/file_3.rrd"
-        assert media_vals[4] == "/tmp/file_4.rrd"
+        assert media_vals[3] == f"{self.media_dir}/file_3.rrd"
+        assert media_vals[4] == f"{self.media_dir}/file_4.rrd"
 
     def test_per_variable_deletes_media_files(self):
         """Nulling a media entry should delete the referenced file from disk."""
-        import os
 
         from bencher.variables.results import ResultImage
 
@@ -671,8 +677,8 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
         try:
             paths = []
             for i in range(4):
-                p = os.path.join(tmpdir, f"img_{i}.png")
-                with open(p, "wb") as f:
+                p = str(Path(tmpdir, f"img_{i}.png"))
+                with Path(p).open("wb") as f:
                     f.write(b"data")
                 paths.append(p)
 
@@ -693,10 +699,10 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
             )
 
             # Oldest 2 files should be deleted, newest 2 should still exist
-            assert not os.path.exists(paths[0])
-            assert not os.path.exists(paths[1])
-            assert os.path.exists(paths[2])
-            assert os.path.exists(paths[3])
+            assert not Path(paths[0]).exists()
+            assert not Path(paths[1]).exists()
+            assert Path(paths[2]).exists()
+            assert Path(paths[3]).exists()
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
@@ -709,7 +715,6 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
         the file when the old cell ages out would break the live one, which is why
         ResultDataSet is excluded from ``_MEDIA_RESULT_TYPES``.
         """
-        import os
 
         from bencher.blob_store import materialize_blob
         from bencher.variables.results import ResultDataSet
@@ -749,7 +754,7 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
             # the live event at index 3, and the one no live cell references at all.
             for name in names:
                 blob = Path(tmpdir) / "blobs" / name
-                assert os.path.exists(blob), f"aging deleted blob {blob}"
+                assert Path(blob).exists(), f"aging deleted blob {blob}"
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
@@ -780,8 +785,8 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
         # Per-variable: media keeps only last 2 of those 5
         media_vals = list(result["media"].values[0])
         assert media_vals[:3] == ["NAN", "NAN", "NAN"]
-        assert media_vals[3] == "/tmp/file_8.rrd"
-        assert media_vals[4] == "/tmp/file_9.rrd"
+        assert media_vals[3] == f"{self.media_dir}/file_8.rrd"
+        assert media_vals[4] == f"{self.media_dir}/file_9.rrd"
 
     def test_per_variable_no_limit_unaffected(self):
         """Variables without max_time_events should not be touched."""

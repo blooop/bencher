@@ -7,10 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 import optuna
 
-from bencher.utils import AggFn
-
 if TYPE_CHECKING:
     from bencher.bench_cfg import BenchCfg
+    from bencher.utils import AggFn
 
 
 @dataclass(frozen=True)

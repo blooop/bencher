@@ -3,7 +3,8 @@ import unittest
 import pytest
 from hypothesis import given, strategies as st
 
-from bencher.plotting.plot_filter import PlotFilter, PltCntCfg, VarRange
+from bencher.plotting.plot_filter import PlotFilter, VarRange
+from bencher.plotting.plt_cnt_cfg import PltCntCfg
 
 
 class TestVarRange(unittest.TestCase):
@@ -14,7 +15,6 @@ class TestVarRange(unittest.TestCase):
 
     def test_matches_upto(self) -> None:
         var_range = VarRange.at_most(1)
-        # self.assertFalse(zero_case.matches(-1))
         assert var_range.matches(0)
         assert var_range.matches(1)
         assert not var_range.matches(2)
@@ -26,7 +26,7 @@ class TestVarRange(unittest.TestCase):
         if val >= 0:
             assert not var_range.matches(val)
         else:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match="val must be >= 0"):
                 var_range.matches(val)
 
     @given(st.integers(min_value=0))
@@ -62,11 +62,11 @@ class TestVarRange(unittest.TestCase):
 
     def test_nonsense_bounds_are_rejected(self) -> None:
         """The old two-sentinel constructor could express these; the new one cannot."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="high must be >= low"):
             VarRange.between(2, 1)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="low must be >= 0"):
             VarRange.at_least(-1)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="low must be >= 0"):
             VarRange.exactly(-1)
 
     def test_str_round_trips_to_its_constructor(self) -> None:

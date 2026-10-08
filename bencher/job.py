@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterable
 from concurrent.futures import Future, ProcessPoolExecutor
 from dataclasses import dataclass
 from enum import auto
-from typing import Protocol, assert_never, runtime_checkable
+from typing import Any, Protocol, assert_never, runtime_checkable
 
 from diskcache import Cache
 from strenum import StrEnum
@@ -38,7 +38,7 @@ class SupportsSubmit(Protocol):
     narrow one (plan 23 P2).
     """
 
-    def submit(self, fn: Callable, /, *args, **kwargs) -> Future: ...
+    def submit(self, fn: Callable, /, *args: Any, **kwargs: Any) -> Future: ...
 
     def shutdown(self, wait: bool = True) -> None: ...
 
@@ -85,7 +85,7 @@ class Job:
         self.tag = tag
 
 
-def normalize_catch(catch) -> tuple[type[BaseException], ...]:
+def normalize_catch(catch: Any) -> tuple[type[BaseException], ...]:
     """Coerce a ``catch=`` value to a tuple of exception types, or reject it.
 
     Validated eagerly, at the start of the run: left alone, a bare class reaches
@@ -116,8 +116,9 @@ def normalize_catch(catch) -> tuple[type[BaseException], ...]:
 
 
 class WorkerContractError(TypeError):
-    """A worker broke the harness contract (returned ``None``, or set a
-    ``ResultVec`` to the wrong shape).
+    """A worker broke the harness contract.
+
+    It returned ``None``, or set a ``ResultVec`` to the wrong shape.
 
     Distinct from a sample fault: the collector records the sample as failed,
     emits :class:`WorkerContractWarning`, surfaces it in the report, and the
@@ -129,8 +130,9 @@ class WorkerContractError(TypeError):
 
 
 class WorkerContractWarning(UserWarning):
-    """Emitted when a sample is dropped because the worker broke the harness
-    contract (see :class:`WorkerContractError`).
+    """Emitted when a sample is dropped because the worker broke the harness contract.
+
+    See :class:`WorkerContractError`.
 
     The sample is counted in ``BenchResult.n_failed`` and listed in the
     report's failed-samples summary. Promote to an error in strict pipelines
@@ -139,8 +141,9 @@ class WorkerContractWarning(UserWarning):
 
 
 class WorkerReturnedNothingError(WorkerContractError):
-    """A job yielded no result at all -- **the harness's own diagnosis**, never a
-    worker's.
+    """A job yielded no result at all.
+
+    This is **the harness's own diagnosis**, never a worker's.
 
     Exists to keep "the framework decided a job produced nothing" separable from
     "a worker raised ``WorkerContractError`` itself", which it can: the class is
@@ -429,7 +432,7 @@ class Executors(StrEnum):
     SERIAL = auto()  # slow but reliable
     MULTIPROCESSING = auto()  # breaks for large number of futures
     SCOOP = auto()  # requires running with python -m scoop your_file.py
-    # THREADS=auto() #not that useful as most bench code is cpu bound
+    # No threads mode: most bench code is CPU bound, so threads would not help.
 
     @staticmethod
     def factory(provider: Executors | str) -> SupportsSubmit | None:
@@ -532,7 +535,7 @@ class FutureCache:
         tag_index: bool = True,
         size_limit: int = int(20e9),  # 20 GB standalone default; overridden by SweepExecutor
         cache_samples: bool = True,  # internal default; public APIs default to False/None
-    ):
+    ) -> None:
         """Initialize a FutureCache with optional caching and execution settings.
 
         Args:
@@ -730,7 +733,7 @@ class JobFunctionCache(FutureCache):
         cache_name: str = "fcache",
         tag_index: bool = True,
         size_limit: int = int(100e8),
-    ):
+    ) -> None:
         """Initialize a JobFunctionCache for a specific function.
 
         Args:
@@ -750,7 +753,7 @@ class JobFunctionCache(FutureCache):
         )
         self.function = function
 
-    def call(self, **kwargs) -> JobFuture:
+    def call(self, **kwargs: Any) -> JobFuture:
         """Call the wrapped function with the provided arguments.
 
         This method creates a Job for the function call and submits it through the cache.

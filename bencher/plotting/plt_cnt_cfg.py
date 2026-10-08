@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 import param
-import xarray as xr
 
-from bencher.bench_cfg import BenchCfg
 from bencher.variables.inputs import (
     BoolSweep,
     EnumSweep,
@@ -21,6 +20,13 @@ from bencher.variables.results import (
 )
 from bencher.variables.time import TimeEvent, TimeSnapshot
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    import xarray as xr
+
+    from bencher.bench_cfg import BenchCfg
+
 __all__ = ["PltCntCfg", "result_kind"]
 
 # Time-like sweep inputs: drives both their classification as float axes and
@@ -29,7 +35,7 @@ TIME_TYPES = (TimeSnapshot, TimeEvent)
 
 
 class PltCntCfg(param.Parameterized):
-    """Plot Count Config"""
+    """Plot Count Config."""
 
     float_vars = param.List(doc="A list of float vars in order of plotting, x then y")
     float_cnt = param.Integer(0, doc="The number of float variables to plot")
@@ -70,7 +76,7 @@ class PltCntCfg(param.Parameterized):
         bench_cfg: BenchCfg,
         ds: xr.Dataset | None = None,
     ) -> PltCntCfg:
-        """Given a BenchCfg work out how many float and cat variables there are and store in a PltCntCfg class
+        """Count the float and categorical variables in a BenchCfg and store them in a PltCntCfg.
 
         Args:
             bench_cfg (BenchCfg): See BenchCfg definition
@@ -85,7 +91,6 @@ class PltCntCfg(param.Parameterized):
             PltCntCfg: see PltCntCfg definition
         """
         plt_cnt_cfg = PltCntCfg()
-        # plt_cnt_cfg.float_vars = deepcopy(bench_cfg.iv_time)
 
         plt_cnt_cfg.cat_vars = []
         plt_cnt_cfg.float_vars = []
@@ -93,11 +98,9 @@ class PltCntCfg(param.Parameterized):
         for iv in bench_cfg.input_vars:
             type_allocated = False
             if isinstance(iv, (IntSweep, FloatSweep, *TIME_TYPES)):
-                # if "IntSweep" in typestr or "FloatSweep" in typestr:
                 plt_cnt_cfg.float_vars.append(iv)
                 type_allocated = True
             if isinstance(iv, (EnumSweep, BoolSweep, StringSweep, YamlSweep)):
-                # if "EnumSweep" in typestr or "BoolSweep" in typestr or "StringSweep" in typestr:
                 plt_cnt_cfg.cat_vars.append(iv)
                 type_allocated = True
 
@@ -125,7 +128,7 @@ class PltCntCfg(param.Parameterized):
             plt_cnt_cfg.samples_per_point = _samples_per_point(ds, bench_cfg.result_vars)
         return plt_cnt_cfg
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
             f"float_cnt: {self.float_cnt}\n"
             f"cat_cnt: {self.cat_cnt}\n"
@@ -138,9 +141,11 @@ class PltCntCfg(param.Parameterized):
         )
 
 
-def _missing_mask(da: xr.DataArray, rv) -> xr.DataArray:
-    """True where an entry holds *rv*'s missing-value sentinel (see
-    ``result_missing_fill``); plain NaN when the variable is unknown.
+def _missing_mask(da: xr.DataArray, rv: param.Parameter | None) -> xr.DataArray:
+    """Mark the entries that hold *rv*'s missing-value sentinel.
+
+    The sentinel comes from ``result_missing_fill``; plain NaN is used when the
+    variable is unknown.
     """
     if rv is not None:
         fill, _ = result_missing_fill(rv)
@@ -149,9 +154,10 @@ def _missing_mask(da: xr.DataArray, rv) -> xr.DataArray:
     return da.isnull()
 
 
-def _samples_per_point(ds: xr.Dataset, result_vars=None) -> int:
-    """The number of repeat samples actually present at the sparsest sweep point:
-    the minimum non-missing count along the repeat dimension over the result
+def _samples_per_point(ds: xr.Dataset, result_vars: Sequence[param.Parameter] | None = None) -> int:
+    """Count the repeat samples actually present at the sparsest sweep point.
+
+    This is the minimum non-missing count along the repeat dimension over the result
     variables that carry it. Differs from the configured `repeats` when runs are
     missing. Missingness is each variable's storage sentinel (NaN / -1 / "NAN",
     matched to `result_vars` by name) so object- and reference-backed misses
@@ -170,8 +176,10 @@ def _samples_per_point(ds: xr.Dataset, result_vars=None) -> int:
             if da.sizes["over_time"] == 0:
                 counts.append(0)
                 continue
-            da = da.isel(over_time=-1)
-        per_point = (~_missing_mask(da, rv_by_name.get(name))).sum(dim="repeat")
+            latest = da.isel(over_time=-1)
+        else:
+            latest = da
+        per_point = (~_missing_mask(latest, rv_by_name.get(name))).sum(dim="repeat")
         counts.append(int(per_point.min()) if per_point.size else 0)
     if counts:
         return min(counts)

@@ -32,8 +32,6 @@ class TestBencherUtils(unittest.TestCase):
         ex_instance = ExampleClass()
         inputs = ex_instance.get_inputs_only()
 
-        print(inputs)
-
         assert len(inputs) == 1
         assert inputs[0].name == "iv1"
 
@@ -68,7 +66,7 @@ class TestBencherUtils(unittest.TestCase):
         result = bn.make_namedtuple("Test", field1=1, field2="value2", field3=True)
         assert result.field1 == 1
         assert result.field2 == "value2"
-        assert result.field3 == True
+        assert result.field3 is True
 
         # Tests that the function returns an empty tuple when an empty dictionary is passed as input
 
@@ -84,7 +82,7 @@ class TestBencherUtils(unittest.TestCase):
         assert bn.hmap_canonical_input(dic1) == bn.hmap_canonical_input(dic2)
 
     def test_mult_tuple(self) -> None:
-        self.assertTupleEqual(mult_tuple((1, 2, 3), 2), (2, 4, 6))
+        assert mult_tuple((1, 2, 3), 2) == (2, 4, 6)
 
     # Tests that the function returns the nearest coordinate name value pair for a dataset containing multiple coordinates
     def test_multiple_coordinates(self):
@@ -162,7 +160,7 @@ class TestBencherUtils(unittest.TestCase):
         assert [obj] == listify(obj)
         assert [obj] == listify([obj])
         assert [obj] == listify(obj)
-        assert listify(None) == None
+        assert listify(None) is None
 
     def test_converts_single_tab_to_nbsp(self):
         input_str = "This is\ta test"

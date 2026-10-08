@@ -100,7 +100,7 @@ def test_failed_restore_is_transactional(tmp_path):
     initial.restore(tmp_path)
     conflicting = snapshot({"a": 2})
     conflicting.records["another-config"] = snapshot({"b": 3}).records["existing-config-key"]
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="history execution content conflict"):
         conflicting.restore(tmp_path)
     restored = HistorySnapshot.export(tmp_path, namespace="machine-a")
     assert list(restored.records) == ["existing-config-key"]

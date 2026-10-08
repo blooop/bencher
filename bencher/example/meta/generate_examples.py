@@ -419,10 +419,10 @@ def generate_python_files():
     # can emit imports in any order without leaving `pixi run lint` dirty.
     if shutil.which("ruff"):
         subprocess.run(
-            ["ruff", "check", "--fix-only", "--quiet", str(GENERATED_DIR)],
+            ["ruff", "check", "--fix-only", "--quiet", str(GENERATED_DIR)],  # noqa: S607 - ruff from PATH
             check=False,
         )
-        subprocess.run(["ruff", "format", str(GENERATED_DIR)], check=False)
+        subprocess.run(["ruff", "format", str(GENERATED_DIR)], check=False)  # noqa: S607 - ruff from PATH
 
 
 def _import_example_module(py_file: Path):

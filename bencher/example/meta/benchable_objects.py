@@ -7,6 +7,7 @@ imported directly in notebooks.
 
 import math
 import random
+from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -76,7 +77,7 @@ class BenchablePathResult(bn.ParametrizedSweep):
 
     def benchmark(self):
         filename = bn.gen_path(self.content, suffix=".txt")
-        with open(filename, "w", encoding="utf-8") as f:
+        with Path(filename).open("w", encoding="utf-8") as f:
             f.write(f"content: {self.content}\ntimestamp: deterministic")
         self.file_result = filename
 

@@ -70,14 +70,18 @@ def store_with(*responses):
 def test_read_pins_bytes_to_generation_and_metadata_version():
     store, transport = store_with(response(metadata()), Response(200, b"abc"))
     value = store.read("key")
-    assert isinstance(value, Present) and value.data == b"abc"
+    assert isinstance(value, Present)
+    assert value.data == b"abc"
     query = parse_qs(urlsplit(transport.calls[1][1]).query)
     assert query == {"alt": ["media"], "generation": ["1"], "ifMetagenerationMatch": ["2"]}
     assert value.metadata["metadata"] == {"custom": "preserved"}
-    assert value.created_at and value.expires_at == value.created_at + 90
+    assert value.created_at
+    assert value.expires_at == value.created_at + 90
 
 
-@pytest.mark.parametrize("status,expected", [(404, Absent), (403, ReadFailed), (500, ReadFailed)])
+@pytest.mark.parametrize(
+    ("status", "expected"), [(404, Absent), (403, ReadFailed), (500, ReadFailed)]
+)
 def test_read_statuses_are_distinct(status, expected):
     store, _ = store_with(Response(status, b"{}"))
     assert isinstance(store.read("key"), expected)
@@ -89,7 +93,7 @@ def test_pinned_generation_disappearing_is_failed_read_not_empty_baseline():
 
 
 @pytest.mark.parametrize(
-    "status,expected", [(412, Conflict), (403, WriteFailed), (500, WriteFailed)]
+    ("status", "expected"), [(412, Conflict), (403, WriteFailed), (500, WriteFailed)]
 )
 def test_write_statuses_are_distinct(status, expected):
     store, transport = store_with(Response(status, b"{}"))
@@ -108,7 +112,8 @@ def test_conditional_write_uses_both_generation_and_metageneration():
     assert isinstance(current, Present)
     assert isinstance(store.write("key", b"new", Match(current.version)), Written)
     query = parse_qs(urlsplit(transport.calls[-1][1]).query)
-    assert query["ifGenerationMatch"] == ["1"] and query["ifMetagenerationMatch"] == ["2"]
+    assert query["ifGenerationMatch"] == ["1"]
+    assert query["ifMetagenerationMatch"] == ["2"]
 
 
 def test_multipart_media_content_type_matches_metadata():
@@ -120,7 +125,8 @@ def test_multipart_media_content_type_matches_metadata():
 def test_timeout_after_submission_is_explicitly_unknown():
     store, _ = store_with(TransportFailed("timeout", submitted=True))
     result = store.write("key", b"abc", CreateOnly())
-    assert isinstance(result, WriteFailed) and result.outcome_unknown
+    assert isinstance(result, WriteFailed)
+    assert result.outcome_unknown
 
 
 def test_gcloud_auth_timeout_is_not_a_submitted_write():
@@ -131,7 +137,8 @@ def test_gcloud_auth_timeout_is_not_a_submitted_write():
 
     store = GcloudStore("bucket", env={"CLOUDSDK_CONFIG": "/isolated"}, timeout=7, runner=runner)
     result = store.write("key", b"abc", CreateOnly())
-    assert isinstance(result, WriteFailed) and not result.outcome_unknown
+    assert isinstance(result, WriteFailed)
+    assert not result.outcome_unknown
 
 
 def test_gcloud_never_authenticates_under_a_foreign_interpreter():
@@ -177,9 +184,13 @@ def test_listing_preserves_server_continuation_even_on_empty_page():
         response({"nextPageToken": "server-token"}), response({"items": [metadata()]})
     )
     first = store.list(limit=1)
-    assert isinstance(first, Listed) and not first.complete and not first.items
+    assert isinstance(first, Listed)
+    assert not first.complete
+    assert not first.items
     second = store.list(token=first.next_token, limit=1)
-    assert isinstance(second, Listed) and second.complete and second.items[0].key == "key"
+    assert isinstance(second, Listed)
+    assert second.complete
+    assert second.items[0].key == "key"
     assert parse_qs(urlsplit(transport.calls[-1][1]).query)["pageToken"] == ["server-token"]
 
 
@@ -205,7 +216,8 @@ def test_renewal_rewrites_same_bytes_and_verifies_new_creation_time(lost_ack):
     assert isinstance(current, Present)
     renewed = store.renew("key", current.version)
     assert isinstance(renewed, Renewed)
-    assert renewed.version != current.version and renewed.created_at > current.created_at
+    assert renewed.version != current.version
+    assert renewed.created_at > current.created_at
     assert b'"custom": "preserved"' in transport.calls[4][2]
     assert b"abc" in transport.calls[4][2]
 
@@ -224,7 +236,8 @@ def test_equal_bytes_without_new_age_do_not_prove_renewal():
     current = store.read("key")
     assert isinstance(current, Present)
     outcome = store.renew("key", current.version)
-    assert isinstance(outcome, WriteFailed) and outcome.outcome_unknown
+    assert isinstance(outcome, WriteFailed)
+    assert outcome.outcome_unknown
 
 
 def test_renewal_conflict_never_replays_stale_bytes():
@@ -241,10 +254,12 @@ def test_renewal_conflict_never_replays_stale_bytes():
 def test_gcloud_live_disposable_contract(report):
     """Small real objects only, under a fresh prefix; bucket lifecycle retires them."""
     root = urlsplit(os.environ["BENCHER_GCS_CONTRACT_ROOT"])
-    assert root.scheme == "gs" and root.netloc and root.path.strip("/")
+    assert root.scheme == "gs"
+    assert root.netloc
+    assert root.path.strip("/")
     prefix = f"{root.path.strip('/')}/{uuid4()}"
     store = GcloudStore(root.netloc, prefix=prefix, expiry_seconds=7 * 86400)
-    print(f"disposable contract prefix: gs://{root.netloc}/{prefix}")
+    print(f"disposable contract prefix: gs://{root.netloc}/{prefix}")  # noqa: T201 - opt-in live run reports its prefix
     assert isinstance(store.read("key"), Absent)
     serving = {
         "contentType": "text/html",
@@ -256,7 +271,8 @@ def test_gcloud_live_disposable_contract(report):
     assert isinstance(initial, Written), initial
     current = store.read("key")
     assert isinstance(current, Present), current
-    assert current.data == b"abc" and current.version == initial.version
+    assert current.data == b"abc"
+    assert current.version == initial.version
     assert all(current.metadata.get(key) == value for key, value in serving.items())
     assert isinstance(store.write("key", b"wrong", CreateOnly()), Conflict)
     newer = store.write("key", b"new", Match(initial.version), metadata=serving)
@@ -268,9 +284,12 @@ def test_gcloud_live_disposable_contract(report):
     assert isinstance(renewed, Renewed), renewed
     after = store.read("key")
     assert isinstance(after, Present)
-    assert after.data == before.data and after.metadata == before.metadata
-    assert after.created_at is not None and before.created_at is not None
-    assert after.expires_at is not None and before.expires_at is not None
+    assert after.data == before.data
+    assert after.metadata == before.metadata
+    assert after.created_at is not None
+    assert before.created_at is not None
+    assert after.expires_at is not None
+    assert before.expires_at is not None
     assert after.created_at > before.created_at
     assert after.expires_at > before.expires_at
     assert isinstance(store.renew("key", before.version), Conflict)
@@ -281,9 +300,11 @@ def test_gcloud_live_disposable_contract(report):
     assert sum(isinstance(item, Written) for item in race) == 1
     assert sum(isinstance(item, Conflict) for item in race) == 3
     first = store.list(limit=1)
-    assert isinstance(first, Listed) and not first.complete, first
+    assert isinstance(first, Listed), first
+    assert not first.complete, first
     second = store.list(token=first.next_token, limit=1)
-    assert isinstance(second, Listed) and second.complete, second
+    assert isinstance(second, Listed), second
+    assert second.complete, second
     assert {item.key for page in [first, second] for item in page.items} == {"key", "race"}
     from bencher.publication_pointers import PointerUpdated
     from bencher.publishing import CompleteReportPublisher, Published
@@ -295,7 +316,7 @@ def test_gcloud_live_disposable_contract(report):
     assert isinstance(published, Published), published
     assert publisher.publish(report) == published
     assert isinstance(publisher.point(published.receipt, "latest/index.html"), PointerUpdated)
-    print(
+    print(  # noqa: T201 - opt-in live run reports its evidence
         json.dumps(
             {
                 "before_created": before.created_at,

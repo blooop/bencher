@@ -227,7 +227,7 @@ def test_missing_recording_is_rejected(tmp_path):
     container = ComposableContainerRerun(output_path=tmp_path / "output.rrd")
     container.append(tmp_path / "missing.rrd")
 
-    with pytest.raises(FileNotFoundError, match="missing.rrd"):
+    with pytest.raises(FileNotFoundError, match=r"missing\.rrd"):
         container.render()
 
 
@@ -236,7 +236,7 @@ def test_output_path_must_be_an_rrd(tmp_path):
     container = ComposableContainerRerun(output_path=tmp_path / "output.mp4")
     container.append(source)
 
-    with pytest.raises(ValueError, match="must end in .rrd"):
+    with pytest.raises(ValueError, match=r"must end in \.rrd"):
         container.render()
 
 

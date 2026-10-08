@@ -44,7 +44,7 @@ def _pane_texts(panel) -> list[str]:
 def _already_handled_exception() -> ValueError:
     """An exception whose ``except`` block has been left, so ``sys.exc_info()`` is clear."""
     try:
-        raise ValueError("boom")
+        raise ValueError("boom")  # noqa: TRY301 - the test needs a caught, finished exception
     except ValueError as exc:
         return exc
 

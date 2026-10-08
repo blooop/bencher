@@ -13,6 +13,7 @@ what the rerun viewer does with an .rrd.
 
 import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import panel as pn
 
@@ -24,7 +25,7 @@ SNAPSHOTS = 2
 
 def file_contents(path: str) -> pn.pane.Markdown:
     """A declared container that renders the file rather than the rerun viewer."""
-    with open(path, encoding="utf-8") as handle:
+    with Path(path).open(encoding="utf-8") as handle:
         return pn.pane.Markdown(f"contents: {handle.read()}")
 
 
@@ -38,7 +39,7 @@ class RerunSweep(bn.ParametrizedSweep):
 
     def benchmark(self):
         filename = bn.gen_path("recording", suffix=".txt")
-        with open(filename, "w", encoding="utf-8") as handle:
+        with Path(filename).open("w", encoding="utf-8") as handle:
             handle.write(f"sides {self.sides} run {self.offset}")
         self.recording = filename
 

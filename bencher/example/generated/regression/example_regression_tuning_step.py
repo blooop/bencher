@@ -78,7 +78,7 @@ def example_regression_tuning_step(run_cfg: bn.BenchRunCfg | None = None) -> bn.
     bench.plot_sweep(
         input_vars=["regression_magnitude", "regression_mad"],
         result_vars=["detection_plot"],
-        description="A step regression of variable magnitude is injected (fixed noise σ=10). Each cell shows the synthesised 20-point history and the current run. When the regression magnitude is large relative to noise and the regression_mad is low the detector fires; when the magnitude shrinks or the threshold rises it stays quiet.  The boundary reveals the minimum detectable effect for each threshold setting.",
+        description="A step regression of variable magnitude is injected (fixed noise sigma=10). Each cell shows the synthesised 20-point history and the current run. When the regression magnitude is large relative to noise and the regression_mad is low the detector fires; when the magnitude shrinks or the threshold rises it stays quiet.  The boundary reveals the minimum detectable effect for each threshold setting.",
     )
 
     return bench

@@ -60,7 +60,7 @@ class TestBenchData(unittest.TestCase):
         """An unknown capability name raises (with the valid vocabulary) instead of
         silently reading as 'absent' (plan 23 C10)."""
         data = BenchData.fake()
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="Unknown capability 'nonexistent'") as ctx:
             data.has("nonexistent")
         assert "nonexistent" in str(ctx.value)
         for cap in Capability:
@@ -96,7 +96,7 @@ class TestRegistry(unittest.TestCase):
 
         # Mutate to violate the contract.
         _stub.name = ""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Plugin must have a non-empty string name"):
             self.reg.register(_stub)
 
     def test_register_typoed_capability_raises(self) -> None:
@@ -113,7 +113,7 @@ class TestRegistry(unittest.TestCase):
         def _stub(_: BenchData) -> pn.viewable.Viewable:
             return _make_pane("x")
 
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="Unknown capability 'legacy_resutl'") as ctx:
             self.reg.register(_stub)
         msg = str(ctx.value)
         assert "legacy_resutl" in msg  # cspell:disable-line

@@ -1,16 +1,19 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import holoviews as hv
-import panel as pn
-import xarray as xr
-from param import Parameter
 
 from bencher.results.holoview_results.distribution_result.distribution_result import (
     DistributionResult,
 )
-from bencher.results.holoview_results.holoview_result import PlotResult
+
+if TYPE_CHECKING:
+    import panel as pn
+    import xarray as xr
+    from param import Parameter
+
+    from bencher.results.holoview_results.holoview_result import PlotResult
 
 
 class ViolinResult(DistributionResult):

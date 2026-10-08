@@ -31,11 +31,10 @@ from __future__ import annotations
 import math
 import numbers
 import warnings
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import auto
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import holoviews as hv
 import panel as pn
@@ -45,13 +44,13 @@ from strenum import StrEnum
 
 from bencher.utils import hash_sha1
 
-# from bencher.variables.parametrised_sweep import ParametrizedSweep
-
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 _PARAM_MODULES = frozenset({"param", "param.parameters", "param.parameterized"})
 
 
-def _hash_slots(instance):
+def _hash_slots(instance: param.Parameter) -> str:
     """Hash all __slots__ from the class hierarchy, excluding non-deterministic attributes.
 
     Walks the MRO from the concrete class up to (but not including) param framework
@@ -92,7 +91,7 @@ def _hash_slots(instance):
                 all_slots.append(slot)
 
     values = tuple(getattr(instance, slot) for slot in all_slots)
-    return hash_sha1((cls.__name__, instance.name) + values)
+    return hash_sha1((cls.__name__, instance.name, *values))
 
 
 class OptDir(StrEnum):
@@ -117,16 +116,17 @@ class ResultFloat(Number):
 
     def __init__(
         self,
-        units="ul",
+        units: str = "ul",
         direction: OptDir = OptDir.minimize,
-        share_axis=True,
-        max_time_events=None,
-        default=float("nan"),
-        meaning_version=1,
-        **params,
-    ):
+        share_axis: bool = True,
+        max_time_events: int | None = None,
+        default: float = float("nan"),
+        meaning_version: int = 1,
+        **params: Any,
+    ) -> None:
         Number.__init__(self, **params)
-        assert isinstance(units, str)
+        if not isinstance(units, str):
+            raise TypeError(f"units must be a str, got {type(units).__name__}")
         self.units = units
         # The sanctioned way to declare "same name, new semantics": bump
         # meaning_version when the quantity this metric measures changes
@@ -153,7 +153,7 @@ class ResultFloat(Number):
         return hv.Dimension((self.name, self.name), unit=self.units)
 
     def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+        """Hash deterministically, avoiding PYTHONHASHSEED's per-run hash randomisation."""
         return _hash_slots(self)
 
 
@@ -165,8 +165,12 @@ class ResultBool(ResultFloat):
     """
 
     def __init__(
-        self, units="ratio", direction: OptDir = OptDir.minimize, default=float("nan"), **params
-    ):
+        self,
+        units: str = "ratio",
+        direction: OptDir = OptDir.minimize,
+        default: float = float("nan"),
+        **params: Any,
+    ) -> None:
         super().__init__(units=units, direction=direction, allow_None=True, **params)
         # Defaults to NaN like ResultFloat (see ResultFloat.__init__): an
         # *unrecorded* repeat is "missing", not a recorded failure, so it is
@@ -179,7 +183,9 @@ class ResultBool(ResultFloat):
         self.default = default
         self.bounds = (0, 1)  # bools are always between 0 and 1
 
-    def _validate_bounds(self, val, bounds, inclusive_bounds):
+    def _validate_bounds(
+        self, val: Any, bounds: tuple | None, inclusive_bounds: tuple[bool, bool]
+    ) -> None:
         # NaN is the sentinel for an unrecorded ("missing") sample — see
         # ResultFloat.__init__.  It lies outside the [0, 1] bounds, so param's
         # bounds check would reject both ``default=float("nan")`` (re-validated
@@ -199,20 +205,20 @@ class ResultBool(ResultFloat):
 
 
 class ResultVec(param.List):
-    """A class to represent fixed size vector result variable"""
+    """A class to represent fixed size vector result variable."""
 
     __slots__ = ["units", "direction", "size", "max_time_events"]
     _hash_exclude = ("max_time_events",)
 
     def __init__(
         self,
-        size,
-        units="ul",
+        size: int,
+        units: str = "ul",
         direction: OptDir = OptDir.minimize,
-        max_time_events=None,
-        default=float("nan"),
-        **params,
-    ):
+        max_time_events: int | None = None,
+        default: Any = float("nan"),
+        **params: Any,
+    ) -> None:
         param.List.__init__(self, **params)
         self.units = units
         # See ResultFloat.__init__ — defaults to NaN so unrecorded samples are
@@ -223,11 +229,11 @@ class ResultVec(param.List):
         self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+        """Hash deterministically, avoiding PYTHONHASHSEED's per-run hash randomisation."""
         return _hash_slots(self)
 
     def index_name(self, idx: int) -> str:
-        """Given the index of the vector, return the column name that
+        """Given the index of the vector, return its column name.
 
         Args:
             idx (int): index of the result vector
@@ -236,14 +242,11 @@ class ResultVec(param.List):
             str: column name of the vector for the xarray dataset
         """
         mapping = ["x", "y", "z"]
-        if idx < 3:
-            index = mapping[idx]
-        else:
-            index = idx
+        index = mapping[idx] if idx < len(mapping) else idx
         return f"{self.name}_{index}"
 
     def index_names(self) -> list[str]:
-        """Returns a list of all the xarray column names for the result vector
+        """Return a list of all the xarray column names for the result vector.
 
         Returns:
             list[str]: column names
@@ -252,7 +255,7 @@ class ResultVec(param.List):
 
 
 class ResultHmap(param.Parameter):
-    """Deprecated: use ResultContainer or ResultReference with a declared container instead.
+    """Use ResultContainer or ResultReference with a declared container instead; deprecated.
 
     A class to represent a holomap return type. Its data lives out-of-band in
     ``bench_res.hmaps`` rather than in the canonical result dataset, so it cannot
@@ -265,7 +268,7 @@ class ResultHmap(param.Parameter):
     in the future, _hash_slots will automatically include it.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         warnings.warn(
             "ResultHmap is deprecated and will be removed in a later phase of the A6 "
             "grammar-of-nd-data migration; use ResultContainer or ResultReference with "
@@ -276,7 +279,7 @@ class ResultHmap(param.Parameter):
         super().__init__(*args, **kwargs)
 
     def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+        """Hash deterministically, avoiding PYTHONHASHSEED's per-run hash randomisation."""
         return _hash_slots(self)
 
 
@@ -286,10 +289,12 @@ def curve(
     x_name: str,
     y_name: str,
     label: str | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> hv.Curve:
     label = label or y_name
-    return hv.Curve(zip(x_vals, y_vals), kdims=[x_name], vdims=[y_name], label=label, **kwargs)
+    return hv.Curve(
+        zip(x_vals, y_vals, strict=True), kdims=[x_name], vdims=[y_name], label=label, **kwargs
+    )
 
 
 class ResultPath(param.Filename):
@@ -307,23 +312,26 @@ class ResultPath(param.Filename):
 
     def __init__(
         self,
-        default=None,
-        units="path",
+        default: str | None = None,
+        units: str = "path",
         container: Callable[[Any], Any] | None = None,
-        max_time_events=None,
-        **params,
-    ):
+        max_time_events: int | None = None,
+        **params: Any,
+    ) -> None:
         super().__init__(default=default, check_exists=False, **params)
         self.units = units
         self.container = container
         self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+        """Hash deterministically, avoiding PYTHONHASHSEED's per-run hash randomisation."""
         return _hash_slots(self)
 
-    def to_container(self):
-        """Returns a partial function for creating a FileDownload widget with embedding enabled.  This function is used to create a panel container to represent the ResultPath object"""
+    def to_container(self) -> partial[pn.widgets.FileDownload]:
+        """Return a partial that creates a FileDownload widget with embedding enabled.
+
+        This function is used to create a panel container to represent the ResultPath object.
+        """
         return partial(pn.widgets.FileDownload, embed=True)
 
 
@@ -331,13 +339,19 @@ class ResultVideo(param.Filename):
     __slots__ = ["units", "max_time_events"]
     _hash_exclude = ("max_time_events",)
 
-    def __init__(self, default=None, units="path", max_time_events=None, **params):
+    def __init__(
+        self,
+        default: str | None = None,
+        units: str = "path",
+        max_time_events: int | None = None,
+        **params: Any,
+    ) -> None:
         super().__init__(default=default, check_exists=False, **params)
         self.units = units
         self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+        """Hash deterministically, avoiding PYTHONHASHSEED's per-run hash randomisation."""
         return _hash_slots(self)
 
 
@@ -345,13 +359,19 @@ class ResultImage(param.Filename):
     __slots__ = ["units", "max_time_events"]
     _hash_exclude = ("max_time_events",)
 
-    def __init__(self, default=None, units="path", max_time_events=None, **params):
+    def __init__(
+        self,
+        default: str | None = None,
+        units: str = "path",
+        max_time_events: int | None = None,
+        **params: Any,
+    ) -> None:
         super().__init__(default=default, check_exists=False, **params)
         self.units = units
         self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+        """Hash deterministically, avoiding PYTHONHASHSEED's per-run hash randomisation."""
         return _hash_slots(self)
 
 
@@ -369,19 +389,19 @@ class ResultString(param.String):
 
     def __init__(
         self,
-        default=None,
-        units="str",
+        default: str | None = None,
+        units: str = "str",
         container: Callable[[Any], Any] | None = None,
-        max_time_events=None,
-        **params,
-    ):
+        max_time_events: int | None = None,
+        **params: Any,
+    ) -> None:
         super().__init__(default=default, **params)
         self.units = units
         self.container = container
         self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+        """Hash deterministically, avoiding PYTHONHASHSEED's per-run hash randomisation."""
         return _hash_slots(self)
 
 
@@ -398,19 +418,19 @@ class ResultContainer(param.Parameter):
 
     def __init__(
         self,
-        default=None,
-        units="container",
+        default: Any = None,
+        units: str = "container",
         container: Callable[[Any], Any] | None = None,
-        max_time_events=None,
-        **params,
-    ):
+        max_time_events: int | None = None,
+        **params: Any,
+    ) -> None:
         super().__init__(default=default, **params)
         self.units = units
         self.container = container
         self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+        """Hash deterministically, avoiding PYTHONHASHSEED's per-run hash randomisation."""
         return _hash_slots(self)
 
 
@@ -438,8 +458,14 @@ class ResultRerun(ResultContainer):
     _hash_exclude = ("width", "height")
 
     def __init__(
-        self, default=None, units="rerun", width=600, height=600, max_time_events=None, **params
-    ):
+        self,
+        default: Any = None,
+        units: str = "rerun",
+        width: int = 600,
+        height: int = 600,
+        max_time_events: int | None = None,
+        **params: Any,
+    ) -> None:
         super().__init__(default=default, units=units, max_time_events=max_time_events, **params)
         self.width = width
         self.height = height
@@ -454,7 +480,7 @@ class ResultRerun(ResultContainer):
         except ImportError:
             pass
 
-    def to_container(self):
+    def to_container(self) -> Callable[..., Any]:
         """Return a callable that renders an .rrd file path as a rerun viewer pane."""
         from bencher.utils_rrd import rrd_file_to_pane
 
@@ -489,9 +515,9 @@ class ResultReference(param.Parameter):
         container: Callable[[Any], Any] | None = None,
         default: Any | None = None,
         units: str = "container",
-        max_time_events=None,
-        **params,
-    ):
+        max_time_events: int | None = None,
+        **params: Any,
+    ) -> None:
         super().__init__(default=default, **params)
         self.units = units
         self.obj = obj
@@ -499,7 +525,7 @@ class ResultReference(param.Parameter):
         self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+        """Hash deterministically, avoiding PYTHONHASHSEED's per-run hash randomisation."""
         return _hash_slots(self)
 
 
@@ -545,9 +571,9 @@ class ResultDataSet(param.Parameter):
         container: Callable[[Any], Any] | None = None,
         default: Any | None = None,
         units: str = "dataset",
-        max_time_events=None,
-        **params,
-    ):
+        max_time_events: int | None = None,
+        **params: Any,
+    ) -> None:
         super().__init__(default=default, **params)
         self.units = units
         self.obj = obj
@@ -555,7 +581,7 @@ class ResultDataSet(param.Parameter):
         self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+        """Hash deterministically, avoiding PYTHONHASHSEED's per-run hash randomisation."""
         return _hash_slots(self)
 
 
@@ -793,7 +819,7 @@ RESULT_SPECS: dict[type, ResultSpec] = {
 }
 
 
-def result_spec(result_var) -> ResultSpec | None:
+def result_spec(result_var: Any) -> ResultSpec | None:
     """Spec for a result-variable instance, resolved most-derived-first.
 
     Returns ``None`` for parameters that are not registered result types.
@@ -806,7 +832,7 @@ def result_spec(result_var) -> ResultSpec | None:
     return None
 
 
-def _spec_types(predicate) -> tuple[type, ...]:
+def _spec_types(predicate: Callable[[ResultSpec], bool]) -> tuple[type, ...]:
     """The registry keys whose spec satisfies *predicate*, in registry order."""
     return tuple(cls for cls, spec in RESULT_SPECS.items() if predicate(spec))
 
@@ -842,9 +868,10 @@ RESULT_KIND_ORDER = tuple((cls, spec.kind.value) for cls, spec in RESULT_SPECS.i
 _MEDIA_RESULT_TYPES = _spec_types(lambda s: s.is_media)
 
 
-def result_kind(result_var) -> str:
-    """Classify a result variable into a coarse, serializable kind name used by
-    plot-selection signatures (A2).
+def result_kind(result_var: Any) -> str:
+    """Classify a result variable into a coarse, serializable kind name.
+
+    The kind name is used by plot-selection signatures (A2).
     """
     spec = result_spec(result_var)
     return spec.kind.value if spec is not None else "unknown"
@@ -881,7 +908,7 @@ _OBJECT_MISSING_TYPES = _spec_types(lambda s: s.fill_dtype is object)
 DATA_VAR_RESULT_TYPES = _spec_types(lambda s: s.is_data_var)
 
 
-def result_missing_fill(rv) -> tuple[Any, type]:
+def result_missing_fill(rv: Any) -> tuple[Any, type]:
     """Return the ``(fill_value, numpy_dtype)`` used for missing entries of *rv*.
 
     Read from the ResultSpec registry; an unregistered parameter (or a future
@@ -894,7 +921,7 @@ def result_missing_fill(rv) -> tuple[Any, type]:
     return spec.missing_fill, spec.fill_dtype
 
 
-def _dataset_cell_is_missing(value) -> bool:
+def _dataset_cell_is_missing(value: Any) -> bool:
     """Missingness for a ``ResultDataSet`` cell, across both sentinel generations.
 
     ``"NAN"`` (blob-path cells, plan 22 onwards) and ``-1`` (index-backed cells
@@ -914,7 +941,7 @@ def _dataset_cell_is_missing(value) -> bool:
     return False
 
 
-def result_is_missing(rv, value) -> bool:
+def result_is_missing(rv: Any, value: Any) -> bool:
     """True when *value* is the missing/unrecorded sentinel for *rv*'s storage.
 
     For NaN-backed (numeric) types, both NaN and ``None`` count as missing — the
@@ -944,9 +971,9 @@ def result_is_missing(rv, value) -> bool:
 
 
 class ResultVar(ResultFloat):
-    """Deprecated: use ResultFloat instead."""
+    """Use ResultFloat instead; this alias is deprecated."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         warnings.warn(
             "ResultVar is deprecated, use ResultFloat instead",
             DeprecationWarning,

@@ -239,13 +239,13 @@ class TestBindValidatesDuplicates(unittest.TestCase):
 
     def test_a_duplicate_input_var_raises_at_bind(self) -> None:
         spec = bn.SweepSpec(input_vars=["theta", "theta"], result_vars=["out_sin"])
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="Input variable 'theta' is declared 2 times") as ctx:
             spec.bind(ExampleBenchCfg)
         assert "one dataset dimension" in str(ctx.value)
 
     def test_a_duplicate_arising_from_composition_raises(self) -> None:
         """plus_input_vars is how it happens in practice."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Input variable 'theta' is declared 2 times"):
             LATENCY.plus_input_vars("theta").bind(ExampleBenchCfg)
 
     def test_a_duplicate_result_var_is_warned_and_dropped_once(self) -> None:
@@ -267,7 +267,9 @@ class TestBindValidatesDuplicates(unittest.TestCase):
 
     def test_conflicting_duplicate_consts_raise_at_bind(self) -> None:
         spec = bn.SweepSpec(result_vars=["out_sin"], const_vars=[("offset", 0.1), ("offset", 0.2)])
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(
+            ValueError, match="Constant 'offset' is declared twice with different values"
+        ) as ctx:
             spec.bind(ExampleBenchCfg)
         assert "different values" in str(ctx.value)
 

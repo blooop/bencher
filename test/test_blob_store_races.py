@@ -277,7 +277,8 @@ class TestGCRacingAWriter:
         self._inject_after_scan(monkeypatch, concurrent_sweep)
         orphans, nbytes = clean_orphaned_blobs(str(tmp_path), dry_run=False, min_age_seconds=3600)
 
-        assert orphans == [] and nbytes == 0
+        assert orphans == []
+        assert nbytes == 0
         assert len(list((tmp_path / "blobs").iterdir())) == 1
 
     def test_min_age_protects_a_new_reference_to_an_old_deduplicated_blob(
@@ -303,7 +304,8 @@ class TestGCRacingAWriter:
         self._inject_after_scan(monkeypatch, concurrent_sweep_dedups_onto_it)
         orphans, nbytes = clean_orphaned_blobs(str(tmp_path), dry_run=False, min_age_seconds=3600)
 
-        assert orphans == [] and nbytes == 0, "the dedup touch must protect the old blob"
+        assert orphans == [], "the dedup touch must protect the old blob"
+        assert nbytes == 0, "the dedup touch must protect the old blob"
         assert old_path.exists()
         # The reference the sweep recorded is intact, not dangling.
         assert blob_reachability(str(tmp_path)).names == {old_name}
@@ -315,7 +317,8 @@ class TestGCRacingAWriter:
 
         orphans, nbytes = clean_orphaned_blobs(str(tmp_path), dry_run=False)
 
-        assert orphans == [] and nbytes == 0
+        assert orphans == []
+        assert nbytes == 0
         assert _blob(tmp_path, path).exists()
 
 
@@ -362,13 +365,14 @@ class TestGCRacingGC:
             # call stat() themselves, which would recurse into this very patch.
             if self == doomed and not removed.is_set():
                 removed.set()
-                os.unlink(doomed)  # simulate the other racer winning right here
+                Path(doomed).unlink()  # simulate the other racer winning right here
             return real_stat(self, *args, **kwargs)
 
         monkeypatch.setattr(Path, "stat", vanishing_stat)
         orphans, nbytes = clean_orphaned_blobs(str(tmp_path), dry_run=False)
 
-        assert orphans == [] and nbytes == 0
+        assert orphans == []
+        assert nbytes == 0
         assert not doomed.exists()
 
 

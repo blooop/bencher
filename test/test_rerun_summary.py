@@ -141,7 +141,8 @@ class TestRerunSummary:
         bench = DeclaredContainerSweep().to_bench()
         res = bench.plot_sweep(input_vars=["freq"], result_vars=["out_rerun"])
         pane = res.to_rerun_grid()
-        assert pane is not None and len(pane) == 1
+        assert pane is not None
+        assert len(pane) == 1
         rendered = pane[0]
         assert isinstance(rendered, pn.pane.Markdown), type(rendered)
         assert rendered.object.startswith("composed: ")

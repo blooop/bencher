@@ -163,7 +163,7 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
         # _AggCfg.score = (param1 - 0.3)^2, same for both algorithms, so mean == value
         best_p1 = study.best_params["param1"]
         expected = (best_p1 - 0.3) ** 2
-        self.assertAlmostEqual(study.best_value, expected, places=5)
+        assert study.best_value == pytest.approx(expected, abs=1e-5)
 
     def test_optimize_false_trials_exclude_non_optimized(self):
         """bench_results_to_optuna_trials should only include optimized vars in trial params
@@ -193,7 +193,7 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
         for trial in trials:
             val = trial.params["value"]
             expected_mean = val * 2
-            self.assertAlmostEqual(trial.values[0], expected_mean, places=5)
+            assert trial.values[0] == pytest.approx(expected_mean, abs=1e-5)
 
     def test_multi_output_aggregation(self):
         """Multi-output aggregation should average each result var independently."""
@@ -238,7 +238,7 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
             assert "algorithm" not in trial.params
             assert "param1" in trial.params
             assert len(trial.values) == 2
-            # aux_score == score + 0.1
+            # aux_score is score plus 0.1
             np.testing.assert_almost_equal(trial.values[1], trial.values[0] + 0.1, decimal=5)
 
     def test_all_optimize_false_raises(self):
@@ -253,7 +253,7 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
             plot_callbacks=False,
         )
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="At least one input variable must have optimize=True"):
             res.to_optuna_from_results(cfg, n_trials=5)
 
     def test_all_optimize_false_raises_in_trials(self):
@@ -268,7 +268,7 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
             plot_callbacks=False,
         )
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="At least one input variable must have optimize=True"):
             res.bench_results_to_optuna_trials(include_meta=False)
 
     def test_all_optimize_false_include_meta_true_succeeds(self):

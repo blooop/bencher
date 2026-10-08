@@ -84,14 +84,14 @@ class _TempCacheMixin:
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self.cachedir = os.path.join(self.tmpdir, "cachedir")
-        os.makedirs(self.cachedir)
+        self.cachedir = str(Path(self.tmpdir, "cachedir"))
+        Path(self.cachedir).mkdir(parents=True)
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def _make_managed_cache(self, name, items=None):
-        path = os.path.join(self.cachedir, name)
+        path = str(Path(self.cachedir, name))
         c = Cache(path)
         if items:
             for k, v in items.items():
@@ -101,28 +101,28 @@ class _TempCacheMixin:
 
     def _make_job_media(self, folder, filename, job_key, content=b"x" * 100):
         """Create a per-job-key media file matching the v2 layout."""
-        full_dir = os.path.join(self.cachedir, folder, filename, job_key)
-        os.makedirs(full_dir, exist_ok=True)
-        p = os.path.join(full_dir, f"{filename}.dat")
-        with open(p, "wb") as f:
+        full_dir = str(Path(self.cachedir, folder, filename, job_key))
+        Path(full_dir).mkdir(parents=True, exist_ok=True)
+        p = str(Path(full_dir, f"{filename}.dat"))
+        with Path(p).open("wb") as f:
             f.write(content)
         return p
 
     def _make_blob(self, name, content=b"x" * 100):
         """Create a flat, sha256-named file matching the blob store layout."""
-        blobs_dir = os.path.join(self.cachedir, "blobs")
-        os.makedirs(blobs_dir, exist_ok=True)
-        p = os.path.join(blobs_dir, name)
-        with open(p, "wb") as f:
+        blobs_dir = str(Path(self.cachedir, "blobs"))
+        Path(blobs_dir).mkdir(parents=True, exist_ok=True)
+        p = str(Path(blobs_dir, name))
+        with Path(p).open("wb") as f:
             f.write(content)
         return p
 
     def _make_legacy_media(self, folder, filename, content=b"x" * 100):
         """Create a legacy UUID-named file (pre-v2 layout)."""
-        full_dir = os.path.join(self.cachedir, folder, filename)
-        os.makedirs(full_dir, exist_ok=True)
-        p = os.path.join(full_dir, f"{filename}_legacy.dat")
-        with open(p, "wb") as f:
+        full_dir = str(Path(self.cachedir, folder, filename))
+        Path(full_dir).mkdir(parents=True, exist_ok=True)
+        p = str(Path(full_dir, f"{filename}_legacy.dat"))
+        with Path(p).open("wb") as f:
             f.write(content)
         return p
 
@@ -142,7 +142,7 @@ class TestCacheVersion(_TempCacheMixin, unittest.TestCase):
         self._make_managed_cache("sample_cache", {"k": "v"})
         ensure_cache_version(self.cachedir)
         # Cache should still exist
-        c = Cache(os.path.join(self.cachedir, "sample_cache"))
+        c = Cache(str(Path(self.cachedir, "sample_cache")))
         assert c["k"] == "v"
         c.close()
 
@@ -216,7 +216,7 @@ class TestCleanupJobMedia(_TempCacheMixin, unittest.TestCase):
         assert removed == 2
         assert not Path(self.cachedir, "img/polygon/abc123").exists()
         assert not Path(self.cachedir, "rrd/rrd/abc123").exists()
-        assert os.path.exists(other)
+        assert Path(other).exists()
 
     def test_noop_for_missing_key(self):
         removed = cleanup_job_media("nonexistent", self.cachedir)
@@ -227,12 +227,12 @@ class TestClearAll(_TempCacheMixin, unittest.TestCase):
     def test_clear_all(self):
         self._make_managed_cache("sample_cache", {"k": "v"})
         self._make_job_media("img", "img", "key1")
-        assert os.path.isdir(self.cachedir)
+        assert Path(self.cachedir).is_dir()
         clear_all(self.cachedir)
-        assert not os.path.exists(self.cachedir)
+        assert not Path(self.cachedir).exists()
 
     def test_clear_all_nonexistent(self):
-        clear_all(os.path.join(self.tmpdir, "nonexistent"))
+        clear_all(str(Path(self.tmpdir, "nonexistent")))
 
 
 class TestClearMedia(_TempCacheMixin, unittest.TestCase):
@@ -246,7 +246,7 @@ class TestClearMedia(_TempCacheMixin, unittest.TestCase):
         assert freed == 150
 
         # Managed cache still exists
-        c = Cache(os.path.join(self.cachedir, "sample_cache"))
+        c = Cache(str(Path(self.cachedir, "sample_cache")))
         assert c["k"] == "v"
         c.close()
 
@@ -272,7 +272,7 @@ class TestBlobsAreNotPerJobPruned(_TempCacheMixin, unittest.TestCase):
         self._make_job_media("img", "img", "abc123")
 
         cleanup_job_media("abc123", self.cachedir)
-        assert os.path.exists(blob)
+        assert Path(blob).exists()
 
     def test_clean_orphaned_media_leaves_blobs(self):
         # No sample cache at all, so every job key is dead: maximally aggressive.
@@ -280,7 +280,7 @@ class TestBlobsAreNotPerJobPruned(_TempCacheMixin, unittest.TestCase):
 
         orphans, _ = clean_orphaned_media(self.cachedir, dry_run=False)
         assert orphans == []
-        assert os.path.exists(blob)
+        assert Path(blob).exists()
 
 
 class TestCleanOrphanedMedia(_TempCacheMixin, unittest.TestCase):
@@ -313,15 +313,15 @@ class TestCleanOrphanedMedia(_TempCacheMixin, unittest.TestCase):
 
     def test_ignores_non_media_files(self):
         """Non-media files like .gitkeep should not be treated as orphans."""
-        full_dir = os.path.join(self.cachedir, "img", "polygon")
-        os.makedirs(full_dir, exist_ok=True)
-        gitkeep = os.path.join(full_dir, ".gitkeep")
-        with open(gitkeep, "w", encoding="utf-8") as f:
+        full_dir = str(Path(self.cachedir, "img", "polygon"))
+        Path(full_dir).mkdir(parents=True, exist_ok=True)
+        gitkeep = str(Path(full_dir, ".gitkeep"))
+        with Path(gitkeep).open("w", encoding="utf-8") as f:
             f.write("")
 
         orphans, _ = clean_orphaned_media(self.cachedir, dry_run=False)
         assert len(orphans) == 0
-        assert os.path.exists(gitkeep)
+        assert Path(gitkeep).exists()
 
     def test_no_orphans(self):
         self._make_managed_cache("sample_cache", {"my_key": "val"})
@@ -448,8 +448,8 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
 
         assert orphans == [dead]
         assert freed == 40
-        assert os.path.exists(live)
-        assert not os.path.exists(dead)
+        assert Path(live).exists()
+        assert not Path(dead).exists()
 
     def test_dry_run_is_the_default_and_deletes_nothing(self):
         dead = self._make_blob(BLOB_B, b"y" * 40)
@@ -458,7 +458,7 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
 
         assert orphans == [dead]
         assert freed == 40
-        assert os.path.exists(dead)
+        assert Path(dead).exists()
 
     def test_blob_referenced_only_by_a_historical_event_survives(self):
         """The case a naive implementation gets wrong: an over_time history's
@@ -470,7 +470,7 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
         assert orphans == []
-        assert os.path.exists(old)
+        assert Path(old).exists()
 
     def test_blob_referenced_only_by_a_retired_column_survives(self):
         """A ``meaning_version`` bump retires a column under a mangled name; the
@@ -496,7 +496,7 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
         assert orphans == []
-        assert os.path.exists(retired_blob)
+        assert Path(retired_blob).exists()
 
     def test_blob_referenced_only_by_a_dormant_column_survives(self):
         """A column whose variable left the config is retained but not served,
@@ -511,7 +511,7 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
         assert orphans == []
-        assert os.path.exists(dormant_blob)
+        assert Path(dormant_blob).exists()
 
     def test_deduplicated_blob_survives_while_another_cell_still_names_it(self):
         """Content addressing means one file backs many cells, which is exactly
@@ -525,7 +525,7 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
         assert orphans == [aged_out]
-        assert os.path.exists(shared)
+        assert Path(shared).exists()
 
     def test_reference_is_matched_by_name_so_a_moved_cachedir_still_protects(self):
         """A blob name *is* its content hash, so a stale absolute prefix from a
@@ -536,7 +536,7 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
         assert orphans == []
-        assert os.path.exists(blob)
+        assert Path(blob).exists()
 
     def test_partial_writes_and_stray_files_are_left_alone(self):
         """``materialize_blob`` renames from ``<name>.tmp-<uuid>``; one may belong
@@ -550,8 +550,8 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
 
         assert orphans == []
         assert freed == 0
-        assert os.path.exists(tmp_write)
-        assert os.path.exists(stray)
+        assert Path(tmp_write).exists()
+        assert Path(stray).exists()
         assert subdir.is_dir()
 
     def test_no_reference_caches_at_all_means_every_blob_is_garbage(self):
@@ -575,7 +575,7 @@ class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
 
         assert orphans == [old]
         assert freed == 40
-        assert os.path.exists(recent)
+        assert Path(recent).exists()
 
     def test_empty_blob_store_is_a_noop(self):
         assert clean_orphaned_blobs(self.cachedir) == ([], 0)
@@ -602,7 +602,7 @@ class TestBlobGCDegradesSafely(_TempCacheMixin, unittest.TestCase):
         orphans, freed = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
         assert (orphans, freed) == ([], 0)
-        assert os.path.exists(blob)
+        assert Path(blob).exists()
 
     def test_incomplete_scan_reports_the_offending_entry(self):
         self._corrupt_history_value()
@@ -619,7 +619,7 @@ class TestBlobGCDegradesSafely(_TempCacheMixin, unittest.TestCase):
             orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
         assert orphans == []
-        assert os.path.exists(blob)
+        assert Path(blob).exists()
 
     def test_unenumerable_cache_collects_nothing(self):
         blob = self._make_blob(BLOB_A)
@@ -629,7 +629,7 @@ class TestBlobGCDegradesSafely(_TempCacheMixin, unittest.TestCase):
             orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
         assert orphans == []
-        assert os.path.exists(blob)
+        assert Path(blob).exists()
 
     def test_undeletable_blob_is_still_reported(self):
         """Matching clean_orphaned_media: the report is what was identified as
@@ -640,7 +640,7 @@ class TestBlobGCDegradesSafely(_TempCacheMixin, unittest.TestCase):
             orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False)
 
         assert orphans == [blob]
-        assert os.path.exists(blob)
+        assert Path(blob).exists()
 
     def test_dry_run_matches_the_real_run_when_the_scan_is_incomplete(self):
         """A dry run has to stay an accurate preview, so it reports nothing too."""
@@ -675,7 +675,7 @@ class TestBlobGCExtraRoots(_TempCacheMixin, unittest.TestCase):
         orphans, _ = clean_orphaned_blobs(self.cachedir, dry_run=False, extra_roots=[saved])
 
         assert orphans == []
-        assert os.path.exists(blob)
+        assert Path(blob).exists()
 
     def test_extra_root_directory_protects_every_pickle_under_it(self):
         blob_a = self._make_blob(BLOB_A)
@@ -689,8 +689,8 @@ class TestBlobGCExtraRoots(_TempCacheMixin, unittest.TestCase):
         )
 
         assert orphans == [dead]
-        assert os.path.exists(blob_a)
-        assert os.path.exists(blob_b)
+        assert Path(blob_a).exists()
+        assert Path(blob_b).exists()
 
     def test_missing_extra_root_aborts_rather_than_running_unprotected(self):
         """A typo'd archive path must not silently become an unprotected GC run."""
@@ -701,7 +701,7 @@ class TestBlobGCExtraRoots(_TempCacheMixin, unittest.TestCase):
         )
 
         assert orphans == []
-        assert os.path.exists(blob)
+        assert Path(blob).exists()
 
     def test_unloadable_extra_root_aborts(self):
         blob = self._make_blob(BLOB_A)
@@ -709,7 +709,7 @@ class TestBlobGCExtraRoots(_TempCacheMixin, unittest.TestCase):
         bad.write_bytes(b"not a pickle")
 
         assert clean_orphaned_blobs(self.cachedir, dry_run=False, extra_roots=[bad]) == ([], 0)
-        assert os.path.exists(blob)
+        assert Path(blob).exists()
 
 
 class TestPrintOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
@@ -725,7 +725,7 @@ class TestPrintOrphanedBlobs(_TempCacheMixin, unittest.TestCase):
         assert dead in out
         assert "Would reclaim 1" in out
         assert "nothing deleted" in out
-        assert os.path.exists(dead)
+        assert Path(dead).exists()
 
     def test_real_run_report(self):
         self._make_blob(BLOB_B, b"y" * 40)
@@ -760,7 +760,7 @@ class TestBlobGCReclaimsAgedOutHistory(unittest.TestCase):
     """
 
     def setUp(self):
-        self._old_cwd = os.getcwd()
+        self._old_cwd = Path.cwd()
         self._tmp = tempfile.mkdtemp()
         os.chdir(self._tmp)
         self.collector = ResultCollector()
@@ -798,15 +798,15 @@ class TestBlobGCReclaimsAgedOutHistory(unittest.TestCase):
         blobs = [self._event({"event": i}, rv, i) for i in range(3)]
         assert len(set(blobs)) == 3
         # The oldest cell is nulled to the sentinel but its file is left behind.
-        assert all(os.path.exists(b) for b in blobs)
+        assert all(Path(b).exists() for b in blobs)
 
         orphans, freed = clean_orphaned_blobs("cachedir", dry_run=False)
 
         assert [Path(p).name for p in orphans] == [blobs[0].name]
         assert freed > 0
-        assert not os.path.exists(blobs[0])
-        assert os.path.exists(blobs[1])
-        assert os.path.exists(blobs[2])
+        assert not Path(blobs[0]).exists()
+        assert Path(blobs[1]).exists()
+        assert Path(blobs[2]).exists()
 
     def test_aged_out_cell_sharing_a_blob_with_a_live_cell_keeps_the_file(self):
         """Identical payloads deduplicate to one file, so the aged-out event and
@@ -821,8 +821,8 @@ class TestBlobGCReclaimsAgedOutHistory(unittest.TestCase):
         orphans, _ = clean_orphaned_blobs("cachedir", dry_run=False)
 
         assert orphans == []
-        assert os.path.exists(shared)
-        assert os.path.exists(other)
+        assert Path(shared).exists()
+        assert Path(other).exists()
 
 
 class TestGenPathWithJobKey(_TempCacheMixin, unittest.TestCase):
@@ -836,10 +836,10 @@ class TestGenPathWithJobKey(_TempCacheMixin, unittest.TestCase):
         token = _current_job_key.set("test_key_123")
         counter_token = _gen_path_counter.set({})
         try:
-            with patch("bencher.utils.Path") as MockPath:
+            with patch("bencher.utils.Path") as mock_path:
                 # Redirect cachedir into our tmpdir
                 real_path = Path
-                MockPath.side_effect = lambda p: real_path(
+                mock_path.side_effect = lambda p: real_path(
                     p.replace("cachedir/", f"{self.cachedir}/", 1)
                 )
                 path = gen_path("myfile", "testfolder", ".txt")
@@ -859,9 +859,9 @@ class TestGenPathWithJobKey(_TempCacheMixin, unittest.TestCase):
         token = _current_job_key.set("dup_key")
         counter_token = _gen_path_counter.set({})
         try:
-            with patch("bencher.utils.Path") as MockPath:
+            with patch("bencher.utils.Path") as mock_path:
                 real_path = Path
-                MockPath.side_effect = lambda p: real_path(
+                mock_path.side_effect = lambda p: real_path(
                     p.replace("cachedir/", f"{self.cachedir}/", 1)
                 )
                 path1 = gen_path("img", "img", ".png")
@@ -878,9 +878,9 @@ class TestGenPathWithJobKey(_TempCacheMixin, unittest.TestCase):
 
         from bencher.utils import gen_path
 
-        with patch("bencher.utils.Path") as MockPath:
+        with patch("bencher.utils.Path") as mock_path:
             real_path = Path
-            MockPath.side_effect = lambda p: real_path(
+            mock_path.side_effect = lambda p: real_path(
                 p.replace("cachedir/", f"{self.cachedir}/", 1)
             )
             path = gen_path("myfile", "testfolder2", ".txt")

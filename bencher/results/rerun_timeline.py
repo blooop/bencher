@@ -47,14 +47,12 @@ import importlib.util
 import itertools
 import logging
 import re
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, assert_never
+from typing import TYPE_CHECKING, Any, assert_never
 
 import numpy as np
 import panel as pn
-import xarray as xr
 from param import Number, Parameter
 from strenum import StrEnum
 
@@ -76,6 +74,17 @@ from bencher.variables.results import (
     ResultString,
     ResultVideo,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
+    from types import ModuleType
+
+    import pyarrow as pa
+    import xarray as xr
+    from numpy.typing import ArrayLike
+    from rerun import RecordingStream
+    from rerun.blueprint import Container, View
+    from rerun.chunk import Chunk
 
 logger = logging.getLogger(__name__)
 
@@ -195,12 +204,12 @@ class _DurationIndex:
     #: The axis shows the parameter's own numbers, so nothing else has to.
     shows_values = True
 
-    def arrow_type(self):
+    def arrow_type(self) -> pa.DataType:
         import pyarrow as pa
 
         return pa.duration("ns")
 
-    def set_time(self, recording, timeline: str, raw: int) -> None:
+    def set_time(self, recording: RecordingStream, timeline: str, raw: int) -> None:
         # numpy, not timedelta: timedelta rounds to microseconds, which would merge
         # coordinates that differ in the nanosecond digits.
         recording.set_time(timeline, duration=np.timedelta64(raw, "ns"))
@@ -219,12 +228,12 @@ class _SequenceIndex:
     values: tuple[int, ...]
     shows_values: bool
 
-    def arrow_type(self):
+    def arrow_type(self) -> pa.DataType:
         import pyarrow as pa
 
         return pa.int64()
 
-    def set_time(self, recording, timeline: str, raw: int) -> None:
+    def set_time(self, recording: RecordingStream, timeline: str, raw: int) -> None:
         recording.set_time(timeline, sequence=raw)
 
 
@@ -234,6 +243,9 @@ _IndexEncoding = _DurationIndex | _SequenceIndex
 # is a count of nanoseconds, so a coordinate must land inside this range once scaled
 # by 1e9 -- roughly +/- 9.2e9 in parameter units.
 _INT64_MIN, _INT64_MAX = -(2**63), 2**63 - 1
+
+# A read-out scatter of this many axes goes in rerun's 3-D view; two get a drawn frame.
+_SPATIAL_AXES = 3
 
 
 def _usable(values: tuple[int, ...]) -> bool:
@@ -403,7 +415,12 @@ class _View:
     plot: _Plot2D | _Plot3D | None = None
 
 
-def _rewrite_chunk(chunk, timeline: str, arrow_type=None, raw_value: int | None = None) -> list:
+def _rewrite_chunk(
+    chunk: Chunk,
+    timeline: str,
+    arrow_type: pa.DataType | None = None,
+    raw_value: int | None = None,
+) -> list[Chunk]:
     """Return *chunk* with ``log_time`` dropped, optionally re-indexed.
 
     Dropping ``log_time`` is unconditional: it says when the data happened to be
@@ -422,7 +439,7 @@ def _rewrite_chunk(chunk, timeline: str, arrow_type=None, raw_value: int | None 
 
     from bencher.utils_rerun import rerun_chunk_api
 
-    Chunk = rerun_chunk_api().Chunk
+    chunk_cls = rerun_chunk_api().Chunk
 
     batch = chunk.to_record_batch()
     keep = [
@@ -452,10 +469,10 @@ def _rewrite_chunk(chunk, timeline: str, arrow_type=None, raw_value: int | None 
         return [chunk]
 
     schema = pa.schema(fields, metadata=batch.schema.metadata)
-    return Chunk.from_record_batch(pa.RecordBatch.from_arrays(columns, schema=schema))
+    return chunk_cls.from_record_batch(pa.RecordBatch.from_arrays(columns, schema=schema))
 
 
-def _forward_stage(recording, staged_path: str, timeline: str) -> None:
+def _forward_stage(recording: RecordingStream, staged_path: str, timeline: str) -> None:
     """Move a staging recording's chunks into *recording*, stripping ``log_time``.
 
     Everything that is not a ``ResultRerun`` is logged with ``recording.log()``, which
@@ -465,9 +482,7 @@ def _forward_stage(recording, staged_path: str, timeline: str) -> None:
     """
     from bencher.utils_rerun import rerun_chunk_api
 
-    RrdReader = rerun_chunk_api().RrdReader
-
-    reader = RrdReader(staged_path)
+    reader = rerun_chunk_api().RrdReader(staged_path)
     for store in reader.recordings():
         for chunk in reader.stream(store=store):
             if str(chunk.entity_path).lstrip("/").startswith("__properties"):
@@ -475,7 +490,7 @@ def _forward_stage(recording, staged_path: str, timeline: str) -> None:
             recording.send_chunks(_rewrite_chunk(chunk, timeline))
 
 
-def _sample_chunks(path: str):
+def _sample_chunks(path: str) -> Iterator[tuple[str, Chunk]]:
     """Yield ``(entity, chunk)`` for every data chunk in one sample's ``.rrd``.
 
     Recording properties are per-file metadata (start time, app id). Every sample
@@ -484,9 +499,7 @@ def _sample_chunks(path: str):
     """
     from bencher.utils_rerun import rerun_chunk_api
 
-    RrdReader = rerun_chunk_api().RrdReader
-
-    reader = RrdReader(path)
+    reader = rerun_chunk_api().RrdReader(path)
     for store in reader.recordings():
         for chunk in reader.stream(store=store):
             entity = str(chunk.entity_path).lstrip("/")
@@ -495,7 +508,7 @@ def _sample_chunks(path: str):
             yield entity, chunk
 
 
-def _content_key(batch) -> bytes:
+def _content_key(batch: pa.RecordBatch) -> bytes:
     """A digest of what a chunk says, ignoring the row ids rerun stamps on it.
 
     Two chunks that say the same thing about the same components digest the same
@@ -568,15 +581,15 @@ def _shared_entities(samples: list[tuple[int, str]], n_ticks: int) -> set[str]:
     for _, path in samples:
         keys: dict[str, list[bytes] | None] = {}
         for entity, chunk in _sample_chunks(path):
-            if entity in keys and keys[entity] is None:
+            found = keys.get(entity, [])
+            if found is None:
                 continue
             batch = chunk.to_record_batch()
             if any(f.name not in _DROPPED_TIMELINES for f in _index_fields(batch)):
                 keys[entity] = None
                 continue
-            found = keys.setdefault(entity, [])
-            assert found is not None
             found.append(_content_key(batch))
+            keys[entity] = found
         per_tick.append({entity: None if k is None else sorted(k) for entity, k in keys.items()})
     first = per_tick[0]
     return {
@@ -587,12 +600,12 @@ def _shared_entities(samples: list[tuple[int, str]], n_ticks: int) -> set[str]:
 
 
 def _send_recordings(
-    recording,
+    recording: RecordingStream,
     view: _View,
     samples: list[tuple[int, str]],
     n_ticks: int,
     timeline: str,
-    arrow_type,
+    arrow_type: pa.DataType,
 ) -> None:
     """Re-root a branch's sample ``.rrd`` files under *view* on the sweep timeline.
 
@@ -633,12 +646,12 @@ _PLOT_ROW_SHARES = (5, 2)
 
 
 def _layout_views(
-    rrb,
-    branches: list[list],
+    rrb: ModuleType,
+    branches: list[list[View | Container]],
     branch_sizes: dict[str, int],
-    readout=None,
+    readout: View | Container | None = None,
     readout_shares: tuple[int, int] = _READOUT_ROW_SHARES,
-):
+) -> View | Container:
     """Arrange the views, grouped by branch, over the read-out strip.
 
     Each branch's result variables are stacked vertically so a sample's image and its
@@ -677,7 +690,7 @@ def _layout_views(
     return rrb.Vertical(layout, readout, row_shares=list(readout_shares))
 
 
-def _readout_view(rrb, view: _View):
+def _readout_view(rrb: ModuleType, view: _View) -> View | Container:
     """One read-out's Blueprint view: a drawn plot, a 3-D one, or an ordinary view."""
     match view.plot:
         case _Plot2D(bounds=((x_min, x_max), (y_min, y_max))):
@@ -697,7 +710,7 @@ def _readout_view(rrb, view: _View):
             assert_never(view.plot)
 
 
-def _readout_layout(rrb, readouts: list[_View]):
+def _readout_layout(rrb: ModuleType, readouts: list[_View]) -> View | Container | None:
     """The read-out strip: nothing, one view, or the scatter beside the value.
 
     Side by side rather than stacked, because the strip is a sliver by design and
@@ -750,7 +763,7 @@ class _ReadoutScatter:
     @property
     def spatial(self) -> bool:
         """Whether this asks for the 3-D view rather than the drawn frame."""
-        return len(self.axes) == 3
+        return len(self.axes) == _SPATIAL_AXES
 
     @classmethod
     def resolve(
@@ -804,6 +817,11 @@ _GRID_COLOR = (170, 175, 185)
 _TITLE_COLOR = (0, 0, 0)
 
 
+#: ``(limit, multiple)``: a raw step whose leading digits fall below *limit* rounds to
+#: *multiple* times its power of ten; anything past the last limit rounds up to 10.
+_NICE_STEP_LIMITS = ((1.5, 1), (3.5, 2), (7.5, 5))
+
+
 def _nice_ticks(low: float, high: float, target: int = 4) -> list[float]:
     """About *target* round-number tick values covering ``[low, high]``.
 
@@ -818,8 +836,8 @@ def _nice_ticks(low: float, high: float, target: int = 4) -> list[float]:
     raw = span / max(target - 1, 1)
     magnitude = 10 ** np.floor(np.log10(raw))
     fraction = raw / magnitude
-    step = magnitude * (
-        1 if fraction < 1.5 else 2 if fraction < 3.5 else 5 if fraction < 7.5 else 10
+    step = magnitude * next(
+        (multiple for limit, multiple in _NICE_STEP_LIMITS if fraction < limit), 10
     )
     first = np.ceil(low / step) * step
     # Half a step of slack so a tick landing on `high` survives the float arithmetic
@@ -876,15 +894,15 @@ class _PlotFrame:
         self.x_range = _padded_range(x)
         self.y_range = _padded_range(y)
 
-    def project_x(self, x) -> np.ndarray:
+    def project_x(self, x: ArrayLike) -> np.ndarray:
         low, high = self.x_range
         return (np.asarray(x, dtype=float) - low) / (high - low) * self.width
 
-    def project_y(self, y) -> np.ndarray:
+    def project_y(self, y: ArrayLike) -> np.ndarray:
         low, high = self.y_range
         return self.height - (np.asarray(y, dtype=float) - low) / (high - low) * self.height
 
-    def project(self, x, y) -> np.ndarray:
+    def project(self, x: ArrayLike, y: ArrayLike) -> np.ndarray:
         return np.column_stack((self.project_x(x), self.project_y(y)))
 
     def bounds(self, titled: bool) -> tuple[tuple[float, float], tuple[float, float]]:
@@ -900,7 +918,13 @@ class _PlotFrame:
 
 
 def _log_plot_frame(
-    rr, staging, origin: str, frame: _PlotFrame, x_name: str, y_name: str, title: str | None
+    rr: ModuleType,
+    staging: RecordingStream,
+    origin: str,
+    frame: _PlotFrame,
+    x_name: str,
+    y_name: str,
+    title: str | None,
 ) -> None:
     """Draw the title, axes, gridlines, tick labels and axis names for *frame*, static.
 
@@ -1005,7 +1029,7 @@ class _PlotBox3D:
     def __init__(self, series: list[np.ndarray]) -> None:
         self.ranges = [_padded_range(values) for values in series]
 
-    def project_axis(self, index: int, values) -> np.ndarray:
+    def project_axis(self, index: int, values: ArrayLike) -> np.ndarray:
         low, high = self.ranges[index]
         return (np.asarray(values, dtype=float) - low) / (high - low) * self.size
 
@@ -1013,7 +1037,9 @@ class _PlotBox3D:
         return np.column_stack([self.project_axis(i, v) for i, v in enumerate(series)])
 
 
-def _log_plot_box_3d(rr, staging, origin: str, box: _PlotBox3D, names: Sequence[str]) -> None:
+def _log_plot_box_3d(
+    rr: ModuleType, staging: RecordingStream, origin: str, box: _PlotBox3D, names: Sequence[str]
+) -> None:
     """Draw the three axes, their tick labels and their names for *box*, static.
 
     Labels are points of no size carrying text, as in the 2-D frame: a point's label
@@ -1146,7 +1172,7 @@ class RerunTimelineResult(BenchResultBase):
         readout_scatter: Sequence[str] | None = None,
         width: int | None = None,
         height: int | None = None,
-        **_kwargs,
+        **_kwargs: Any,
     ) -> pn.panel | None:
         """Render the sweep as one rerun viewer scrubbed by a swept parameter.
 
@@ -1362,13 +1388,12 @@ class RerunTimelineResult(BenchResultBase):
         recording.send_blueprint(blueprint, make_active=True, make_default=True)
 
         output = gen_rerun_data_path("timeline")
-        with open(output, "wb") as handle:
-            handle.write(recording.memory_recording().drain_as_bytes())
+        Path(output).write_bytes(recording.memory_recording().drain_as_bytes())
         return str(output)
 
     def _log_value_readout(
         self,
-        staging,
+        staging: RecordingStream,
         dataset: xr.Dataset,
         timeline_dim: str,
         encoding: _IndexEncoding,
@@ -1405,7 +1430,7 @@ class RerunTimelineResult(BenchResultBase):
         coords = np.asarray(dataset.coords[timeline_dim].values)
         numeric = bool(np.issubdtype(coords.dtype, np.number)) and not riding
         origin = _readout_entity(timeline_dim)
-        for position, (raw, value) in enumerate(zip(encoding.values, coords)):
+        for position, (raw, value) in enumerate(zip(encoding.values, coords, strict=True)):
             encoding.set_time(staging, timeline_dim, raw)
             if numeric:
                 staging.log(origin, rr.Scalars(float(value)))
@@ -1427,7 +1452,7 @@ class RerunTimelineResult(BenchResultBase):
 
     def _log_front_scatter(
         self,
-        staging,
+        staging: RecordingStream,
         dataset: xr.Dataset,
         timeline_dim: str,
         encoding: _IndexEncoding,
@@ -1555,8 +1580,8 @@ class RerunTimelineResult(BenchResultBase):
 
     @staticmethod
     def _log_front_scatter_3d(
-        rr,
-        staging,
+        rr: ModuleType,
+        staging: RecordingStream,
         dataset: xr.Dataset,
         timeline_dim: str,
         encoding: _IndexEncoding,
@@ -1617,7 +1642,7 @@ class RerunTimelineResult(BenchResultBase):
 
     def _log_sweep(
         self,
-        recording,
+        recording: RecordingStream,
         dataset: xr.Dataset,
         result_vars: list[Parameter],
         timeline_dim: str,
@@ -1649,9 +1674,11 @@ class RerunTimelineResult(BenchResultBase):
         parts = {dim: _entity_parts(dim, list(dataset.coords[dim].values)) for dim in branch_dims}
         branches: list[list[_View]] = []
         for combo in itertools.product(*(range(dataset.sizes[dim]) for dim in branch_dims)):
-            branch_ds = dataset.isel(dict(zip(branch_dims, combo))) if branch_dims else dataset
+            branch_ds = (
+                dataset.isel(dict(zip(branch_dims, combo, strict=True))) if branch_dims else dataset
+            )
             prefix = "".join(
-                f"/{parts[dim][position]}" for dim, position in zip(branch_dims, combo)
+                f"/{parts[dim][position]}" for dim, position in zip(branch_dims, combo, strict=True)
             )
             branch_label = ", ".join(
                 f"{dim}={_coord_label(branch_ds.coords[dim].values.item())}" for dim in branch_dims
@@ -1719,8 +1746,7 @@ class RerunTimelineResult(BenchResultBase):
             from bencher.utils import gen_rerun_data_path
 
             staged_path = gen_rerun_data_path("timeline_stage")
-            with open(staged_path, "wb") as handle:
-                handle.write(staging.memory_recording().drain_as_bytes())
+            Path(staged_path).write_bytes(staging.memory_recording().drain_as_bytes())
             _forward_stage(recording, staged_path, timeline_dim)
             # Purely an intermediate: the composition is what callers are handed.
             Path(staged_path).unlink(missing_ok=True)

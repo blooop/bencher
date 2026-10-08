@@ -40,7 +40,9 @@ def to_capability(value: str | Capability) -> Capability:
 
 @runtime_checkable
 class CacheHandle(Protocol):
-    """Plugin-accessible memoization surface. Bencher core supplies a concrete handle;
+    """Plugin-accessible memoization surface.
+
+    Bencher core supplies a concrete handle;
     plugins treat it as opaque key/value storage.
     """
 
@@ -58,7 +60,9 @@ class RunMeta:
 
 @dataclass(frozen=True)
 class BenchData:
-    """Frozen value type handed to plot plugins. The stable public contract surface for
+    """Frozen value type handed to plot plugins.
+
+    The stable public contract surface for
     plugin authors — internal bencher refactors must preserve this shape.
     """
 
@@ -105,7 +109,7 @@ class BenchData:
             case unreachable:
                 assert_never(unreachable)
 
-    def with_changes(self, **kwargs) -> BenchData:
+    def with_changes(self, **kwargs: Any) -> BenchData:
         return replace(self, **kwargs)
 
     @classmethod
@@ -116,7 +120,7 @@ class BenchData:
         input_vars: tuple = (),
         result_vars: tuple = (),
         plt_cnt_cfg: PltCntCfg | None = None,
-        **overrides,
+        **overrides: Any,
     ) -> BenchData:
         """Construct a minimal BenchData for plugin unit tests.
 

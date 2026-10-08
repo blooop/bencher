@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from itertools import product as iter_product
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import optuna
 import panel as pn
 
-# from bencher.results.bench_result_base import BenchResultBase
 from bencher.optuna_conversions import (
     _append_safe,
     _append_safe_sized,
@@ -26,16 +26,35 @@ from bencher.utils import hmap_canonical_input
 from bencher.variables.inputs import BoolSweep
 from bencher.variables.time import TimeEvent, TimeSnapshot
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+    import pandas as pd
+    from optuna.trial import FrozenTrial, Trial
+    from param import Parameter
+
+    from bencher.variables.sweep_base import SweepBase
+
 logger = logging.getLogger(__name__)
 
+# optuna's plot_pareto_front draws at most three objectives.
+MAX_PARETO_OBJECTIVES = 3
+# Above this many lines the best-parameters summary gets a scrolling fixed-height box.
+SCROLL_PARAM_LINES = 30
 
-def _evaluate_over_non_optimized(worker, opt_kwargs, non_opt_vars, result_vars):
+
+def _evaluate_over_non_optimized(
+    worker: Callable[..., dict[str, Any]],
+    opt_kwargs: dict[str, Any],
+    non_opt_vars: Sequence[SweepBase],
+    result_vars: Sequence[Parameter],
+) -> tuple[float, ...]:
     """Evaluate worker across all combinations of non-optimized vars and return mean results."""
     non_opt_value_lists = [iv.values() for iv in non_opt_vars]
     all_results = []
     for combo in iter_product(*non_opt_value_lists):
         call_kwargs = dict(opt_kwargs)
-        for iv, val in zip(non_opt_vars, combo):
+        for iv, val in zip(non_opt_vars, combo, strict=True):
             call_kwargs[iv.name] = val
         all_results.append(worker(**call_kwargs))
 
@@ -52,7 +71,12 @@ def _evaluate_over_non_optimized(worker, opt_kwargs, non_opt_vars, result_vars):
     return tuple(aggregated)
 
 
-def _aggregate_non_optimized(df, opt_vars, non_opt_vars, target_names):
+def _aggregate_non_optimized(
+    df: pd.DataFrame,
+    opt_vars: Sequence[SweepBase],
+    non_opt_vars: Sequence[SweepBase],
+    target_names: Sequence[str],
+) -> pd.DataFrame:
     """Group DataFrame by optimized vars and average target columns over non-optimized vars."""
     if not (non_opt_vars and opt_vars and target_names):
         return df
@@ -65,14 +89,14 @@ def _aggregate_non_optimized(df, opt_vars, non_opt_vars, target_names):
     return df.groupby(group_cols, as_index=False)[agg_cols].mean()
 
 
-def _study_has_multiple_params(study):
+def _study_has_multiple_params(study: optuna.Study) -> bool:
     """True when the study has >1 trial parameter, making importance meaningful."""
     return bool(study.trials) and len(study.trials[0].params) > 1
 
 
 class OptunaResult(BenchResultBase):
-    def to_optuna_plots(self, **kwargs) -> list[pn.pane.panel]:
-        """Create an optuna summary from the benchmark results
+    def to_optuna_plots(self, **kwargs: Any) -> list[pn.pane.panel]:
+        """Create an optuna summary from the benchmark results.
 
         Returns:
             list[pn.pane.panel]: A list of optuna plot summarising the benchmark process
@@ -81,14 +105,12 @@ class OptunaResult(BenchResultBase):
 
     def to_optuna_from_results(
         self,
-        worker,
-        n_trials=100,
+        worker: Callable[..., dict[str, Any]],
+        n_trials: int = 100,
         extra_results: list[OptunaResult] | None = None,
-        sampler=None,
-    ):
-        directions = []
-        for rv in self.bench_cfg.optuna_targets(True):
-            directions.append(rv.direction)
+        sampler: optuna.samplers.BaseSampler | None = None,
+    ) -> optuna.Study:
+        directions = [rv.direction for rv in self.bench_cfg.optuna_targets(True)]
 
         if sampler is None:
             sampler = optuna.samplers.TPESampler()
@@ -110,7 +132,7 @@ class OptunaResult(BenchResultBase):
                 "At least one input variable must have optimize=True for Optuna optimization."
             )
 
-        def wrapped(trial) -> tuple:
+        def wrapped(trial: Trial) -> tuple:
             kwargs = {iv.name: sweep_var_to_suggest(iv, trial) for iv in opt_vars}
 
             if not non_opt_vars:
@@ -175,7 +197,7 @@ class OptunaResult(BenchResultBase):
             trial_vars = opt_vars
 
         rows_before = len(df)
-        df.dropna(inplace=True)
+        df = df.dropna()
         rows_after = len(df)
         if rows_after == 0 and rows_before > 0:
             logger.warning(
@@ -211,8 +233,7 @@ class OptunaResult(BenchResultBase):
                 else:
                     params[i.name] = row[1][i.name]
 
-            for r in target_names:
-                values.append(row[1][r])
+            values.extend(row[1][r] for r in target_names)
 
             trials.append(
                 optuna.trial.create_trial(
@@ -238,14 +259,14 @@ class OptunaResult(BenchResultBase):
         study.add_trials(trials)
         return study
 
-    def get_best_trial_params(self, canonical=False):
+    def get_best_trial_params(self, canonical: bool = False) -> dict[str, Any] | tuple:
         studies = self.bench_result_to_study(False)
         out = studies.best_trials[0].params
         if canonical:
             return hmap_canonical_input(out)
         return out
 
-    def get_pareto_front_params(self):
+    def get_pareto_front_params(self) -> list[dict[str, Any]]:
         return [p.params for p in self.studies[0].trials]
 
     def collect_optuna_plots(
@@ -285,7 +306,7 @@ class OptunaResult(BenchResultBase):
         plot_w = self.bench_cfg.plot_width or self.bench_cfg.plot_size or 600
         target_names = self.bench_cfg.optuna_targets()
         study_panes = []
-        for study, tab_name in zip(self.studies, tab_names):
+        for study, tab_name in zip(self.studies, tab_names, strict=True):
             study_pane = pn.Column()
             param_str = []
 
@@ -294,7 +315,7 @@ class OptunaResult(BenchResultBase):
                 history_row = pn.Row()
                 for idx, tgt in enumerate(target_names):
 
-                    def _target_hist(t, i=idx):
+                    def _target_hist(t: FrozenTrial, i: int = idx) -> float:
                         return t.values[i]
 
                     col = pn.Column(pn.pane.Markdown(f"## {tgt}"))
@@ -319,7 +340,7 @@ class OptunaResult(BenchResultBase):
                 # --- Pareto Front ---
                 if self.bench_cfg.post_description:
                     study_pane.append(pn.pane.Markdown(self.bench_cfg.post_description))
-                if len(target_names) <= 3:
+                if len(target_names) <= MAX_PARETO_OBJECTIVES:
                     _append_safe(
                         study_pane,
                         plot_pareto_front,
@@ -328,7 +349,7 @@ class OptunaResult(BenchResultBase):
                         include_dominated_trials=False,
                     )
                 else:
-                    print("plotting pareto front of first 3 result variables")
+                    logger.info("plotting pareto front of first 3 result variables")
                     _append_safe(
                         study_pane,
                         plot_pareto_front,
@@ -368,7 +389,7 @@ class OptunaResult(BenchResultBase):
 
                 param_str.extend(summarise_trial(study.best_trial, self.bench_cfg))
 
-            kwargs = {"height": 500, "scroll": True} if len(param_str) > 30 else {}
+            kwargs = {"height": 500, "scroll": True} if len(param_str) > SCROLL_PARAM_LINES else {}
 
             param_str = "\n".join(param_str)
             study_pane.append(
@@ -385,8 +406,8 @@ class OptunaResult(BenchResultBase):
         return pn.Tabs(*study_panes)
 
     def deep(self) -> OptunaResult:  # pragma: no cover
-        """Return a deep copy of these results"""
+        """Return a deep copy of these results."""
         return deepcopy(self)
 
-    def get_best_holomap(self, name: str | None = None):
+    def get_best_holomap(self, name: str | None = None) -> Any:
         return self.get_hmap(name)[self.get_best_trial_params(True)]

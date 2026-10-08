@@ -9,19 +9,23 @@ from __future__ import annotations
 
 import logging
 import warnings
-from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import assert_never
-
-from param import Parameter
+from typing import TYPE_CHECKING, Any, assert_never
 
 from bencher.variables.parametrised_sweep import ParametrizedSweep
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from param import Parameter
 
 logger = logging.getLogger(__name__)
 
 
-def kwargs_to_input_cfg(worker_input_cfg: type[ParametrizedSweep], **kwargs) -> ParametrizedSweep:
+def kwargs_to_input_cfg(
+    worker_input_cfg: type[ParametrizedSweep], **kwargs: Any
+) -> ParametrizedSweep:
     """Create a configured instance of a ParametrizedSweep with the provided keyword arguments.
 
     ``worker_input_cfg`` is a *class*, and always was: every caller passes one (the
@@ -46,7 +50,7 @@ def kwargs_to_input_cfg(worker_input_cfg: type[ParametrizedSweep], **kwargs) -> 
 
 
 def worker_cfg_wrapper(
-    worker: Callable, worker_input_cfg: type[ParametrizedSweep], **kwargs
+    worker: Callable, worker_input_cfg: type[ParametrizedSweep], **kwargs: Any
 ) -> dict:
     """Wrap a worker function to accept keyword arguments instead of a config object.
 

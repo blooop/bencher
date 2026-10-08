@@ -29,7 +29,7 @@ class TestBenchReport(unittest.TestCase):
             # `ctx.exception`, which is unset -- so the real failure is buried under an
             # AttributeError from the assertion meant to diagnose it.
             with self.subTest(debug=debug):
-                with pytest.raises(ValueError) as ctx:
+                with pytest.raises(ValueError, match="has no branch name to push to") as ctx:
                     bench_report.publish(lambda _b: ("repo", "url"), debug=debug)
                 message = str(ctx.value)
                 assert "branch_name" in message

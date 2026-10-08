@@ -6,10 +6,10 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-import os
 from importlib import metadata
+from pathlib import Path
 
-copyright = "2025, Austin Gregg-Smith"
+copyright = "2025, Austin Gregg-Smith"  # noqa: A001 - Sphinx reads this config name
 author = "Austin Gregg-Smith"
 release = metadata.version("holobench")
 project = f"bencher {release}"
@@ -50,8 +50,8 @@ html_js_files = ["bencher-embed.js"]
 
 # Copy HTML reports and thumbnails into the build (only if generated)
 # Reports live in docs/_extra/reference/meta/ to mirror the built output structure
-_extra_dir = os.path.join(os.path.dirname(__file__), "_extra")
-html_extra_path = ["_extra"] if os.path.isdir(_extra_dir) else []
+_extra_dir = Path(__file__).parent / "_extra"
+html_extra_path = ["_extra"] if _extra_dir.is_dir() else []
 
 autoapi_dirs = ["../bencher"]
 autoapi_ignore = ["*example_*", "*example*", "*experimental*"]

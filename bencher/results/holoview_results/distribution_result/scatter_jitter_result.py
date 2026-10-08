@@ -1,19 +1,22 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import holoviews as hv
-import panel as pn
-import xarray as xr
-from param import Parameter
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.distribution_result.distribution_result import (
     DistributionResult,
 )
-from bencher.results.holoview_results.holoview_result import PlotResult
 from bencher.variables.results import ResultFloat
+
+if TYPE_CHECKING:
+    import panel as pn
+    import xarray as xr
+    from param import Parameter
+
+    from bencher.results.holoview_results.holoview_result import PlotResult
 
 
 class ScatterJitterResult(DistributionResult):
@@ -49,7 +52,10 @@ class ScatterJitterResult(DistributionResult):
             result_var: The result variable to plot. If None, uses the default.
             override: Whether to override filter restrictions. Defaults to True.
             jitter: Amount of jitter to apply to points. Defaults to 0.1.
+            target_dimension: The target dimensionality for data filtering. Defaults to
+                the categorical variable count plus one for the repeats dimension.
             **kwargs: Additional keyword arguments passed to the plot rendering.
+
 
         Returns:
             A panel containing the scatter jitter plot if data is appropriate,

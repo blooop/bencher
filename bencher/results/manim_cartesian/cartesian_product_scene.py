@@ -14,12 +14,19 @@ import functools
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PIL import Image, ImageDraw, ImageFont
 
-from bencher.results.manim_cartesian.cartesian_product_cfg import CartesianProductCfg
+if TYPE_CHECKING:
+    from bencher.results.manim_cartesian.cartesian_product_cfg import CartesianProductCfg
 
 logger = logging.getLogger(__name__)
+
+# Dimension index drawn as an isometric stack; depths up to it share the tight grid gap.
+STACK_DIM = 2
+# Flash intensity above which a strobe frame gets the gray wash.
+FLASH_WASH_THRESHOLD = 0.3
 
 # Layout — light theme to match white page background
 CELL_SIZE = 20
@@ -85,7 +92,7 @@ def _generate_unique_filename(cfg: CartesianProductCfg, width: int, height: int)
 
 
 @functools.lru_cache(maxsize=8)
-def _get_font(size: int):
+def _get_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     """Get a font, falling back to default if no TTF available."""
     try:
         return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
@@ -114,7 +121,7 @@ class Shape(ABC):
     disappear from the group code instead of being re-tested in each method.
     """
 
-    def __init__(self, depth: int = 0):
+    def __init__(self, depth: int = 0) -> None:
         self.depth = depth  # 0 = innermost (tight gap), higher = wider gap
 
     @property
@@ -129,7 +136,7 @@ class Shape(ABC):
         Depth 3 (stack direction): uses isometric offset, gap not used.
         Depth 4+ (sets of stacks, sets of sets): GROUP_GAP scaling with depth.
         """
-        if self.depth <= 2:
+        if self.depth <= STACK_DIM:
             return CELL_GAP
         return GROUP_GAP * max(1, self.depth - 3)
 
@@ -142,25 +149,25 @@ class Shape(ABC):
         """Draw this shape at position (x, y) on the image."""
 
     @abstractmethod
-    def _deep_copy(self) -> Shape: ...
+    def deep_copy(self) -> Shape: ...
 
     @abstractmethod
-    def _deep_copy_recolored(self, color_index: int) -> Shape:
+    def deep_copy_recolored(self, color_index: int) -> Shape:
         """Copy and recolor in a single traversal."""
 
     def extrude(self, n: int, direction: str, color_index: int | None = None) -> Group:
         """Create a new shape by extruding this one n times along direction."""
         if color_index is not None:
-            copies = [self._deep_copy_recolored(color_index) for _ in range(n)]
+            copies = [self.deep_copy_recolored(color_index) for _ in range(n)]
         else:
-            copies = [self._deep_copy() for _ in range(n)]
+            copies = [self.deep_copy() for _ in range(n)]
         return Group(children=copies, direction=direction, depth=self.depth + 1)
 
 
 class Cell(Shape):
     """A single leaf square, coloured by palette index."""
 
-    def __init__(self, color_index: int = 0, depth: int = 0):
+    def __init__(self, color_index: int = 0, depth: int = 0) -> None:
         super().__init__(depth=depth)
         self.color_index = color_index  # palette index for leaf cells
 
@@ -173,10 +180,10 @@ class Cell(Shape):
         border = tuple(int(c * alpha) for c in CELL_BORDER)
         img.rectangle([x, y, x + CELL_SIZE, y + CELL_SIZE], fill=color, outline=border)
 
-    def _deep_copy(self) -> Cell:
+    def deep_copy(self) -> Cell:
         return Cell(color_index=self.color_index)
 
-    def _deep_copy_recolored(self, color_index: int) -> Cell:
+    def deep_copy_recolored(self, color_index: int) -> Cell:
         return Cell(color_index=color_index)
 
 
@@ -189,7 +196,7 @@ class Group(Shape):
     sequence, several frames into a render.
     """
 
-    def __init__(self, children: list[Shape], direction: str = "right", depth: int = 0):
+    def __init__(self, children: list[Shape], direction: str = "right", depth: int = 0) -> None:
         if not children:
             raise ValueError("Group needs at least one child shape; use Cell() for a leaf.")
         super().__init__(depth=depth)
@@ -245,17 +252,17 @@ class Group(Shape):
                 child.draw(img, x, cy, alpha)
                 cy += child.size()[1] + g
 
-    def _deep_copy(self) -> Group:
+    def deep_copy(self) -> Group:
         return Group(
-            children=[c._deep_copy() for c in self.children],
+            children=[c.deep_copy() for c in self.children],
             direction=self.direction,
             depth=self.depth,
         )
 
-    def _deep_copy_recolored(self, color_index: int) -> Group:
+    def deep_copy_recolored(self, color_index: int) -> Group:
         """Copy and recolor in a single traversal."""
         return Group(
-            children=[c._deep_copy_recolored(color_index) for c in self.children],
+            children=[c.deep_copy_recolored(color_index) for c in self.children],
             direction=self.direction,
             depth=self.depth,
         )
@@ -266,7 +273,7 @@ class Group(Shape):
 # Dimensions 3+: resume right/down alternation for sets/groups.
 def _direction_for(dim_index: int) -> str:
     """Map dimension index to layout direction."""
-    if dim_index == 2:
+    if dim_index == STACK_DIM:
         return "stack"
     return "right" if dim_index % 2 == 0 else "down"
 
@@ -305,7 +312,7 @@ class TimelineShape(Shape):
     FRAME_W = 100
     FRAME_H = 80
 
-    def __init__(self, inner: Shape, count: int):
+    def __init__(self, inner: Shape, count: int) -> None:
         self.inner = inner
         self.count = count
         self._skip_labels = False  # when True, draw() skips frame labels (overlay mode)
@@ -331,7 +338,7 @@ class TimelineShape(Shape):
         )
         return (total_w, total_h)
 
-    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0):
+    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0) -> None:
         frame_w, frame_h = self._outer_frame_size()
         total_w, total_h = self.size()
         strip_h = total_h - FILM_LABEL_H
@@ -353,7 +360,7 @@ class TimelineShape(Shape):
         scaled_w, scaled_h = inner_img.size
 
         # Need the underlying PIL Image (not ImageDraw) for pasting
-        base_img: Image.Image = img._image
+        base_img: Image.Image = img._image  # noqa: SLF001 - ImageDraw has no public accessor for its image
 
         frames_y = y + FILM_PAD + FILM_SPROCKET_H + FILM_SPROCKET_MARGIN
         font_label = _get_font(12)
@@ -383,7 +390,7 @@ class TimelineShape(Shape):
                 img.text((lx, y + strip_h + 2), label, fill=FILM_LABEL_COLOR, font=font_label)
 
     @staticmethod
-    def _draw_sprockets(img: ImageDraw.ImageDraw, strip_x: int, row_y: int, strip_w: int):
+    def _draw_sprockets(img: ImageDraw.ImageDraw, strip_x: int, row_y: int, strip_w: int) -> None:
         """Draw a row of rounded sprocket holes across the strip width."""
         margin = FILM_PAD + 6
         avail = strip_w - 2 * margin
@@ -458,17 +465,17 @@ class TimelineShape(Shape):
                 font=font_label,
             )
 
-    def _deep_copy(self) -> TimelineShape:
-        return TimelineShape(self.inner._deep_copy(), self.count)
+    def deep_copy(self) -> TimelineShape:
+        return TimelineShape(self.inner.deep_copy(), self.count)
 
-    def _deep_copy_recolored(self, color_index: int) -> TimelineShape:
+    def deep_copy_recolored(self, color_index: int) -> TimelineShape:
         # Recolours the wrapped shape and rewraps. The base class used to supply this
         # by walking `self.children`, which is None on a wrapper, so extruding through
         # a film strip raised `TypeError: 'NoneType' object is not iterable`. Making the
         # sum type explicit turned that into a missing implementation, which is what it
         # always was.
         return TimelineShape(
-            self.inner._deep_copy_recolored(color_index),
+            self.inner.deep_copy_recolored(color_index),
             self.count,
         )
 
@@ -481,11 +488,13 @@ class TimelineShape(Shape):
 class StrobeShape(Shape):
     """Shape with a glowing border and tally-mark counter.
 
-    ``flash`` (0–1) controls the glow intensity for animation frames.
+    ``flash`` (0-1) controls the glow intensity for animation frames.
     All visual tunables are read from ``cfg`` (a CartesianProductCfg).
     """
 
-    def __init__(self, inner: Shape, count: int, cfg: CartesianProductCfg, flash: float = 0.0):
+    def __init__(
+        self, inner: Shape, count: int, cfg: CartesianProductCfg, flash: float = 0.0
+    ) -> None:
         self.inner = inner
         self.count = count
         self.cfg = cfg
@@ -501,7 +510,7 @@ class StrobeShape(Shape):
         total_h = ih + 2 * c.strobe_pad + c.strobe_mark_row_h
         return (total_w, total_h)
 
-    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0):
+    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0) -> None:
         c = self.cfg
         iw, ih = self.inner.size()
         total_w, total_h = self.size()
@@ -522,10 +531,10 @@ class StrobeShape(Shape):
         self.inner.draw(img, ix, iy, alpha)
 
         # Gentle gray wash on flash
-        if self.flash > 0.3:
+        if self.flash > FLASH_WASH_THRESHOLD:
             fill_alpha = self.flash * 0.08
             overlay = Image.new("RGB", (total_w, box_h), c.strobe_color)
-            base_img = img._image
+            base_img = img._image  # noqa: SLF001 - ImageDraw has no public accessor for its image
             # Crop the region, blend with overlay, then paste back
             region = base_img.crop((x, y, x + total_w, y + box_h))
             blended = Image.blend(region, overlay, fill_alpha)
@@ -538,7 +547,15 @@ class StrobeShape(Shape):
             avail_w = total_w - 2 * c.strobe_pad
             self._draw_tally(img, x + c.strobe_pad, marks_y, avail_w, mark_color, c)
 
-    def _draw_tally(self, img, mx0, my, avail_w, color, c):
+    def _draw_tally(
+        self,
+        img: ImageDraw.ImageDraw,
+        mx0: int,
+        my: int,
+        avail_w: int,
+        color: tuple[int, ...],
+        c: CartesianProductCfg,
+    ) -> None:
         """Proper tally marks (vertical lines, diagonal strike every 5) + xN label.
 
         Tallies grow from the left. The xN number is always on the right.
@@ -555,7 +572,7 @@ class StrobeShape(Shape):
         one_group_w = (group_size - 1) * stride + mark_w
 
         # Check if all tallies fit
-        def tally_width(n):
+        def tally_width(n: int) -> int:
             if n == 0:
                 return 0
             n_full = n // group_size
@@ -613,7 +630,7 @@ class StrobeShape(Shape):
 
     def draw_tally_overlay(
         self, img: ImageDraw.ImageDraw, anchor_x: int, anchor_y: int, avail_w: int
-    ):
+    ) -> None:
         """Draw tally marks at fixed pixel size on the final frame."""
         c = self.cfg
         mark_color = tuple(int(v) for v in c.strobe_color)
@@ -636,14 +653,14 @@ class StrobeShape(Shape):
         tally_x = box_x + (box_w - tally_avail_w) // 2
         self.draw_tally_overlay(img, tally_x, tally_y, tally_avail_w)
 
-    def _deep_copy(self) -> StrobeShape:
-        return StrobeShape(self.inner._deep_copy(), self.count, self.cfg, self.flash)
+    def deep_copy(self) -> StrobeShape:
+        return StrobeShape(self.inner.deep_copy(), self.count, self.cfg, self.flash)
 
-    def _deep_copy_recolored(self, color_index: int) -> StrobeShape:
-        # See TimelineShape._deep_copy_recolored: inherited from the base this walked a
+    def deep_copy_recolored(self, color_index: int) -> StrobeShape:
+        # See TimelineShape.deep_copy_recolored: inherited from the base this walked a
         # None `children` and raised.
         return StrobeShape(
-            self.inner._deep_copy_recolored(color_index),
+            self.inner.deep_copy_recolored(color_index),
             self.count,
             self.cfg,
             self.flash,
@@ -716,7 +733,7 @@ def render_animation(
         dim_label: str | None = None,
         count_label: str | None = None,
         x_offset: int = 0,
-    ):
+    ) -> None:
         """Render one frame. Text is persistent — only updates when new values given.
 
         x_offset shifts the shape horizontally (positive = right). Parts that
@@ -821,7 +838,7 @@ def render_animation(
     # Minimum frames to hold each step so labels are readable (~0.5s)
     min_hold = max(1, fps // 2)
 
-    def hold(n: int = 0):
+    def hold(n: int = 0) -> None:
         """Extend the last frame's duration instead of duplicating it."""
         durations[-1] += max(min_hold, n) * frame_duration_ms
 
@@ -881,19 +898,19 @@ def render_animation(
         dim_color += 1
 
     # --- Phase 2: Repeat — strobe flash animation ---
-    # Always shown (even ×1) to match the LaTeX summary.
+    # Always shown (even x1) to match the LaTeX summary.
     # Total repeat phase is hard-capped at ~3 seconds of frames.
-    MAX_REPEAT_FRAMES = fps * 3
+    max_repeat_frames = fps * 3
     if repeat_dim:
         repeat_size = repeat_dim[0][1]
-        logger.info("Repeat: ×%d (strobe)", repeat_size)
+        logger.info("Repeat: x%d (strobe)", repeat_size)
 
         make_frame(shape, dim_label="repeat")
         hold()
 
         repeat_frame_count = 0
         for k in range(1, repeat_size + 1):
-            if repeat_frame_count >= MAX_REPEAT_FRAMES:
+            if repeat_frame_count >= max_repeat_frames:
                 break
             flash_on = StrobeShape(shape, k, cfg, flash=1.0)
             make_frame(flash_on, count_label=f"{running_product} x {k} repeats")
@@ -908,7 +925,7 @@ def render_animation(
         dim_color += 1
 
     # --- Phase 3: over_time as film strip that slides in from the right ---
-    # Always shown (even ×1) to match the LaTeX summary.
+    # Always shown (even x1) to match the LaTeX summary.
     if time_dim:
         time_size = time_dim[0][1]
         base_product = running_product  # Store base product before time multiplication

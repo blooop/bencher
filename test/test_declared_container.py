@@ -11,6 +11,7 @@ the result cache and the collect/render split both pickle.
 """
 
 import unittest
+from pathlib import Path
 
 import panel as pn
 
@@ -33,7 +34,7 @@ def as_heading(text: str) -> pn.pane.HTML:
 
 def path_contents(path: str) -> pn.pane.Markdown:
     """Render a file's contents rather than a download widget."""
-    with open(path, encoding="utf-8") as handle:
+    with Path(path).open(encoding="utf-8") as handle:
         return pn.pane.Markdown(handle.read())
 
 
@@ -69,7 +70,7 @@ class PathSweep(bn.ParametrizedSweep):
 
     def benchmark(self):
         filename = bn.gen_path("report", suffix=".txt")
-        with open(filename, "w", encoding="utf-8") as handle:
+        with Path(filename).open("w", encoding="utf-8") as handle:
             handle.write(f"sides {self.sides}")
         self.report = filename
 
@@ -82,7 +83,7 @@ class PlainPathSweep(bn.ParametrizedSweep):
 
     def benchmark(self):
         filename = bn.gen_path("report", suffix=".txt")
-        with open(filename, "w", encoding="utf-8") as handle:
+        with Path(filename).open("w", encoding="utf-8") as handle:
             handle.write(f"sides {self.sides}")
         self.report = filename
 

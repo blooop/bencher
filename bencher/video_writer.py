@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import numpy as np
 from PIL import Image, ImageDraw
 
 if TYPE_CHECKING:
+    import numpy as np
     from moviepy import VideoClip
 
 from .utils import gen_image_path, gen_video_path
@@ -19,7 +19,7 @@ class VideoWriter:
         self.video_files = []
         self.filename = gen_video_path(filename)
 
-    def append(self, img):
+    def append(self, img: np.ndarray | str) -> None:
         self.images.append(img)
 
     def write(self) -> str:
@@ -33,11 +33,15 @@ class VideoWriter:
         return self.filename
 
     @staticmethod
-    def create_label(label, width=None, height=16, color=(255, 255, 255)):
+    def create_label(
+        label: str,
+        width: int | None = None,
+        height: int = 16,
+        color: tuple[int, int, int] = (255, 255, 255),
+    ) -> Image.Image:
         if width is None:
             width = len(label) * 10
         new_img = Image.new("RGB", (width, height), color=color)
-        # ImageDraw.Draw(new_img).text((width/2, 0), label, (0, 0, 0),align="center",anchor="ms")
         ImageDraw.Draw(new_img).text(
             (width / 2.0, 0), label, (0, 0, 0), anchor="mt", font_size=height
         )
@@ -45,7 +49,9 @@ class VideoWriter:
         return new_img
 
     @staticmethod
-    def label_image(path: Path, label, padding=20, color=(255, 255, 255)) -> Path:
+    def label_image(
+        path: Path, label: str, padding: int = 20, color: tuple[int, int, int] = (255, 255, 255)
+    ) -> Image.Image:
         image = Image.open(path)
         new_img = VideoWriter.create_label(
             label, image.size[0], image.size[1] + padding, color=color
@@ -111,7 +117,7 @@ class VideoWriter:
 
 
 def add_image(np_array: np.ndarray, name: str = "img") -> str:
-    """Creates a file on disk from a numpy array and returns the created image path"""
+    """Creates a file on disk from a numpy array and returns the created image path."""
     filename = gen_image_path(name)
     Image.fromarray(np_array).save(filename)
     return filename

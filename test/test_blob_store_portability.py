@@ -245,7 +245,7 @@ class TestFormatTableIsTheSingleSourceOfTruth:
         assert isinstance(loaded, xr.DataArray)
 
     def test_rejection_message_lists_every_known_suffix(self, tmp_path):
-        with pytest.raises(ValueError) as excinfo:
+        with pytest.raises(ValueError, match="is not a blob reference") as excinfo:
             resolve_blob("results.csv", tmp_path)
         for fmt in _BLOB_FORMATS:
             assert fmt.suffix in str(excinfo.value)

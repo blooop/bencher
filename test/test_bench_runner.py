@@ -12,10 +12,10 @@ class TestBenchRunner(unittest.TestCase):
     # Tests that bn.BenchRunner can be created with default configuration and the import statement in the bn.BenchRunner class is fixed
     def test_benchrunner_default_configuration_fixed(self):
         bench_runner = bn.BenchRunner("bench_runner_test")
-        assert bench_runner.run_cfg.cache_samples == False
-        assert bench_runner.run_cfg.only_hash_tag == False
+        assert bench_runner.run_cfg.cache_samples is False
+        assert bench_runner.run_cfg.only_hash_tag is False
         assert bench_runner.run_cfg.subsampling_divisions == 2
-        assert bench_runner.publisher == None
+        assert bench_runner.publisher is None
         assert bench_runner.bench_fns == []
 
     # Tests that Benchable functions can be added to bn.BenchRunner instance
@@ -51,7 +51,6 @@ class TestBenchRunner(unittest.TestCase):
         )
 
         bench_class = SimpleBenchClass()
-        # bench = bn.Bench("test_bench", bench_class, run_cfg=run_cfg, report=report            )
 
         def run_bench_class(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.Bench:
             bench = bn.Bench("test_bench1_cache", bench_class, run_cfg=run_cfg, report=report)
@@ -86,14 +85,6 @@ class TestBenchRunner(unittest.TestCase):
         bench_runner.add_bench(SimpleBenchClass())
         results = bench_runner.run()
         assert results[0].bench_cfg.run_tag == "1"
-
-    # def test_benchrunner_level_1(self):
-    #     results = bn.BenchRunner("bench_runner_test", AllSweepVars()).run(min_subsampling_divisions=1)
-    #     self.assertEqual(results[0].result_samples(), 1)
-
-    # def test_benchrunner_level_1_only(self):
-    #     results = bn.BenchRunner("bench_runner_test", AllSweepVars()).run(subsampling_divisions=1)
-    #     self.assertEqual(results[0].result_samples(), 1)
 
     def test_benchrunner_repeats(self):
         res = bn.Bench(
@@ -306,80 +297,6 @@ class TestBenchRunner(unittest.TestCase):
         results = bench_runner.run(subsampling_divisions=2, repeats=1)
         assert len(results) == 1
 
-    # def test_benchrunner_cache(self):
-    #     res = bn.Bench(
-    #         "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(subsampling_divisions=2, repeats=1)
-    #     ).plot_sweep("float")
-
-    #     res = bn.Bench(
-    #         "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(subsampling_divisions=2, repeats=5)
-    #     ).plot_sweep("float")
-    #     self.assertEqual(res.result_samples(), 10)
-
-    # # Tests that bn.BenchRunner can run Benchable functions with default configuration (fixed)
-    # def test_benchrunner_run_default_configuration_fixed(self):
-
-    #     bench_runner = bn.BenchRunner()
-    #     bench_fn1 = Mock()
-    #     bench_fn2 = Mock()
-    #     bench_runner.add_run(bench_fn1)
-    #     bench_runner.add_run(bench_fn2)
-    #     results = bench_runner.run()
-
-    #     self.assertEqual(len(results), 10)
-    #     self.assertEqual(results[0].subsampling_divisions, 1)
-    #     self.assertEqual(results[1].subsampling_divisions, 1)
-    #     self.assertEqual(results[2].subsampling_divisions, 2)
-    #     self.assertEqual(results[3].subsampling_divisions, 2)
-    #     self.assertEqual(results[4].subsampling_divisions, 3)
-    #     self.assertEqual(results[5].subsampling_divisions, 3)
-    #     self.assertEqual(results[6].subsampling_divisions, 4)
-    #     self.assertEqual(results[7].subsampling_divisions, 4)
-    #     self.assertEqual(results[8].subsampling_divisions, 5)
-    #     self.assertEqual(results[9].subsampling_divisions, 5)
-
-    # Tests that bn.BenchRunner can run Benchable functions with custom configuration, after fixing the import statements
-    # def test_benchrunner_run_custom_configuration_fixed_fixed_import_statements(self):
-
-    #     bench_runner = bn.BenchRunner()
-    #     bench_fn1 = Mock()
-    #     bench_fn2 = Mock()
-    #     bench_runner.add_run(bench_fn1)
-    #     bench_runner.add_run(bench_fn2)
-    #     run_cfg = bn.BenchRunCfg()
-    #     run_cfg.cache_samples = False
-    #     run_cfg.only_hash_tag = False
-    #     run_cfg.subsampling_divisions = 3
-    #     results = bench_runner.run(run_cfg=run_cfg)
-    #     self.assertEqual(len(results), 2)
-    #     self.assertEqual(results[0].subsampling_divisions, 3)
-    #     self.assertEqual(results[1].subsampling_divisions, 3)
-
-    # Tests that bn.BenchRunner can publish results of Benchable functions (fixed)
-    # def test_benchrunner_publish_results_fixed(self):
-    #     class MockBenchable:
-    #         def bench(self, run_cfg: bn.BenchRunCfg) -> bn.BenchCfg:
-    #             return bn.BenchCfg()
-
-    #     bench_runner = bn.BenchRunner(publisher=Mock())
-    #     bench_fn1 = MockBenchable()
-    #     bench_fn2 = MockBenchable()
-    #     bench_runner.add_run(bench_fn1)
-    #     bench_runner.add_run(bench_fn2)
-    #     results = bench_runner.run(publish=True)
-    #     self.assertEqual(len(results), 10)
-    #     self.assertEqual(bench_runner.publisher.call_count, 10)
-    #     self.assertEqual(bench_runner.publisher.call_args_list[0][0][0], results[0])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[1][0][0], results[1])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[2][0][0], results[2])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[3][0][0], results[3])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[4][0][0], results[4])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[5][0][0], results[5])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[6][0][0], results[6])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[7][0][0], results[7])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[8][0][0], results[8])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[9][0][0], results[9])
-
     def test_add_run_deprecation_warning(self):
         """Test that add_run() emits a DeprecationWarning."""
         import warnings
@@ -489,20 +406,6 @@ class TestBenchRunner(unittest.TestCase):
         br.servers = [Mock()]
         br.shutdown()
         assert len(br.servers) == 0
-
-    # Tests that bn.BenchRunner can handle empty list of Benchable functions
-    # def test_benchrunner_handle_empty_list(self):
-
-    #     def benchable(run_cfg:bn.BenchRunCfg)->bn.BenchCfg:
-    #         bench = bn.Bench("sbc",SimpleBenchClass(),run_cfg=run_cfg)
-    #         return bench.plot_sweep("sweep1")
-
-    #     bench_runner = bn.BenchRunner()
-    #     bench_runner.add_run(benchable)
-
-    #     results = bench_runner.run(run_cfg=bn.BenchRunCfg(run_tag="1"))
-
-    #     self.assertEqual(results[0].bench_cfg.run_tag, "1")
 
     def test_cache_samples_deprecation_warning(self):
         """Passing the old cache_results kwarg emits a DeprecationWarning."""

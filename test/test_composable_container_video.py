@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -25,9 +26,6 @@ class TestComposableContainerVideo(unittest.TestCase):
         if size is None:
             size = (2, 1)
         return np.ones((size[0], size[1], 3))
-        # return np.array(
-        #     [[[1, 1, 1]], [[0, 0, 0]]]
-        # )  # represents an image of 1x2 (keep it small for speed)
 
     def small_video(self, num_frames: int = 2, render_cfg=None, size=None):
         img = self.small_img(size=size)
@@ -36,26 +34,22 @@ class TestComposableContainerVideo(unittest.TestCase):
             vid.append(img)
         return vid.render(render_cfg)
 
-    # @given(frames=st.sampled_from([1, 2, 10, 100]))
-    # def test_duration_default(self, frames):
-    #     ccv = bn.ComposableContainerVideo()
-    #     duration, frame_duration = ccv.calculate_duration(frames, bn.RenderCfg())
-    #     self.assertEqual(duration, 10)
-    #     self.assertEqual(frame_duration, 10 / frames)
-
     @given(frames=st.sampled_from([1, 2, 10, 100]), duration=st.sampled_from([0.1, 1, 10, 100]))
     def test_set_duration(self, frames, duration):
         ccv = bn.ComposableContainerVideo()
-        duration, frame_duration = ccv.calculate_duration(frames, bn.RenderCfg(duration=duration))
-        assert duration == duration
-        assert frame_duration == duration / frames
+        cfg = bn.RenderCfg(duration=duration)
+        out_duration, frame_duration = ccv.calculate_duration(frames, cfg)
+        # duration_target defaults to True, so the per-frame clamp may move the duration.
+        if cfg.min_frame_duration <= duration / frames <= cfg.max_frame_duration:
+            assert out_duration == pytest.approx(duration)
+        assert frame_duration == out_duration / frames
 
     @given(frames=st.sampled_from([1, 2, 10, 100]), duration=st.sampled_from([0.1, 1, 10, 100]))
     def test_set_duration1(self, frames, duration):
         ccv = bn.ComposableContainerVideo()
         min_frame_duration = 1 / 30
         max_frame_duration = 2.0
-        duration, frame_duration = ccv.calculate_duration(
+        out_duration, frame_duration = ccv.calculate_duration(
             frames,
             bn.RenderCfg(
                 duration=duration,
@@ -64,8 +58,10 @@ class TestComposableContainerVideo(unittest.TestCase):
                 duration_target=True,
             ),
         )
-        assert duration == duration
-        assert frame_duration == duration / frames
+        # The requested duration survives unless the frame-duration clamp moved it.
+        if min_frame_duration <= duration / frames <= max_frame_duration:
+            assert out_duration == pytest.approx(duration)
+        assert frame_duration == out_duration / frames
         assert frame_duration <= max_frame_duration
         assert frame_duration >= min_frame_duration
 
@@ -136,7 +132,6 @@ class TestComposableContainerVideo(unittest.TestCase):
 
     def test_1px_to_video(self):
         """to_video() should produce a file path from 1x1 pixel images."""
-        import os
 
         img = np.ones((1, 1, 3))
         vid = bn.ComposableContainerVideo()
@@ -147,7 +142,7 @@ class TestComposableContainerVideo(unittest.TestCase):
             vid2.append(img)
             vid2.append(img)
             path = vid2.to_video(bn.RenderCfg(compose_method=compose_type, duration=0.1))
-            assert os.path.exists(path), f"Video file not created for {compose_type}"
+            assert Path(path).exists(), f"Video file not created for {compose_type}"
 
     def test_video_seq(self):
         img = self.small_img()
@@ -260,7 +255,7 @@ class TestComposableContainerVideo(unittest.TestCase):
             ccv.append(self.small_img())
 
         # still limited by target video duration
-        self.assertAlmostEqual(rendered_duration(ccv.render()), 10.0)
+        assert rendered_duration(ccv.render()) == pytest.approx(10.0, abs=1e-7)
 
     def test_composite_image_length(self):
         ccv = bn.ComposableContainerVideo()
@@ -306,7 +301,7 @@ class TestComposableContainerVideo(unittest.TestCase):
             ccv.append(self.small_video())
 
         # still concatted vid time
-        self.assertAlmostEqual(rendered_duration(ccv.render()), 800.0)
+        assert rendered_duration(ccv.render()) == pytest.approx(800.0, abs=1e-7)
 
     def test_render_no_stdout(self):
         """render() should not print debug output to stdout."""

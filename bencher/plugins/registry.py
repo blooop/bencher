@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import logging
 import traceback
-from collections.abc import Iterable
 from dataclasses import dataclass, field
 from importlib import metadata
+from typing import TYPE_CHECKING, Any
 
 import panel as pn
 
 from bencher.plugins.bench_data import BenchData, to_capability
 from bencher.plugins.plugin import PlotPlugin
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 ENTRY_POINT_GROUP = "bencher.plot_plugins"
 
@@ -18,8 +21,10 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class PluginDecision:
-    """One row of a selection decision table: whether a plugin was chosen for a
-    given BenchData, and the first gate that rejected it when it wasn't.
+    """One row of a selection decision table.
+
+    Records whether a plugin was chosen for a given BenchData, and the first gate
+    that rejected it when it wasn't.
     """
 
     name: str
@@ -30,8 +35,9 @@ class PluginDecision:
 
 
 def decisions_to_table(decisions: Iterable[PluginDecision]) -> str:
-    """Render a decision table (from ``PluginRegistry.explain``) as a markdown-ish
-    text table, chosen rows first.
+    """Render a decision table as a markdown-ish text table, chosen rows first.
+
+    The table comes from ``PluginRegistry.explain``.
     """
     rows = [("chart type", "backend", "chosen", "reason")]
     rows += [(d.name, d.backend, "yes" if d.chosen else "no", d.reason) for d in decisions]
@@ -84,8 +90,9 @@ class PluginRegistry:
         self._plugins[(plugin.name, plugin.backend)] = plugin
 
     def unregister(self, name: str, backend: str | None = None) -> None:
-        """Remove a plugin. With no backend, removes every backend's implementation
-        of that chart type.
+        """Remove a plugin.
+
+        With no backend, removes every backend's implementation of that chart type.
         """
         if backend is not None:
             self._plugins.pop((name, backend), None)
@@ -152,7 +159,7 @@ class PluginRegistry:
                 # rather than aborting the run; explicit register() calls still raise.
                 log.warning("Skipping invalid plugin entry-point %r: %s", ep.name, exc)
 
-    def _register_loaded(self, ep_name: str, obj) -> None:
+    def _register_loaded(self, ep_name: str, obj: Any) -> None:
         # Entry points may resolve to a single plugin instance, a plugin class (no-arg
         # constructor), or a callable returning an iterable of plugins. Accept all three.
         if callable(obj) and not hasattr(obj, "render"):
@@ -218,8 +225,9 @@ class PluginRegistry:
         backend: str | None = None,
         only: str | None = None,
     ) -> tuple[PluginDecision, ...]:
-        """The full selection decision table: one entry per registered plugin, chosen
-        entries first (in `select()` order — descending priority, then name), each
+        """The full selection decision table.
+
+        One entry per registered plugin, chosen entries first (in `select()` order — descending priority, then name), each
         rejected entry carrying the first gate that dropped it. `select()` is exactly
         the chosen subset, so this is the authoritative record of why a plot did or
         did not appear (A2 Phase S2).

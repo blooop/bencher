@@ -7,8 +7,7 @@ import logging
 import signal
 import sys
 import time
-from collections.abc import Callable
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, suppress
 from typing import TYPE_CHECKING, Any
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, ShowMode, normalize_show
@@ -19,9 +18,13 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from types import FrameType
+
     from bencher.bench_report import GithubPagesCfg, Publisher
     from bencher.bencher import Bench
     from bencher.publication_target import PublicationTarget
+    from bencher.utils import _Unset
 
 # Keep references to BenchRunners with active servers so that __del__ doesn't
 # kill the panel servers while the process is still running.
@@ -37,7 +40,7 @@ def _shutdown_all_servers() -> None:
         try:
             _active_runners.pop().shutdown()
         except Exception:  # noqa: BLE001
-            print(
+            print(  # noqa: T201 - runs at exit, when logging may already be shut down
                 "bencher: error shutting down panel server, continuing cleanup",
                 file=sys.stderr,
             )
@@ -48,7 +51,7 @@ atexit.register(_shutdown_all_servers)
 _prev_sigterm_handler = None
 
 
-def _sigterm_handler(signum, frame) -> None:
+def _sigterm_handler(signum: int, frame: FrameType | None) -> None:
     """Handle SIGTERM so servers are stopped even when the process is killed."""
     _shutdown_all_servers()
     if _prev_sigterm_handler not in (signal.SIG_DFL, signal.SIG_IGN, None):
@@ -59,7 +62,7 @@ def _sigterm_handler(signum, frame) -> None:
 
 def _install_sigterm_handler() -> None:
     """Install SIGTERM handler lazily, only when servers are actually running."""
-    global _sigterm_installed, _prev_sigterm_handler
+    global _sigterm_installed, _prev_sigterm_handler  # noqa: PLW0603 - process-wide signal state
     if not _sigterm_installed:
         _sigterm_installed = True
         _prev_sigterm_handler = signal.getsignal(signal.SIGTERM)
@@ -69,7 +72,7 @@ def _install_sigterm_handler() -> None:
 def run(
     target: Callable | type | ParametrizedSweep,
     *,
-    subsampling_divisions=UNSET,
+    subsampling_divisions: int | _Unset = UNSET,
     repeats: int = 1,
     max_subsampling_divisions: int | None = None,
     max_repeats: int | None = None,
@@ -86,7 +89,7 @@ def run(
     sampling_context: AbstractContextManager[Any] | None = None,
     report_directory: str | None = None,
     publication: PublicationTarget | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> list[BenchCfg]:
     """Run a benchmark target with sensible defaults.
 
@@ -149,6 +152,10 @@ def run(
 
                 bn.run(target, show=True, sampling_context=gpu_context())
 
+        report_directory: Export the complete execution report below this root.
+        publication: Commit the frozen report to this object store (see above).
+        **kwargs: Deprecated ``level`` and ``cache_results`` aliases.
+
     Returns:
         list[BenchCfg]: A list of benchmark configuration objects with results.
     """
@@ -193,13 +200,13 @@ def run(
         _original_target = target
 
         def _with_optimise(run_cfg: BenchRunCfg | None = None) -> Bench:
-            import panel as _pn
+            import panel as pn
 
             bench = _original_target(run_cfg)
             result = bench.optimize(n_trials=optimise, plot=False)
             if result is None:
                 bench.report.append(
-                    _pn.pane.Markdown(
+                    pn.pane.Markdown(
                         "**Optimisation skipped**: no result variables have an optimization "
                         "direction. Set `direction=OptDir.minimize` or `OptDir.maximize` "
                         "on your `ResultFloat`."
@@ -265,14 +272,10 @@ def run(
             sys.stdout.flush()
             sys.stderr.flush()
             # Interactive terminal: block until the user is done viewing results.
-            try:
+            with suppress(EOFError, KeyboardInterrupt):
                 input("Press Enter to stop the server(s) and exit...")
-            except (EOFError, KeyboardInterrupt):
-                pass
             br.shutdown()
             # Remove so atexit/SIGTERM doesn't double-stop.
-            try:
+            with suppress(ValueError):
                 _active_runners.remove(br)
-            except ValueError:
-                pass
     return results

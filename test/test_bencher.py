@@ -1,10 +1,11 @@
 import logging
-import os
 import random
 import subprocess
+import sys
 import unittest
 from copy import deepcopy
 from datetime import datetime
+from pathlib import Path
 from shutil import rmtree
 
 import pytest
@@ -21,7 +22,7 @@ def get_hash_isolated_process() -> bytes:
     """This sets up bencher in a new process and prints a hash of the input config to the terminal which is then returned by this function.  The purpose is to set up bench from two different python process and make sure the hashes match"""
     result = subprocess.run(
         [
-            "python3",
+            sys.executable,
             "-c",
             "'from bencher.example.benchmark_data import ExampleBenchCfg;import bencher as bn;cfg1 = bn.BenchCfg(input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noise_distribution],result_vars=[ExampleBenchCfg.param.out_sin],const_vars=[ExampleBenchCfg.param.noisy],repeats=5,over_time=False);print(cfg1.hash_persistent())'",
         ],
@@ -36,7 +37,7 @@ def clear_autofig_folder() -> None:
         rmtree("autofig")
     except FileNotFoundError as e:
         logger.debug(e)
-    os.mkdir("autofig")
+    Path("autofig").mkdir()
 
 
 # at the beginning of the test delete all the figures in the autofig folder.  At the end of the test they should be replaced with pixel perfect figures.  If the git repo is dirty at the end of the tests then CI will fail.
@@ -67,7 +68,7 @@ input_var_float_permutations = [
 input_var_cat_float_permutations = input_var_cat_permutations + input_var_float_permutations
 
 # Generating figures for the None case has some edge cases so make a separate variable to make it easier to debug
-input_var_and_none_permutations = [] + input_var_cat_permutations
+input_var_and_none_permutations = [*input_var_cat_permutations]
 
 result_var_permutations = [
     [ExampleBenchCfg.param.out_sin],
@@ -170,7 +171,7 @@ class TestBencher(unittest.TestCase):
             [[ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos]]
         ),
         repeats=st.sampled_from([20]),
-        # repeats=st.sampled_from([1, 2]), #TODO this fails at the moment
+        # TODO: sampling repeats from 1 and 2 fails at the moment.
     )
     def test_combinations(self, input_vars, result_vars, repeats) -> None:
         """check that up to 3 categorical and 1 float value without time can be plotted"""
@@ -220,7 +221,7 @@ class TestBencher(unittest.TestCase):
         input_vars=st.sampled_from(input_var_cat_permutations),
         result_vars=st.sampled_from(result_var_permutations),
         repeats=st.sampled_from([2]),
-        # repeats=st.sampled_from([1, 2]), #TODO this fails at the moment
+        # TODO: sampling repeats from 1 and 2 fails at the moment.
         over_time=st.booleans(),
     )
     def test_unique_file_names(self, input_vars, result_vars, repeats, over_time):
@@ -304,7 +305,6 @@ class TestBencher(unittest.TestCase):
         )
         assert bench2.sample_cache.worker_wrapper_call_count == ExampleBenchCfg.param.theta.samples
 
-        # bench3 = self.create_bench()
         # run again with the cache turned on. The worker_wrapper_call_count should not increase because it loads cached results
         bench2.plot_sweep(
             title=title,
@@ -465,5 +465,5 @@ class TestBenchRunCfgWithDefaults(unittest.TestCase):
         assert result is not original
 
     def test_unknown_key_raises(self):
-        with self.assertRaises(ValueError, msg="Unknown BenchRunCfg parameter"):
+        with pytest.raises(ValueError, match="Unknown BenchRunCfg parameter"):
             BenchRunCfg.with_defaults(None, not_a_real_param=42)

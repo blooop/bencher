@@ -48,17 +48,17 @@ class TestResolveAggregate(unittest.TestCase):
         assert resolve_aggregate(3, self.vars3) == ["x", "y", "z"]
 
     def test_int_exceeds_length(self):
-        with pytest.raises(ValueError) as cm:
+        with pytest.raises(ValueError, match="aggregate=4 exceeds number of input vars") as cm:
             resolve_aggregate(4, self.vars3)
         assert "aggregate=4 exceeds" in str(cm.value)
 
     def test_int_zero(self):
-        with pytest.raises(ValueError) as cm:
+        with pytest.raises(ValueError, match="aggregate must be >= 1, got 0") as cm:
             resolve_aggregate(0, self.vars3)
         assert "must be >= 1" in str(cm.value)
 
     def test_int_negative(self):
-        with pytest.raises(ValueError) as cm:
+        with pytest.raises(ValueError, match="aggregate must be >= 1, got -1") as cm:
             resolve_aggregate(-1, self.vars3)
         assert "must be >= 1" in str(cm.value)
 
@@ -74,7 +74,7 @@ class TestResolveAggregate(unittest.TestCase):
         assert resolve_aggregate(["y"], self.vars3) == ["y"]
 
     def test_list_unknown_name(self):
-        with pytest.raises(ValueError) as cm:
+        with pytest.raises(ValueError, match="aggregate contains unknown input var names") as cm:
             resolve_aggregate(["x", "bogus"], self.vars3)
         assert "unknown input var names" in str(cm.value)
 
@@ -94,12 +94,12 @@ class TestResolveAggregate(unittest.TestCase):
     # --- input_var_names=None ---
 
     def test_true_with_none_input_var_names(self):
-        with pytest.raises(ValueError) as cm:
+        with pytest.raises(ValueError, match="aggregate=True requires input_var_names") as cm:
             resolve_aggregate(True, None)
         assert "requires input_var_names" in str(cm.value)
 
     def test_int_with_none_input_var_names(self):
-        with pytest.raises(ValueError) as cm:
+        with pytest.raises(ValueError, match="aggregate=<int> requires input_var_names") as cm:
             resolve_aggregate(2, None)
         assert "requires input_var_names" in str(cm.value)
 

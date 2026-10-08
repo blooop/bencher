@@ -8,10 +8,10 @@ out with ``default=0`` to make unrecorded samples read as 0.
 """
 
 import math
-import os
 import tempfile
 import unittest
 from enum import auto
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -142,9 +142,9 @@ class TestResultBoolNanBounds(unittest.TestCase):
             flag = ResultBool(doc="x")
 
         obj = B()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="must be at most 1"):
             obj.flag = 2.0  # above upper bound
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="must be at least 0"):
             obj.flag = -1.0  # below lower bound
 
 
@@ -186,7 +186,7 @@ class TestNanDefaultSerialization(unittest.TestCase):
     def test_save_load_pickle_roundtrip_preserves_nan(self):
         res = self._collect_nan()
         with tempfile.TemporaryDirectory() as tmp:
-            path = bn.save_result(res, os.path.join(tmp, "res.pkl"))
+            path = bn.save_result(res, str(Path(tmp, "res.pkl")))
             loaded = bn.load_result(path)
         for val in loaded.to_dataset()["out"].values.flat:
             assert np.isnan(val)
@@ -198,7 +198,7 @@ class TestNanDefaultSerialization(unittest.TestCase):
         res = self._collect_nan()
         with tempfile.TemporaryDirectory() as tmp:
             out = bn.render_report(res, tmp)
-            assert os.path.exists(out)
+            assert Path(out).exists()
 
 
 if __name__ == "__main__":

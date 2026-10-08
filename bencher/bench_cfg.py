@@ -6,7 +6,7 @@ import warnings
 from copy import deepcopy
 from datetime import datetime
 from enum import auto
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, Self, TypeVar
 
 import panel as pn
 import param
@@ -24,6 +24,8 @@ from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, describe
 from bencher.variables.time import TimeEvent, TimeSnapshot
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     # Runtime import would be circular: identity imports this module.
     from bencher.identity import SweepIdentity
 
@@ -699,11 +701,11 @@ class BenchRunCfg(BenchPlotSrvCfg):
             subsampling_divisions=level, max_subsampling_divisions=max_level
         )
 
-    def deep(self):
+    def deep(self) -> Self:
         return deepcopy(self)
 
     @classmethod
-    def with_defaults(cls, run_cfg=None, **defaults):
+    def with_defaults(cls, run_cfg: Self | None = None, **defaults: Any) -> Self:
         """Merge *defaults* into *run_cfg*, creating a new instance when needed.
 
         When *run_cfg* is ``None`` a fresh ``BenchRunCfg`` is created with *defaults*.
@@ -973,11 +975,8 @@ class BenchCfg(BenchRunCfg):
         Returns:
             str: A persistent hash value for the benchmark configuration
         """
-        if include_repeats:
-            # needed so that the historical xarray arrays are the same size
-            repeats_hash = hash_sha1(self.repeats)
-        else:
-            repeats_hash = 0
+        # Hashing repeats keeps the historical xarray arrays the same size.
+        repeats_hash = hash_sha1(self.repeats) if include_repeats else 0
 
         # NOTE: title is intentionally excluded from the hash so that renaming
         # a benchmark's display title does not invalidate cached results or
@@ -1182,8 +1181,7 @@ class BenchCfg(BenchRunCfg):
 
         benchmark_sampling_str.append("```")
 
-        benchmark_sampling_str = "\n".join(benchmark_sampling_str)
-        return benchmark_sampling_str
+        return "\n".join(benchmark_sampling_str)
 
     def to_title(self, panel_name: str | None = None) -> pn.pane.Markdown:
         """Create a markdown panel with the benchmark title.
@@ -1242,10 +1240,7 @@ class BenchCfg(BenchRunCfg):
             pn.Column: A panel with the benchmark summary
         """
         if name is None:
-            if title:
-                name = self.title
-            else:
-                name = "Data Collection Parameters"
+            name = self.title if title else "Data Collection Parameters"
         col = pn.Column(name=name)
         if title:
             col.append(self.to_title())
@@ -1258,7 +1253,7 @@ class BenchCfg(BenchRunCfg):
         return col
 
     @staticmethod
-    def partition_input_vars(vars_) -> tuple[list, list]:
+    def partition_input_vars(vars_: Iterable[param.Parameter]) -> tuple[list, list]:
         """Split variables into (optimized, non-optimized) based on the optimize flag."""
         opt = [v for v in vars_ if getattr(v, "optimize", True)]
         non_opt = [v for v in vars_ if not getattr(v, "optimize", True)]
@@ -1325,7 +1320,7 @@ class DimsCfg:
         self.dims_size: list[int] = [len(p) for p in self.dim_ranges]
         self.dim_ranges_index: list[list[int]] = [list(range(i)) for i in self.dims_size]
         self.dim_ranges_str: list[str] = [f"{s}\n" for s in self.dim_ranges]
-        self.coords: dict[str, list[Any]] = dict(zip(self.dims_name, self.dim_ranges))
+        self.coords: dict[str, list[Any]] = dict(zip(self.dims_name, self.dim_ranges, strict=True))
 
         logger.debug(f"dims_name: {self.dims_name}")
         logger.debug(f"dim_ranges {self.dim_ranges_str}")

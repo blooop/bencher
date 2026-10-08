@@ -148,7 +148,7 @@ class PaneLayout(StrEnum):
 
 @dataclass(kw_only=True)
 class ComposableContainerBase:
-    """A base class for renderer backends.  A composable renderer"""
+    """A base class for composable renderer backends."""
 
     compose_method: ComposeType = ComposeType.right
     container: list[Any] = field(default_factory=list)
@@ -156,7 +156,7 @@ class ComposableContainerBase:
 
     @staticmethod
     def label_formatter(var_name: str | None, var_value: float | str | None) -> str | None:
-        """Take a variable name and values and return a pretty version with approximate fixed width
+        """Return a pretty, roughly fixed-width label for a variable name and value.
 
         Args:
             var_name (str | None): The name of the variable, usually a dimension
@@ -177,15 +177,21 @@ class ComposableContainerBase:
         return None
 
     def append(self, obj: Any) -> None:
-        """Add an object to the container.  The relationship between the objects is defined by the ComposeType
+        """Add an object to the container.
+
+        The ComposeType defines the relationship between the objects.
 
         Args:
             obj (Any): Object to add to the container
         """
         self.container.append(obj)
 
-    def render(self):
-        """Return a representation of the container that can be composed with other render() results. This function can also be used to defer layout and rending options until all the information about the container content is known.  You may need to override this method depending on the container. See composable_container_video as an example.
+    def render(self) -> Any:
+        """Return a representation of the container that composes with other render results.
+
+        This function can also be used to defer layout and rending options until all the
+        information about the container content is known.  You may need to override this
+        method depending on the container. See composable_container_video as an example.
 
         Returns:
             Any: Visual representation of the container that can be combined with other containers

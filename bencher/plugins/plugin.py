@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
-
-import panel as pn
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from bencher.plotting.plot_filter import PlotFilter
-from bencher.plugins.bench_data import BenchData
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import panel as pn
+
+    from bencher.plugins.bench_data import BenchData
 
 
 @runtime_checkable
@@ -35,7 +38,9 @@ class PlotPlugin(Protocol):
 
 @dataclass
 class _FunctionPlugin:
-    """Concrete plugin synthesised by the @plot_plugin decorator. Class form is canonical
+    """Concrete plugin synthesised by the @plot_plugin decorator.
+
+    Class form is canonical
     for distributed plugins; this exists so a one-shot in-script plugin can be a single
     decorated function.
     """
@@ -62,8 +67,9 @@ def plot_plugin(
     register: bool = True,
     auto: bool = True,
 ) -> Callable[[Callable[[BenchData], pn.viewable.Viewable]], _FunctionPlugin]:
-    """Wrap a function as a plot plugin and (by default) register it with the global
-    registry. Returns the plugin object so callers can also register manually with
+    """Wrap a function as a plot plugin and (by default) register it globally.
+
+    Returns the plugin object so callers can also register manually with
     register=False.
 
     auto=False makes the plugin named-only: it never appears in automatic selection

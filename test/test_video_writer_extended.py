@@ -80,7 +80,7 @@ class TestVideoWriterConvertAndExtract(unittest.TestCase):
             assert output_path.exists()
 
     def test_extract_frame_nonexistent_source(self):
-        with pytest.raises(OSError):
+        with pytest.raises(OSError, match="not found"):
             VideoWriter.extract_frame("/nonexistent/path/video.mp4", time=0.0)
 
     def test_convert_to_compatible_format(self):

@@ -36,11 +36,6 @@ class TestBenchMeta(unittest.TestCase):
         res2_ds = res2_ds.drop_vars("distance_std")
         res2_ds = res2_ds.drop_vars("sample_noise_std")
 
-        print(res1_ds)
-        print(res2_ds)
-        print(res1_ds["distance"].attrs)
-        print(res2_ds["distance"].attrs)
-
         assert res1_ds.equals(res2_ds), "should be equal because of removed std_dev column"
 
         assert res1_ds.identical(res2_ds), "should be equal because of removed std_dev column"

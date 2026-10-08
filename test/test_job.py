@@ -27,7 +27,7 @@ class CachedParamExample(bn.ParametrizedSweep):
     result = bn.ResultFloat()
 
     def benchmark(self):
-        self.result = self.var1 + self.var2 + random.uniform(0, 1)
+        self.result = self.var1 + self.var2 + random.uniform(0, 1)  # noqa: S311 - test noise, not crypto
 
 
 class TestJob(unittest.TestCase):
@@ -276,8 +276,7 @@ class TestJobFunctionCacheJobIds:
         cache = JobFunctionCache(lambda **kw: dict(kw), cache_name="test_job_ids")
         try:
             cache.clear_cache()
-            for i in range(3):
-                seen.append(cache.call(var1=i).job.job_id)
+            seen.extend(cache.call(var1=i).job.job_id for i in range(3))
         finally:
             cache.close()
         assert len(set(seen)) == 3, seen

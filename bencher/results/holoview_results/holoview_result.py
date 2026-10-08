@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from functools import partial
 from itertools import product as iterproduct
+from typing import TYPE_CHECKING, Any
 
 import holoviews as hv
 import numpy as np
 import panel as pn
-import xarray as xr
-from param import Parameter
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.pane_result import PaneResult
@@ -19,6 +18,12 @@ from bencher.utils import (
     listify,
 )
 from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import xarray as xr
+    from param import Parameter
 
 # NOTE: plotly is intentionally NOT registered here. Nothing in bencher renders
 # through the holoviews plotly backend (Surface/Volume use plotly.graph_objs
@@ -43,6 +48,12 @@ PlotResult = hv.Overlay | hv.HoloMap | pn.Column | pn.Tabs
 use_tap = True
 
 _AGG_TITLE = "All Time Points (aggregated)"
+
+# `pn.panel(holomap, widgets=...)` returns `Row(plot, widget_box)` when it builds widgets.
+_PLOT_AND_WIDGETS = 2
+
+# `to_grid` lays its inputs out on a 2D GridSpace, so at most two inputs become its axes.
+_MAX_GRID_DIMS = 2
 
 # Shared default figure size, in pixels, for every plot in a report. Applied through
 # hv.opts.defaults below, and read directly by anything that sizes its own figure and so
@@ -88,12 +99,13 @@ class HoloviewResult(PaneResult):
                 for element in HoloviewResult.DEFAULT_SIZED_ELEMENTS
             ),
             hv.opts.HeatMap(cmap="plasma", **width_height, colorbar=True),
-            # hv.opts.Surface(**width_heigh),
             hv.opts.GridSpace(plot_size=400),
         )
         return width_height
 
-    def to_hv_type(self, hv_type: type, reduce: ReduceType = ReduceType.AUTO, **kwargs) -> hv.Chart:
+    def to_hv_type(
+        self, hv_type: type, reduce: ReduceType = ReduceType.AUTO, **kwargs: Any
+    ) -> hv.Chart:
         """Convert the dataset to a specific HoloViews visualization type.
 
         Args:
@@ -176,7 +188,7 @@ class HoloviewResult(PaneResult):
         )
 
     @staticmethod
-    def _apply_opts(plot, **opts_kwargs):
+    def _apply_opts(plot: Any, **opts_kwargs: Any) -> Any:
         """Apply .opts() to a plot, handling panel wrappers and layout containers.
 
         hvplot may return any of:
@@ -211,7 +223,9 @@ class HoloviewResult(PaneResult):
         return ["over_time"]
 
     @staticmethod
-    def _holomap_with_slider_bottom(hvobj, widgets=None):
+    def _holomap_with_slider_bottom(
+        hvobj: hv.HoloMap, widgets: dict[str, type] | None = None
+    ) -> hv.HoloMap | pn.Column:
         """Wrap a HoloViews object so any scrubber/slider appears below the plot.
 
         ``pn.pane.HoloViews(holomap, widget_location="bottom")`` does not
@@ -235,7 +249,7 @@ class HoloviewResult(PaneResult):
         if widgets is None:
             widgets = {"over_time": pn.widgets.DiscreteSlider}
         row = pn.panel(hvobj, widgets=widgets)
-        if not isinstance(row, pn.Row) or len(row) < 2:
+        if not isinstance(row, pn.Row) or len(row) < _PLOT_AND_WIDGETS:
             return hvobj
         widget_box = row[1]
         if not isinstance(widget_box, pn.layout.ListPanel):
@@ -259,7 +273,7 @@ class HoloviewResult(PaneResult):
         return pn.Column(row[0], widget_box)
 
     def _build_curve_overlay(
-        self, dataset: xr.Dataset, result_var: Parameter, **kwargs
+        self, dataset: xr.Dataset, result_var: Parameter, **kwargs: Any
     ) -> hv.Overlay | None:
         """Build a Curve (+ optional Spread) overlay for a single time slice or aggregated data.
 
@@ -312,7 +326,7 @@ class HoloviewResult(PaneResult):
         group_coords = [dataset.coords[g].values for g in groupby]
         pt = hv.Overlay()
         for combo in iterproduct(*group_coords):
-            sel = dict(zip(groupby, combo))
+            sel = dict(zip(groupby, combo, strict=True))
             group_ds = dataset.sel(**sel)
             label = ", ".join(str(v) for v in combo) if len(combo) > 1 else str(combo[0])
             group_hvds = hv.Dataset(group_ds, kdims=kdims, vdims=vdims)
@@ -324,7 +338,7 @@ class HoloviewResult(PaneResult):
         return pt.opts(title=title, legend_position="right")
 
     @staticmethod
-    def _mean_over_time(dataset, result_var_name):
+    def _mean_over_time(dataset: xr.Dataset, result_var_name: str) -> xr.Dataset:
         """Average a dataset across all time points.
 
         Always produces a ``_std`` variable so that downstream renderers
@@ -345,7 +359,7 @@ class HoloviewResult(PaneResult):
         return new_ds
 
     @staticmethod
-    def subsample_indices(n, max_points):
+    def subsample_indices(n: int, max_points: int | None) -> range | list[int]:
         """Return evenly-spaced indices into a length-*n* array.
 
         Always includes the first and last index.  When *max_points* is
@@ -355,7 +369,12 @@ class HoloviewResult(PaneResult):
             return range(n)
         return np.unique(np.linspace(0, n - 1, max_points, dtype=int)).tolist()
 
-    def _build_time_holomap(self, dataset, result_var_name, make_plot_fn):
+    def _build_time_holomap(
+        self,
+        dataset: xr.Dataset,
+        result_var_name: str,
+        make_plot_fn: Callable[[xr.Dataset], Any],
+    ) -> hv.HoloMap | pn.Column | pn.Tabs:
         """Build per-time-point HoloMap + optional aggregated plot.
 
         ``make_plot_fn`` receives a Dataset *without* the ``over_time``
@@ -409,7 +428,9 @@ class HoloviewResult(PaneResult):
 
         return slider_pane
 
-    def _build_time_holomap_raw(self, da, make_plot_fn):
+    def _build_time_holomap_raw(
+        self, da: xr.DataArray, make_plot_fn: Callable[[xr.DataArray], Any]
+    ) -> hv.HoloMap | pn.Column | pn.Tabs:
         """Build per-time-point HoloMap + optional aggregated plot for distributions.
 
         *make_plot_fn* receives a DataArray that **retains** the ``over_time``
@@ -478,7 +499,7 @@ class HoloviewResult(PaneResult):
         num_inputs = self.plt_cnt_cfg.inputs_cnt
         state = {"x": None, "y": None, "update": False}
 
-        def _on_pointer(x, y):  # pragma: no cover
+        def _on_pointer(x: float | None, y: float | None) -> None:  # pragma: no cover
             x_nearest = get_nearest_coords1D(x, dataset.coords[input_vars[0].name].data)
             if x_nearest != state["x"]:
                 state["x"] = x_nearest
@@ -504,9 +525,11 @@ class HoloviewResult(PaneResult):
                 # zip a value with a type instead of a second lookup on a union.
                 current_key = getattr(plot, "current_key", None)
                 if current_key is not None:
-                    for d, k in zip(plot.kdims, current_key):
+                    for d, k in zip(plot.kdims, current_key, strict=True):
                         kdims[d.name] = k
-                for rv, cont in zip(result_var_plots, cont_instances):
+                # An explicit `container` list may be shorter than the result vars;
+                # only the vars that got a container are shown.
+                for rv, cont in zip(result_var_plots, cont_instances, strict=False):
                     val = dataset[rv.name].sel(**kdims)
                     item = self.zero_dim_da_to_val(val)
                     title.object = "Selected: " + ", ".join(f"{k}:{v}" for k, v in kdims.items())
@@ -518,7 +541,7 @@ class HoloviewResult(PaneResult):
                         cont.autoplay = True
                 state["update"] = False
 
-        def _on_exit(x, y):  # pragma: no cover
+        def _on_exit(**_pointer: float | None) -> None:  # pragma: no cover
             state["update"] = True
 
         posxy = hv.streams.PointerXY(source=plot)
@@ -536,7 +559,7 @@ class HoloviewResult(PaneResult):
         dataset: xr.Dataset,
         result_var: Parameter,
         container: hv.Chart | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> hv.Chart:
         """Convert an xarray Dataset to a HoloViews container for a specific result variable.
 
@@ -558,7 +581,7 @@ class HoloviewResult(PaneResult):
         target_dimension: int = 2,
         result_var: Parameter | None = None,
         result_types: tuple | None = (ResultFloat,),
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.pane.panel | None:
         """Convert the data to a HoloViews container with specified dimensions and options.
 
@@ -601,7 +624,7 @@ class HoloviewResult(PaneResult):
         self,
         result_var_plots: Parameter | list[Parameter],
         container: type | list[type] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> tuple[list[Parameter], list[pn.viewable.Viewable | None]]:
         """Set up appropriate containers for result variables.
 
@@ -628,7 +651,7 @@ class HoloviewResult(PaneResult):
         cont_instances = [c(**kwargs) if c is not None else None for c in containers]
         return plots, cont_instances
 
-    def to_error_bar(self, result_var: Parameter | str | None = None, **kwargs) -> hv.Bars:
+    def to_error_bar(self, result_var: Parameter | str | None = None, **kwargs: Any) -> hv.Bars:
         """Convert the dataset to an ErrorBars visualization for a specific result variable.
 
         Args:
@@ -651,11 +674,7 @@ class HoloviewResult(PaneResult):
         Returns:
             hv.Points: A HoloViews Points object, potentially with ErrorBars if reduction is applied.
         """
-        ds = self.to_hv_dataset(reduce)
-        pt = ds.to(hv.Points)
-        # if reduce:
-        # pt *= ds.to(hv.ErrorBars)
-        return pt
+        return self.to_hv_dataset(reduce).to(hv.Points)
 
     def to_nd_layout(self, hmap_name: str) -> hv.NdLayout:
         """Convert a HoloMap to an NdLayout for multi-dimensional visualization.
@@ -698,7 +717,7 @@ class HoloviewResult(PaneResult):
             self.to_holomap(name)
         return col
 
-    def get_nearest_holomap(self, name: str | None = None, **kwargs) -> hv.HoloMap:
+    def get_nearest_holomap(self, name: str | None = None, **kwargs: Any) -> hv.HoloMap:
         """Get the HoloMap element closest to the specified coordinates.
 
         Args:
@@ -727,14 +746,15 @@ class HoloviewResult(PaneResult):
             hv.DynamicMap: A HoloViews DynamicMap for interactive visualization.
         """
 
-        def cb(**kwargs):
+        def cb(**kwargs: Any) -> Any:
             return self.get_hmap(name)[hmap_canonical_input(kwargs)].opts(
                 framewise=True, shared_axes=False
             )
 
-        kdims = []
-        for i in self.bench_cfg.input_vars + [self.bench_cfg.iv_repeat]:
-            kdims.append(i.as_dim(compute_values=True))
+        kdims = [
+            i.as_dim(compute_values=True)
+            for i in [*self.bench_cfg.input_vars, self.bench_cfg.iv_repeat]
+        ]
 
         return hv.DynamicMap(cb, kdims=kdims)
 
@@ -750,8 +770,9 @@ class HoloviewResult(PaneResult):
         """
         if inputs is None:
             inputs = self.bench_cfg.inputs_as_str()
-        if len(inputs) > 2:
-            inputs = inputs[:2]
+        if len(inputs) > _MAX_GRID_DIMS:
+            inputs = inputs[:_MAX_GRID_DIMS]
+
         return self.to_holomap().grid(inputs)
 
 

@@ -18,6 +18,7 @@ import shutil
 import tempfile
 import unittest
 import uuid
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -51,7 +52,7 @@ class SeriesBase(unittest.TestCase):
     """Drives the collector directly against a throwaway cachedir."""
 
     def setUp(self) -> None:
-        self._old_cwd = os.getcwd()
+        self._old_cwd = Path.cwd()
         self._tmp = tempfile.mkdtemp()
         os.chdir(self._tmp)
         self.collector = ResultCollector()

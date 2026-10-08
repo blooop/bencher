@@ -3,6 +3,7 @@
 import os
 import tempfile
 import unittest
+from pathlib import Path
 
 import panel as pn
 
@@ -29,7 +30,7 @@ class TestVideoControls(unittest.TestCase):
             assert isinstance(result, pn.pane.Video)
             assert result in vc.vid_p
         finally:
-            os.remove(tmp_path)
+            Path(tmp_path).unlink()
 
     def test_video_container_none_path(self):
         vc = VideoControls()

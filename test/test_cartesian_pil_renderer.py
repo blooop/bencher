@@ -36,7 +36,7 @@ def _render_hash(shape: Shape, w: int = 200, h: int = 200) -> str:
     img = Image.new("RGB", (w, h), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     shape.draw(draw, 10, 10)
-    return hashlib.md5(img.tobytes()).hexdigest()
+    return hashlib.md5(img.tobytes(), usedforsecurity=False).hexdigest()
 
 
 def _simple_cfg() -> CartesianProductCfg:

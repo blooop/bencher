@@ -33,13 +33,16 @@ import argparse
 import logging
 import pickle
 import sys
-from collections.abc import Sequence
 from contextlib import ExitStack
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from bencher.bench_report import BenchReport
 from bencher.complete_report import execution_for_results
 from bencher.results.bench_result import BenchResult
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +78,7 @@ def save_result(bench_res: BenchResult, path: str | Path) -> Path:
 def load_result(path: str | Path) -> BenchResult:
     """Load a :class:`BenchResult` previously written by :func:`save_result`."""
     with Path(path).open("rb") as fh:
-        return pickle.load(fh)
+        return pickle.load(fh)  # noqa: S301 - loads a result file the user saved with save_result
 
 
 def save_results(results: Sequence[BenchResult], path: str | Path) -> Path:
@@ -252,7 +255,7 @@ def _load_or_fail(path: str, label: str) -> tuple[BenchResult | None, int]:
     missing file, ``1`` for a load failure).
     """
     if not Path(path).exists():
-        print(f"{label} file not found: {path}", file=sys.stderr)
+        print(f"{label} file not found: {path}", file=sys.stderr)  # noqa: T201 - CLI error output
         return None, 2
     try:
         return load_result(path), 0
@@ -276,13 +279,13 @@ def _run_compare(argv: list[str]) -> int:
     except ValueError as exc:
         # Surface the specific, actionable message (e.g. no shared metrics) to
         # the user rather than only logging a generic "failed to compare".
-        print(f"compare failed: {exc}", file=sys.stderr)
+        print(f"compare failed: {exc}", file=sys.stderr)  # noqa: T201 - CLI error output
         logger.exception("Failed to compare %s vs %s", args.baseline, args.candidate)
         return 1
     except Exception:
         logger.exception("Failed to compare %s vs %s", args.baseline, args.candidate)
         return 1
-    print(out)
+    print(out)  # noqa: T201 - CLI prints the output path
     return 0
 
 
@@ -307,7 +310,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _render_parser().parse_args(argv)
 
     if not args.result_path or not args.output_dir:
-        print(
+        print(  # noqa: T201 - CLI usage message
             f"Usage: {_prog()} <result_path> <output_dir> [--json PATH] [--cachedir DIR]",
             file=sys.stderr,
         )
@@ -315,9 +318,10 @@ def main(argv: list[str] | None = None) -> int:
     bench_res, code = _load_or_fail(args.result_path, "result")
     if bench_res is None:
         return code
+    if args.report and args.json_path:
+        logger.error("--report includes summaries; --json is only for legacy rendering")
+        return 1
     try:
-        if args.report and args.json_path:
-            raise ValueError("--report includes summaries; --json is only for legacy rendering")
         out = render_report(
             bench_res, args.output_dir, cache_dir=args.cache_dir, complete=args.report
         )
@@ -329,7 +333,7 @@ def main(argv: list[str] | None = None) -> int:
         # Top-level CLI guard: convert any render failure into a clean exit code.
         logger.exception("Failed to render report from %s", args.result_path)
         return 1
-    print(out)
+    print(out)  # noqa: T201 - CLI prints the output path
     return 0
 
 

@@ -50,16 +50,18 @@ bench.plot_sweep(
     "bench.report.publish_gh_pages() with your GitHub username and a "
     "target repository. The report HTML is committed to the gh-pages "
     "branch and served at https://<user>.github.io/<repo>/<folder>/.",
-    post_description="To actually publish, uncomment the publish_gh_pages call below "
+    post_description="To actually publish, set publish = True below "
     "and provide your own GitHub username and repository name.",
 )
 
-# Uncomment to publish:
-# bench.report.publish_gh_pages(
-#     github_user="your_username",
-#     repo_name="your_reports_repo",
-#     folder_name="my_benchmark",
-# )
+# Set publish = True and fill in your own GitHub username and repository to publish.
+publish = False
+if publish:
+    bench.report.publish_gh_pages(
+        github_user="your_username",
+        repo_name="your_reports_repo",
+        folder_name="my_benchmark",
+    )
 """
         self.generate_example(
             title="Publish Report to GitHub Pages",
@@ -106,13 +108,15 @@ bench.plot_sweep(
     "  runner.run(subsampling_divisions=3, publish=True)",
 )
 
-# Uncomment to publish via BenchRunner:
-# runner = bn.BenchRunner(
-#     "wave_benchmarks",
-#     publisher=bn.GithubPagesCfg("your_username", "your_reports_repo", "waves"),
-# )
-# runner.add_bench(WaveBenchmark())
-# runner.run(subsampling_divisions=3, show=True, publish=True)
+# Set publish = True and fill in your own GitHub details to publish via BenchRunner.
+publish = False
+if publish:
+    runner = bn.BenchRunner(
+        "wave_benchmarks",
+        publisher=bn.GithubPagesCfg("your_username", "your_reports_repo", "waves"),
+    )
+    runner.add_bench(WaveBenchmark())
+    runner.run(subsampling_divisions=3, show=True, publish=True)
 """
         self.generate_example(
             title="BenchRunner Publishing with GithubPagesCfg",

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, assert_never
+from typing import Any, assert_never, cast
 
 import panel as pn
 
@@ -66,13 +66,15 @@ class ComposableContainerPanel(ComposableContainerBase):
             else:
                 self.append(side)
 
-    def append(self, obj):
+    def append(self, obj: Any) -> None:
         if self._tabs is not None:
             self._tabs.append(obj)
         else:
             self.container.append(obj)
 
-    def render(self):
+    def render(self) -> pn.layout.ListPanel:
         if self._tabs is not None:
             self.container.append(self._tabs)
-        return self.container
+        # __post_init__ replaces the base's default list with a pn.Row or pn.Column on
+        # every compose method, so by render() the field always holds a Panel layout.
+        return cast("pn.layout.ListPanel", self.container)

@@ -9,6 +9,7 @@ from enum import auto
 
 import holoviews as hv
 import numpy as np
+import pytest
 from param import Number
 from strenum import StrEnum
 
@@ -180,14 +181,14 @@ class TestDataIntegrity(unittest.TestCase):
         res = _run_sweep(BoolBenchAllTrue, ["cat"], repeats=3)
         ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out"].values.flat:
-            self.assertAlmostEqual(float(val), 1.0)
+            assert float(val) == pytest.approx(1.0, abs=1e-7)
 
     def test_bool_all_false_mean(self):
         """All-False benchmark with repeats should give mean=0.0."""
         res = _run_sweep(BoolBenchAllFalse, ["cat"], repeats=3)
         ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out"].values.flat:
-            self.assertAlmostEqual(float(val), 0.0)
+            assert float(val) == pytest.approx(0.0, abs=1e-7)
 
     def test_result_bool_bounds(self):
         """ResultBool.bounds should be (0, 1)."""
@@ -445,11 +446,11 @@ class TestBinomialSEWithMissingRepeats(unittest.TestCase):
         p = float(ds["out"][{"cat": 0}])
         se = float(ds["out_std"][{"cat": 0}])
 
-        self.assertAlmostEqual(p, 2.0 / 3.0)  # skipna mean over 3 valid samples
+        assert p == pytest.approx(2.0 / 3.0, abs=1e-7)  # skipna mean over 3 valid samples
         n_valid = 3
-        self.assertAlmostEqual(se, float(np.sqrt(p * (1 - p) / n_valid)))
+        assert se == pytest.approx(float(np.sqrt(p * (1 - p) / n_valid)), abs=1e-7)
         # The full-dim-size SE would be measurably smaller; ensure we didn't use it.
-        self.assertNotAlmostEqual(se, float(np.sqrt(p * (1 - p) / 4)))
+        assert se != pytest.approx(float(np.sqrt(p * (1 - p) / 4)), abs=1e-7)
 
 
 # ===========================================================================
@@ -547,7 +548,7 @@ class TestBinomialSE(unittest.TestCase):
             p = float(val)
             expected_se = np.sqrt(p * (1 - p) / n)
             actual_se = float(ds["out_std"].sel(cat=ds["out"].coords["cat"].values[0]).values)
-            self.assertAlmostEqual(actual_se, expected_se, places=10)
+            assert actual_se == pytest.approx(expected_se, abs=1e-10)
             break  # one check is enough to validate the formula
 
     def test_all_true_binomial_se_is_zero(self):
@@ -555,14 +556,14 @@ class TestBinomialSE(unittest.TestCase):
         res = _run_sweep(BoolBenchAllTrue, ["cat"], repeats=4)
         ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out_std"].values.flat:
-            self.assertAlmostEqual(float(val), 0.0)
+            assert float(val) == pytest.approx(0.0, abs=1e-7)
 
     def test_all_false_binomial_se_is_zero(self):
         """If p=0.0, binomial SE should be 0.0."""
         res = _run_sweep(BoolBenchAllFalse, ["cat"], repeats=4)
         ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out_std"].values.flat:
-            self.assertAlmostEqual(float(val), 0.0)
+            assert float(val) == pytest.approx(0.0, abs=1e-7)
 
 
 def test_result_var_deprecation_warning():

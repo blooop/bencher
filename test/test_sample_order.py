@@ -274,7 +274,7 @@ class TestRoundRobin(unittest.TestCase):
         )
 
     def test_unknown_sample_order_raises_instead_of_running(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="is not a valid SampleOrder"):
             _call_order("reverse", [OrderExample.param.a], 2)
 
     def test_member_value_string_still_selects_that_order(self):

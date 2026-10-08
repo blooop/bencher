@@ -242,7 +242,7 @@ class TestAggOverDimsStd(unittest.TestCase):
         more spelling of the vocabulary and is gone — optimize() and
         BenchCfg.agg_fn always rejected "MEAN".
         """
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unknown agg_fn='MEAN'"):
             self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn="MEAN")
 
 
@@ -286,7 +286,7 @@ class TestAggFnVocabulary(unittest.TestCase):
 
     def test_unknown_agg_fn_raises_instead_of_silently_meaning_mean(self):
         """Before plan 23 P11 the ladder's terminal else silently meant mean."""
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="Unknown agg_fn='bogus'") as ctx:
             self.res.to_dataset(agg_over_dims=["float1"], agg_fn="bogus")
         msg = str(ctx.value)
         assert "bogus" in msg
@@ -324,7 +324,7 @@ class TestAggFnVocabulary(unittest.TestCase):
         """
         worker = CountingWorker()
         bench = worker.to_bench()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="does not accept 'bogus'"):
             bench.plot_sweep(
                 "agg_fn_bogus",
                 input_vars=[CountingWorker.param.float1],
@@ -351,7 +351,7 @@ class TestAggFnVocabulary(unittest.TestCase):
 
     def test_uppercase_agg_fn_error_names_the_lowercase_spelling(self):
         """The break is small but the fix should not need guessing."""
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="Unknown agg_fn='MEAN'") as ctx:
             self.res.to_dataset(agg_over_dims=["float1"], agg_fn="MEAN")
         msg = str(ctx.value)
         assert "lowercase" in msg
@@ -364,22 +364,22 @@ class TestAggFnVocabulary(unittest.TestCase):
         *validation* on that would make an unknown value raise or pass depending
         on the dataset's dims -- the shape plan 23 exists to remove.
         """
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unknown agg_fn='bogus'"):
             self.res.to_dataset(agg_fn="bogus")
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unknown agg_fn='bogus'"):
             self.res.to_dataset(agg_over_dims=[], agg_fn="bogus")
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unknown agg_fn='bogus'"):
             self.res.to_dataset(agg_over_dims=["nonexistent"], agg_fn="bogus")
 
     def test_unknown_agg_fn_raises_on_a_warm_cache(self):
         """The cache-key call is the only validation once _to_dataset_cache hits."""
         self.res.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unknown agg_fn='bogus'"):
             self.res.to_dataset(agg_over_dims=["float1"], agg_fn="bogus")
 
     def test_unknown_agg_fn_param_assignment_raises(self):
         """Assigning through the param descriptor is also boundary-checked."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="does not accept 'bogus'"):
             self.res.bench_cfg.agg_fn = "bogus"
 
     def test_valid_raw_string_through_param_field_reaches_shipped_path(self):
@@ -430,21 +430,9 @@ class TestBenchResultBase(unittest.TestCase):
             plot_callbacks=False,
         )
 
-        # print(res_repeat1.to_dataset())
-        # print(res_repeat1.to_hv_dataset().data)
-        # print(res_repeat1.to_hv_dataset_old().data)
-
-        # print(res_repeat1.to_dataset()["distance"].attrs)
-
-        # print(res_repeat2.to_dataset())
-        # print(res_repeat2.to_hv_dataset())
-        # print(res_repeat2.to_dataset()["distance"].attrs)
-
         assert (
             res_repeat1.to_dataset()["distance"].attrs == res_repeat2.to_dataset()["distance"].attrs
         )
-
-        # bm.__call__(float_vars=1, sample_with_repeats=1)
 
     def test_select_subsampling_divisions(self):
         bench = TstBench().to_bench()

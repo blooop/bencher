@@ -84,7 +84,7 @@ def example_regression_tuning_drift(run_cfg: bn.BenchRunCfg | None = None) -> bn
     bench.plot_sweep(
         input_vars=["drift_rate", "regression_mad"],
         result_vars=["detection_plot"],
-        description="A linear drift is added to the history (fixed noise σ=5). With 20 time points, the total drift equals drift_rate × 20 and the current run continues the trend.  The adaptive drift test (Theil–Sen slope + Mann–Kendall trend guard) fires when the accumulated drift outweighs the detrended noise.  Low drift rates or high regression_mads allow the trend to pass unnoticed.",
+        description="A linear drift is added to the history (fixed noise sigma=5). With 20 time points, the total drift equals drift_rate x 20 and the current run continues the trend.  The adaptive drift test (Theil-Sen slope + Mann-Kendall trend guard) fires when the accumulated drift outweighs the detrended noise.  Low drift rates or high regression_mads allow the trend to pass unnoticed.",
     )
 
     return bench

@@ -155,14 +155,16 @@ class TestXYCurveFactory(unittest.TestCase):
         assert style_opts(curve)["line_width"] == 3
 
     def test_missing_column_names_the_chart_and_what_is_available(self):
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(
+            ValueError, match="xy_curve y='nope' is not a column of the result"
+        ) as ctx:
             xy_curve(x="time", y="nope")(self.df)
         message = str(ctx.value)
         assert "xy_curve" in message
         assert "signal" in message, "the error should list the available columns"
 
     def test_empty_y_list_rejected(self):
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="xy_curve y= is empty") as ctx:
             xy_curve(x="time", y=[])(self.df)
         assert "at least one column" in str(ctx.value)
 
@@ -269,9 +271,9 @@ class TestXYCurveResult(unittest.TestCase):
     def test_one_plot_per_sample(self):
         curves = all_curves(self.res.to(XYCurveResult, x="time", y="signal"))
         assert len(curves) == len(DURATIONS)
-        for curve, duration in zip(curves, DURATIONS):
+        for curve, duration in zip(curves, DURATIONS, strict=True):
             assert len(curve) == SAMPLES_PER_TRACE
-            self.assertAlmostEqual(curve["time"].max(), duration)
+            assert curve["time"].max() == pytest.approx(duration, abs=1e-7)
 
     def test_scalar_results_are_skipped(self):
         """`peak` is in the sweep; a curve over a sample's rows is undefined for it."""
@@ -293,7 +295,7 @@ class TestXYCurveResult(unittest.TestCase):
         assert len(curves) == len(DURATIONS)
 
     def test_bad_column_raises_rather_than_plotting_nothing(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="xy_curve y='nope' is not a column of the result"):
             self.res.to(XYCurveResult, x="time", y="nope")
 
     def test_no_tabular_result_renders_nothing(self):

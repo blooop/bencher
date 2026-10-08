@@ -171,7 +171,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
     # -- Progressive sweep (1 -> 2 -> 3 parameters) ---------------------------
 
     def _gen_progressive(self):
-        imports = "\n".join(["import bencher as bn"] + _EXTRA_IMPORTS)
+        imports = "\n".join(["import bencher as bn", *_EXTRA_IMPORTS])
         body = (
             "bench = PolygonRenderer().to_bench(run_cfg)\n"
             "bench.add_plot_callback(bn.BenchResult.to_sweep_summary)\n"
@@ -198,7 +198,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
     # -- Mixed image + scalar results ----------------------------------------
 
     def _gen_mixed(self):
-        imports = "\n".join(["import bencher as bn"] + _EXTRA_IMPORTS)
+        imports = "\n".join(["import bencher as bn", *_EXTRA_IMPORTS])
         body = (
             "bench = PolygonRenderer().to_bench(run_cfg)\n"
             "res = bench.plot_sweep(\n"
@@ -221,7 +221,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
     # -- Image sweep to video grid -------------------------------------------
 
     def _gen_to_video(self):
-        imports = "\n".join(["import bencher as bn"] + _EXTRA_IMPORTS)
+        imports = "\n".join(["import bencher as bn", *_EXTRA_IMPORTS])
         body = (
             "bench = PolygonRenderer().to_bench(run_cfg)\n"
             "bench.add_plot_callback(bn.BenchResult.to_sweep_summary)\n"
@@ -252,7 +252,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
 
     def _gen_over_time(self):
         imports = "\n".join(
-            ["import bencher as bn", "from datetime import datetime, timedelta"] + _EXTRA_IMPORTS
+            ["import bencher as bn", "from datetime import datetime, timedelta", *_EXTRA_IMPORTS]
         )
         body = (
             "if run_cfg is None:\n"
@@ -321,7 +321,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             "        return self.get_results_values_as_dict()"
         )
 
-        imports = "\n".join(["import bencher as bn"] + _EXTRA_IMPORTS)
+        imports = "\n".join(["import bencher as bn", *_EXTRA_IMPORTS])
         body = (
             "bench = _ComposableImageDemo().to_bench(run_cfg)\n"
             "bench.plot_sweep(\n"
@@ -348,7 +348,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
     # -- Image aggregate -------------------------------------------------------
 
     def _gen_image_aggregate(self):
-        imports = "\n".join(["import bencher as bn"] + _EXTRA_IMPORTS)
+        imports = "\n".join(["import bencher as bn", *_EXTRA_IMPORTS])
         body = (
             "bench = PolygonRenderer().to_bench(run_cfg)\n"
             "bench.plot_sweep(\n"
@@ -374,7 +374,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
     # -- Video aggregate -------------------------------------------------------
 
     def _gen_video_aggregate(self):
-        imports = "\n".join(["import bencher as bn"] + _EXTRA_IMPORTS)
+        imports = "\n".join(["import bencher as bn", *_EXTRA_IMPORTS])
         body = (
             "bench = PolygonAnimator().to_bench(run_cfg)\n"
             "bench.plot_sweep(\n"

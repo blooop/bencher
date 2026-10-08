@@ -10,14 +10,16 @@ import base64
 import json
 import sqlite3
 import time
-from collections.abc import Callable, Mapping
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 
 from bencher.complete_report import safe_path
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator, Mapping
 
 
 @dataclass(frozen=True)
@@ -126,18 +128,24 @@ def encode_token(value: object) -> str:
     return base64.urlsafe_b64encode(json.dumps(value).encode()).decode()
 
 
-def decode_token(token: str):
+def decode_token(token: str) -> Any:
     try:
         return json.loads(base64.b64decode(token, altchars=b"-_", validate=True))
     except (ValueError, UnicodeError) as exc:
         raise ValueError("invalid object-store token") from exc
 
 
+# The most objects one list() call may return.
+_MAX_LISTING_LIMIT = 1000
+# A LocalStore listing token encodes [directory, prefix, last key].
+_LOCAL_LISTING_TOKEN_PARTS = 3
+
+
 def validate_listing(prefix: str, limit: int) -> None:
     if prefix:
         safe_path(prefix.removesuffix("/"))
-    if not 1 <= limit <= 1000:
-        raise ValueError("listing limit must be between 1 and 1000")
+    if not 1 <= limit <= _MAX_LISTING_LIMIT:
+        raise ValueError(f"listing limit must be between 1 and {_MAX_LISTING_LIMIT}")
 
 
 class LocalStore:
@@ -171,11 +179,11 @@ class LocalStore:
                 "version TEXT NOT NULL, metadata TEXT NOT NULL, created REAL NOT NULL, expiry REAL)"
             )
 
-    def _connect(self):
+    def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.database, timeout=self.timeout)
 
     @contextmanager
-    def _transaction(self):
+    def _transaction(self) -> Iterator[sqlite3.Connection]:
         connection = self._connect()
         try:
             with connection:
@@ -183,7 +191,7 @@ class LocalStore:
         finally:
             connection.close()
 
-    def _read(self, connection, key: str) -> Present | Absent:
+    def _read(self, connection: sqlite3.Connection, key: str) -> Present | Absent:
         row = connection.execute(
             "SELECT data, version, metadata, created, expiry FROM objects WHERE key=?", (key,)
         ).fetchone()
@@ -199,7 +207,9 @@ class LocalStore:
         except sqlite3.Error as exc:
             return ReadFailed(str(exc))
 
-    def _put(self, connection, key, data, metadata) -> Present:
+    def _put(
+        self, connection: sqlite3.Connection, key: str, data: bytes, metadata: Mapping | None
+    ) -> Present:
         now = self.clock()
         expires = now + self.expiry_seconds if self.expiry_seconds is not None else None
         value = Present(data, str(uuid4()), dict(metadata or {}), now, expires)
@@ -241,7 +251,7 @@ class LocalStore:
         after = ""
         if token is not None:
             decoded = decode_token(token)
-            if not isinstance(decoded, list) or len(decoded) != 3:
+            if not isinstance(decoded, list) or len(decoded) != _LOCAL_LISTING_TOKEN_PARTS:
                 raise ValueError("invalid listing token")
             directory, original_prefix, after = decoded
             if directory != str(self.directory.resolve()) or original_prefix != prefix:
@@ -284,7 +294,7 @@ class LocalStore:
                 if current.version != expected_version:
                     return Conflict()
                 value = self._put(connection, key, current.data, current.metadata)
-            assert value.created_at is not None
+            assert value.created_at is not None  # noqa: S101 - type narrowing; _put sets it
             return Renewed(value.version, value.created_at, value.expires_at)
         except sqlite3.Error as exc:
             return WriteFailed(str(exc), outcome_unknown=True)

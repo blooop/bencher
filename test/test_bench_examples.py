@@ -1,6 +1,6 @@
 import inspect
-import os
 import unittest
+from pathlib import Path
 
 import bencher as bn
 from bencher.example.meta.example_meta import example_meta
@@ -25,7 +25,7 @@ class TestBenchExamples(unittest.TestCase):
         assert example_result is not None
         if save or self.generate_all:
             path = example_result.report.save_index("cachedir")
-            assert os.path.exists(path)
+            assert Path(path).exists()
 
     def test_example_meta(self) -> None:
         self.examples_asserts(example_meta(self.create_run_cfg(), sample_repeats_values=[1, 3]))

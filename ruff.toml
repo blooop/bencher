@@ -58,7 +58,11 @@ ignore = [
     # S603 fires on every subprocess call made without shell=True, i.e. on the safe form.
     # The argv lists here are built from constants and repo paths, never user input.
     "S603", # `subprocess` call: check for execution of untrusted input.
-    "PD011", # `.values`: fires on every xarray `.values` and dict `.values`, not just pandas.
+    # PD003/PD004/PD011 assume every `.isnull()`/`.notnull()`/`.values` is pandas; here most
+    # are xarray (which has no `.isna()`/`.notna()`, so PD003/PD004's autofix breaks it).
+    "PD003", # `.isna` is preferred to `.isnull`.
+    "PD004", # `.notna` is preferred to `.notnull`.
+    "PD011", # Use `.to_numpy()` instead of `.values`.
     # TD002/TD003/FIX002: a TODO is allowed and needs no author or issue link. TD004-TD007
     # (TODO formatting) stay on.
     "TD002", # Missing author in TODO.
@@ -72,6 +76,10 @@ ignore = [
     "DTZ001", # `datetime.datetime()` without tzinfo.
     "DTZ005", # `datetime.datetime.now()` without tz.
 ]
+
+# σ (standard deviation), × (dimensions) and – (ranges) are the intended glyphs in
+# user-facing labels and the tests that pin them.
+allowed-confusables = ["σ", "×", "–"]
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
@@ -92,7 +100,9 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "test/**" = ["S101", "SLF001", "PLR2004", "ARG", "ANN", "D", "INP001", "S301"]
 # Examples are user-facing tutorial scripts (and generated from templates): they print,
 # use literal sweep values, and are not annotated or documented like library code.
-"bencher/example/**" = ["ANN", "D", "T201", "PLR2004", "INP001", "S311", "NPY002"]
+# SLF001: setting a private knob such as `_time_offset` between over_time snapshots is
+# the documented idiom (docs/over_time.md).
+"bencher/example/**" = ["ANN", "D", "T201", "PLR2004", "INP001", "S311", "NPY002", "SLF001"]
 "scripts/**" = ["ANN", "D", "T201", "INP001"]
 "docs/**" = ["ANN", "D", "INP001"]
 

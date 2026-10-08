@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from copy import deepcopy
+from typing import TYPE_CHECKING, Any
 
 import panel as pn
-import xarray as xr
-from param import Parameter
 
 from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
@@ -23,14 +21,20 @@ from bencher.utils import callable_name, color_tuple_to_255, int_to_col
 from bencher.variables.results import ResultImage
 from bencher.video_writer import VideoWriter
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import xarray as xr
+    from param import Parameter
+
 
 class VideoSummaryResult(BenchResultBase):
     def to_video_summary(
         self,
         result_var: Parameter | None = None,
         reverse: bool = True,
-        result_types=(ResultImage,),
-        **kwargs,
+        result_types: type | tuple[type, ...] = (ResultImage,),
+        **kwargs: Any,
     ) -> pn.panel | None:
         return self.to_video_grid(
             result_var=result_var,
@@ -43,20 +47,23 @@ class VideoSummaryResult(BenchResultBase):
     def to_video_grid(
         self,
         result_var: Parameter | None = None,
-        result_types=(ResultImage,),
+        result_types: type | tuple[type, ...] = (ResultImage,),
         pane_collection: pn.pane = None,
-        time_sequence_dimension=0,
+        time_sequence_dimension: int = 0,
         target_duration: float | None = None,
         compose_method_list: list | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.panel | None:
-        """Returns the results compiled into a video
+        """Returns the results compiled into a video.
 
         Args:
             result_var (Parameter, optional): The result var to plot. Defaults to None.
             result_types (tuple, optional): The types of result var to convert to video. Defaults to (ResultImage,).
-            collection (pn.pane, optional): If there are multiple results, use this collection to stack them. Defaults to pn.Row().
+            pane_collection (pn.pane, optional): If there are multiple results, use this collection to stack them. Defaults to pn.Row().
+            time_sequence_dimension (int, optional): The dimension to start time sequencing instead of composing in space. Defaults to 0.
+            target_duration (float, optional): Target duration for the video in seconds.
             compose_method_list (list: optional): Defines how each of the dimensions is composed in the video. ie, concatenate the videos horizontally, vertically, sequentially or alpha overlay. Seee bn.ComposeType for the options.
+            **kwargs: Additional keyword arguments passed to video rendering.
 
         Returns:
             pn.panel | None: a panel pane with a video of all results concatenated together
@@ -96,14 +103,14 @@ class VideoSummaryResult(BenchResultBase):
         self,
         dataset: xr.Dataset,
         result_var: Parameter,
-        reverse=True,
-        time_sequence_dimension=0,
+        reverse: bool = True,
+        time_sequence_dimension: int = 0,
         video_controls: VideoControls | None = None,
         target_duration: float | None = None,
         compose_method_list: list | None = None,
         target_dimension: int = 0,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> pn.pane.Video | pn.pane.Markdown | None:
         """Creates a video grid from the provided dataset.
 
         This method generates a video by composing multiple plot panes into a grid
@@ -148,9 +155,8 @@ class VideoSummaryResult(BenchResultBase):
             )
         return None
 
-    def plot_cb(self, dataset, result_var, **kwargs):
-        val = self.ds_to_container(dataset, result_var, container=None, **kwargs)
-        return val
+    def plot_cb(self, dataset: xr.Dataset, result_var: Parameter, **kwargs: Any) -> Any:
+        return self.ds_to_container(dataset, result_var, container=None, **kwargs)
 
     def dataset_to_compose_list(
         self,
@@ -158,7 +164,7 @@ class VideoSummaryResult(BenchResultBase):
         first_compose_method: ComposeType | Axis = ComposeType.down,
         time_sequence_dimension: int = 0,
     ) -> list[ComposeType]:
-        """ "Given a dataset, chose an order for composing the results.  By default will flip between right and down and the last dimension will be a time sequence.
+        """Given a dataset, chose an order for composing the results.  By default will flip between right and down and the last dimension will be a time sequence.
 
         Args:
             dataset (xr.Dataset): the dataset to render
@@ -178,20 +184,20 @@ class VideoSummaryResult(BenchResultBase):
         self,
         dataset: xr.Dataset,
         plot_callback: Callable,
-        target_dimension=0,
-        compose_method=ComposeType.right,
-        compose_method_list=None,
-        result_var=None,
-        time_sequence_dimension=0,
-        root_dimensions=None,
-        reverse=False,
+        target_dimension: int = 0,
+        compose_method: ComposeType = ComposeType.right,
+        compose_method_list: list[ComposeType] | None = None,
+        result_var: Parameter | None = None,
+        time_sequence_dimension: int = 0,
+        root_dimensions: int | None = None,
+        reverse: bool = False,
         target_duration: float | None = None,
-        **kwargs,
-    ) -> pn.panel:
+        **kwargs: Any,
+    ) -> Any:
         num_dims = len(dataset.sizes)
         dims = list(dataset.sizes)
         if reverse:
-            dims = list(reversed(dims))
+            dims.reverse()
 
         if root_dimensions is None:
             root_dimensions = num_dims
@@ -238,7 +244,6 @@ class VideoSummaryResult(BenchResultBase):
                     compose_method=compose_method,
                     duration=target_duration,
                     background_col=color_tuple_to_255(int_to_col(num_dims - 2, 0.05, 1.0)),
-                    # background_col= (255,0,0),
                 )
             )
         return plot_callback(dataset=dataset, result_var=result_var, **kwargs)

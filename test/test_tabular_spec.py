@@ -131,7 +131,7 @@ class TestSharedHelpers(unittest.TestCase):
 
     def test_errors_name_the_chart(self):
         """A chart-agnostic helper must still say which chart rejected the column."""
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="y='nope' is not a column of the result") as ctx:
             _Probe(x="a", y="nope")(self.df)
         assert "probe_chart" in str(ctx.value)
 
@@ -152,7 +152,7 @@ class TestSharedHelpers(unittest.TestCase):
         assert "list" in str(ctx.value)
 
     def test_check_column_reports_what_is_available(self):
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="x='nope' is not a column of the result") as ctx:
             check_column(self.df, "nope", "x", "c")
         assert "'a'" in str(ctx.value)
 
@@ -188,12 +188,14 @@ class TestValueColumns(unittest.TestCase):
         assert self.spec.value_columns(self.df, ["a"], None) == ["a"]
 
     def test_unknown_vdim_raises(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="vdims entry='nope' is not a column of the result"):
             self.spec.value_columns(self.df, ["nope"])
 
     def test_unknown_extra_raises_before_the_frame_is_built(self):
         """An unchecked extra would reach frame() and raise a bare pandas KeyError."""
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(
+            ValueError, match="value column='nope' is not a column of the result"
+        ) as ctx:
             self.spec.value_columns(self.df, ["a"], "nope")
         assert "probe_chart" in str(ctx.value)
         assert "'a'" in str(ctx.value), "the error should list the available columns"

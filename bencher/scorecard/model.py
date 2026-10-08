@@ -9,10 +9,13 @@ HTML. This keeps the column/verdict/formatting logic unit-testable in isolation.
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 from bencher.report_export import _verdict as _core_verdict
-from bencher.scorecard.config import ScorecardConfig
 from bencher.sparkline import sparkline_svg
+
+if TYPE_CHECKING:
+    from bencher.scorecard.config import ScorecardConfig
 
 
 def unify_metric_names(
@@ -177,7 +180,7 @@ def build_cell(
     stds = [pt.get("std") for pt in series]
     finite = [m for m in means if m is not None and math.isfinite(m)]
     latest = finite[-1] if finite else metric.get("optimal_value")
-    prev = finite[-2] if len(finite) >= 2 else None
+    prev = finite[-2] if len(finite) > 1 else None
     mean_val = sum(finite) / len(finite) if finite else None
     # σ over the per-event means: the spread of the dots in the distribution
     # column that μ summarises (population std, so a lone run reads 0).

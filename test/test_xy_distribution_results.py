@@ -151,8 +151,8 @@ class TestXYHistogramFactory(unittest.TestCase):
     def test_explicit_bin_range_is_honoured(self):
         element = only(xy_histogram("error_mm", bins=4, bin_range=(-1.0, 1.0))(self.df))
         low, high = element.range("error_mm")
-        self.assertAlmostEqual(low, -1.0)
-        self.assertAlmostEqual(high, 1.0)
+        assert low == pytest.approx(-1.0, abs=1e-7)
+        assert high == pytest.approx(1.0, abs=1e-7)
 
     def test_density_normalises_and_relabels_the_y_axis(self):
         element = only(xy_histogram("error_mm", density=True)(self.df))
@@ -183,19 +183,23 @@ class TestXYHistogramFactory(unittest.TestCase):
         assert style_opts(first(overlay))["alpha"] == 1.0
 
     def test_missing_column_names_the_chart_and_what_is_available(self):
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(
+            ValueError, match="xy_histogram column='nope' is not a column of the result"
+        ) as ctx:
             xy_histogram("nope")(self.df)
         message = str(ctx.value)
         assert "xy_histogram" in message
         assert "error_mm" in message, "the error should list the available columns"
 
     def test_empty_column_list_rejected(self):
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(ValueError, match="xy_histogram column= is empty") as ctx:
             xy_histogram([])(self.df)
         assert "at least one column" in str(ctx.value)
 
     def test_frame_with_no_numeric_column_rejected(self):
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(
+            ValueError, match="xy_histogram needs at least one numeric column"
+        ) as ctx:
             xy_histogram()(pd.DataFrame({"label": ["a", "b"]}))
         assert "column=" in str(ctx.value)
 
@@ -282,7 +286,9 @@ class TestXYHexbinFactory(unittest.TestCase):
         assert plot_opts(tiles)["gridsize"] == 13, "the chart option must still apply"
 
     def test_missing_column_names_the_chart(self):
-        with pytest.raises(ValueError) as ctx:
+        with pytest.raises(
+            ValueError, match="xy_hexbin y='nope' is not a column of the result"
+        ) as ctx:
             xy_hexbin(x="error_mm", y="nope")(self.df)
         assert "xy_hexbin" in str(ctx.value)
 
@@ -338,9 +344,11 @@ class TestChartTypes(unittest.TestCase):
         assert self.res.to(XYHexbinResult, result_var=CloudSweep.param.peak) is None
 
     def test_bad_column_raises_rather_than_plotting_nothing(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValueError, match="xy_histogram column='nope' is not a column of the result"
+        ):
             self.res.to(XYHistogramResult, column="nope")
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="xy_hexbin y='nope' is not a column of the result"):
             self.res.to(XYHexbinResult, x="error_mm", y="nope")
 
 

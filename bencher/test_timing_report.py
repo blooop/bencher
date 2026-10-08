@@ -18,7 +18,7 @@ from bencher.bench_report import BenchReport
 
 def parse_junit_xml(path: str | Path) -> pd.DataFrame:
     """Parse a JUnit XML file into a DataFrame of test cases."""
-    tree = ET.parse(path)
+    tree = ET.parse(path)  # noqa: S314 - parses the JUnit XML our own pytest run wrote
     root = tree.getroot()
 
     rows = []
@@ -134,7 +134,8 @@ def generate_report(junit_path: str | Path, output_dir: str | Path = "reports") 
 
 
 if __name__ == "__main__":
-    junit_xml = sys.argv[1] if len(sys.argv) > 1 else "test-results.xml"
-    out_dir = sys.argv[2] if len(sys.argv) > 2 else "reports"
+    args = sys.argv[1:]
+    junit_xml = args[0] if args else "test-results.xml"
+    out_dir = args[1] if len(args) > 1 else "reports"
     result_path = generate_report(junit_xml, out_dir)
-    print(f"Report saved to: {result_path}")
+    print(f"Report saved to: {result_path}")  # noqa: T201 - CLI output

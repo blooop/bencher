@@ -48,7 +48,7 @@ def _get_rerun_version() -> str:
 
 def rrd_to_pane(
     url: str, width: int = 500, height: int = 600, version: str | None = None
-):  # pragma: no cover
+) -> pn.pane.HTML:  # pragma: no cover
     """Display an .rrd file from a URL using the hosted rerun web viewer."""
     if version is None:
         version = _get_rerun_version()
@@ -64,7 +64,7 @@ def publish_and_view_rrd(
     branch_name: str,
     content_callback: callable,
     version: str | None = None,
-):  # pragma: no cover
+) -> pn.pane.HTML:  # pragma: no cover
     publish_file(file_path, remote=remote, branch_name=branch_name)
     publish_path = content_callback(remote, branch_name, file_path)
     logger.info(publish_path)
@@ -72,12 +72,12 @@ def publish_and_view_rrd(
 
 
 def rrd_file_to_pane(  # pragma: no cover
-    file_path,
+    file_path: str | Path | None,
     width: int = 300,
     height: int = 300,
     viewer_version: str | None = None,
     report_dir: str | Path | None = None,
-):
+) -> pn.pane.HTML | pn.pane.Markdown:
     """Create a rerun viewer pane from an .rrd file path.
 
     Uses an HTML iframe to display the .rrd file.  By default the viewer
@@ -385,10 +385,7 @@ def inline_rrd_iframes(
     html = html_path.read_text(encoding="utf-8")
     cache_root = _RRD_CACHE_DIR.resolve()
     report_dir = html_path.parent
-    if rrd_base is not None:
-        rrd_dir = rrd_base / "_rrd"
-    else:
-        rrd_dir = report_dir / "_rrd"
+    rrd_dir = rrd_base / "_rrd" if rrd_base is not None else report_dir / "_rrd"
     rrd_rel_prefix = os.path.relpath(rrd_dir, report_dir).replace("\\", "/")
 
     changed = False

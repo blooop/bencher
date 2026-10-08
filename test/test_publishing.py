@@ -102,9 +102,11 @@ def test_conflicting_bytes_never_overwrite(report, tmp_path):
     key = f"reports/{execution['uuid']}/nested/data.rrd"
     store.write(key, b"different", CreateOnly())
     outcome = CompleteReportPublisher(store, "reports", "https://example.test").publish(report)
-    assert isinstance(outcome, PublishFailed) and "conflict" in outcome.reason
+    assert isinstance(outcome, PublishFailed)
+    assert "conflict" in outcome.reason
     current = store.read(key)
-    assert isinstance(current, Present) and current.data == b"different"
+    assert isinstance(current, Present)
+    assert current.data == b"different"
     assert not any(item.endswith("index.html") for item in store.writes)
 
 
@@ -112,7 +114,8 @@ def test_denied_read_is_not_absent(report, tmp_path, monkeypatch):
     store = RecordingStore(tmp_path / "store")
     monkeypatch.setattr(store, "read", lambda key: ReadFailed("denied"))
     outcome = CompleteReportPublisher(store, "reports", "https://example.test").publish(report)
-    assert isinstance(outcome, PublishFailed) and "denied" in outcome.reason
+    assert isinstance(outcome, PublishFailed)
+    assert "denied" in outcome.reason
     assert not store.writes
 
 

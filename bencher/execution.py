@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Collection, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
+
+if TYPE_CHECKING:
+    from collections.abc import Collection, Iterator, Mapping
 
 # The launcher is often not this process: a CI job or a wrapper script starts the
 # benchmark and is the only thing that knows which revision it checked out. These
@@ -90,7 +93,7 @@ class Execution:
             raise ValueError("execution timestamp must be UTC")
 
     @classmethod
-    def start(cls, **provenance) -> Execution:
+    def start(cls, **provenance: str | int | None) -> Execution:
         """Start a new execution using optional caller-supplied provenance.
 
         Resolve git metadata in the launcher before starting foreign threads;
@@ -124,7 +127,7 @@ def current_execution() -> Execution:
 
 
 @contextmanager
-def execution_context(**provenance) -> Iterator[Execution]:
+def execution_context(**provenance: str | int | None) -> Iterator[Execution]:
     """Group collected sweeps into one new execution, including across configurations."""
     execution = Execution.start(**provenance)
     token = _CURRENT.set(execution)

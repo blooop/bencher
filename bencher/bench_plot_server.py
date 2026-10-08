@@ -1,4 +1,4 @@
-"""A server for display plots of benchmark results"""
+"""A server for display plots of benchmark results."""
 
 from __future__ import annotations
 
@@ -8,13 +8,16 @@ import os
 import random
 import socket
 from pathlib import Path
-from threading import Thread
+from typing import TYPE_CHECKING
 
 import panel as pn
 from diskcache import Cache
 from tornado.web import StaticFileHandler
 
 from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg, ShowMode, normalize_show
+
+if TYPE_CHECKING:
+    from threading import Thread
 
 logger = logging.getLogger(__name__)
 
@@ -38,33 +41,38 @@ class _CorsStaticHandler(StaticFileHandler):
     intended for local development only, not public-facing deployments.
     """
 
-    def data_received(self, chunk):  # pragma: no cover — abstract in RequestHandler
+    def data_received(self, chunk: bytes) -> None:  # pragma: no cover — abstract in RequestHandler
         pass
 
-    def set_default_headers(self):
+    def set_default_headers(self) -> None:
         self.set_header("Access-Control-Allow-Origin", "*")
         self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
         self.set_header("Access-Control-Allow-Headers", "*")
 
-    def options(self, *_args, **_kwargs):
+    def options(self, *_args: str, **_kwargs: str) -> None:
         self.set_status(204)
         self.finish()
 
 
 class BenchPlotServer:
-    """A server for display plots of benchmark results"""
+    """A server for display plots of benchmark results."""
 
     def __init__(self) -> None:
-        """Create a new BenchPlotServer object"""
+        """Create a new BenchPlotServer object."""
 
     def plot_server(
-        self, bench_name: str, plot_cfg: BenchPlotSrvCfg | None = None, plots_instance=None
+        self,
+        bench_name: str,
+        plot_cfg: BenchPlotSrvCfg | None = None,
+        plots_instance: list[pn.panel] | None = None,
     ) -> Thread:
-        """Load previously calculated benchmark data from the database and start a plot server to display it
+        """Load previously calculated benchmark data from the database and start a plot server to display it.
 
         Args:
             bench_name (str): The name of the benchmark and output folder for the figures
             plot_cfg (BenchPlotSrvCfg, optional): Options for the plot server. Defaults to None.
+            plots_instance (list[pn.panel], optional): Panels to serve. Defaults to None,
+                which loads them from the cache by ``bench_name``.
 
         Raises:
             FileNotFoundError: No data found was found in the database to plot
@@ -81,7 +89,7 @@ class BenchPlotServer:
         return self.serve(bench_name, plots_instance, port=plot_cfg.port, show=auto_open)
 
     def load_data_from_cache(self, bench_name: str) -> tuple[BenchCfg, list[pn.panel]] | None:
-        """Load previously calculated benchmark data from the database and start a plot server to display it
+        """Load previously calculated benchmark data from the database and start a plot server to display it.
 
         Args:
             bench_name (str): The name of the benchmark and output folder for the figures
@@ -131,10 +139,10 @@ class BenchPlotServer:
         callers should be prepared for a rare ``OSError`` on server start.
         """
         for _ in range(_PORT_PROBE_ATTEMPTS):
-            port = random.randint(_PORT_RANGE_MIN, _PORT_RANGE_MAX)
+            port = random.randint(_PORT_RANGE_MIN, _PORT_RANGE_MAX)  # noqa: S311 - port choice, not crypto
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.bind(("0.0.0.0", port))
+                    s.bind(("0.0.0.0", port))  # noqa: S104 - probes the interface serve() binds
                     return port
             except OSError as exc:
                 if exc.errno == errno.EADDRINUSE:
@@ -149,12 +157,13 @@ class BenchPlotServer:
         port: int | None = None,
         show: bool = True,
     ) -> Thread:
-        """Launch a panel server to view results
+        """Launch a panel server to view results.
 
         Args:
-            bench_cfg (BenchCfg): benchmark results
+            bench_name (str): title of the served page
             plots_instance (list[pn.panel]): list of panel objects to display
             port (int): use a fixed port to launch the server
+            show (bool): open the page in a browser
         """
         # suppress verbose tornado and bokeh output
         for noisy_logger in ["tornado", "bokeh"]:
@@ -169,7 +178,7 @@ class BenchPlotServer:
             "title": bench_name,
             "threaded": True,
             "show": show,
-            "address": "0.0.0.0",
+            "address": "0.0.0.0",  # noqa: S104 - local dev server, reachable from containers
             "websocket_origin": ["*"],
             "extra_patterns": extra,
             "port": port,
