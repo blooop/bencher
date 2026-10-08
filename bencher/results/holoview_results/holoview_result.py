@@ -666,13 +666,13 @@ class HoloviewResult(PaneResult):
         )
 
     def to_points(self, reduce: ReduceType = ReduceType.AUTO) -> hv.Points:
-        """Convert the dataset to a Points visualization with optional error bars.
+        """Convert the dataset to a Points visualization.
 
         Args:
             reduce (ReduceType, optional): How to reduce the dataset dimensions. Defaults to ReduceType.AUTO.
 
         Returns:
-            hv.Points: A HoloViews Points object, potentially with ErrorBars if reduction is applied.
+            hv.Points: A HoloViews Points object of the (optionally reduced) dataset.
         """
         return self.to_hv_dataset(reduce).to(hv.Points)
 
@@ -714,7 +714,7 @@ class HoloviewResult(PaneResult):
             hmap_names = [i.name for i in self.result_hmaps]
         col = pn.Column()
         for name in hmap_names:
-            self.to_holomap(name)
+            col.append(self.to_holomap(name))
         return col
 
     def get_nearest_holomap(self, name: str | None = None, **kwargs: Any) -> hv.HoloMap:
