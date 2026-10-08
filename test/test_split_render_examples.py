@@ -158,3 +158,27 @@ def test_split_render_result_reference_degrades_to_placeholder(tmp_path):
         warnings.simplefilter("error", RenderFailedWarning)
         out = render_report(loaded, tmp_path / "report")
     assert "was not persisted" in Path(out).read_text()
+
+
+def test_result_reference_placeholder_on_cache_hit_does_not_blame_save(tmp_path):
+    """A result-cache hit also has an empty ``object_index``, with no save_result call.
+
+    The placeholder must render without a RenderFailedWarning and must not claim the
+    result was saved; it names the result cache as a cause too.
+    """
+    run_cfg = bn.BenchRunCfg(auto_plot=False, cache_results=True, clear_cache=True)
+    bench = _ReferenceSweep().to_bench(run_cfg)
+    bench.plot_sweep("ref_cache", input_vars=["x", "y"], result_vars=["ref"])
+
+    run_cfg = bn.BenchRunCfg(auto_plot=False, cache_results=True)
+    bench = _ReferenceSweep().to_bench(run_cfg)
+    res = bench.plot_sweep("ref_cache", input_vars=["x", "y"], result_vars=["ref"])
+    assert res.object_index == []
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RenderFailedWarning)
+        out = render_report(res, tmp_path / "report")
+    text = Path(out).read_text()
+    assert "was not persisted" in text
+    assert "with the saved result" not in text
+    assert "result cache" in text
