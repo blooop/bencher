@@ -229,6 +229,16 @@ class ReferenceSweep(bn.ParametrizedSweep):
         self.score = float(self.run_id)
 
 
+def test_reference_history_does_not_render_the_latest_object(tmp_path, monkeypatch):
+    # object_index holds only the final run's objects, so a historical cell's
+    # index is in range yet names the wrong run's object.
+    monkeypatch.chdir(tmp_path)
+    result = _run_over_time(ReferenceSweep(), ["ref", "score"])
+    text = _markdown_text(PaneResult.to_panes(result))
+    assert sum("ref=run-1" in line for line in text) == 1, text
+    assert any("was not persisted" in line for line in text), text
+
+
 def test_reference_absent_from_an_old_run_leaves_a_gap(tmp_path, monkeypatch):
     # A run that did not record the reference leaves the -1 missing sentinel. That
     # cell is skipped like any other missing time point; nothing was lost to save.
