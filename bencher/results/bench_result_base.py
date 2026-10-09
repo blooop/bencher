@@ -1510,6 +1510,8 @@ class BenchResultBase:
         if isinstance(result_var, ResultDataSet):
             return self._dataset_sample_to_container(val, result_var, container, legacy_trusted)
         if isinstance(result_var, ResultReference):
+            if result_is_missing(result_var, val):
+                return None
             if not 0 <= val < len(self.object_index):
                 # The cell's index has no object in this result's object_index,
                 # e.g. after save/load or a result-cache hit (both strip it).
