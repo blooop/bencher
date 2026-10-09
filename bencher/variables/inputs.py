@@ -383,7 +383,9 @@ class YamlSelection(str):
         return NotImplemented
 
     # Defining __eq__ makes Python set __hash__ to None; state that explicitly so the
-    # class stays unhashable, as it has always been.
+    # class stays unhashable. __eq__ is not transitive (two selections with one key but
+    # different values each equal that key, yet not each other), so any hash would make
+    # set and dict membership depend on insertion order. A TypeError is the safer failure.
     __hash__ = None  # type: ignore[assignment]
 
     def __lt__(self, other: Any) -> bool:
