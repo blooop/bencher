@@ -1,5 +1,7 @@
 import logging
+import os
 import random
+import re
 import subprocess
 import sys
 import unittest
@@ -18,18 +20,35 @@ from bencher.example.benchmark_data import ExampleBenchCfg
 logger = logging.getLogger(__name__)
 
 
-def get_hash_isolated_process() -> bytes:
-    """This sets up bencher in a new process and prints a hash of the input config to the terminal which is then returned by this function.  The purpose is to set up bench from two different python process and make sure the hashes match"""
+_HASH_SCRIPT = """
+from bencher.example.benchmark_data import ExampleBenchCfg
+import bencher as bn
+cfg1 = bn.BenchCfg(
+    input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noise_distribution],
+    result_vars=[ExampleBenchCfg.param.out_sin],
+    const_vars=[(ExampleBenchCfg.param.noisy, True)],
+    repeats=5,
+    over_time=False,
+)
+print(cfg1.hash_persistent(include_repeats=True))
+"""
+
+
+def get_hash_isolated_process(hash_seed: int) -> str:
+    """Hash a BenchCfg in a fresh interpreter seeded with *hash_seed*.
+
+    Two calls with different seeds agreeing shows hash_persistent() does not depend
+    on per-process hash randomisation, even where the caller's environment pins
+    PYTHONHASHSEED.
+    """
     result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "'from bencher.example.benchmark_data import ExampleBenchCfg;import bencher as bn;cfg1 = bn.BenchCfg(input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noise_distribution],result_vars=[ExampleBenchCfg.param.out_sin],const_vars=[ExampleBenchCfg.param.noisy],repeats=5,over_time=False);print(cfg1.hash_persistent())'",
-        ],
+        [sys.executable, "-c", _HASH_SCRIPT],
+        env={**os.environ, "PYTHONHASHSEED": str(hash_seed)},
         stdout=subprocess.PIPE,
-        check=False,
+        check=True,
+        text=True,
     )
-    return result.stdout
+    return result.stdout.strip()
 
 
 def clear_autofig_folder() -> None:
@@ -136,7 +155,9 @@ class TestBencher(unittest.TestCase):
 
     def test_bench_cfg_hash_isolated(self):
         """hash values only seem to not match if run in a separate process, so run the hash test in separate processes"""
-        assert get_hash_isolated_process() == get_hash_isolated_process()
+        first = get_hash_isolated_process(1)
+        assert re.fullmatch(r"[0-9a-f]{40}", first), first
+        assert first == get_hash_isolated_process(2)
 
     # @pytest.mark.skip
     @settings(deadline=30000)

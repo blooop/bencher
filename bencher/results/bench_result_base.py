@@ -1479,7 +1479,8 @@ class BenchResultBase:
         :meth:`_dataset_sample_to_container` for ``ResultDataSet`` cells; the
         over_time render path passes ``False`` for historical time indices whose
         legacy int cells cannot be resolved against the final run's
-        ``dataset_list`` (see that method).
+        ``dataset_list`` (see that method). A ``ResultReference`` cell has the same
+        problem with ``object_index``, so an untrusted one renders a placeholder.
 
         Two kinds of container can apply, and they are different contracts:
 
@@ -1510,6 +1511,19 @@ class BenchResultBase:
         if isinstance(result_var, ResultDataSet):
             return self._dataset_sample_to_container(val, result_var, container, legacy_trusted)
         if isinstance(result_var, ResultReference):
+            if result_is_missing(result_var, val):
+                return None
+            if not legacy_trusted or not 0 <= val < len(self.object_index):
+                # The cell's index has no object in this result's object_index,
+                # e.g. after save/load or a result-cache hit (both strip it), or it
+                # is an over_time history cell (object_index holds the final run's
+                # objects only). Say so in the pane instead of an IndexError or the
+                # wrong run's object.
+                return pn.pane.Markdown(
+                    f"*'{result_var.name}': this ResultReference object was not persisted "
+                    "(save_result, the result cache and over_time history keep only its "
+                    "index); use ResultDataSet for a payload that must survive them*"
+                )
             ref = self.object_index[val]
             if ref is not None:
                 val = ref.obj

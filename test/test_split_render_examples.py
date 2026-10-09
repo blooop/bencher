@@ -22,12 +22,15 @@ files written to disk during collection.
 import importlib
 import subprocess
 import sys
+import warnings
 from pathlib import Path
 
 import pytest
 
 import bencher as bn
 from bencher import render_report, save_result
+from bencher.render import load_result
+from bencher.results.render_failure import RenderFailedWarning
 
 GENERATED_DIR = Path("bencher/example/generated")
 RESULT_TYPES_DIR = GENERATED_DIR / "result_types"
@@ -124,3 +127,58 @@ def test_split_render_subprocess_media(tmp_path):
     )
     assert proc.returncode == 0, f"render subprocess failed:\n{proc.stderr}"
     assert any(out_dir.rglob("*.html")), "subprocess produced no HTML report"
+
+
+class _ReferenceSweep(bn.ParametrizedSweep):
+    """A sweep whose only result is a live ``ResultReference`` object."""
+
+    x = bn.IntSweep(default=0, bounds=[0, 2])
+    y = bn.IntSweep(default=0, bounds=[0, 1])
+    ref = bn.ResultReference()
+
+    def benchmark(self):
+        self.ref = bn.ResultReference(obj=f"x={self.x}, y={self.y}")
+
+
+def test_split_render_result_reference_degrades_to_placeholder(tmp_path):
+    """A ResultReference sweep renders from a loaded result without a failed plot.
+
+    ``save_result`` strips ``object_index`` by design, so the loaded result has a
+    cell index for each sample but no object behind it. The 'panes' plugin used to
+    index the empty list and fail with IndexError, which the report swallows as a
+    RenderFailedWarning; the plot then silently went missing.
+    """
+    bench = _ReferenceSweep().to_bench(bn.BenchRunCfg(auto_plot=False))
+    res = bench.plot_sweep("ref", input_vars=["x", "y"], result_vars=["ref"])
+
+    loaded = load_result(save_result(res, tmp_path / "result.pkl"))
+    assert loaded.object_index == []
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RenderFailedWarning)
+        out = render_report(loaded, tmp_path / "report")
+    assert "was not persisted" in Path(out).read_text()
+
+
+def test_result_reference_placeholder_on_cache_hit_does_not_blame_save(tmp_path):
+    """A result-cache hit also has an empty ``object_index``, with no save_result call.
+
+    The placeholder must render without a RenderFailedWarning and must not claim the
+    result was saved; it names the result cache as a cause too.
+    """
+    run_cfg = bn.BenchRunCfg(auto_plot=False, cache_results=True, clear_cache=True)
+    bench = _ReferenceSweep().to_bench(run_cfg)
+    bench.plot_sweep("ref_cache", input_vars=["x", "y"], result_vars=["ref"])
+
+    run_cfg = bn.BenchRunCfg(auto_plot=False, cache_results=True)
+    bench = _ReferenceSweep().to_bench(run_cfg)
+    res = bench.plot_sweep("ref_cache", input_vars=["x", "y"], result_vars=["ref"])
+    assert res.object_index == []
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RenderFailedWarning)
+        out = render_report(res, tmp_path / "report")
+    text = Path(out).read_text()
+    assert "was not persisted" in text
+    assert "with the saved result" not in text
+    assert "result cache" in text

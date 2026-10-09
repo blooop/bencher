@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import optuna
+import pandas as pd
 import panel as pn
 
 from bencher.optuna_conversions import (
@@ -29,7 +30,6 @@ from bencher.variables.time import TimeEvent, TimeSnapshot
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    import pandas as pd
     from optuna.trial import FrozenTrial, Trial
     from param import Parameter
 
@@ -216,9 +216,14 @@ class OptunaResult(BenchResultBase):
             for i in trial_vars:
                 if isinstance(i, TimeSnapshot):
                     val = row[1][i.name]
-                    if hasattr(val, "timestamp") and not (hasattr(val, "isnull") and val.isnull()):
+                    # df.dropna() above already removes NaT rows; this keeps a missing
+                    # time out of optuna if that ever changes (pd.NaT has .timestamp(),
+                    # which raises).
+                    if pd.isna(val):
+                        continue
+                    if hasattr(val, "timestamp"):
                         params[i.name] = val.timestamp()
-                    elif isinstance(val, np.datetime64) and not np.isnat(val):
+                    elif isinstance(val, np.datetime64):
                         params[i.name] = val.astype("datetime64[s]").astype(float)
                     else:
                         continue
