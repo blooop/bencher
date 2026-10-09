@@ -1,4 +1,5 @@
 import logging
+import os
 import random
 import re
 import subprocess
@@ -33,14 +34,16 @@ print(cfg1.hash_persistent(include_repeats=True))
 """
 
 
-def get_hash_isolated_process() -> str:
-    """Hash a BenchCfg in a fresh interpreter and return the printed hash.
+def get_hash_isolated_process(hash_seed: int) -> str:
+    """Hash a BenchCfg in a fresh interpreter seeded with *hash_seed*.
 
-    Each call is a new process with its own PYTHONHASHSEED, so two calls agreeing shows
-    hash_persistent() does not depend on per-process hash randomisation.
+    Two calls with different seeds agreeing shows hash_persistent() does not depend
+    on per-process hash randomisation, even where the caller's environment pins
+    PYTHONHASHSEED.
     """
     result = subprocess.run(
         [sys.executable, "-c", _HASH_SCRIPT],
+        env={**os.environ, "PYTHONHASHSEED": str(hash_seed)},
         stdout=subprocess.PIPE,
         check=True,
         text=True,
@@ -152,9 +155,9 @@ class TestBencher(unittest.TestCase):
 
     def test_bench_cfg_hash_isolated(self):
         """hash values only seem to not match if run in a separate process, so run the hash test in separate processes"""
-        first = get_hash_isolated_process()
+        first = get_hash_isolated_process(1)
         assert re.fullmatch(r"[0-9a-f]{40}", first), first
-        assert first == get_hash_isolated_process()
+        assert first == get_hash_isolated_process(2)
 
     # @pytest.mark.skip
     @settings(deadline=30000)
