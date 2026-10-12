@@ -178,8 +178,9 @@ def evaluate_claim(claim: Claim, da: xr.DataArray) -> ClaimOutcome:
     recorded = ~np.isnan(values)
     if not recorded.any():
         return Unmeasured()
-    margins = np.where(recorded, _margin(claim, values), np.inf)
-    flat = int(np.argmin(margins))
+    candidates = np.flatnonzero(recorded)
+    margins = _margin(claim, values.ravel()[candidates])
+    flat = int(candidates[np.argmin(margins)])
     index = np.unravel_index(flat, values.shape)
     inputs = {
         dim: _scalar(da[dim].values[i]) if dim in da.coords else int(i)

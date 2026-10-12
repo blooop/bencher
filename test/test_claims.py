@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import math
 
 import pytest
+import xarray as xr
 
 import bencher as bn
+from bencher.claims import Holds, WorstSample, evaluate_claim
 
 
 class Braking(bn.ParametrizedSweep):
@@ -113,3 +116,12 @@ def test_compare_reports_the_claim_on_both_sides():
     assert claim["candidate"]["holds"] is True
     assert claim["candidate"]["worst_inputs"] == {"speed": 3.0, "repeat": 1}
     json.dumps(cmp, allow_nan=False)
+
+
+@pytest.mark.parametrize(("claim", "infinite"), [("> 0", math.inf), ("< 0.7", -math.inf)])
+def test_an_unrecorded_sample_is_never_named_the_worst(claim, infinite):
+    # An infinite sample deep inside the claim has an infinite margin, the same
+    # margin the unrecorded (NaN) sample before it is masked to.
+    da = xr.DataArray([math.nan, infinite], dims=["speed"], coords={"speed": [1.0, 2.0]})
+    outcome = evaluate_claim(bn.parse_claim(claim), da)
+    assert outcome == Holds(WorstSample(infinite, {"speed": 2.0}), samples=1)
