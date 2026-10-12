@@ -181,6 +181,47 @@ def test_a_result_saved_by_a_script_loads_in_another_process(repo, tmp_path):
     assert str(res.bench_cfg.result_vars[0].claim) == "< 0.7"
 
 
+ENUM_BENCH = """
+from enum import auto
+
+from strenum import StrEnum
+
+import bencher as bn
+
+
+class Mode(StrEnum):
+    fast = auto()
+    slow = auto()
+
+
+class Timed(bn.ParametrizedSweep):
+    mode = bn.EnumSweep(Mode)
+    t = bn.ResultFloat(units="s")
+
+    def benchmark(self):
+        self.t = 1.0 if self.mode == Mode.fast else 2.0
+
+
+bn.Bench("ab_enum", Timed()).collect(input_vars=["mode"], result_vars=["t"])
+"""
+
+
+def test_a_result_whose_script_defines_an_enum_loads_in_another_process(tmp_path):
+    # An enum member pickles as a call of its class with the value, and the class
+    # is in the script's __main__ like the sweep class.
+    (tmp_path / "enum_bench.py").write_text(ENUM_BENCH, encoding="utf-8")
+    path = tmp_path / "enum.pkl"
+    subprocess.run(
+        [sys.executable, "enum_bench.py"],
+        cwd=tmp_path,
+        env={**os.environ, RESULT_PATH_ENV: str(path), NO_CACHE_ENV: "1"},
+        check=True,
+        capture_output=True,
+    )
+    res = bn.load_result(path)
+    assert res.ds["t"].values.ravel().tolist() == [1.0, 2.0]
+
+
 class Counted(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0.0, bounds=(0.0, 1.0), samples=2)
     y = bn.ResultFloat()

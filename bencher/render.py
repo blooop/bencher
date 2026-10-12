@@ -75,6 +75,17 @@ def save_result(bench_res: BenchResult, path: str | Path) -> Path:
     return path
 
 
+class _MainPlaceholder:
+    """Stands in for a class that a result's script defined in its ``__main__``."""
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Any:
+        # An enum member pickles as a call of its class with its value; the value
+        # is what a coordinate or a label needs.
+        if len(args) == 1 and not kwargs:
+            return args[0]
+        return super().__new__(cls)
+
+
 class _ResultUnpickler(pickle.Unpickler):
     """Load a result whose sweep class was defined in another process's ``__main__``.
 
@@ -98,7 +109,7 @@ class _ResultUnpickler(pickle.Unpickler):
                 raise
         if name not in self._placeholders:
             logger.debug("result references __main__.%s; loading it as a placeholder", name)
-            self._placeholders[name] = type(name, (), {"__module__": "__main__"})
+            self._placeholders[name] = type(name, (_MainPlaceholder,), {"__module__": "__main__"})
         return self._placeholders[name]
 
 
