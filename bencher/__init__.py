@@ -58,6 +58,13 @@ from .bencher import (
     BenchRunCfg as BenchRunCfg,
     SampleErrorPolicyError as SampleErrorPolicyError,
 )
+from .claims import (
+    Claim as Claim,
+    Comparison as Comparison,
+    Threshold as Threshold,
+    Within as Within,
+    parse_claim as parse_claim,
+)
 from .complete_report import verify_report as verify_report
 from .example.benchmark_data import ExampleBenchCfg as ExampleBenchCfg
 from .execution import Execution as Execution, execution_context as execution_context

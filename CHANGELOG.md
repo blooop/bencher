@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **A result variable can declare a claim.** `bn.ResultFloat(units="m", claim="< 0.7")`
+  says what a change is meant to make true; `<`, `<=`, `>`, `>=` and the range `low..high`
+  are accepted, and an unreadable claim raises where the class is defined. The claim is
+  judged on every sample, repeats included, so it holds only if the worst sample satisfies
+  it. `result_to_dict` reports the outcome, the worst value and the inputs it came from;
+  `compare_results` reports it for the baseline as well as the candidate. `schema_version`
+  stays 1: the `claim` key is additive, and only a breaking change to the shape bumps it.
+
 ## [1.138.0] - 2026-10-12
 
 ### Changed

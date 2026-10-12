@@ -17,7 +17,9 @@ Two artifacts:
   shares identical direction/threshold semantics with the normal pipeline.
 
 The contracts carry ``schema_version`` so downstream consumers can pin to a
-shape.
+shape. It counts breaking changes only: an added key (such as ``claim`` on a
+metric whose result variable declares one) leaves it alone, so a reader must
+tolerate keys it does not know.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import xarray as xr
 
+from bencher.claims import evaluate_claim, outcome_to_dict
 from bencher.regression import (
     _finite_or_none,
     detect_regressions,
@@ -80,6 +83,11 @@ def _metric_entry(bench_res: BenchResult, rv: param.Parameter) -> dict:
     except (ValueError, IndexError, KeyError, TypeError):
         entry["optimal_value"] = None
         entry["optimal_inputs"] = {}
+    claim = getattr(rv, "claim", None)
+    if claim is not None:
+        # Judged on this run's samples only, not on an accumulated over_time history.
+        da = _snapshot_ds(bench_res)[rv.name]
+        entry["claim"] = {"claim": str(claim), **outcome_to_dict(evaluate_claim(claim, da))}
     return entry
 
 
@@ -141,7 +149,11 @@ def result_to_dict(bench_res: BenchResult, *, include_series: bool = False) -> d
 
     Returns:
         A dict with ``schema_version``, ``bench_name``, ``provenance``,
-        ``input_vars``, ``over_time``, ``metrics``, and ``regressions``.
+        ``input_vars``, ``over_time``, ``metrics``, and ``regressions``. A metric
+        whose result variable declares a claim (``ResultFloat(claim="< 0.7")``)
+        carries ``claim``: the claim text, ``holds`` (None when nothing was
+        recorded), the worst sample's ``worst_value`` and ``worst_inputs``, and
+        the number of ``samples`` judged.
     """
     cfg = bench_res.bench_cfg
     scalar_vars = [rv for rv in cfg.result_vars if isinstance(rv, SCALAR_RESULT_TYPES)]
@@ -327,7 +339,10 @@ def compare_results(
 
     Returns:
         A dict with ``schema_version``, ``baseline``/``candidate`` provenance,
-        per-metric ``metrics`` (with a ``verdict``), and a ``summary`` count.
+        per-metric ``metrics`` (with a ``verdict``), and a ``summary`` count. A
+        metric whose candidate result variable declares a claim carries
+        ``claim``: the claim text and its outcome on each of ``baseline`` and
+        ``candidate`` (shaped as in :func:`result_to_dict`).
 
     Raises:
         ValueError: when the two results share no comparable scalar metric.
@@ -357,23 +372,31 @@ def compare_results(
     # detect_regressions only inspects bench_cfg.result_vars; reuse candidate's.
     report = detect_regressions(combined, candidate.bench_cfg, run_cfg)
 
+    claims = {rv.name: rv.claim for rv in shared if getattr(rv, "claim", None) is not None}
     metrics = []
     counts = {"improved": 0, "regressed": 0, "unchanged": 0}
     for r in report.results:
         verdict = _verdict(r.to_dict())
         counts[verdict] += 1
-        metrics.append(
-            {
-                "variable": r.variable,
-                "baseline_value": _finite_or_none(r.baseline_value),
-                "current_value": _finite_or_none(r.current_value),
-                "change_percent": _finite_or_none(r.change_percent),
-                "direction": r.direction,
-                "method": r.method,
-                "regressed": bool(r.regressed),
-                "verdict": verdict,
+        metric = {
+            "variable": r.variable,
+            "baseline_value": _finite_or_none(r.baseline_value),
+            "current_value": _finite_or_none(r.current_value),
+            "change_percent": _finite_or_none(r.change_percent),
+            "direction": r.direction,
+            "method": r.method,
+            "regressed": bool(r.regressed),
+            "verdict": verdict,
+        }
+        if (claim := claims.get(r.variable)) is not None:
+            # The candidate declares what the change is meant to make true; judging
+            # the baseline by the same claim shows whether the change made it true.
+            metric["claim"] = {
+                "claim": str(claim),
+                "baseline": outcome_to_dict(evaluate_claim(claim, base_ds[r.variable])),
+                "candidate": outcome_to_dict(evaluate_claim(claim, cand_ds[r.variable])),
             }
-        )
+        metrics.append(metric)
 
     return {
         "schema_version": SCHEMA_VERSION,

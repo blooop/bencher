@@ -700,6 +700,28 @@ python -m bencher.render compare baseline.pkl candidate.pkl --json comparison.js
 contained result (opt-in; default off). All JSON output is strict — non-finite values (e.g. a
 zero-baseline percent change) are emitted as `null`.
 
+### Declaring a claim
+
+A result variable can declare what a change is meant to make true:
+
+```python
+class Braking(bn.ParametrizedSweep):
+    speed = bn.FloatSweep(bounds=(0.5, 3.0))
+    stop_distance = bn.ResultFloat(units="m", claim="< 0.7")
+```
+
+The forms are `< x`, `<= x`, `> x`, `>= x` and the inclusive range `low..high`. The string
+is parsed when the class is defined, so a typo fails there and not after the sweep. A claim
+is judged against every sample, repeats included: it holds only if the *worst* sample
+satisfies it (the largest for `<`/`<=`, the smallest for `>`/`>=`, the one nearest or
+furthest past an edge for a range). A mean inside the bound with one point outside it fails.
+
+`result_to_dict` adds a `claim` entry to that metric — `holds` (`null` when nothing was
+recorded), `worst_value`, `worst_inputs` (sweep inputs and `repeat`) and `samples`.
+`compare_results` judges the candidate's claim on both sides, so "the baseline fails the
+claim and the candidate holds it" reads straight off the comparison. The claim is not part
+of the variable's cache identity: changing it keeps cached samples and over-time history.
+
 ## Complete execution reports
 
 `BenchReport.save_report(root)` freezes a complete execution under
