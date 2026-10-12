@@ -1398,7 +1398,7 @@ class BenchResultBase:
                     getattr(self, "blob_cache_dir", None),
                     fallback_cache_dirs=blob_cache_dir_hints(self.ds),
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 - logged, shows a not-found pane
                 logger.warning(
                     "ResultDataSet '%s': failed to load blob %r (%s: %s)",
                     result_var.name,

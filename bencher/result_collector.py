@@ -196,7 +196,7 @@ def _materialize_dataset_value(result_value: Any) -> str:
         else:
             try:
                 return materialize_blob(payload, cache_dir)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 - logged, stores the bare payload
                 logger.warning(
                     "ResultDataSet sample: per-sample container %r could not be "
                     "pickled (%s: %s); storing the bare payload without it — a "

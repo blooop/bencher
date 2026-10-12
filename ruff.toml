@@ -48,8 +48,13 @@ ignore = [
     # PLC0415: imports inside functions are deliberate. They keep optional extras (rerun,
     # optuna, plotly) optional and keep `import bencher` cheap (test/test_import_cost.py).
     "PLC0415", # `import` should be at the top-level of a file.
-    # Complexity thresholds: kept from the pylint config, which disabled too-many-*.
+    # Complexity thresholds: the pylint config disabled too-many-branches/-arguments/
+    # -statements/-positional-arguments, and never loaded the mccabe (C901) check.
     "C901",    # Too complex.
+    # PLR0911 is the exception: pylint enforced too-many-return-statements, and six
+    # functions carried a `pylint: disable` for it. It stays off because the functions it
+    # flags (publish/verify validators, CLI and container dispatchers) return early on each
+    # failed check or each case by design; splitting them to meet a count hides that flow.
     "PLR0911", # Too many return statements.
     "PLR0912", # Too many branches.
     "PLR0913", # Too many arguments.

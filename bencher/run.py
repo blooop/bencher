@@ -39,7 +39,7 @@ def _shutdown_all_servers() -> None:
     while _active_runners:
         try:
             _active_runners.pop().shutdown()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - exit cleanup must stop every server
             print(  # noqa: T201 - runs at exit, when logging may already be shut down
                 "bencher: error shutting down panel server, continuing cleanup",
                 file=sys.stderr,
@@ -216,7 +216,7 @@ def run(
                 for res in bench.results:
                     try:
                         bench.report.append_to_result(res, res.to_optuna_plots())
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:  # noqa: BLE001 - a failed plot shows as a pane, not a crash
                         bench.report.append(report_render_failure("Optuna plot generation", exc))
             return bench
 

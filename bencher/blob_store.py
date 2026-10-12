@@ -163,7 +163,7 @@ def _serialize(obj: Any) -> tuple[bytes, str]:
             buffer = io.BytesIO()
             obj.to_parquet(buffer)
             return buffer.getvalue(), ".parquet"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - logged, falls back to pickle
             logger.warning(
                 "blob_store: DataFrame payload could not be serialized to parquet "
                 "(%s: %s); falling back to pickle",
@@ -188,7 +188,7 @@ def _serialize(obj: Any) -> tuple[bytes, str]:
                 # to_netcdf() with no target returns the serialized bytes
                 # (memoryview on newer xarray versions).
                 return bytes(obj.to_netcdf()), extension
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 - logged, falls back to pickle
                 logger.warning(
                     "blob_store: %s payload could not be serialized to netCDF "
                     "(%s: %s); falling back to pickle",

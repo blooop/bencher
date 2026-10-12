@@ -54,7 +54,7 @@ def make_namedtuple(class_name: str, **fields: Any) -> tuple:
         namedtuple: a named tuple with the fields as values
     """
     # The field names are only known at runtime, so typing.NamedTuple adds nothing.
-    return namedtuple(class_name, fields)(*fields.values())  # noqa: PYI024
+    return namedtuple(class_name, fields)(*fields.values())  # noqa: PYI024 - field names are only known at runtime
 
 
 def get_nearest_coords(dataset: xr.Dataset, collapse_list: bool = False, **kwargs: Any) -> dict:
@@ -591,7 +591,7 @@ def publish_file(filepath: str, remote: str, branch_name: str) -> None:  # pragm
 
         def git(*args: str) -> None:
             # git is resolved from PATH like any other developer tool.
-            subprocess.run(["git", *args], cwd=temp_dir, check=True)  # noqa: S607
+            subprocess.run(["git", *args], cwd=temp_dir, check=True)  # noqa: S607 - git from PATH
 
         git("init")
         git("branch", "-m", branch_name)

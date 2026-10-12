@@ -214,7 +214,7 @@ def _append_safe(row: pn.layout.ListPanel, plot_fn: Callable, *args: Any, **kwar
         row.append(plot_fn(*args, **kwargs))
     except _EXPECTED_PLOT_FAILURES as exc:
         row.append(_plot_failure_pane(plot_fn, exc))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - a failed plot shows as a pane, not a crash
         row.append(_plot_failure_pane(plot_fn, exc, unexpected=True))
 
 
@@ -229,5 +229,5 @@ def _append_safe_sized(
         row.append(fig)
     except _EXPECTED_PLOT_FAILURES as exc:
         row.append(_plot_failure_pane(plot_fn, exc))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - a failed plot shows as a pane, not a crash
         row.append(_plot_failure_pane(plot_fn, exc, unexpected=True))
