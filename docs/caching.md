@@ -247,6 +247,14 @@ some earlier process used is not one this reader chose.
 `BENCHER_CACHE_DIR` is read-side only. Collection always writes to `./cachedir`, next to
 the diskcaches and media, so the env var cannot split one cache dir across two locations.
 
+## Turning the caches off from outside the process
+
+Both caches are keyed by inputs, not by code. Two revisions of the same bench therefore share
+cache entries, and the second one to run reads the first one's samples. A launcher that
+compares revisions sets `BENCHER_NO_CACHE=1`: every sweep in that process then runs with
+`cache_results=False` and `cache_samples=False`, whatever the bench's own run config asks.
+`bencher ab` sets it on both sides.
+
 ## See also
 
 - [Getting Started](how_to_use_bencher.md) — run configuration overview

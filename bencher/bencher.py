@@ -32,6 +32,7 @@ from bencher.job import (
     normalize_catch,
     normalize_executor,
 )
+from bencher.launch_env import caches_disabled_by_env, result_path_from_env
 from bencher.optuna_conversions import sweep_var_to_optuna_dist, sweep_var_to_suggest
 from bencher.regression import RegressionError, detect_regressions
 from bencher.result_collector import ResultCollector
@@ -880,6 +881,13 @@ class Bench(BenchPlotServer):
         """
         timings = SweepTimings()
 
+        if caches_disabled_by_env():
+            # A launcher comparing two revisions (bencher ab) needs samples from this
+            # code: the caches are keyed by inputs, so they would answer for the other.
+            run_cfg = deepcopy(run_cfg)
+            run_cfg.cache_results = False
+            run_cfg.cache_samples = False
+
         if run_cfg.cache_size is not None:
             cache_size_bytes = run_cfg.cache_size * 1_000_000
             self.cache_size = cache_size_bytes
@@ -1053,6 +1061,11 @@ class Bench(BenchPlotServer):
         # bench_res.n_failed, which is a different question.
         if calculate_results:
             _enforce_sample_error_policy(bench_res, run_cfg.fail_on_sample_error)
+        if (result_path := result_path_from_env()) is not None:
+            # Local import, as in _append_result_via_split: render pulls in panel.
+            from bencher.render import save_result
+
+            save_result(bench_res, result_path)
         return bench_res
 
     def _append_result_via_split(self, bench_res: BenchResult) -> None:

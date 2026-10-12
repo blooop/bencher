@@ -723,6 +723,40 @@ In Python: `bn.evidence_markdown(base, cand)`, `bn.write_evidence_pngs(base, can
 and `bn.write_evidence(base, cand, json_path=..., markdown_path=..., png_dir=...)`. See
 [`example_evidence.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_evidence.py).
 
+### Before and after a change: `bencher ab`
+
+`bencher ab` runs one bench command on the base revision and on the working tree, then
+writes the comparison and the evidence:
+
+```bash
+bencher ab -- python my_bench.py
+bencher ab --base origin/main --out evidence/ --png-url-base <url> -- pixi run python my_bench.py
+```
+
+- The base is `--base REF` when given, else the merge-base of `HEAD` with `origin/HEAD`
+  (then `origin/main`, then `main`). It runs in a temporary detached `git worktree`,
+  removed afterwards even on failure. The candidate runs in the working tree as it is, so
+  uncommitted changes count.
+- Each side runs with `BENCHER_NO_CACHE=1` (see [Caching](caching.md)): the caches are
+  keyed by inputs, not code, so without it the candidate could read the base's samples.
+- Each side is told where to save its result with `BENCHER_RESULT_PATH`. Any process that
+  sets it gets every collected sweep saved there with `bn.save_result`; a command that runs
+  several sweeps leaves the last one. `BENCHER_SOURCE_REVISION` is the side's commit (with
+  `+dirty` for a modified working tree) and `BENCHER_DISPLAY_LABEL` is `base <rev>` or
+  `candidate <rev>`.
+- `--out` (default `./bencher-ab/`) receives `base.pkl`, `candidate.pkl`,
+  `comparison.json`, `evidence.md`, one PNG per metric, and `base.log`/`candidate.log`
+  with each side's output. The paths are printed on stdout.
+- The exit status is 0 when both sides ran, whatever the verdict; 1 when a side failed or
+  saved no result (stderr names the side and the tail of its log, which is kept); 2 for a
+  usage or git problem.
+
+Each side also runs with `BENCHER_NO_SHOW=1`, which makes `bn.run` and `BenchRunner` show
+nothing: the default `show=True` starts a live report server, and that server keeps a
+non-interactive process alive after the bench finishes. The bench file must
+exist on the base revision: for a bench added by the change itself, commit it on its own
+first and pass that commit as `--base`.
+
 `BenchReport.save(..., emit_json=True)` writes `result.json` next to the HTML for every
 contained result (opt-in; default off). All JSON output is strict — non-finite values (e.g. a
 zero-baseline percent change) are emitted as `null`.

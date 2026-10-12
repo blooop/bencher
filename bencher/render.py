@@ -35,7 +35,7 @@ import pickle
 import sys
 from contextlib import ExitStack
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, BinaryIO
 
 from bencher.bench_report import BenchReport
 from bencher.complete_report import execution_for_results
@@ -75,10 +75,41 @@ def save_result(bench_res: BenchResult, path: str | Path) -> Path:
     return path
 
 
+class _ResultUnpickler(pickle.Unpickler):
+    """Load a result whose sweep class was defined in another process's ``__main__``.
+
+    A bench script that defines its sweep class and runs it directly pickles that
+    class as ``__main__.<Name>``, which no other process has: ``bencher compare``
+    and ``bencher ab`` would fail before reading a number. The class is only the
+    owner of the result's parameters, so a placeholder of the same name stands in
+    for it and the dataset, result vars and claims load intact. Only a missing
+    ``__main__`` attribute is replaced; any other unknown name still raises.
+    """
+
+    def __init__(self, file: BinaryIO) -> None:
+        super().__init__(file)
+        self._placeholders: dict[str, type] = {}
+
+    def find_class(self, module: str, name: str) -> Any:
+        try:
+            return super().find_class(module, name)
+        except AttributeError:
+            if module != "__main__":
+                raise
+        if name not in self._placeholders:
+            logger.debug("result references __main__.%s; loading it as a placeholder", name)
+            self._placeholders[name] = type(name, (), {"__module__": "__main__"})
+        return self._placeholders[name]
+
+
 def load_result(path: str | Path) -> BenchResult:
-    """Load a :class:`BenchResult` previously written by :func:`save_result`."""
+    """Load a :class:`BenchResult` previously written by :func:`save_result`.
+
+    A result saved by a script whose sweep class lives in its ``__main__`` loads
+    in any process, with a placeholder standing in for that class.
+    """
     with Path(path).open("rb") as fh:
-        return pickle.load(fh)  # noqa: S301 - loads a result file the user saved with save_result
+        return _ResultUnpickler(fh).load()
 
 
 def save_results(results: Sequence[BenchResult], path: str | Path) -> Path:
@@ -322,6 +353,18 @@ def _run_compare(argv: list[str]) -> int:
     return 0
 
 
+def _run_subcommand(name: str, argv: list[str]) -> int:
+    if name == "compare":
+        return _run_compare(argv)
+    if name == "ab":
+        from bencher.ab import main as ab_main
+
+        return ab_main(argv)
+    from bencher.publishing_cli import main as publish_main
+
+    return publish_main(argv)
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint.
 
@@ -331,15 +374,12 @@ def main(argv: list[str] | None = None) -> int:
     Render: ``bencher <result.pkl> <output_dir> [--json PATH] [--cachedir DIR]``
     Compare: ``bencher compare <a.pkl> <b.pkl> [--json PATH] [--markdown PATH]
     [--png DIR] [--png-url-base URL]``
+    A/B: ``bencher ab [--base REF] [--out DIR] [--png-url-base URL] -- <command...>``
     """
     argv = sys.argv[1:] if argv is None else argv
 
-    if argv and argv[0] == "compare":
-        return _run_compare(argv[1:])
-    if argv and argv[0] == "publish":
-        from bencher.publishing_cli import main as publish_main
-
-        return publish_main(argv[1:])
+    if argv and argv[0] in ("compare", "ab", "publish"):
+        return _run_subcommand(argv[0], argv[1:])
 
     args = _render_parser().parse_args(argv)
 

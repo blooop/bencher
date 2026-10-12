@@ -23,6 +23,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead. `--png DIR` writes one PNG per metric with a ±1 std band and the claim drawn in,
   and `--png-url-base URL` points the Markdown's image links at where the PNGs were pushed.
   `--json` is now optional when either is given. `bn.write_evidence` is the Python form.
+- **`bencher ab -- <command>` measures a change before and after.** It runs the bench
+  command on the base revision (the merge-base with `origin/HEAD` unless `--base` names
+  one) in a temporary `git worktree`, then on the working tree as it is, and writes
+  `base.pkl`, `candidate.pkl`, `comparison.json`, `evidence.md` and the PNGs into `--out`.
+  Each side runs with the caches off, because the caches are keyed by inputs and would
+  otherwise answer the candidate with the base's samples. A failed side exits 1, names
+  itself and keeps its log.
+- **`BENCHER_RESULT_PATH`, `BENCHER_NO_CACHE` and `BENCHER_NO_SHOW`.** A launcher can ask
+  any bench process to save its collected result to a path, to run every sweep with the
+  result and sample caches off, and to show no report, without editing the bench. The last
+  matters because `bn.run`'s default live report server keeps a non-interactive process
+  alive after the bench finishes.
+
+### Fixed
+- **`bn.load_result` loads a result saved by a script.** A sweep class defined in the
+  script that ran it was pickled as `__main__.<Name>`, which no other process has, so
+  `bencher compare` and `bencher <result.pkl>` failed on such results. A placeholder now
+  stands in for the missing class; the data, result variables and claims load intact.
 
 ## [1.138.0] - 2026-10-12
 
