@@ -145,6 +145,12 @@ def test_large_and_small_values_are_written_without_an_exponent(before, after, b
         assert all(re.fullmatch(_NUMBER, v) for v in series.split(", "))
 
 
+def test_a_png_draws_a_side_that_swept_nothing_beside_one_that_swept(tmp_path):
+    # The change added a swept input: the baseline is one value, the candidate a curve.
+    pngs = bn.write_evidence_pngs(_collect(0.3, input_vars=()), _collect(0.2), tmp_path)
+    assert imread(pngs["stop_distance"]).shape[0] > 0
+
+
 @pytest.fixture(name="saved")
 def saved_pair(tmp_path):
     a = save_result(_collect(0.3, input_vars=("speed", "load")), tmp_path / "a.pkl")

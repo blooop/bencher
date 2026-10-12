@@ -419,6 +419,12 @@ def _draw(ax: Axes, m: _Metric) -> None:
         (base, "before", _BEFORE_COLOR, "--"),
         (cand, "after", _AFTER_COLOR, "-"),
     ):
+        if not profile.swept:
+            # One value across the other side's sweep: a level line with its band.
+            mean, std = profile.mean[0], profile.std[0]
+            ax.axhline(mean, linestyle=style, color=color, label=label, linewidth=2)
+            ax.axhspan(mean - std, mean + std, color=color, alpha=0.18)
+            continue
         if numeric:
             x = np.asarray(profile.x, dtype=float)
         else:
