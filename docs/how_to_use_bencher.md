@@ -696,6 +696,33 @@ python -m bencher.render result.pkl out_dir --json result.json
 python -m bencher.render compare baseline.pkl candidate.pkl --json comparison.json
 ```
 
+### Evidence for a pull request
+
+`bencher compare` also writes what a reviewer reads. `--markdown PATH` writes a block to
+paste as a PR's `## Evidence` section: per metric, a Mermaid `xychart-beta` chart with the
+baseline as bars and the candidate as a line on the same axes, then a caption with the
+verdict, the mean before → after with the change in percent, the claim outcome on each side
+(see below) and each side's revision and sample count. `--png DIR` writes one PNG per metric
+with a ±1 std band from the repeats and the claim threshold drawn in. Any of `--json`,
+`--markdown` and `--png` may be given; at least one is required.
+
+```bash
+bencher compare base.pkl candidate.pkl --markdown evidence.md --png evidence/ \
+    --png-url-base https://raw.githubusercontent.com/<org>/<repo>/<sha>/evidence
+```
+
+A metric gets a Mermaid chart only when the chart is honest: no swept input (one bar per
+side) or one swept input with the same values on both sides, binned to at most 30 points.
+Two or more swept inputs, a sweep that differs between the sides, or a repeat-to-repeat
+spread as large as the change get an image link instead, `![<metric>: before vs
+after](<url>)`. The URL is `--png-url-base` plus the file name, so an agent pushes the PNGs
+first and renders the Markdown against the pinned URL; without it, the link is relative to
+the Markdown file, and the PNGs it links are written beside it when `--png` is not given.
+
+In Python: `bn.evidence_markdown(base, cand)`, `bn.write_evidence_pngs(base, cand, out_dir)`
+and `bn.write_evidence(base, cand, json_path=..., markdown_path=..., png_dir=...)`. See
+[`example_evidence.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_evidence.py).
+
 `BenchReport.save(..., emit_json=True)` writes `result.json` next to the HTML for every
 contained result (opt-in; default off). All JSON output is strict — non-finite values (e.g. a
 zero-baseline percent change) are emitted as `null`.

@@ -237,12 +237,33 @@ def _render_parser() -> argparse.ArgumentParser:
 def _compare_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=f"{_prog()} compare",
-        description="Diff two saved results into a machine-readable comparison JSON.",
+        description=(
+            "Diff two saved results into a comparison JSON and/or PR-ready evidence: "
+            "a Markdown block with a chart per metric, and PNG charts."
+        ),
     )
     parser.add_argument("baseline", help="Path to the baseline .pkl result")
     parser.add_argument("candidate", help="Path to the candidate .pkl result")
     parser.add_argument(
-        "--json", dest="json_path", metavar="PATH", required=True, help="Write comparison JSON here"
+        "--json", dest="json_path", metavar="PATH", help="Write comparison JSON here"
+    )
+    parser.add_argument(
+        "--markdown",
+        dest="markdown_path",
+        metavar="PATH",
+        help=(
+            "Write a Markdown block for a PR's Evidence section here. PNGs it links "
+            "are written beside it unless --png names a directory"
+        ),
+    )
+    parser.add_argument(
+        "--png", dest="png_dir", metavar="DIR", help="Write one before/after PNG per metric here"
+    )
+    parser.add_argument(
+        "--png-url-base",
+        dest="png_url_base",
+        metavar="URL",
+        help="Prefix for image links in --markdown (e.g. where the PNGs were pushed)",
     )
     return parser
 
@@ -265,9 +286,12 @@ def _load_or_fail(path: str, label: str) -> tuple[BenchResult | None, int]:
 
 
 def _run_compare(argv: list[str]) -> int:
-    from bencher.report_export import comparison_to_json
+    from bencher.evidence import write_evidence
 
-    args = _compare_parser().parse_args(argv)
+    parser = _compare_parser()
+    args = parser.parse_args(argv)
+    if not (args.json_path or args.markdown_path or args.png_dir):
+        parser.error("give at least one of --json, --markdown or --png")
     baseline, code = _load_or_fail(args.baseline, "baseline result")
     if baseline is None:
         return code
@@ -275,7 +299,14 @@ def _run_compare(argv: list[str]) -> int:
     if candidate is None:
         return code
     try:
-        out = comparison_to_json(baseline, candidate, args.json_path)
+        files = write_evidence(
+            baseline,
+            candidate,
+            json_path=args.json_path,
+            markdown_path=args.markdown_path,
+            png_dir=args.png_dir,
+            png_url_base=args.png_url_base,
+        )
     except ValueError as exc:
         # Surface the specific, actionable message (e.g. no shared metrics) to
         # the user rather than only logging a generic "failed to compare".
@@ -285,7 +316,9 @@ def _run_compare(argv: list[str]) -> int:
     except Exception:
         logger.exception("Failed to compare %s vs %s", args.baseline, args.candidate)
         return 1
-    print(out)  # noqa: T201 - CLI prints the output path
+    for path in (files.json_path, files.markdown_path, *files.pngs.values()):
+        if path is not None:
+            print(path)  # noqa: T201 - CLI prints the output paths
     return 0
 
 
@@ -296,7 +329,8 @@ def main(argv: list[str] | None = None) -> int:
     ``python -m bencher.render`` when running from a source checkout.
 
     Render: ``bencher <result.pkl> <output_dir> [--json PATH] [--cachedir DIR]``
-    Compare: ``bencher compare <a.pkl> <b.pkl> --json PATH``
+    Compare: ``bencher compare <a.pkl> <b.pkl> [--json PATH] [--markdown PATH]
+    [--png DIR] [--png-url-base URL]``
     """
     argv = sys.argv[1:] if argv is None else argv
 

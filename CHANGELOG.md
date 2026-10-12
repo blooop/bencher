@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it. `result_to_dict` reports the outcome, the worst value and the inputs it came from;
   `compare_results` reports it for the baseline as well as the candidate. `schema_version`
   stays 1: the `claim` key is additive, and only a breaking change to the shape bumps it.
+- **`bencher compare` writes evidence for a pull request.** `--markdown PATH` writes a block
+  to paste as a PR's Evidence section: per metric, a Mermaid `xychart-beta` chart with the
+  baseline as bars and the candidate as a line, and a caption with the verdict, the values,
+  the claim outcome on each side and each side's revision. A metric that a Mermaid chart
+  cannot show honestly (two swept inputs, a spread as large as the change) links a PNG
+  instead. `--png DIR` writes one PNG per metric with a ±1 std band and the claim drawn in,
+  and `--png-url-base URL` points the Markdown's image links at where the PNGs were pushed.
+  `--json` is now optional when either is given. `bn.write_evidence` is the Python form.
 
 ## [1.138.0] - 2026-10-12
 
