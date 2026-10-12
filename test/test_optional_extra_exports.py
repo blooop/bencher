@@ -212,3 +212,16 @@ def test_placeholder_keeps_its_own_identity_attributes() -> None:
     assert placeholder.__name__ == "rerun_to_pane"
     assert placeholder.__doc__ is not None
     assert "rerun-sdk" in placeholder.__doc__
+
+
+def test_package_namespace_does_not_reexport_typing_names() -> None:
+    import typing
+
+    import bencher
+
+    leaked = sorted(
+        name
+        for name in dir(bencher)
+        if not name.startswith("_") and getattr(bencher, name) is getattr(typing, name, object())
+    )
+    assert leaked == []

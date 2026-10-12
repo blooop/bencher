@@ -7,7 +7,7 @@ import warnings
 # this package -- it is import-order noise for anyone importing bencher.
 warnings.filterwarnings("ignore", message="Unable to import Axes3D", category=UserWarning)
 
-from typing import Any
+from typing import Any as _Any
 
 from bencher.results.dataset_result import DataSetResult as DataSetResult
 from bencher.results.explorer_result import ExplorerResult as ExplorerResult
@@ -200,7 +200,7 @@ def _requires_rerun(name: str) -> type:
         "installed. Install it with `pip install rerun-sdk`."
     )
 
-    def __init__(_self: object, *_args: Any, **_kwargs: Any) -> None:  # noqa: N807 - becomes the placeholder class's __init__ via type()
+    def __init__(_self: object, *_args: _Any, **_kwargs: _Any) -> None:  # noqa: N807 - becomes the placeholder class's __init__ via type()
         raise ImportError(message)
 
     return type(
@@ -324,7 +324,7 @@ _DEPRECATED_ALIASES = {
 }
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str) -> _Any:
     import sys
 
     new_name = _DEPRECATED_ALIASES.get(name)
