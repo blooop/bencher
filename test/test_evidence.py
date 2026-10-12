@@ -118,6 +118,13 @@ def test_quotes_in_units_do_not_break_the_title():
     assert title.count('"') == 2
 
 
+def test_a_metric_that_reads_zero_on_both_sides_still_charts(monkeypatch):
+    base, cand = _collect(0.0, input_vars=()), _collect(0.0, input_vars=())
+    for res in (base, cand):
+        monkeypatch.setattr(res.bench_cfg.result_vars[0], "claim", None)
+    assert "bar [0, 0]" in _chart(bn.evidence_markdown(base, cand))
+
+
 @pytest.fixture(name="saved")
 def saved_pair(tmp_path):
     a = save_result(_collect(0.3, input_vars=("speed", "load")), tmp_path / "a.pkl")

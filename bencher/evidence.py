@@ -207,6 +207,8 @@ def _y_range(
     span = hi - lo or abs(hi) or 1.0
     pad = 0.08 * span
     lo, hi = (lo if lo == 0 else lo - pad), (hi if hi == 0 else hi + pad)
+    if hi == lo:  # every value and bound is 0
+        hi = span
     # Round outward to two significant figures of the span, so the axis reads 0 --> 0.81.
     step = 10.0 ** (math.floor(math.log10(hi - lo)) - 1)
     return math.floor(lo / step) * step, math.ceil(hi / step) * step
