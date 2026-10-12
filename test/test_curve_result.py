@@ -127,3 +127,8 @@ class TestCurveResult:
         overlay = unwrap_hv(plot)
         assert isinstance(overlay, hv.Overlay)
         assert any(isinstance(el, hv.Curve) for el in overlay)
+
+
+def test_curve_rejects_mismatched_lengths():
+    with pytest.raises(ValueError, match="zip"):
+        bn.curve([0, 1, 2], [10, 11], "x", "y")

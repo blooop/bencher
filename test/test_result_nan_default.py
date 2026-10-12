@@ -201,5 +201,10 @@ class TestNanDefaultSerialization(unittest.TestCase):
             assert Path(out).exists()
 
 
+def test_result_float_rejects_non_str_units():
+    with pytest.raises(TypeError, match="units must be a str, got int"):
+        ResultFloat(units=5)
+
+
 if __name__ == "__main__":
     unittest.main()

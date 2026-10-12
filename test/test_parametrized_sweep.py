@@ -3,6 +3,7 @@ import unittest
 
 import holoviews as hv
 import param
+import pytest
 
 from bencher.variables.inputs import BoolSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
@@ -74,3 +75,10 @@ class TestParametrizedSweep(unittest.TestCase):
 
         instance = BoolDefaultTrue()
         assert instance.bool_var is True
+
+    def test_get_input_defaults_rejects_non_list(self) -> None:
+        class OneInput(ParametrizedSweep):
+            x = BoolSweep(default=False)
+
+        with pytest.raises(TypeError, match="override_defaults must be a list, got tuple"):
+            OneInput.get_input_defaults(override_defaults=("x", 1))
