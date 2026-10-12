@@ -737,6 +737,10 @@ bencher ab --base origin/main --out evidence/ --png-url-base <url> -- pixi run p
   (then `origin/main`, then `main`). It runs in a temporary detached `git worktree`,
   removed afterwards even on failure. The candidate runs in the working tree as it is, so
   uncommitted changes count.
+- A relative path in the command that the base worktree cannot have, because it is outside
+  the repository or ignored by git (a `.venv/bin/python`, a data directory), is made
+  absolute for the base run. A tracked path such as the bench file stays relative, so each
+  side runs its own copy.
 - Each side runs with `BENCHER_NO_CACHE=1` (see [Caching](caching.md)): the caches are
   keyed by inputs, not code, so without it the candidate could read the base's samples.
 - Each side is told where to save its result with `BENCHER_RESULT_PATH`. Any process that

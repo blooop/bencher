@@ -144,6 +144,36 @@ def run_side(side: str, command: Sequence[str], cwd: Path, revision: str, out: P
     return result
 
 
+def _absent_from_worktree(path: Path, top: Path) -> bool:
+    """True for a path a worktree of *top* never has: outside the repository, or ignored."""
+    if not path.is_relative_to(top):
+        return True
+    proc = subprocess.run(
+        ["git", "check-ignore", "--quiet", "--", str(path)],  # noqa: S607 - git from PATH
+        cwd=top,
+        capture_output=True,
+        check=False,
+    )
+    return proc.returncode == 0
+
+
+def _pin_paths(command: Sequence[str], here: Path, top: Path) -> list[str]:
+    """Make absolute each relative argument naming a path the base worktree lacks.
+
+    A ``.venv/bin/python`` or a ``../data`` directory exists only where ``ab`` runs;
+    a tracked file such as the bench itself stays relative, so the base runs its own.
+    """
+    return [
+        str(path)
+        if not arg.startswith("-")
+        and not Path(arg).is_absolute()
+        and os.path.lexists(path := Path(os.path.normpath(here / arg)))
+        and _absent_from_worktree(path, top)
+        else arg
+        for arg in command
+    ]
+
+
 def _run_base(command: Sequence[str], base: str, top: Path, rel: Path, out: Path) -> Path:
     revision = _git(["rev-parse", "--short", base], top)
     with tempfile.TemporaryDirectory(prefix="bencher-ab-") as tmp:
@@ -212,7 +242,8 @@ def main(argv: list[str]) -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     try:
-        base_pkl = _run_base(command, base, top, here.relative_to(top), out)
+        base_command = _pin_paths(command, here, top)
+        base_pkl = _run_base(base_command, base, top, here.relative_to(top), out)
         candidate_pkl = run_side("candidate", command, here, candidate_revision, out)
     except SideFailedError as exc:
         print(_tail(exc.log), file=sys.stderr)  # noqa: T201 - CLI output

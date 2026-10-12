@@ -144,6 +144,32 @@ def test_ab_explicit_base_and_image_url(repo):
     assert _metric(repo / "bencher-ab")["verdict"] == "unchanged"
 
 
+AB_MAIN = (sys.executable, "-m", "bencher.render", "ab", "--base", "main")
+
+
+def test_ab_runs_an_ignored_interpreter_on_the_base_side_too(repo):
+    # A virtualenv is git-ignored, so the base worktree has none; the command names
+    # it relative to where ab runs.
+    venv = repo / ".venv" / "bin"
+    venv.mkdir(parents=True)
+    (venv / "python").symlink_to(sys.executable)
+    (repo / ".git" / "info" / "exclude").write_text(".venv/\n", encoding="utf-8")
+    (repo / "gain.py").write_text("GAIN = 0.2\n", encoding="utf-8")
+
+    proc = subprocess.run(
+        [*AB_MAIN, "--", ".venv/bin/python", "bench.py"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    # The bench itself is tracked, so each side still runs its own copy of it.
+    assert _metric(repo / "bencher-ab")["baseline_value"] == pytest.approx(0.6)
+    assert _metric(repo / "bencher-ab")["current_value"] == pytest.approx(0.4)
+
+
 def test_ab_without_a_base_says_how_to_name_one(tmp_path):
     repo = tmp_path / "lonely"
     repo.mkdir()
