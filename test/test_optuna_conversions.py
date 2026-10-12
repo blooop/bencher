@@ -5,7 +5,9 @@ import warnings
 from enum import auto
 from unittest.mock import MagicMock
 
+import numpy as np
 import optuna
+import pandas as pd
 import panel as pn
 import param
 import pytest
@@ -21,6 +23,7 @@ from bencher.optuna_conversions import (
     sweep_var_to_optuna_dist,
     sweep_var_to_suggest,
 )
+from bencher.results.optuna_result import _time_snapshot_to_float
 from bencher.variables.inputs import BoolSweep, EnumSweep, FloatSweep, IntSweep, StringSweep
 from bencher.variables.time import TimeSnapshot
 
@@ -370,3 +373,17 @@ class TestAppendSafe(unittest.TestCase):
         marker = pn.pane.Markdown("ok")
         _append_safe(row, lambda: marker)
         assert marker is row[0]
+
+
+class TestTimeSnapshotToFloat(unittest.TestCase):
+    def test_pandas_nat_is_skipped(self):
+        assert _time_snapshot_to_float(pd.NaT) is None
+
+    def test_numpy_nat_is_skipped(self):
+        assert _time_snapshot_to_float(np.datetime64("NaT")) is None
+
+    def test_timestamp_converts_to_posix_seconds(self):
+        assert _time_snapshot_to_float(pd.Timestamp("2024-01-01", tz="UTC")) == 1704067200.0
+
+    def test_datetime64_converts_to_posix_seconds(self):
+        assert _time_snapshot_to_float(np.datetime64("2024-01-01T00:00:00")) == 1704067200.0

@@ -94,6 +94,19 @@ def _study_has_multiple_params(study: optuna.Study) -> bool:
     return bool(study.trials) and len(study.trials[0].params) > 1
 
 
+def _time_snapshot_to_float(val: Any) -> float | None:
+    """Convert a TimeSnapshot value to a POSIX timestamp, or None to skip it."""
+    # df.dropna() already removes NaT rows; this keeps a missing time out of optuna
+    # if that ever changes (pd.NaT has .timestamp(), which raises).
+    if pd.isna(val):
+        return None
+    if hasattr(val, "timestamp"):
+        return val.timestamp()
+    if isinstance(val, np.datetime64):
+        return val.astype("datetime64[s]").astype(float)
+    return None
+
+
 class OptunaResult(BenchResultBase):
     def to_optuna_plots(self, **kwargs: Any) -> list[pn.pane.panel]:
         """Create an optuna summary from the benchmark results.
@@ -215,18 +228,10 @@ class OptunaResult(BenchResultBase):
             values = []
             for i in trial_vars:
                 if isinstance(i, TimeSnapshot):
-                    val = row[1][i.name]
-                    # df.dropna() above already removes NaT rows; this keeps a missing
-                    # time out of optuna if that ever changes (pd.NaT has .timestamp(),
-                    # which raises).
-                    if pd.isna(val):
+                    ts = _time_snapshot_to_float(row[1][i.name])
+                    if ts is None:
                         continue
-                    if hasattr(val, "timestamp"):
-                        params[i.name] = val.timestamp()
-                    elif isinstance(val, np.datetime64):
-                        params[i.name] = val.astype("datetime64[s]").astype(float)
-                    else:
-                        continue
+                    params[i.name] = ts
                 elif isinstance(i, TimeEvent):
                     params[i.name] = str(row[1][i.name])
                 elif isinstance(i, BoolSweep):
