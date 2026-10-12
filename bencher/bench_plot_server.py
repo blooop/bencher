@@ -64,14 +64,14 @@ class BenchPlotServer:
         self,
         bench_name: str,
         plot_cfg: BenchPlotSrvCfg | None = None,
-        plots_instance: list[pn.panel] | None = None,
+        plots_instance: pn.viewable.Viewable | None = None,
     ) -> Thread:
         """Load previously calculated benchmark data from the database and start a plot server to display it.
 
         Args:
             bench_name (str): The name of the benchmark and output folder for the figures
             plot_cfg (BenchPlotSrvCfg, optional): Options for the plot server. Defaults to None.
-            plots_instance (list[pn.panel], optional): Panels to serve. Defaults to None,
+            plots_instance (pn.viewable.Viewable, optional): Panel to serve. Defaults to None,
                 which loads them from the cache by ``bench_name``.
 
         Raises:
@@ -153,7 +153,7 @@ class BenchPlotServer:
     def serve(
         self,
         bench_name: str,
-        plots_instance: list[pn.panel],
+        plots_instance: pn.viewable.Viewable,
         port: int | None = None,
         show: bool = True,
     ) -> Thread:
@@ -161,7 +161,7 @@ class BenchPlotServer:
 
         Args:
             bench_name (str): title of the served page
-            plots_instance (list[pn.panel]): list of panel objects to display
+            plots_instance (pn.viewable.Viewable): panel object to display
             port (int): use a fixed port to launch the server
             show (bool): open the page in a browser
         """

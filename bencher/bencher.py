@@ -4,6 +4,7 @@ import logging
 import os
 import tempfile
 import warnings
+from collections.abc import Mapping
 from concurrent.futures import as_completed
 from contextlib import suppress
 from copy import deepcopy
@@ -51,7 +52,7 @@ from bencher.worker_job import WorkerJob
 from bencher.worker_manager import WorkerManager
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
     from datetime import datetime
 
     import numpy as np
@@ -388,9 +389,12 @@ class Bench(BenchPlotServer):
     def sweep_sequential(
         self,
         title: str = "",
-        input_vars: list[param.Parameter | str | dict[str, Any] | tuple] | None = None,
-        result_vars: list[param.Parameter | str | dict[str, Any] | tuple] | None = None,
-        const_vars: list[tuple] | dict[str, Any] | None = None,
+        input_vars: Sequence[param.Parameter | str | dict[str, Any] | tuple] | None = None,
+        result_vars: Sequence[param.Parameter | str | dict[str, Any] | tuple] | None = None,
+        const_vars: Sequence[tuple]
+        | Mapping[param.Parameter, Any]
+        | Mapping[str, Any]
+        | None = None,
         optimise_var: ParametrizedSweep | None = None,
         run_cfg: BenchRunCfg | None = None,
         group_size: int = 1,
@@ -459,9 +463,12 @@ class Bench(BenchPlotServer):
     def plot_sweep(
         self,
         title: str | None = None,
-        input_vars: list[param.Parameter | str | dict[str, Any] | tuple] | None = None,
-        result_vars: list[param.Parameter | str | dict[str, Any] | tuple] | None = None,
-        const_vars: list[tuple] | dict[str, Any] | None = None,
+        input_vars: Sequence[param.Parameter | str | dict[str, Any] | tuple] | None = None,
+        result_vars: Sequence[param.Parameter | str | dict[str, Any] | tuple] | None = None,
+        const_vars: Sequence[tuple]
+        | Mapping[param.Parameter, Any]
+        | Mapping[str, Any]
+        | None = None,
         time_src: datetime | None = None,
         description: str | None = None,
         post_description: str | None = None,
@@ -631,6 +638,8 @@ class Bench(BenchPlotServer):
                 for k, v in input_vars_in.items()
             ]
 
+        input_vars_in = list(input_vars_in)
+        result_vars_in = list(result_vars_in)
         for i in range(len(input_vars_in)):
             input_vars_in[i] = self.convert_vars_to_params(input_vars_in[i], "input", run_cfg)
         for i in range(len(result_vars_in)):
@@ -649,8 +658,9 @@ class Bench(BenchPlotServer):
             r_name = getattr(r, "name", str(r))
             logger.info("result var: %s", r_name)
 
-        if isinstance(const_vars_in, dict):
+        if isinstance(const_vars_in, Mapping):
             const_vars_in = list(const_vars_in.items())
+        const_vars_in = list(const_vars_in)
 
         for i in range(len(const_vars_in)):
             # consts come as tuple pairs
