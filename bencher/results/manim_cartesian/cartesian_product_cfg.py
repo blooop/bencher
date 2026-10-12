@@ -7,7 +7,10 @@ to the animation scene.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from bencher.bench_cfg import BenchCfg
 
 
 @dataclass
@@ -67,7 +70,7 @@ class CartesianProductCfg:
         return result
 
 
-def from_bench_cfg(bench_cfg) -> CartesianProductCfg:
+def from_bench_cfg(bench_cfg: BenchCfg) -> CartesianProductCfg:
     """Build a :class:`CartesianProductCfg` from a ``BenchCfg`` instance.
 
     Uses ``bench_cfg.all_vars`` (input_vars + meta_vars) so that repeat

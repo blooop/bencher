@@ -14,7 +14,7 @@ OUTPUT_DIR = "regression"
 
 
 # ---------------------------------------------------------------------------
-# Tuning examples — 2-D sweeps (effect × regression_mad) with ResultReference
+# Tuning examples — 2-D sweeps (effect x regression_mad) with ResultReference
 # ---------------------------------------------------------------------------
 
 
@@ -52,7 +52,7 @@ _TUNING: dict[str, TuningSpec] = {
         classname="AdaptiveStepDetection",
         input_vars=("regression_magnitude", "regression_mad"),
         description=(
-            "A step regression of variable magnitude is injected (fixed noise σ=10). "
+            "A step regression of variable magnitude is injected (fixed noise sigma=10). "
             "Each cell shows the synthesised 20-point history and the current run. "
             "When the regression magnitude is large relative to noise and the "
             "regression_mad is low the detector fires; when the magnitude shrinks or "
@@ -109,10 +109,10 @@ class AdaptiveStepDetection(bn.ParametrizedSweep):
         classname="AdaptiveDriftDetection",
         input_vars=("drift_rate", "regression_mad"),
         description=(
-            "A linear drift is added to the history (fixed noise σ=5). "
-            "With 20 time points, the total drift equals drift_rate × 20 "
+            "A linear drift is added to the history (fixed noise sigma=5). "
+            "With 20 time points, the total drift equals drift_rate x 20 "
             "and the current run continues the trend.  The adaptive drift "
-            "test (Theil–Sen slope + Mann–Kendall trend guard) fires when "
+            "test (Theil-Sen slope + Mann-Kendall trend guard) fires when "
             "the accumulated drift outweighs the detrended noise.  Low "
             "drift rates or high regression_mads allow the trend to pass "
             "unnoticed."

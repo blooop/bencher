@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-import holoviews as hv
-import xarray as xr
-from param import Parameter
+from typing import TYPE_CHECKING, Any
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult, PlotResult
 from bencher.variables.results import SCALAR_RESULT_TYPES
+
+if TYPE_CHECKING:
+    import holoviews as hv
+    import xarray as xr
+    from param import Parameter
 
 
 class CurveResult(HoloviewResult):
@@ -18,12 +21,12 @@ class CurveResult(HoloviewResult):
     deviation bounds are displayed using an ``hv.Spread`` overlay.
     """
 
-    def to_plot(self, **kwargs) -> hv.Curve | None:
+    def to_plot(self, **kwargs: Any) -> hv.Curve | None:
         """Generates a curve plot. See ``to_curve`` for parameters."""
         return self.to_curve(**kwargs)
 
     def to_curve(
-        self, result_var: Parameter | None = None, override: bool = True, **kwargs
+        self, result_var: Parameter | None = None, override: bool = True, **kwargs: Any
     ) -> hv.Curve | None:
         """Generates a curve plot from benchmark data.
 
@@ -49,7 +52,7 @@ class CurveResult(HoloviewResult):
         )
 
     def to_curve_ds(
-        self, dataset: xr.Dataset, result_var: Parameter, **kwargs
+        self, dataset: xr.Dataset, result_var: Parameter, **kwargs: Any
     ) -> PlotResult | None:
         """Creates a curve plot from the provided dataset.
 
@@ -73,7 +76,8 @@ class CurveResult(HoloviewResult):
         if self._use_holomap_for_time(dataset):
             var = result_var.name
 
-            def make_curve(ds_t):
+            def make_curve(ds_t: xr.Dataset) -> hv.Overlay | None:
+
                 return self._build_curve_overlay(ds_t, result_var, **kwargs)
 
             return self._build_time_holomap(dataset, var, make_curve)

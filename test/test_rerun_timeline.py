@@ -363,7 +363,7 @@ def _texts(path: str, entity: str) -> list[str]:
             for i, field in enumerate(batch.schema)
             if field.name.startswith("TextDocument") and field.name.endswith("text")
         )
-        rows.extend(zip(index, ("".join(t) if t else "" for t in text)))
+        rows.extend(zip(index, ("".join(t) if t else "" for t in text), strict=True))
     return [text for _, text in sorted(rows)]
 
 
@@ -401,8 +401,10 @@ def _points3d(path: str, entity: str) -> list[list[list[float]]]:
         batch = chunk.to_record_batch()
         for i, field in enumerate(batch.schema):
             if field.name.startswith("Points3D") and "positions" in field.name:
-                for row in batch.column(i).to_pylist():
-                    rows.append([[float(v) for v in _xyz(point)] for point in row])
+                rows.extend(
+                    [[float(v) for v in _xyz(point)] for point in row]
+                    for row in batch.column(i).to_pylist()
+                )
     return rows
 
 
@@ -661,7 +663,7 @@ class TestRidingCoordinates:
                 continue
             assert sorted(timelines["pareto_rank"]) == ranks
         texts = _texts(path, _readout_entity("pareto_rank"))
-        for rank, (text, trial) in enumerate(zip(texts, result.pareto_trials())):
+        for rank, (text, trial) in enumerate(zip(texts, result.pareto_trials(), strict=True)):
             lines = text.splitlines()
             assert lines[0] == f"- **pareto_rank** = {rank}"
             assert lines[1] == f"- **theta** = {_coord_label(trial.params['theta'])}"
@@ -682,8 +684,10 @@ class TestTrackingScatter:
             batch = chunk.to_record_batch()
             for i, field in enumerate(batch.schema):
                 if field.name.startswith("Points2D") and "positions" in field.name:
-                    for row in batch.column(i).to_pylist():
-                        rows.append([[float(v) for v in _xy(point)] for point in row])
+                    rows.extend(
+                        [[float(v) for v in _xy(point)] for point in row]
+                        for row in batch.column(i).to_pylist()
+                    )
         return rows
 
     def _scatter_dataset(self, res):
@@ -726,8 +730,10 @@ class TestTrackingScatter:
         # falling coordinate -- and the four samples span the box less its padding.
         xs = [point[0] for point in every]
         ys = [point[1] for point in every]
-        assert xs == sorted(xs, reverse=True) and ys == sorted(ys, reverse=True)
-        assert 0 < xs[-1] < xs[0] < 160 and 0 < ys[-1] < ys[0] < 100
+        assert xs == sorted(xs, reverse=True)
+        assert ys == sorted(ys, reverse=True)
+        assert 0 < xs[-1] < xs[0] < 160
+        assert 0 < ys[-1] < ys[0] < 100
         # One point per tick, each the sample sitting at that tick.
         assert self._points(path, "/front/size/current") == [[point] for point in every]
 
@@ -917,7 +923,7 @@ class TestNiceTicks:
     """Round-number tick values that stay inside the axis they label."""
 
     @pytest.mark.parametrize(
-        "low,high",
+        ("low", "high"),
         [
             (-5.418, 50.568),  # the heat sink's material axis
             (-26.812, 270.912),  # its pressure-drop axis
@@ -1295,8 +1301,10 @@ class TestBackendSwap:
         data = res.to_bench_data()
         by_default = {(p.name, p.backend) for p in get_registry().select(data)}
         preferred = {(p.name, p.backend) for p in get_registry().select(data, backend="rerun")}
-        assert ("panes", "panel") in by_default and ("panes", "rerun") not in by_default
-        assert ("panes", "rerun") in preferred and ("panes", "panel") not in preferred
+        assert ("panes", "panel") in by_default
+        assert ("panes", "rerun") not in by_default
+        assert ("panes", "rerun") in preferred
+        assert ("panes", "panel") not in preferred
 
     def test_the_configured_backend_reaches_plot_selection(self):
         """``to_auto_plots`` is where the preference is applied; without it the flag
@@ -1361,7 +1369,7 @@ class TestLayout:
     """Where the pieces sit, which is the difference between a viewer you can read
     and one where the scene is a thumbnail."""
 
-    @pytest.mark.parametrize("rows, columns", [(3, 2), (2, 3)])
+    @pytest.mark.parametrize(("rows", "columns"), [(3, 2), (2, 3)])
     def test_two_axes_have_fixed_rows_and_columns(self, rows, columns):
         import rerun.blueprint as rrb
 

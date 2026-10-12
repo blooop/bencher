@@ -87,7 +87,7 @@ def example_rerun_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     base_time = datetime(2024, 1, 1)
 
     for i, degradation in enumerate([0.0, 0.1, 0.25, 0.4]):
-        benchable._degradation = degradation  # pylint: disable=protected-access
+        benchable._degradation = degradation
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
         bench.plot_sweep(

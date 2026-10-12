@@ -210,3 +210,53 @@ def test_scalar_keeps_its_over_time_series(swept):
     hmap = hmaps[0]
     assert "over_time" in [d.name for d in hmap.kdims], hmap.kdims
     assert len(hmap.keys()) == _RUNS, hmap.keys()
+
+
+def _reference_container(obj: str) -> pn.pane.Markdown:
+    return pn.pane.Markdown(f"ref={obj}")
+
+
+class ReferenceSweep(bn.ParametrizedSweep):
+    """A live ``ResultReference`` beside a scalar, sampled once per run."""
+
+    ref = bn.ResultReference(container=_reference_container, doc="a live object")
+    score = bn.ResultFloat(units="pt", doc="a plain scalar")
+
+    run_id = 0
+
+    def benchmark(self):
+        self.ref = bn.ResultReference(obj=f"run-{self.run_id}")
+        self.score = float(self.run_id)
+
+
+def test_reference_history_does_not_render_the_latest_object(tmp_path, monkeypatch):
+    # object_index holds only the final run's objects, so a historical cell's
+    # index is in range yet names the wrong run's object.
+    monkeypatch.chdir(tmp_path)
+    result = _run_over_time(ReferenceSweep(), ["ref", "score"])
+    text = _markdown_text(PaneResult.to_panes(result))
+    assert sum("ref=run-1" in line for line in text) == 1, text
+    assert any("was not persisted" in line for line in text), text
+
+
+def test_reference_absent_from_an_old_run_leaves_a_gap(tmp_path, monkeypatch):
+    # A run that did not record the reference leaves the -1 missing sentinel. That
+    # cell is skipped like any other missing time point; nothing was lost to save.
+    monkeypatch.chdir(tmp_path)
+    worker = ReferenceSweep()
+    run_cfg = bn.BenchRunCfg(over_time=True, repeats=1, auto_plot=False)
+    bench = worker.to_bench(run_cfg)
+    for run, result_vars in enumerate((["score"], ["ref", "score"])):
+        worker.run_id = run
+        run_cfg.clear_cache = True
+        run_cfg.clear_history = run == 0
+        result = bench.plot_sweep(
+            "over_time_ref_gap",
+            result_vars=result_vars,
+            run_cfg=run_cfg,
+            time_src=_BASE_TIME + timedelta(seconds=run),
+        )
+    assert (result.ds["ref"].isel(over_time=0) == -1).all()
+    text = _markdown_text(PaneResult.to_panes(result))
+    assert not any("was not persisted" in line for line in text), text
+    assert sum("ref=run-1" in line for line in text) == 1, text

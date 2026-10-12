@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import holoviews as hv
 import numpy as np
-import xarray as xr
-from param import Parameter
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.variables.results import SCALAR_RESULT_TYPES
+
+if TYPE_CHECKING:
+    import panel as pn
+    import xarray as xr
+    from param import Parameter
 
 
 class BandResult(HoloviewResult):
@@ -22,16 +27,16 @@ class BandResult(HoloviewResult):
     """
 
     def to_plot(
-        self, result_var: Parameter | None = None, override: bool = True, **kwargs
-    ) -> hv.Overlay | None:
+        self, result_var: Parameter | None = None, override: bool = True, **kwargs: Any
+    ) -> pn.panel | None:
         return self.to_band(result_var=result_var, override=override, **kwargs)
 
     def to_band(
         self,
         result_var: Parameter | None = None,
         override: bool = True,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> pn.panel | None:
         # Extract agg_over_dims so filter() doesn't pre-aggregate the dataset.
         # BandResult computes its own percentiles from the raw data.
         band_agg_dims = kwargs.pop("agg_over_dims", None)
@@ -52,7 +57,9 @@ class BandResult(HoloviewResult):
             **kwargs,
         )
 
-    def to_band_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs) -> hv.Overlay | None:
+    def to_band_ds(
+        self, dataset: xr.Dataset, result_var: Parameter, **kwargs: Any
+    ) -> hv.Overlay | None:
         """Create a percentile band plot from the provided dataset.
 
         Flattens all dimensions except the continuous axis (typically over_time)
@@ -90,7 +97,7 @@ class BandResult(HoloviewResult):
         var: str,
         title: str | None,
         units: str = "",
-        **kwargs,
+        **kwargs: Any,
     ) -> hv.Overlay | None:
         """Build percentile bands with time on x-axis."""
         da = dataset[var]
@@ -124,7 +131,7 @@ class BandResult(HoloviewResult):
 
         scatter_x, scatter_y = self._build_scatter_data(time_coords, values, **kwargs)
 
-        overlay = self._build_band_overlay(
+        return self._build_band_overlay(
             time_coords,
             p10,
             p25,
@@ -140,8 +147,6 @@ class BandResult(HoloviewResult):
             **kwargs,
         )
 
-        return overlay
-
     def _band_static(
         self,
         dataset: xr.Dataset,
@@ -149,7 +154,7 @@ class BandResult(HoloviewResult):
         title: str | None,
         agg_over_dims: list[str] | None,
         units: str = "",
-        **kwargs,
+        **kwargs: Any,
     ) -> hv.Overlay | None:
         """Build percentile bands over a non-time continuous axis."""
         da = dataset[var]
@@ -208,9 +213,9 @@ class BandResult(HoloviewResult):
 
     @staticmethod
     def _build_scatter_data(
-        x_coords,
-        values,
-        **kwargs,
+        x_coords: np.ndarray,
+        values: np.ndarray,
+        **kwargs: Any,
     ) -> tuple[np.ndarray | None, np.ndarray | None]:
         """Build scatter arrays from the 2-D values grid, with optional downsampling.
 
@@ -245,25 +250,36 @@ class BandResult(HoloviewResult):
 
     @staticmethod
     def _build_band_overlay(
-        x_coords,
-        p10,
-        p25,
-        p50,
-        p75,
-        p90,
-        scatter_x,
-        scatter_y,
+        x_coords: np.ndarray,
+        p10: np.ndarray,
+        p25: np.ndarray,
+        p50: np.ndarray,
+        p75: np.ndarray,
+        p90: np.ndarray,
+        scatter_x: np.ndarray | None,
+        scatter_y: np.ndarray | None,
         var: str,
         title: str,
         x_dim: str = "x",
         units: str = "",
-        **_kwargs,
+        **_kwargs: Any,
     ) -> hv.Overlay:
         """Construct the overlay of Area bands + median Curve + scatter points.
 
         Args:
+            x_coords: 1-D array of x-axis coordinates.
+            p10: 10th percentile at each x coordinate.
+            p25: 25th percentile at each x coordinate.
+            p50: Median at each x coordinate.
+            p75: 75th percentile at each x coordinate.
+            p90: 90th percentile at each x coordinate.
+            scatter_x: X values of the individual samples, or None to skip the scatter.
+            scatter_y: Y values of the individual samples, or None to skip the scatter.
+            var: Name of the result variable, used for the value dimensions.
+            title: Plot title.
             x_dim: Name of the x-axis dimension, used as the kdim label so that
                 axis labels reflect the original coordinate (e.g. ``over_time``).
+            units: Units of the result variable, appended to the y-axis label.
         """
         # Outer band: 10th-90th percentile
         band_outer = hv.Area(
@@ -303,5 +319,4 @@ class BandResult(HoloviewResult):
             overlay = overlay * scatter
 
         ylabel = f"{var} [{units}]" if units else var
-        overlay = overlay.opts(title=title, xrotation=30, ylabel=ylabel, legend_position="right")
-        return overlay
+        return overlay.opts(title=title, xrotation=30, ylabel=ylabel, legend_position="right")

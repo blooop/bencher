@@ -2,15 +2,12 @@ from __future__ import annotations
 
 import html
 import logging
-import os
 import subprocess
 import tempfile
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Thread
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import numpy as np
 import pandas as pd
@@ -19,9 +16,17 @@ import panel as pn
 from bencher.bench_cfg import BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.blob_store import DEFAULT_CACHE_DIR
-from bencher.results.bench_result import BenchResult
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from threading import Thread
+
+    from bencher.results.bench_result import BenchResult
 
 logger = logging.getLogger(__name__)
+
+# Longest time-event label shown in a tab title before it is truncated with "...".
+_MAX_TIME_LABEL_LEN = 60
 
 
 def _inline_rrd(
@@ -39,7 +44,7 @@ def _inline_rrd(
         from bencher.utils_rrd import inline_rrd_iframes
 
         inline_rrd_iframes(html_path, rrd_base=rrd_base, portable=portable)
-    except Exception:  # pylint: disable=broad-except
+    except Exception:
         logger.warning("inline_rrd_iframes failed for %s", html_path, exc_info=True)
 
 
@@ -111,7 +116,7 @@ def _inject_embed_script(html_path: Path) -> None:
         else:
             content += _EMBED_HEIGHT_SCRIPT
         html_path.write_text(content, encoding="utf-8")
-    except Exception:  # pylint: disable=broad-except
+    except Exception:
         logger.warning("inject_embed_script failed for %s", html_path, exc_info=True)
 
 
@@ -128,7 +133,7 @@ class Publisher(Protocol):
 
     def publish(self, report: BenchReport) -> str | None:
         """Publish a report. Returns the published URL, or None."""
-        ...  # pylint: disable=unnecessary-ellipsis
+        ...
 
 
 @dataclass
@@ -178,15 +183,15 @@ class BenchReport(BenchPlotServer):
         if other is self:
             return
         self.pane.extend(list(other.pane))
-        self._result_tabs.extend(other._result_tabs)  # pylint: disable=protected-access
+        self._result_tabs.extend(other._result_tabs)
 
-    def append_title(self, title: str, new_tab: bool = True):
+    def append_title(self, title: str, new_tab: bool = True) -> pn.panel | None:
         if new_tab:
             return self.append_tab(pn.pane.Markdown(f"# {title}", name=title), title)
         return self.append_markdown(f"# {title}", title)
 
     def append_markdown(
-        self, markdown: str, name: str | None = None, width: int = 800, **kwargs
+        self, markdown: str, name: str | None = None, width: int = 800, **kwargs: Any
     ) -> pn.pane.Markdown:
         if name is None:
             name = markdown
@@ -203,10 +208,7 @@ class BenchReport(BenchPlotServer):
             self.pane[-1].append(pane)
 
     def append_col(self, pane: pn.panel, name: str | None = None) -> None:
-        if name is not None:
-            col = pn.Column(pane, name=name)
-        else:
-            col = pn.Column(pane, name=pane.name)
+        col = pn.Column(pane, name=name) if name is not None else pn.Column(pane, name=pane.name)
         self.pane.append(col)
 
     @staticmethod
@@ -225,8 +227,8 @@ class BenchReport(BenchPlotServer):
             label = pd.Timestamp(last).strftime("%Y-%m-%d %H:%M:%S")
         else:
             label = str(last).replace("\n", " ")
-        if len(label) > 60:
-            label = label[:57] + "..."
+        if len(label) > _MAX_TIME_LABEL_LEN:
+            label = label[: _MAX_TIME_LABEL_LEN - 3] + "..."
         return label
 
     def append_result(self, bench_res: BenchResult, render_from: BenchResult | None = None) -> None:
@@ -362,7 +364,7 @@ class BenchReport(BenchPlotServer):
         portable: bool = False,
         emit_json: bool | str = False,
         _process_rrd: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> Path:
         """Save the result to a html file.
 
@@ -384,11 +386,11 @@ class BenchReport(BenchPlotServer):
                 ``file://`` without any server.  When False (default), .rrd
                 files are copied as sidecar files and loaded via relative
                 URLs — the report must be served over HTTP.
+            **kwargs: passed through to panel's ``save()``.
 
         Returns:
             Path: the save path
         """
-
         t0 = time.perf_counter()
         try:
             if filename is None:
@@ -400,7 +402,7 @@ class BenchReport(BenchPlotServer):
                 base_path /= "html"
 
             logger.info(f"creating dir {base_path.absolute()}")
-            os.makedirs(base_path.absolute(), exist_ok=True)
+            base_path.absolute().mkdir(parents=True, exist_ok=True)
 
             index_path = base_path / filename
             self._saved_pages = {id(result): filename for result in self.bench_results}
@@ -420,7 +422,7 @@ class BenchReport(BenchPlotServer):
 
             # Save each tab to its own HTML so HoloMap sliders don't collide.
             tab_dir = base_path / "_tabs"
-            os.makedirs(tab_dir, exist_ok=True)
+            tab_dir.mkdir(parents=True, exist_ok=True)
             tab_files = []
             seen_names = set()
             for i, tab in enumerate(self.pane):
@@ -537,11 +539,10 @@ if (_embedded) {{
   document.body.style.overflow = 'hidden';
 }}
 </script></body></html>"""
-        with open(index_path, "w", encoding="utf-8") as f:
-            f.write(page)
+        index_path.write_text(page, encoding="utf-8")
 
     def show(self, run_cfg: BenchRunCfg | None = None) -> Thread:  # pragma: no cover
-        """Launches a webserver with plots of the benchmark results, blocking
+        """Launches a webserver with plots of the benchmark results, blocking.
 
         Args:
             run_cfg (BenchRunCfg, optional): Options for the webserve such as the port. Defaults to None.
@@ -573,9 +574,9 @@ if (_embedded) {{
             logger.info(f"created report at: {report_path.absolute()}")
 
             def git(*args: str) -> None:
-                subprocess.run(["git", *args], cwd=directory, check=True)
+                subprocess.run(["git", *args], cwd=directory, check=True)  # noqa: S607 - git from PATH
 
-            # TODO DON'T OVERWRITE EVERYTHING
+            # TODO: DON'T OVERWRITE EVERYTHING
             git("init")
             git("checkout", "-b", branch_name)
             git("add", f"{folder_name}/index.html")
@@ -591,7 +592,9 @@ if (_embedded) {{
     def publish(
         self, remote_callback: Callable, branch_name: str | None = None, debug: bool = False
     ) -> str:  # pragma: no cover
-        """Publish the results as an html file by committing it to the bench_results branch in the current repo. If you have set up your repo with github pages or equivalent then the html file will be served as a viewable webpage.  This is an example of a callable to publish on github pages:
+        """Publish the results as an html file by committing it to a branch in the current repo.
+
+        If you have set up your repo with github pages or equivalent then the html file will be served as a viewable webpage.  This is an example of a callable to publish on github pages:
 
         .. code-block:: python
 
@@ -602,12 +605,13 @@ if (_embedded) {{
 
 
         Args:
-            remote (Callable): A function the returns a tuple of the publishing urls. It must follow the signature def publish_args(branch_name) -> tuple[str, str].  The first url is the git repo name, the second url needs to match the format for viewable html pages on your git provider.  The second url can use the argument branch_name to point to the report on a specified branch.
+            remote_callback (Callable): A function the returns a tuple of the publishing urls. It must follow the signature def publish_args(branch_name) -> tuple[str, str].  The first url is the git repo name, the second url needs to match the format for viewable html pages on your git provider.  The second url can use the argument branch_name to point to the report on a specified branch.
+            branch_name (str, optional): branch to push to. Defaults to the bench name.
+            debug (bool, optional): append ``_debug`` to the branch name. Defaults to False.
 
         Returns:
             str: the url of the published report
         """
-
         if branch_name is None:
             if self.bench_name is None:
                 # Previously this fell through to `None += "_debug" if debug else ""`, so
@@ -629,7 +633,7 @@ if (_embedded) {{
             logger.info(f"created report at: {report_path.absolute()}")
 
             def git(*args: str) -> None:
-                subprocess.run(["git", *args], cwd=directory, check=True)
+                subprocess.run(["git", *args], cwd=directory, check=True)  # noqa: S607 - git from PATH
 
             git("init")
             git("checkout", "-b", branch_name)

@@ -31,7 +31,8 @@ class TestComposableContainerDataframe:
         c.append(ds_a)
         c.append(ds_b)
         assert c.container == [ds_a, ds_b]
-        assert c.container[0] is ds_a and c.container[1] is ds_b
+        assert c.container[0] is ds_a
+        assert c.container[1] is ds_b
 
     def test_single_pandas_dataframe_passthrough(self):
         df = _make_df([1.0, 2.0, 3.0])

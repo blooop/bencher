@@ -2,7 +2,6 @@
 
 # _compose_ds is exercised directly: it returns the composed .rrd path, which the
 # public renderers wrap in a pane, so it is the only way to assert on the merge.
-# pylint: disable=protected-access
 
 from pathlib import Path
 
@@ -142,7 +141,8 @@ class TestRerunSummary:
         bench = DeclaredContainerSweep().to_bench()
         res = bench.plot_sweep(input_vars=["freq"], result_vars=["out_rerun"])
         pane = res.to_rerun_grid()
-        assert pane is not None and len(pane) == 1
+        assert pane is not None
+        assert len(pane) == 1
         rendered = pane[0]
         assert isinstance(rendered, pn.pane.Markdown), type(rendered)
         assert rendered.object.startswith("composed: ")

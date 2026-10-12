@@ -1,20 +1,23 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
-
-import panel as pn
-from param import Parameter
+from typing import TYPE_CHECKING, Any
 
 from bencher.results.bench_result_base import BenchResultBase
 from bencher.variables.results import ResultDataSet
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import holoviews as hv
+    import panel as pn
+    from param import Parameter
 
 
 def render_data_samples(
     result: BenchResultBase,
     renderer: Callable[[Any], Any] | None = None,
     result_var: Parameter | None = None,
-    hv_dataset=None,
+    hv_dataset: hv.Dataset | None = None,
     target_dimension: int = 0,
     subsampling_divisions: int | None = None,
     **kwargs: Any,
@@ -47,7 +50,7 @@ class DataSetResult(BenchResultBase):
     def to_plot(
         self,
         result_var: Parameter | None = None,
-        hv_dataset=None,
+        hv_dataset: hv.Dataset | None = None,
         target_dimension: int = 0,
         container: Callable[[Any], Any] | None = None,
         subsampling_divisions: int | None = None,

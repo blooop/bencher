@@ -20,11 +20,11 @@ class Rastrigin(bn.ParametrizedSweep):
     loss = bn.ResultFloat("ul", bn.OptDir.minimize)
 
     def benchmark(self):
-        A = 10
+        a = 10
         self.loss = float(
-            A * 2
-            + (self.x**2 - A * np.cos(2 * np.pi * self.x))
-            + (self.y**2 - A * np.cos(2 * np.pi * self.y))
+            a * 2
+            + (self.x**2 - a * np.cos(2 * np.pi * self.x))
+            + (self.y**2 - a * np.cos(2 * np.pi * self.y))
         )
 
 

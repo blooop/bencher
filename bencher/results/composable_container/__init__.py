@@ -1,21 +1,21 @@
 from bencher.results.composable_container.composable_container_base import (
-    Axis,
-    ComposableContainerBase,
-    ComposeType,
-    PaneLayout,
+    Axis as Axis,
+    ComposableContainerBase as ComposableContainerBase,
+    ComposeType as ComposeType,
+    PaneLayout as PaneLayout,
 )
 from bencher.results.composable_container.composable_container_dataframe import (
-    ComposableContainerDataset,
+    ComposableContainerDataset as ComposableContainerDataset,
 )
 from bencher.results.composable_container.composable_container_panel import (
-    ComposableContainerPanel,
+    ComposableContainerPanel as ComposableContainerPanel,
 )
 from bencher.results.composable_container.composable_container_rerun import (
-    ComposableContainerRerun,
-    RerunRecording,
-    RerunViewKind,
+    ComposableContainerRerun as ComposableContainerRerun,
+    RerunRecording as RerunRecording,
+    RerunViewKind as RerunViewKind,
 )
 from bencher.results.composable_container.composable_container_video import (
-    ComposableContainerVideo,
-    RenderCfg,
+    ComposableContainerVideo as ComposableContainerVideo,
+    RenderCfg as RenderCfg,
 )

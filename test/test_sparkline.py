@@ -84,4 +84,5 @@ class TestSparkline:
         svg = sparkline_svg([1.0, 2.0, 1.5], [0.1, 0.2, 0.1])
         assert "#dc2626" not in svg  # regressed red
         assert "#16a34a" not in svg  # improved green
-        assert 'stroke-width="5"' not in svg and 'stroke-width="6"' not in svg
+        assert 'stroke-width="5"' not in svg
+        assert 'stroke-width="6"' not in svg

@@ -29,7 +29,8 @@ class BenchPolygons(bn.ParametrizedSweep):
         filepath = bn.gen_image_path("polygon")
         self.polygon = self.points_to_polygon_png(points, filepath)
         # Verify filepath is being returned
-        assert isinstance(self.polygon, str), f"Expected string filepath, got {type(self.polygon)}"
+        if not isinstance(self.polygon, str):
+            raise TypeError(f"Expected string filepath, got {type(self.polygon)}")
 
         self.side_length = 2 * self.radius * math.sin(math.pi / self.sides)
         self.area = (self.sides * self.side_length**2) / (4 * math.tan(math.pi / self.sides))

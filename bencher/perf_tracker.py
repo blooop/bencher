@@ -6,6 +6,10 @@ import logging
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +50,7 @@ class PerfReport:
     def summary(self) -> str:
         """Human-readable summary of all phases."""
         lines = ["Performance report:"]
-        for p in self.phases:
-            lines.append(f"  {p.name}: {p.duration_ms:.1f} ms")
+        lines.extend(f"  {p.name}: {p.duration_ms:.1f} ms" for p in self.phases)
         lines.append(f"  TOTAL: {self.total_ms:.1f} ms")
         return "\n".join(lines)
 
@@ -75,7 +78,7 @@ class PerfTracker:
         self._phases: list[PhaseTime] = []
 
     @contextmanager
-    def phase(self, name: str):
+    def phase(self, name: str) -> Iterator[None]:
         """Time a block and record it as a named phase."""
         t0 = time.perf_counter()
         try:

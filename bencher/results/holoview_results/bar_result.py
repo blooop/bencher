@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-import panel as pn
-import xarray as xr
-from param import Parameter
+from typing import TYPE_CHECKING, Any
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.hvplot_accessor import hvplot_of
 from bencher.variables.results import ResultBool, ResultFloat
+
+if TYPE_CHECKING:
+    import holoviews as hv
+    import panel as pn
+    import xarray as xr
+    from param import Parameter
 
 
 class BarResult(HoloviewResult):
@@ -21,7 +25,7 @@ class BarResult(HoloviewResult):
     """
 
     def to_plot(
-        self, result_var: Parameter | None = None, override: bool = True, **kwargs
+        self, result_var: Parameter | None = None, override: bool = True, **kwargs: Any
     ) -> pn.panel | None:
         return self.to_bar(result_var, override, **kwargs)
 
@@ -30,7 +34,7 @@ class BarResult(HoloviewResult):
         result_var: Parameter | None = None,
         override: bool = True,
         target_dimension: int = 2,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.panel | None:
         """Generates a bar chart from benchmark data.
 
@@ -80,7 +84,9 @@ class BarResult(HoloviewResult):
                 return res
         return None
 
-    def to_bar_ds(self, dataset: xr.Dataset, result_var: Parameter | None = None, **kwargs):
+    def to_bar_ds(
+        self, dataset: xr.Dataset, result_var: Parameter | None = None, **kwargs: Any
+    ) -> hv.core.Dimensioned | pn.viewable.Viewable | None:
         """Creates a bar chart from the provided dataset.
 
         Given a filtered dataset, this method generates a bar chart visualization showing
@@ -128,7 +134,8 @@ class BarResult(HoloviewResult):
 
         if use_holomap:
 
-            def make_bar(ds_t):
+            def make_bar(ds_t: xr.Dataset) -> hv.core.Dimensioned | pn.viewable.Viewable:
+
                 da_t = ds_t[da.name]
                 plot_t = hvplot_of(da_t).bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
                 return self._apply_opts(plot_t, **opts_kwargs)

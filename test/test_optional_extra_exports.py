@@ -212,3 +212,22 @@ def test_placeholder_keeps_its_own_identity_attributes() -> None:
     assert placeholder.__name__ == "rerun_to_pane"
     assert placeholder.__doc__ is not None
     assert "rerun-sdk" in placeholder.__doc__
+
+
+def test_package_namespace_does_not_reexport_typing_names() -> None:
+    import typing
+
+    import bencher
+
+    # Compare against typing's own exports (``typing.__all__``), not every attribute of
+    # the typing module: on Python 3.11 and 3.13 ``typing`` imports ``warnings``, so
+    # ``typing.warnings is bencher.warnings`` and a ``dir(typing)`` check flags bencher's
+    # own ``import warnings`` as a typing re-export.
+    leaked = sorted(
+        name
+        for name in dir(bencher)
+        if not name.startswith("_")
+        and name in typing.__all__
+        and getattr(bencher, name) is getattr(typing, name)
+    )
+    assert leaked == []

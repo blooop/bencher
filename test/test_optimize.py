@@ -145,8 +145,7 @@ def _collect_markdown(panel):
     if isinstance(panel, pn.pane.Markdown):
         texts.append(panel.object)
     elif hasattr(panel, "objects"):
-        for obj in panel.objects:
-            texts.append(_collect_markdown(obj))
+        texts.extend(_collect_markdown(obj) for obj in panel.objects)
     return " ".join(texts)
 
 
@@ -687,7 +686,9 @@ class TestParetoScrubExample:
             sink.fin_height = height
             sink.fin_pitch = 4.0
             sink.benchmark()
-            digests.add(hashlib.md5(Path(sink.profile).read_bytes()).hexdigest())
+            digests.add(
+                hashlib.md5(Path(sink.profile).read_bytes(), usedforsecurity=False).hexdigest()
+            )
         assert len(digests) == 6, "fin height is not visible across its whole range"
 
     def test_a_choked_heat_sink_is_beaten_on_every_objective(self):

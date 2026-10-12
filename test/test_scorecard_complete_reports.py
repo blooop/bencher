@@ -88,7 +88,8 @@ def test_scorecard_keeps_configurations_and_links_frozen_pages(tmp_path):
     assert by_config["b"]["time_event"] == old.uuid
     assert by_config["a"]["link"] == new_dir.relative_to(tmp_path).as_posix() + "/nested.html"
     html = generate_scorecard(tmp_path, config).read_text()
-    assert old.uuid in html and new.uuid in html
+    assert old.uuid in html
+    assert new.uuid in html
     assert "Reports without metrics" in html
     assert "report-time snapshot" in html.lower()
 

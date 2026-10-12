@@ -31,29 +31,29 @@ class TestLineResult(unittest.TestCase):
         ds = self.res_1d.to_dataset()
         rv = self.res_1d.bench_cfg.result_vars[0]
         result = self.res_1d.to_line_ds(ds, rv)
-        self.assertIsNotNone(result)
+        assert result is not None
 
     def test_to_line(self):
         result = self.res_1d.to_line()
-        self.assertIsNotNone(result)
+        assert result is not None
 
     def test_to_plot(self):
         """Test to_plot delegates to to_line."""
         from bencher.results.holoview_results.line_result import LineResult
 
         result = LineResult.to_plot(self.res_1d)
-        self.assertIsNotNone(result)
+        assert result is not None
 
     def test_to_line_no_tap(self):
         result = self.res_1d.to_line(use_tap=False)
-        self.assertIsNotNone(result)
+        assert result is not None
 
     def test_to_line_with_cat(self):
         result = self.res_1d_cat.to_line()
-        self.assertIsNotNone(result)
+        assert result is not None
 
     def test_to_line_ds_with_cat(self):
         ds = self.res_1d_cat.to_dataset()
         rv = self.res_1d_cat.bench_cfg.result_vars[0]
         result = self.res_1d_cat.to_line_ds(ds, rv)
-        self.assertIsNotNone(result)
+        assert result is not None

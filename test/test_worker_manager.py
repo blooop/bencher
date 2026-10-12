@@ -4,8 +4,8 @@ import dataclasses
 import unittest
 from typing import get_args
 
-from hypothesis import given, settings
-from hypothesis import strategies as st
+import pytest
+from hypothesis import given, settings, strategies as st
 
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.worker_manager import (
@@ -30,8 +30,8 @@ class TestWorkerManager(unittest.TestCase):
         """Test setting worker from ParametrizedSweep instance."""
         instance = ExampleBenchCfg()
         self.manager.set_worker(instance)
-        self.assertEqual(self.manager.worker, instance.__call__)
-        self.assertEqual(self.manager.worker_class_instance, instance)
+        assert self.manager.worker == instance.__call__
+        assert self.manager.worker_class_instance == instance
 
     def test_set_worker_from_callable(self):
         """Test setting worker from function."""
@@ -40,8 +40,8 @@ class TestWorkerManager(unittest.TestCase):
             return {"result": 1}
 
         self.manager.set_worker(my_worker)
-        self.assertEqual(self.manager.worker, my_worker)
-        self.assertIsNone(self.manager.worker_class_instance)
+        assert self.manager.worker == my_worker
+        assert self.manager.worker_class_instance is None
 
     def test_set_worker_with_input_cfg(self):
         """Test setting worker with separate config."""
@@ -51,12 +51,12 @@ class TestWorkerManager(unittest.TestCase):
 
         self.manager.set_worker(my_worker, ExampleBenchCfg)
         # Worker should be wrapped with config - it's now a partial
-        self.assertIsNotNone(self.manager.worker)
-        self.assertEqual(self.manager.worker_input_cfg, ExampleBenchCfg)
+        assert self.manager.worker is not None
+        assert self.manager.worker_input_cfg == ExampleBenchCfg
 
     def test_set_worker_class_type_error(self):
         """Test error when class type passed instead of instance."""
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self.manager.set_worker(ExampleBenchCfg)  # Class, not instance
 
     def test_set_worker_class_attaches_the_class_without_a_callable_worker(self):
@@ -66,55 +66,55 @@ class TestWorkerManager(unittest.TestCase):
         makes an attempt to sample fail loudly rather than call a class object.
         """
         self.manager.set_worker_class(ExampleBenchCfg)
-        self.assertIs(self.manager.worker_class_instance, ExampleBenchCfg)
-        self.assertIsNone(self.manager.worker)
+        assert self.manager.worker_class_instance is ExampleBenchCfg
+        assert self.manager.worker is None
         # A class is enough to answer what the declaration is made of.
-        self.assertIn("out_sin", self.manager.get_result_vars(as_str=True))
+        assert "out_sin" in self.manager.get_result_vars(as_str=True)
 
     def test_set_worker_class_rejects_an_instance(self):
         """The mirror of set_worker's complaint, so neither silently takes the other's."""
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self.manager.set_worker_class(ExampleBenchCfg())
 
     def test_get_result_vars_as_str(self):
         """Test getting result var names as strings."""
         self.manager.set_worker(ExampleBenchCfg())
         result_vars = self.manager.get_result_vars(as_str=True)
-        self.assertIsInstance(result_vars[0], str)
-        self.assertIn("out_sin", result_vars)
+        assert isinstance(result_vars[0], str)
+        assert "out_sin" in result_vars
 
     def test_get_result_vars_as_params(self):
         """Test getting result vars as Parameter objects."""
         self.manager.set_worker(ExampleBenchCfg())
         result_vars = self.manager.get_result_vars(as_str=False)
-        self.assertTrue(hasattr(result_vars[0], "name"))
+        assert hasattr(result_vars[0], "name")
 
     def test_get_result_vars_no_instance_error(self):
         """Test error when worker instance not set."""
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self.manager.get_result_vars()
 
     def test_get_inputs_only(self):
         """Test getting input variables."""
         self.manager.set_worker(ExampleBenchCfg())
         inputs = self.manager.get_inputs_only()
-        self.assertIsInstance(inputs, list)
-        self.assertGreater(len(inputs), 0)
+        assert isinstance(inputs, list)
+        assert len(inputs) > 0
 
     def test_get_inputs_only_no_instance_error(self):
         """Test error when worker instance not set for get_inputs_only."""
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self.manager.get_inputs_only()
 
     def test_get_input_defaults(self):
         """Test getting default input values."""
         self.manager.set_worker(ExampleBenchCfg())
         defaults = self.manager.get_input_defaults()
-        self.assertIsInstance(defaults, list)
+        assert isinstance(defaults, list)
 
     def test_get_input_defaults_no_instance_error(self):
         """Test error when worker instance not set for get_input_defaults."""
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self.manager.get_input_defaults()
 
     # Hypothesis property-based tests
@@ -125,9 +125,9 @@ class TestWorkerManager(unittest.TestCase):
         self.manager.set_worker(ExampleBenchCfg())
         result_vars = self.manager.get_result_vars(as_str=as_str)
         if as_str:
-            self.assertTrue(all(isinstance(v, str) for v in result_vars))
+            assert all(isinstance(v, str) for v in result_vars)
         else:
-            self.assertTrue(all(hasattr(v, "name") for v in result_vars))
+            assert all(hasattr(v, "name") for v in result_vars)
 
 
 class TestWorkerState(unittest.TestCase):
@@ -146,17 +146,17 @@ class TestWorkerState(unittest.TestCase):
 
     def test_a_fresh_manager_is_unbound(self):
         """Nothing attached is its own state, not a pair of Nones."""
-        self.assertEqual(self.manager.state, Unbound())
-        self.assertIsNone(self.manager.worker)
-        self.assertIsNone(self.manager.worker_class_instance)
+        assert self.manager.state == Unbound()
+        assert self.manager.worker is None
+        assert self.manager.worker_class_instance is None
 
     def test_unbound_to_runnable_instance(self):
         """set_worker(instance): callable *and* the declaration source."""
         instance = ExampleBenchCfg()
         self.manager.set_worker(instance)
-        self.assertEqual(self.manager.state, RunnableInstance(instance))
-        self.assertEqual(self.manager.worker, instance.__call__)
-        self.assertIs(self.manager.worker_class_instance, instance)
+        assert self.manager.state == RunnableInstance(instance)
+        assert self.manager.worker == instance.__call__
+        assert self.manager.worker_class_instance is instance
 
     def test_unbound_to_runnable_function(self):
         """set_worker(fn): callable, but nothing declares the sweep's variables."""
@@ -165,9 +165,9 @@ class TestWorkerState(unittest.TestCase):
             return {"result": 1}
 
         self.manager.set_worker(my_worker)
-        self.assertEqual(self.manager.state, RunnableFunction(my_worker))
-        self.assertIs(self.manager.worker, my_worker)
-        self.assertIsNone(self.manager.worker_class_instance)
+        assert self.manager.state == RunnableFunction(my_worker)
+        assert self.manager.worker is my_worker
+        assert self.manager.worker_class_instance is None
 
     def test_unbound_to_runnable_function_with_input_cfg(self):
         """The config class is folded into the callable, not kept as a second mode."""
@@ -176,34 +176,34 @@ class TestWorkerState(unittest.TestCase):
             return {"result": cfg.theta}
 
         self.manager.set_worker(my_worker, ExampleBenchCfg)
-        self.assertIsInstance(self.manager.state, RunnableFunction)
-        self.assertIsNot(self.manager.worker, my_worker)  # wrapped in a partial
-        self.assertIs(self.manager.worker_input_cfg, ExampleBenchCfg)
+        assert isinstance(self.manager.state, RunnableFunction)
+        assert self.manager.worker is not my_worker  # wrapped in a partial
+        assert self.manager.worker_input_cfg is ExampleBenchCfg
         # A config class is still not a declaration source: it never was one, and
         # promoting it would switch on plot_sweep's auto-discovery for these callers.
-        self.assertIsNone(self.manager.worker_class_instance)
+        assert self.manager.worker_class_instance is None
 
     def test_unbound_to_declared(self):
         """set_worker_class(cls): declares the sweep but cannot be sampled."""
         self.manager.set_worker_class(ExampleBenchCfg)
-        self.assertEqual(self.manager.state, Declared(ExampleBenchCfg))
-        self.assertIsNone(self.manager.worker)
-        self.assertIs(self.manager.worker_class_instance, ExampleBenchCfg)
+        assert self.manager.state == Declared(ExampleBenchCfg)
+        assert self.manager.worker is None
+        assert self.manager.worker_class_instance is ExampleBenchCfg
 
     def test_declared_to_runnable_instance(self):
         """Declaring first and binding later (sweep_identity then a real run)."""
         self.manager.set_worker_class(ExampleBenchCfg)
         instance = ExampleBenchCfg()
         self.manager.set_worker(instance)
-        self.assertEqual(self.manager.state, RunnableInstance(instance))
-        self.assertEqual(self.manager.worker, instance.__call__)
+        assert self.manager.state == RunnableInstance(instance)
+        assert self.manager.worker == instance.__call__
 
     def test_runnable_instance_to_declared(self):
         """Redeclaring drops the callable rather than leaving a stale one behind."""
         self.manager.set_worker(ExampleBenchCfg())
         self.manager.set_worker_class(ExampleBenchCfg)
-        self.assertEqual(self.manager.state, Declared(ExampleBenchCfg))
-        self.assertIsNone(self.manager.worker)
+        assert self.manager.state == Declared(ExampleBenchCfg)
+        assert self.manager.worker is None
 
     def test_runnable_function_to_runnable_instance(self):
         """Rebinding a function manager to an instance makes it declaring too."""
@@ -214,36 +214,33 @@ class TestWorkerState(unittest.TestCase):
         self.manager.set_worker(my_worker)
         instance = ExampleBenchCfg()
         self.manager.set_worker(instance)
-        self.assertEqual(self.manager.state, RunnableInstance(instance))
-        self.assertIs(self.manager.worker_class_instance, instance)
+        assert self.manager.state == RunnableInstance(instance)
+        assert self.manager.worker_class_instance is instance
 
     def test_a_rejected_class_leaves_the_state_untouched(self):
         """set_worker(cls) raises without half-binding anything."""
         instance = ExampleBenchCfg()
         self.manager.set_worker(instance)
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self.manager.set_worker(ExampleBenchCfg)
-        self.assertEqual(self.manager.state, RunnableInstance(instance))
+        assert self.manager.state == RunnableInstance(instance)
 
     def test_a_rejected_instance_leaves_the_state_untouched(self):
         """set_worker_class(instance) raises without half-declaring anything."""
         self.manager.set_worker_class(ExampleBenchCfg)
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self.manager.set_worker_class(ExampleBenchCfg())
-        self.assertEqual(self.manager.state, Declared(ExampleBenchCfg))
+        assert self.manager.state == Declared(ExampleBenchCfg)
 
     def test_states_are_frozen(self):
         """A state is a value: it is replaced by set_worker*, never mutated in place."""
         self.manager.set_worker_class(ExampleBenchCfg)
-        with self.assertRaises(dataclasses.FrozenInstanceError):
+        with pytest.raises(dataclasses.FrozenInstanceError):
             self.manager.state.worker_class = ExampleBenchCfg  # type: ignore[misc]
 
     def test_the_union_has_exactly_the_four_documented_variants(self):
         """Guards the union against a variant added without updating the matches."""
-        self.assertEqual(
-            set(get_args(WorkerState)),
-            {Unbound, Declared, RunnableFunction, RunnableInstance},
-        )
+        assert set(get_args(WorkerState)) == {Unbound, Declared, RunnableFunction, RunnableInstance}
 
     def test_unbound_variable_reads_name_what_to_call(self):
         """Setup-time failure, so raising is right -- but the message must be actionable."""
@@ -252,11 +249,11 @@ class TestWorkerState(unittest.TestCase):
             self.manager.get_inputs_only,
             self.manager.get_input_defaults,
         ):
-            with self.subTest(read=read.__name__), self.assertRaises(RuntimeError) as ctx:
+            with self.subTest(read=read.__name__), pytest.raises(RuntimeError) as ctx:
                 read()
-            message = str(ctx.exception)
-            self.assertIn("set_worker(", message)
-            self.assertIn("set_worker_class(", message)
+            message = str(ctx.value)
+            assert "set_worker(" in message
+            assert "set_worker_class(" in message
 
     def test_plain_function_variable_reads_say_why_and_what_to_pass(self):
         """A function worker has no declaration source; the message says so by name."""
@@ -270,23 +267,23 @@ class TestWorkerState(unittest.TestCase):
             self.manager.get_inputs_only,
             self.manager.get_input_defaults,
         ):
-            with self.subTest(read=read.__name__), self.assertRaises(RuntimeError) as ctx:
+            with self.subTest(read=read.__name__), pytest.raises(RuntimeError) as ctx:
                 read()
-            message = str(ctx.exception)
-            self.assertIn("plain function", message)
-            self.assertIn("set_worker(", message)
-            self.assertIn("result_vars", message)
+            message = str(ctx.value)
+            assert "plain function" in message
+            assert "set_worker(" in message
+            assert "result_vars" in message
 
     def test_declared_answers_every_variable_read(self):
         """A class is enough to describe a sweep -- the reason Declared exists."""
         self.manager.set_worker_class(ExampleBenchCfg)
-        self.assertIn("out_sin", self.manager.get_result_vars(as_str=True))
-        self.assertTrue(self.manager.get_inputs_only())
-        self.assertIsInstance(self.manager.get_input_defaults(), list)
+        assert "out_sin" in self.manager.get_result_vars(as_str=True)
+        assert self.manager.get_inputs_only()
+        assert isinstance(self.manager.get_input_defaults(), list)
 
     def test_state_is_read_only(self):
         """Only set_worker* may change the state; nothing may poke it directly."""
-        with self.assertRaises(AttributeError):
+        with pytest.raises(AttributeError):
             self.manager.state = Unbound()
 
 
@@ -296,12 +293,12 @@ class TestKwargsToInputCfg(unittest.TestCase):
     def test_creates_instance(self):
         """Test that it creates an instance of the config class."""
         cfg = kwargs_to_input_cfg(ExampleBenchCfg)
-        self.assertIsInstance(cfg, ExampleBenchCfg)
+        assert isinstance(cfg, ExampleBenchCfg)
 
     def test_updates_with_kwargs(self):
         """Test that kwargs are applied to the config."""
         cfg = kwargs_to_input_cfg(ExampleBenchCfg, theta=1.5)
-        self.assertEqual(cfg.theta, 1.5)
+        assert cfg.theta == 1.5
 
 
 class TestWorkerCfgWrapper(unittest.TestCase):
@@ -317,10 +314,10 @@ class TestWorkerCfgWrapper(unittest.TestCase):
 
         result = worker_cfg_wrapper(my_worker, ExampleBenchCfg, theta=2.0)
 
-        self.assertEqual(len(call_log), 1)
-        self.assertIsInstance(call_log[0], ExampleBenchCfg)
-        self.assertEqual(call_log[0].theta, 2.0)
-        self.assertEqual(result, {"result": 2.0})
+        assert len(call_log) == 1
+        assert isinstance(call_log[0], ExampleBenchCfg)
+        assert call_log[0].theta == 2.0
+        assert result == {"result": 2.0}
 
 
 if __name__ == "__main__":

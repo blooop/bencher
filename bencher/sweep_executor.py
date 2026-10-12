@@ -8,20 +8,23 @@ from __future__ import annotations
 
 import logging
 import warnings
-from collections.abc import Callable
 from copy import deepcopy
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import param
 
-from bencher.bench_cfg import BenchCfg, BenchRunCfg
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 from bencher.job import FutureCache
-from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.sweep_base import hash_sha1
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
-def _unnamed_parameter_error(var_type: str, name: str, owner: str, actual) -> TypeError:
+    from bencher.bench_cfg import BenchCfg, BenchRunCfg
+    from bencher.variables.parametrised_sweep import ParametrizedSweep
+
+
+def _unnamed_parameter_error(var_type: str, name: str, owner: str, actual: str | None) -> TypeError:
     """The error for a Parameter that never received a name from param's metaclass.
 
     param assigns ``Parameter.name`` in the metaclass of the class that *declares*
@@ -193,7 +196,7 @@ _META_KEYS = frozenset({"over_time", "time_event"})
 logger = logging.getLogger(__name__)
 
 
-def worker_kwargs_wrapper(worker: Callable, bench_cfg: BenchCfg, **kwargs) -> dict:
+def worker_kwargs_wrapper(worker: Callable, bench_cfg: BenchCfg, **kwargs: Any) -> dict:
     """Prepare keyword arguments and pass them to a worker function.
 
     This wrapper filters out metadata parameters that should not be passed
@@ -325,7 +328,7 @@ class SweepExecutor:
             ]
 
             constant_names = [i.name for i in const_vars_list]
-            constant_inputs = dict(zip(constant_names, constant_values))
+            constant_inputs = dict(zip(constant_names, constant_values, strict=True))
         return constant_inputs
 
     def init_sample_cache(self, run_cfg: BenchRunCfg) -> FutureCache:

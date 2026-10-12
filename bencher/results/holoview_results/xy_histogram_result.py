@@ -20,18 +20,22 @@ Two ways in, same renderer:
 
 from __future__ import annotations
 
-from collections.abc import Hashable, Sequence
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import holoviews as hv
 import numpy as np
-import panel as pn
-from param import Parameter
 
 from bencher.results.dataset_result import render_data_samples
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.holoview_results.tabular_spec import TabularSpec
+
+if TYPE_CHECKING:
+    from collections.abc import Hashable, Sequence
+
+    import pandas as pd
+    import panel as pn
+    from param import Parameter
 
 # Enough transparency that an overlaid distribution is still readable underneath.
 # Only applied when there is more than one, and `**opts` still overrides it.
@@ -52,7 +56,7 @@ class XYHistogram(TabularSpec):
     bin_range: tuple[float, float] | None = None
     density: bool = False
 
-    def build(self, df) -> hv.Overlay:
+    def build(self, df: pd.DataFrame) -> hv.Overlay:
         cols = self.columns(df, self.column, "column")
         plot_df, names = self.frame(df, cols)
 
@@ -82,7 +86,9 @@ class XYHistogram(TabularSpec):
         # legend_position is an Overlay option, not a Histogram one.
         return overlay if single else overlay.opts(legend_position="right")
 
-    def _counts(self, values, bin_range) -> tuple[Any, Any]:
+    def _counts(
+        self, values: np.ndarray, bin_range: tuple[float, float] | None
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Bin *values*, tolerating a column that is empty or all-NaN.
 
         numpy cannot pick a range for an empty array and raises; a run that measured
@@ -181,7 +187,7 @@ class XYHistogramResult(HoloviewResult):
         ylabel: str | None = None,
         data_aspect: float | None = None,
         opts: dict[str, Any] | None = None,
-        hv_dataset=None,
+        hv_dataset: hv.Dataset | None = None,
         target_dimension: int = 0,
         subsampling_divisions: int | None = None,
         **kwargs: Any,

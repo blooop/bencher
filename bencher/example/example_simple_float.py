@@ -24,7 +24,7 @@ def example_simple_float(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    # For the simplest case (sweep all inputs, collect all results), you can also use:
-    #   bn.run(SimpleFloat)
+    # For the simplest case (sweep all inputs, collect all results), you can also
+    # pass the class straight to `bn.run(SimpleFloat)`.
     # The wrapper function is needed when you want custom plot_sweep() arguments.
     bn.run(example_simple_float)

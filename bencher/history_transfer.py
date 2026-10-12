@@ -23,6 +23,9 @@ from bencher.cache_management import CACHE_VERSION
 from bencher.history import HISTORY_FORMAT, incompatible_reason
 from bencher.variables.results import RESULT_SPECS
 
+# A namespaced key is the tuple (namespace, key).
+_NAMESPACED_KEY_LEN = 2
+
 
 class NamespacedHistory(MutableMapping[str, Any]):
     """Partition native cache keys without changing benchmark/configuration identities."""
@@ -46,7 +49,11 @@ class NamespacedHistory(MutableMapping[str, Any]):
     def __iter__(self) -> Iterator[str]:
         for key in self.cache:
             if self.namespace:
-                if isinstance(key, tuple) and len(key) == 2 and key[0] == self.namespace:
+                if (
+                    isinstance(key, tuple)
+                    and len(key) == _NAMESPACED_KEY_LEN
+                    and key[0] == self.namespace
+                ):
                     yield key[1]
             elif isinstance(key, str):
                 yield key
@@ -243,7 +250,7 @@ class HistorySnapshot:
     @classmethod
     def from_bytes(cls, data: bytes) -> HistorySnapshot:
         """Read a trusted snapshot, rejecting an unrelated or unsupported payload."""
-        snapshot = pickle.loads(data)
+        snapshot = pickle.loads(data)  # noqa: S301 - trusted-writer contract, see docstring
         if not isinstance(snapshot, cls):
             raise TypeError("not a bencher history snapshot")
         if snapshot.cache_version != CACHE_VERSION:

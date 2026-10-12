@@ -98,27 +98,27 @@ class TestBuiltinRegistration(unittest.TestCase):
     def test_builtins_registered_on_import(self):
         names = [p.name for p in get_registry().all()]
         for name in BUILTIN_ORDER:
-            self.assertIn(name, names)
+            assert name in names
 
     def test_priority_encodes_report_order(self):
         reg = get_registry()
         priorities = [reg.get(name).priority for name in BUILTIN_ORDER]
-        self.assertEqual(priorities, sorted(priorities, reverse=True))
+        assert priorities == sorted(priorities, reverse=True)
 
     def test_callback_mapping_covers_default_callbacks(self):
         for cb in BenchResult.default_plot_callbacks():
-            self.assertIn(cb, CALLBACK_TO_PLUGIN)
+            assert cb in CALLBACK_TO_PLUGIN
 
     def test_registration_is_idempotent(self):
         before = len(get_registry().all())
         register_builtin_plugins()
-        self.assertEqual(len(get_registry().all()), before)
+        assert len(get_registry().all()) == before
 
     def test_builtins_require_legacy_result(self):
         plugin = get_registry().get("line")
-        self.assertIn("legacy_result", plugin.requires)
+        assert "legacy_result" in plugin.requires
         # A pure BenchData (no live result) must not select the wrapped built-ins.
-        self.assertNotIn(plugin, get_registry().select(BenchData.fake()))
+        assert plugin not in get_registry().select(BenchData.fake())
 
 
 class TestToAutoParity(unittest.TestCase):
@@ -144,7 +144,7 @@ class TestToAutoParity(unittest.TestCase):
             for cb in BenchResult.default_plot_callbacks():
                 try:
                     pane = cb(self.res, override=False, **plot_kwargs)
-                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     pane = None
                 if pane is not None:
                     panes.append(pane)
@@ -155,7 +155,7 @@ class TestToAutoParity(unittest.TestCase):
     def test_default_output_matches_legacy(self):
         new = list(self.res.to_auto())
         legacy = self.legacy_to_auto()
-        self.assertEqual(_pane_types(new), _pane_types(legacy))
+        assert _pane_types(new) == _pane_types(legacy)
 
     def test_default_output_matches_legacy_float_cat_repeats(self):
         """Richer shape: float + cat inputs with repeats activates bar/box/curve paths."""
@@ -167,48 +167,48 @@ class TestToAutoParity(unittest.TestCase):
             for cb in BenchResult.default_plot_callbacks():
                 try:
                     pane = cb(res, override=False, **plot_kwargs)
-                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     pane = None
                 if pane is not None:
                     legacy.append(pane)
         finally:
             res.plt_cnt_cfg.print_debug = True
         new = list(res.to_auto())
-        self.assertEqual(_pane_types(new), _pane_types(legacy))
-        self.assertGreaterEqual(len(new), 1)
+        assert _pane_types(new) == _pane_types(legacy)
+        assert len(new) >= 1
 
     def test_plot_list_name_and_callable_equivalent(self):
         by_callable = self.res.to_auto(plot_list=[LineResult.to_plot])
         by_name = self.res.to_auto(plot_list=["line"])
-        self.assertEqual(_pane_types(by_callable), _pane_types(by_name))
-        self.assertGreater(len(by_name), 0)
+        assert _pane_types(by_callable) == _pane_types(by_name)
+        assert len(by_name) > 0
 
     def test_remove_plots_by_name(self):
         # On this 1-float sweep only the line plot matches, so removing it by
         # name leaves nothing and the placeholder message appears.
         full = self.res.to_auto()
-        self.assertGreaterEqual(len(full), 1)
+        assert len(full) >= 1
         removed = self.res.to_auto(remove_plots=["line"])
-        self.assertEqual(len(removed), 1)
-        self.assertIn("No Plotters", removed[0].object)
+        assert len(removed) == 1
+        assert "No Plotters" in removed[0].object
 
     def test_numeric_only_excludes_panes(self):
         reg = get_registry()
         data = self.res.to_bench_data()
         selected_names = [p.name for p in reg.select(data)]
-        self.assertIn("panes", selected_names)
+        assert "panes" in selected_names
         # numeric_only routes through exclude; verify against the select() call to_auto makes
         numeric_names = [p.name for p in reg.select(data, exclude={"panes"})]
-        self.assertNotIn("panes", numeric_names)
+        assert "panes" not in numeric_names
         # and the end-to-end call still renders something
-        self.assertGreater(len(self.res.to_auto(numeric_only=True)), 0)
+        assert len(self.res.to_auto(numeric_only=True)) > 0
 
     def test_unknown_callable_still_invoked(self):
-        def marker(res, **kwargs):  # pylint: disable=unused-argument
+        def marker(res, **kwargs):
             return pn.pane.Markdown("marker")
 
         panes = self.res.to_auto(plot_list=[marker])
-        self.assertEqual([p.object for p in panes], ["marker"])
+        assert [p.object for p in panes] == ["marker"]
 
 
 class TestUserPluginsInToAuto(unittest.TestCase):
@@ -230,7 +230,7 @@ class TestUserPluginsInToAuto(unittest.TestCase):
 
         panes = self.res.to_auto()
         markdowns = [p.object for p in panes if isinstance(p, pn.pane.Markdown)]
-        self.assertTrue(any("user plugin" in m for m in markdowns))
+        assert any("user plugin" in m for m in markdowns)
 
     def test_user_plugin_receives_bench_data(self):
         seen = {}
@@ -242,8 +242,8 @@ class TestUserPluginsInToAuto(unittest.TestCase):
             return pn.pane.Markdown("ok")
 
         self.res.to_auto()
-        self.assertIs(seen["dataset"], self.res.ds)
-        self.assertIs(seen["plt_cnt_cfg"], self.res.plt_cnt_cfg)
+        assert seen["dataset"] is self.res.ds
+        assert seen["plt_cnt_cfg"] is self.res.plt_cnt_cfg
 
     def test_override_builtin_by_name(self):
         @plot_plugin(name="line", priority=85)
@@ -251,7 +251,7 @@ class TestUserPluginsInToAuto(unittest.TestCase):
             return pn.pane.Markdown("replaced line")
 
         panes = self.res.to_auto(plot_list=["line"])
-        self.assertEqual([p.object for p in panes], ["replaced line"])
+        assert [p.object for p in panes] == ["replaced line"]
 
     def test_backend_swap_under_same_plotter(self):
         """An alternative backend's implementation of an existing chart type is
@@ -264,12 +264,10 @@ class TestUserPluginsInToAuto(unittest.TestCase):
         try:
             # Default: the built-in holoviews line wins on priority.
             default_panes = self.res.to_auto(plot_list=["line"])
-            self.assertNotIn(
-                "alt-backend line", [getattr(p, "object", None) for p in default_panes]
-            )
+            assert "alt-backend line" not in [getattr(p, "object", None) for p in default_panes]
             # Preferring the alt backend swaps the implementation of the same plotter.
             swapped = self.res.to_auto(plot_list=["line"], backend="alt")
-            self.assertEqual([p.object for p in swapped], ["alt-backend line"])
+            assert [p.object for p in swapped] == ["alt-backend line"]
         finally:
             unregister_plugin("line", backend="alt")
 
@@ -284,18 +282,16 @@ class TestUserPluginsInToAuto(unittest.TestCase):
         ):
             warnings.simplefilter("always")
             panes = self.res.to_auto()
-        self.assertTrue(any("user.extra" in msg for msg in captured.output))
-        self.assertGreater(len(panes), 0)
+        assert any("user.extra" in msg for msg in captured.output)
+        assert len(panes) > 0
         # A caller that never configured logging still sees the failure.
-        self.assertTrue(
-            any(issubclass(w.category, RenderFailedWarning) for w in caught),
-            "expected a RenderFailedWarning for the failing plugin",
+        assert any(issubclass(w.category, RenderFailedWarning) for w in caught), (
+            "expected a RenderFailedWarning for the failing plugin"
         )
         # The failed plugin leaves a visible marker rather than vanishing.
         objs = [str(getattr(p, "object", "")) for p in panes]
-        self.assertTrue(
-            any("user.extra" in o and "failed to render" in o for o in objs),
-            "expected a visible failure pane naming the failing plugin",
+        assert any("user.extra" in o and "failed to render" in o for o in objs), (
+            "expected a visible failure pane naming the failing plugin"
         )
 
 
@@ -313,30 +309,30 @@ class TestNamedOnlyPlugins(unittest.TestCase):
         reg = get_registry()
         for name in NAMED_ONLY:
             plugin = reg.get(name)
-            self.assertIsNotNone(plugin, f"{name} not registered")
-            self.assertFalse(plugin.auto, f"{name} must be named-only (auto=False)")
-            self.assertIn("legacy_result", plugin.requires)
+            assert plugin is not None, f"{name} not registered"
+            assert not plugin.auto, f"{name} must be named-only (auto=False)"
+            assert "legacy_result" in plugin.requires
 
     def test_backend_assignments(self):
         reg = get_registry()
         # Rerun is its own first-class backend; Plotly appears only where a plot
         # already required it (surface, like the volume built-in).
-        self.assertEqual(reg.get("rerun").backend, "rerun")
-        self.assertEqual(reg.get("surface").backend, "plotly")
+        assert reg.get("rerun").backend == "rerun"
+        assert reg.get("surface").backend == "plotly"
         for name in ("violin", "scatter_jitter", "scatter", "band", "table"):
-            self.assertEqual(reg.get(name).backend, "holoviews")
+            assert reg.get(name).backend == "holoviews"
         for name in ("tabulator", "dataset", "video_summary"):
-            self.assertEqual(reg.get(name).backend, "panel")
+            assert reg.get(name).backend == "panel"
 
     def test_never_auto_selected(self):
         data = self.res.to_bench_data()
         selected = {p.name for p in get_registry().select(data)}
-        self.assertEqual(selected & set(NAMED_ONLY), set())
+        assert selected & set(NAMED_ONLY) == set()
 
     def test_violin_by_name_renders(self):
         panes = self.res.to_auto(plot_list=["violin"])
-        self.assertEqual(len(panes), 1)
-        self.assertNotIsInstance(panes[0], pn.pane.Markdown)
+        assert len(panes) == 1
+        assert not isinstance(panes[0], pn.pane.Markdown)
 
     def test_named_only_name_and_callable_equivalent(self):
         from bencher.results.holoview_results.distribution_result.violin_result import (
@@ -345,17 +341,17 @@ class TestNamedOnlyPlugins(unittest.TestCase):
 
         by_name = self.res.to_auto(plot_list=["violin"])
         by_callable = self.res.to_auto(plot_list=[ViolinResult.to_plot])
-        self.assertEqual(_pane_types(by_name), _pane_types(by_callable))
+        assert _pane_types(by_name) == _pane_types(by_callable)
 
     def test_table_by_name_renders(self):
         panes = self.res.to_auto(plot_list=["table"])
-        self.assertEqual(len(panes), 1)
-        self.assertNotIsInstance(panes[0], pn.pane.Markdown)
+        assert len(panes) == 1
+        assert not isinstance(panes[0], pn.pane.Markdown)
 
     def test_tabulator_by_name_renders(self):
         panes = self.res.to_auto(plot_list=["tabulator"])
-        self.assertEqual(len(panes), 1)
-        self.assertNotIsInstance(panes[0], pn.pane.Markdown)
+        assert len(panes) == 1
+        assert not isinstance(panes[0], pn.pane.Markdown)
 
     def test_named_only_callbacks_invokable_on_bench_result(self):
         """Every named-only callback is an unbound method invoked on the live
@@ -367,14 +363,14 @@ class TestNamedOnlyPlugins(unittest.TestCase):
         mro_names = {c.__name__ for c in BenchResult.__mro__}
         for name, _backend, callback in _named_only_specs():
             owner = callback.__qualname__.split(".")[0]
-            self.assertIn(owner, mro_names, f"{name}: {owner} not in BenchResult MRO")
+            assert owner in mro_names, f"{name}: {owner} not in BenchResult MRO"
 
     def test_named_only_composes_with_auto_set(self):
         default = self.res.to_auto()
         with_violin = self.res.to_auto(
             plot_list=[p.name for p in get_registry().select(self.res.to_bench_data())] + ["violin"]
         )
-        self.assertEqual(len(with_violin), len(default) + 1)
+        assert len(with_violin) == len(default) + 1
 
     def test_fixed_signature_callback_gets_only_declared_kwargs(self):
         """Renderers without **kwargs (e.g. RerunResult.to_rerun) must not receive
@@ -399,16 +395,16 @@ class TestNamedOnlyPlugins(unittest.TestCase):
             legacy_result=marker, render_kwargs={"override": False, "width": 600}
         )
         pane = plugin.render(data)
-        self.assertEqual(pane.object, "fixed")
-        self.assertIs(calls["result"], marker)
-        self.assertEqual(calls["width"], 600)
+        assert pane.object == "fixed"
+        assert calls["result"] is marker
+        assert calls["width"] == 600
 
     def test_kwargs_callback_gets_full_render_kwargs(self):
         """Companion to the fixed-signature test: renderers WITH **kwargs must receive
         the render_kwargs dict unfiltered, including names they don't declare."""
         calls = {}
 
-        def kwargs_callback(result, **kwargs):  # pylint: disable=unused-argument
+        def kwargs_callback(result, **kwargs):
             calls["kwargs"] = kwargs
             return pn.pane.Markdown("kwargs")
 
@@ -423,15 +419,15 @@ class TestNamedOnlyPlugins(unittest.TestCase):
         render_kwargs = {"override": False, "width": 600, "not_a_declared_name": 1}
         data = BenchData.fake().with_changes(legacy_result=object(), render_kwargs=render_kwargs)
         pane = plugin.render(data)
-        self.assertEqual(pane.object, "kwargs")
-        self.assertEqual(calls["kwargs"], render_kwargs)
+        assert pane.object == "kwargs"
+        assert calls["kwargs"] == render_kwargs
 
     def test_non_introspectable_callback_called_unfiltered(self):
         """Callables whose signature inspect.signature cannot retrieve (C builtins,
         unhashable callables) must be invoked without filtering, not crash."""
         from bencher.plugins.builtins import _declared_kwargs
 
-        self.assertIsNone(_declared_kwargs(max))  # ValueError: no signature
+        assert _declared_kwargs(max) is None  # ValueError: no signature
 
         class UnhashableCallable:
             __hash__ = None
@@ -448,7 +444,7 @@ class TestNamedOnlyPlugins(unittest.TestCase):
             callback=UnhashableCallable(),
         )
         data = BenchData.fake().with_changes(legacy_result=object(), render_kwargs={"width": 1})
-        self.assertEqual(plugin.render(data).object, "unhashable")
+        assert plugin.render(data).object == "unhashable"
 
 
 class TestToBenchData(unittest.TestCase):
@@ -458,16 +454,16 @@ class TestToBenchData(unittest.TestCase):
 
     def test_fields(self):
         data = self.res.to_bench_data()
-        self.assertIs(data.dataset, self.res.ds)
-        self.assertEqual([v.name for v in data.input_vars], ["x"])
-        self.assertEqual([v.name for v in data.result_vars], ["value"])
-        self.assertIs(data.plt_cnt_cfg, self.res.plt_cnt_cfg)
-        self.assertIs(data.legacy_result, self.res)
-        self.assertTrue(data.has("legacy_result"))
+        assert data.dataset is self.res.ds
+        assert [v.name for v in data.input_vars] == ["x"]
+        assert [v.name for v in data.result_vars] == ["value"]
+        assert data.plt_cnt_cfg is self.res.plt_cnt_cfg
+        assert data.legacy_result is self.res
+        assert data.has("legacy_result")
 
     def test_render_kwargs_passthrough(self):
         data = self.res.to_bench_data(render_kwargs={"override": True})
-        self.assertEqual(data.render_kwargs, {"override": True})
+        assert data.render_kwargs == {"override": True}
 
 
 class TestLegacyResultPlugin(unittest.TestCase):
@@ -490,9 +486,9 @@ class TestLegacyResultPlugin(unittest.TestCase):
         marker = object()
         data = BenchData.fake().with_changes(legacy_result=marker, render_kwargs={"override": True})
         pane = plugin.render(data)
-        self.assertEqual(pane.object, "out")
-        self.assertIs(calls["result"], marker)
-        self.assertEqual(calls["kwargs"], {"override": True})
+        assert pane.object == "out"
+        assert calls["result"] is marker
+        assert calls["kwargs"] == {"override": True}
 
 
 CHART_NAMES = frozenset(BUILTIN_ORDER) - {"panes"}
@@ -534,28 +530,26 @@ class TestPaneGroupLeadsThePlots(unittest.TestCase):
 
     def test_selection_puts_panes_ahead_of_every_chart(self):
         names = [p.name for p in get_registry().select(self.res.to_bench_data())]
-        self.assertEqual(names[0], "panes")
+        assert names[0] == "panes"
         charts = [n for n in names if n in CHART_NAMES]
-        self.assertGreater(len(charts), 0, "no chart selected, so nothing was ordered")
+        assert len(charts) > 0, "no chart selected, so nothing was ordered"
 
     def test_the_rendered_report_opens_with_the_pane_group(self):
         """What actually reaches the report, not what selection intended: only the
         plugins that returned a pane are here, and each one is named."""
         data = self.res.to_bench_data(render_kwargs=self.res.set_plot_size(override=False))
         rendered = [name for name, _ in get_registry().render(data)]
-        self.assertEqual(rendered[0], "panes")
-        self.assertTrue(
-            set(rendered) & CHART_NAMES, f"no chart rendered, so nothing was ordered: {rendered}"
-        )
+        assert rendered[0] == "panes"
+        assert set(rendered) & CHART_NAMES, f"no chart rendered, so nothing was ordered: {rendered}"
 
     def test_to_auto_puts_the_images_above_the_charts(self):
         panes = list(self.res.to_auto())
-        self.assertGreaterEqual(len(panes), 2)
+        assert len(panes) >= 2
         first = _descendant_types(panes[0])
-        self.assertIn(pn.pane.PNG, first)
-        self.assertNotIn(pn.pane.HoloViews, first)
+        assert pn.pane.PNG in first
+        assert pn.pane.HoloViews not in first
         later = set().union(*(_descendant_types(p) for p in panes[1:]))
-        self.assertIn(pn.pane.HoloViews, later)
+        assert pn.pane.HoloViews in later
 
 
 if __name__ == "__main__":

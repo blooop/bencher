@@ -38,13 +38,15 @@ def example_publish_runner_gh_pages(run_cfg: bn.BenchRunCfg | None = None) -> bn
         "  runner.run(subsampling_divisions=3, publish=True)",
     )
 
-    # Uncomment to publish via BenchRunner:
-    # runner = bn.BenchRunner(
-    #     "wave_benchmarks",
-    #     publisher=bn.GithubPagesCfg("your_username", "your_reports_repo", "waves"),
-    # )
-    # runner.add_bench(WaveBenchmark())
-    # runner.run(subsampling_divisions=3, show=True, publish=True)
+    # Set publish = True and fill in your own GitHub details to publish via BenchRunner.
+    publish = False
+    if publish:
+        runner = bn.BenchRunner(
+            "wave_benchmarks",
+            publisher=bn.GithubPagesCfg("your_username", "your_reports_repo", "waves"),
+        )
+        runner.add_bench(WaveBenchmark())
+        runner.run(subsampling_divisions=3, show=True, publish=True)
 
     return bench
 

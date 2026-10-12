@@ -79,7 +79,6 @@ class TestComposableContainerPanel:
     def test_horizontal_kwarg_is_gone(self):
         # The removed kwarg is the point of the test, so both checkers must tolerate it
         # here -- and both flagging it is itself evidence that it is gone.
-        # pylint: disable=unexpected-keyword-arg
         with pytest.raises(TypeError):
             ComposableContainerPanel(horizontal=True)  # ty: ignore[unknown-argument]
 
@@ -87,7 +86,7 @@ class TestComposableContainerPanel:
     def test_tabs_declared_for_every_compose_method(self, compose_method):
         """_tabs exists on every instance; only the sequence arm fills it in."""
         c = ComposableContainerPanel(compose_method=compose_method)
-        tabs = c._tabs  # pylint: disable=protected-access
+        tabs = c._tabs
         assert (tabs is not None) == (compose_method == ComposeType.sequence)
 
     def test_unknown_compose_method_fails_at_construction(self):

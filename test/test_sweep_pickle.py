@@ -65,7 +65,7 @@ def _pickle_roundtrip(obj):
 
 
 def _identity(x):
-    """Trivial function for multiprocessing – must be module-level for pickling."""
+    """Trivial function for multiprocessing - must be module-level for pickling."""
     return x
 
 
@@ -332,7 +332,7 @@ class TestPickleInContainer:
     def test_list_of_mutated_sweeps(self):
         sweeps = [sw.with_subsampling_divisions(3) for sw in _build_sweeps().values()]
         restored = _pickle_roundtrip(sweeps)
-        for orig, rest in zip(sweeps, restored):
+        for orig, rest in zip(sweeps, restored, strict=True):
             assert rest.values() == orig.values()
 
     def test_nested_structure(self):
@@ -434,7 +434,7 @@ class TestParametrizedSweepPickle:
     def test_class_params_pickle_after_with_subsampling_divisions(self):
         """Each class-level param, after with_subsampling_divisions(), must pickle."""
         for p_name in ("color", "label", "enabled", "count", "ratio"):
-            param = SampleConfig.param[p_name]  # pylint: disable=unsubscriptable-object
+            param = SampleConfig.param[p_name]
             mutated = param.with_subsampling_divisions(2)
             restored = _pickle_roundtrip(mutated)
             assert restored.values() == mutated.values(), (
@@ -451,5 +451,5 @@ class TestParametrizedSweepPickle:
             SampleConfig.param.ratio.with_subsampling_divisions(3),
         ]
         restored = _pickle_roundtrip(input_vars)
-        for orig, rest in zip(input_vars, restored):
+        for orig, rest in zip(input_vars, restored, strict=True):
             assert rest.values() == orig.values()

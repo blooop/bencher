@@ -77,12 +77,12 @@ class TestLineGraphMissing(unittest.TestCase):
         ds = xr.Dataset({"metric": ("x", [1.0, np.nan, 3.0])}, coords={"x": [0, 1, 2]})
         _log_line_graph(_fake_rr(), rec, ds, "", _Vars.param.metric, "x")
 
-        self.assertEqual(len(rec.logged), 2)
+        assert len(rec.logged) == 2
         values = [payload[1] for _path, payload in rec.logged]
-        self.assertEqual(values, [1.0, 3.0])
-        self.assertNotIn(0.0, values)
+        assert values == [1.0, 3.0]
+        assert 0.0 not in values
         # The tick sequence keeps its coordinate position, leaving a hole at 1
-        self.assertEqual([seq for _tl, seq in rec.times], [0, 2])
+        assert [seq for _tl, seq in rec.times] == [0, 2]
 
 
 class TestBarChartMissing(unittest.TestCase):
@@ -92,10 +92,10 @@ class TestBarChartMissing(unittest.TestCase):
         ds = xr.Dataset({"metric": ("c", [2.0, np.nan])}, coords={"c": ["a", "b"]})
         _log_bar_chart(_fake_rr(), rec, ds, "", _Vars.param.metric, "c")
 
-        self.assertEqual(len(rec.logged), 1)
+        assert len(rec.logged) == 1
         _path, (_kind, values) = rec.logged[0]
-        self.assertEqual(values[0], 2.0)
-        self.assertTrue(math.isnan(values[1]), f"expected NaN gap, got {values[1]!r}")
+        assert values[0] == 2.0
+        assert math.isnan(values[1]), f"expected NaN gap, got {values[1]!r}"
 
 
 class TestTensorMissing(unittest.TestCase):
@@ -108,10 +108,10 @@ class TestTensorMissing(unittest.TestCase):
         )
         _log_tensor(_fake_rr(), rec, ds, "", _Vars.param.metric, ["x", "y"])
 
-        self.assertEqual(len(rec.logged), 1)
+        assert len(rec.logged) == 1
         _path, (_kind, arr, _dims, value_range) = rec.logged[0]
-        self.assertTrue(np.isnan(arr[0, 1]), "missing cell must stay NaN, not become 0.0")
-        self.assertEqual(value_range, [1.0, 4.0])
+        assert np.isnan(arr[0, 1]), "missing cell must stay NaN, not become 0.0"
+        assert value_range == [1.0, 4.0]
 
     def test_minus_one_sentinel_is_a_gap_not_data(self):
         """The -1 missing sentinel (ResultReference, and legacy ResultDataSet cells) is
@@ -124,11 +124,11 @@ class TestTensorMissing(unittest.TestCase):
         )
         _log_tensor(_fake_rr(), rec, ds, "", _Vars.param.ref, ["x", "y"])
 
-        self.assertEqual(len(rec.logged), 1)
+        assert len(rec.logged) == 1
         _path, (_kind, arr, _dims, value_range) = rec.logged[0]
-        self.assertTrue(np.isnan(arr[0, 0]), "the -1 sentinel must become a NaN gap")
-        self.assertNotIn(-1.0, arr.ravel().tolist())
-        self.assertEqual(value_range, [1.0, 3.0], "value_range must exclude the sentinel")
+        assert np.isnan(arr[0, 0]), "the -1 sentinel must become a NaN gap"
+        assert -1.0 not in arr.ravel().tolist()
+        assert value_range == [1.0, 3.0], "value_range must exclude the sentinel"
 
     def test_dataset_legacy_minus_one_sentinel_is_a_gap(self):
         """ResultDataSet accepts both sentinel generations; the legacy -1 int cells are
@@ -141,8 +141,8 @@ class TestTensorMissing(unittest.TestCase):
         _log_tensor(_fake_rr(), rec, ds, "", _Vars.param.data_out, ["x"])
 
         _path, (_kind, arr, _dims, value_range) = rec.logged[0]
-        self.assertTrue(np.isnan(arr[0]))
-        self.assertEqual(value_range, [4.0, 6.0])
+        assert np.isnan(arr[0])
+        assert value_range == [4.0, 6.0]
 
     def test_all_missing_tensor_skipped_with_warning(self):
         rec = _FakeRecording()
@@ -152,8 +152,8 @@ class TestTensorMissing(unittest.TestCase):
         )
         with self.assertLogs(LOGGER, level="WARNING") as cm:
             _log_tensor(_fake_rr(), rec, ds, "", _Vars.param.metric, ["x", "y"])
-        self.assertEqual(rec.logged, [])
-        self.assertIn("no recorded values", "\n".join(cm.output))
+        assert rec.logged == []
+        assert "no recorded values" in "\n".join(cm.output)
 
 
 class TestResultVarDispatch(unittest.TestCase):
@@ -161,37 +161,37 @@ class TestResultVarDispatch(unittest.TestCase):
         rec = _FakeRecording()
         ds = xr.Dataset({"metric": xr.DataArray(np.nan)})
         _log_result_var(_fake_rr(), rec, ds, "", _Vars.param.metric)
-        self.assertEqual(rec.logged, [])
+        assert rec.logged == []
 
     def test_present_scalar_logged(self):
         rec = _FakeRecording()
         ds = xr.Dataset({"metric": xr.DataArray(1.5)})
         _log_result_var(_fake_rr(), rec, ds, "", _Vars.param.metric)
-        self.assertEqual(rec.logged, [("metric", ("Scalars", 1.5))])
+        assert rec.logged == [("metric", ("Scalars", 1.5))]
 
     def test_missing_string_sentinel_not_logged(self):
         rec = _FakeRecording()
         ds = xr.Dataset({"label": xr.DataArray("NAN")})
         _log_result_var(_fake_rr(), rec, ds, "", _Vars.param.label)
-        self.assertEqual(rec.logged, [])
+        assert rec.logged == []
 
     def test_present_string_logged(self):
         rec = _FakeRecording()
         ds = xr.Dataset({"label": xr.DataArray("hello")})
         _log_result_var(_fake_rr(), rec, ds, "", _Vars.param.label)
-        self.assertEqual(rec.logged, [("label", ("TextDocument", "hello"))])
+        assert rec.logged == [("label", ("TextDocument", "hello"))]
 
     def test_unmapped_type_warns_instead_of_float_coercion(self):
         """A ResultPath must not fall through to float("/path/..."); it surfaces
         visibly as a warning and is skipped."""
         rec = _FakeRecording()
-        ds = xr.Dataset({"file_out": xr.DataArray("/tmp/result.csv")})
+        ds = xr.Dataset({"file_out": xr.DataArray("/tmp/result.csv")})  # noqa: S108 - never opened
         with self.assertLogs(LOGGER, level="WARNING") as cm:
             _log_result_var(_fake_rr(), rec, ds, "", _Vars.param.file_out)
-        self.assertEqual(rec.logged, [])
+        assert rec.logged == []
         out = "\n".join(cm.output)
-        self.assertIn("ResultPath", out)
-        self.assertIn("file_out", out)
+        assert "ResultPath" in out
+        assert "file_out" in out
 
 
 if __name__ == "__main__":

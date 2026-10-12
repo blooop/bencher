@@ -437,12 +437,12 @@ bench.plot_sweep(
         imports = "import bencher as bn\nfrom bencher.results.manim_cartesian import CartesianProductCfg, SweepVar, render_animation"
         class_code = '''class CartesianAnimationSweep(bn.ParametrizedSweep):
     """Renders animations of Cartesian product exploration across dimensions.
-    
+
     Demonstrates advanced animation capabilities by sweeping across:
     - spatial_dims: Number of spatial dimensions (1-4)
-    - repeats: Number of repeat dimensions 
+    - repeats: Number of repeat dimensions
     - time_steps: Number of time steps for over_time dimension
-    
+
     Each combination produces a unique animation showing how the Cartesian
     product grid changes with different dimensionality patterns.
     """

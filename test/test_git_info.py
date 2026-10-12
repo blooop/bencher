@@ -1,5 +1,6 @@
 """Tests for bencher.git_info module."""
 
+import re
 import subprocess
 import unittest
 from unittest import mock
@@ -20,7 +21,7 @@ class TestGitTimeEvent(unittest.TestCase):
         ):
             mock_dt.now.return_value.strftime.return_value = "2024-06-15 14:59"
             result = git_time_event()
-        self.assertEqual(result, "2024-06-15 14:59 abc1234")
+        assert result == "2024-06-15 14:59 abc1234"
 
     def test_returns_unknown_outside_repo(self):
         with (
@@ -28,7 +29,7 @@ class TestGitTimeEvent(unittest.TestCase):
             mock.patch("bencher.git_info.datetime") as mock_dt,
         ):
             mock_dt.now.return_value.strftime.return_value = "2024-06-15 14:59"
-            self.assertEqual(git_time_event(), "2024-06-15 14:59 unknown")
+            assert git_time_event() == "2024-06-15 14:59 unknown"
 
     def test_returns_unknown_when_git_not_installed(self):
         with (
@@ -36,7 +37,7 @@ class TestGitTimeEvent(unittest.TestCase):
             mock.patch("bencher.git_info.datetime") as mock_dt,
         ):
             mock_dt.now.return_value.strftime.return_value = "2024-06-15 14:59"
-            self.assertEqual(git_time_event(), "2024-06-15 14:59 unknown")
+            assert git_time_event() == "2024-06-15 14:59 unknown"
 
     def test_used_as_time_src(self):
         """git_time_event() works as time_src in plot_sweep."""
@@ -52,7 +53,7 @@ class TestGitTimeEvent(unittest.TestCase):
             plot_callbacks=False,
         )
         over_time_val = str(res.ds.coords["over_time"].values[0])
-        self.assertRegex(over_time_val, r"\d{4}-\d{2}-\d{2} \d{2}:\d{2} [0-9a-f]{7,}")
+        assert re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2} [0-9a-f]{7,}", over_time_val)
 
 
 if __name__ == "__main__":

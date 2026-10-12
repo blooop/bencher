@@ -68,7 +68,7 @@ def example_optimize_aggregate(run_cfg: bn.BenchRunCfg | None = None) -> bn.Benc
         f"### Optimize (aggregate + repeats)\n"
         f"Best value: {result2.best_value:.4f}  \n"
         f"Best params: {result2.best_params}\n\n"
-        f"Each trial evaluates 5 seeds × 3 repeats = 15 function calls, "
+        f"Each trial evaluates 5 seeds x 3 repeats = 15 function calls, "
         f"then returns the mean loss to Optuna."
     )
 

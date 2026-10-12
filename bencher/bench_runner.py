@@ -11,7 +11,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, ShowMode, normalize_show
 from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
@@ -19,15 +19,21 @@ from bencher.bencher import Bench
 from bencher.execution import execution_scope
 from bencher.publication_target import PublicationTarget, commit_frozen_report
 from bencher.utils import UNSET
-from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 if TYPE_CHECKING:
     from bencher.publishing import CompleteReportPublisher, Published
+    from bencher.utils import _Unset
+    from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 logger = logging.getLogger(__name__)
 
+# A BenchableV1 callable takes (run_cfg, report); a BenchableV2 one takes only run_cfg.
+_BENCHABLE_V1_ARITY = 2
 
-def _resolve_cache_samples(cache_samples, kwargs, stacklevel=2):
+
+def _resolve_cache_samples(
+    cache_samples: bool | None, kwargs: dict[str, Any], stacklevel: int = 2
+) -> bool | None:
     """Handle deprecated ``cache_results`` kwarg, returning resolved *cache_samples*.
 
     Pops ``cache_results`` from *kwargs*, emits a ``DeprecationWarning``, and
@@ -139,11 +145,11 @@ class BenchRunner:
         # Create a unique name based on timestamp, object id, and random value
         timestamp = int(time.time() * 1000)  # millisecond precision
         obj_id = id(self)
-        random_val = random.randint(0, 999999)
+        random_val = random.randint(0, 999999)  # noqa: S311 - name uniqueness, not crypto
 
         # Create a hash from these values
         unique_string = f"{timestamp}_{obj_id}_{random_val}"
-        hash_obj = hashlib.md5(unique_string.encode())
+        hash_obj = hashlib.md5(unique_string.encode(), usedforsecurity=False)
         hash_hex = hash_obj.hexdigest()[:8]  # Use first 8 characters
 
         return f"bench_runner_{hash_hex}"
@@ -151,7 +157,7 @@ class BenchRunner:
     @staticmethod
     def setup_run_cfg(
         run_cfg: BenchRunCfg | None = None,
-        subsampling_divisions=UNSET,
+        subsampling_divisions: int | _Unset = UNSET,
         cache_samples: bool = False,
         over_time: bool | None = None,
         level: int | None = None,
@@ -285,8 +291,8 @@ class BenchRunner:
         """Execute a bench function handling legacy and new signatures."""
         # Check function signature to determine version
         sig = inspect.signature(bench_fn)
-        if len(sig.parameters) == 2:
-            # BenchableV1: takes (run_cfg, report)
+        if len(sig.parameters) == _BENCHABLE_V1_ARITY:
+            # A BenchableV1 takes the run config and a report.
             report = report or BenchReport()
             # The signature check above is the discriminator for the Benchable union; no
             # type checker can narrow on it, so state the established arm explicitly.
@@ -295,7 +301,7 @@ class BenchRunner:
                 result.report = report
             return result, report
 
-        # BenchableV2: takes (run_cfg)
+        # A BenchableV2 takes only the run config.
         result = cast("BenchableV2", bench_fn)(run_cfg)
         result_report = getattr(result, "report", None)
 
@@ -314,7 +320,7 @@ class BenchRunner:
     def run(
         self,
         # New unified parameters (subsampling_divisions and repeats are starting values)
-        subsampling_divisions=UNSET,
+        subsampling_divisions: int | _Unset = UNSET,
         repeats: int = 1,
         max_subsampling_divisions: int | None = None,
         max_repeats: int | None = None,
@@ -333,7 +339,7 @@ class BenchRunner:
         backend: str | None = None,
         report_directory: str | Path | None = None,
         publication: PublicationTarget | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> list[BenchCfg]:
         """Unified interface for running benchmarks.
 
@@ -373,6 +379,9 @@ class BenchRunner:
                 for progressive runs.
             over_time (bool, optional): Enable time-series benchmarking. None preserves run_cfg value.
             backend (str, optional): Visualization backend ('panel' or 'rerun'). None preserves run_cfg value.
+            report_directory (str | Path, optional): Export the complete report here.
+            publication (PublicationTarget, optional): Commit the complete report to this store.
+            **kwargs: Deprecated ``level`` and ``cache_results`` aliases.
 
         Returns:
             list[BenchCfg]: A list of benchmark configuration objects with results
@@ -507,7 +516,7 @@ class BenchRunner:
                         self.show_publish(report_to_publish, show, publish, save, debug)
                     self.results.append(res)
                 if grouped:
-                    assert report_level is not None
+                    assert report_level is not None  # noqa: S101 - type narrowing; set when grouped
                     if complete_report is not None:
                         complete_report.extend_report(report_level)
                     self.show_publish(report_level, show, publish, save, debug)
@@ -534,7 +543,7 @@ class BenchRunner:
             if publication is not None:
                 self._publish(entry.parent, publication, publisher)
             return
-        assert publication is not None
+        assert publication is not None  # noqa: S101 - type narrowing; caller checks one is set
         staging = Path(tempfile.mkdtemp(prefix="bencher-publication-"))
         published = False
         try:
@@ -596,7 +605,7 @@ class BenchRunner:
                     published_url = self.publisher.publish(report)
                     if published_url:
                         logger.info("Benchmark report published at %s", published_url)
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     logger.exception("Publisher.publish() failed — continuing benchmark")
             else:
                 published_url = report.publish(remote_callback=self.publisher, debug=debug)
@@ -607,13 +616,13 @@ class BenchRunner:
             path = report.save(portable=True)  # file:// needs inline .rrd data
             try:
                 webbrowser.open(path.resolve().as_uri())
-            except Exception:  # pylint: disable=broad-exception-caught
+            except Exception:
                 logger.exception("Failed to open browser for %s", path)
         elif show_mode is ShowMode.PUBLISHED:
             if published_url:
                 try:
                     webbrowser.open(published_url)
-                except Exception:  # pylint: disable=broad-exception-caught
+                except Exception:
                     logger.exception("Failed to open %s", published_url)
             else:
                 logger.warning(

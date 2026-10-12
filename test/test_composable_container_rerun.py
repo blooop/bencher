@@ -227,7 +227,7 @@ def test_missing_recording_is_rejected(tmp_path):
     container = ComposableContainerRerun(output_path=tmp_path / "output.rrd")
     container.append(tmp_path / "missing.rrd")
 
-    with pytest.raises(FileNotFoundError, match="missing.rrd"):
+    with pytest.raises(FileNotFoundError, match=r"missing\.rrd"):
         container.render()
 
 
@@ -236,7 +236,7 @@ def test_output_path_must_be_an_rrd(tmp_path):
     container = ComposableContainerRerun(output_path=tmp_path / "output.mp4")
     container.append(source)
 
-    with pytest.raises(ValueError, match="must end in .rrd"):
+    with pytest.raises(ValueError, match=r"must end in \.rrd"):
         container.render()
 
 
@@ -292,7 +292,7 @@ def test_unknown_compose_method_is_rejected_by_name():
     """An out-of-vocabulary compose method names itself instead of raising KeyError."""
     container = ComposableContainerRerun(compose_method="not_a_compose_type")
     with pytest.raises(ValueError, match="not_a_compose_type"):
-        _ = container._spec  # pylint: disable=protected-access
+        _ = container._spec
 
 
 def test_public_api_exports_rerun_composition_types():

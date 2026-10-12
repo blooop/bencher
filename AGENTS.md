@@ -10,7 +10,7 @@ The project uses Pixi for package management and task automation. Key commands:
 - `pixi run ci` - Run complete CI pipeline (format, lint, test with coverage)
 - `pixi run test` - Run pytest test suite
 - `pixi run format` - Format code with ruff
-- `pixi run lint` - Run ruff linting and pylint
+- `pixi run lint` - Run ruff linting and ty type checking
 - `pixi run coverage` - Run tests with coverage reporting
 - `pixi run generate-docs` - Generate documentation from examples
 - `pixi run demo` - Run demo example (example_image.py)

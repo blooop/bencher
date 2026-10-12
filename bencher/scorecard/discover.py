@@ -10,11 +10,15 @@ and the on-disk layout — come from the :class:`ScorecardConfig`.
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from bencher.scorecard.config import ScorecardConfig
 from bencher.scorecard.executions import discover_complete_reports
 from bencher.scorecard.model import unify_metric_names
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from bencher.scorecard.config import ScorecardConfig
 
 
 def tag_to_name(tag: str) -> str:

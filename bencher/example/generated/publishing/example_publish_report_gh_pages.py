@@ -28,16 +28,18 @@ def example_publish_report_gh_pages(run_cfg: bn.BenchRunCfg | None = None) -> bn
         "bench.report.publish_gh_pages() with your GitHub username and a "
         "target repository. The report HTML is committed to the gh-pages "
         "branch and served at https://<user>.github.io/<repo>/<folder>/.",
-        post_description="To actually publish, uncomment the publish_gh_pages call below "
+        post_description="To actually publish, set publish = True below "
         "and provide your own GitHub username and repository name.",
     )
 
-    # Uncomment to publish:
-    # bench.report.publish_gh_pages(
-    #     github_user="your_username",
-    #     repo_name="your_reports_repo",
-    #     folder_name="my_benchmark",
-    # )
+    # Set publish = True and fill in your own GitHub username and repository to publish.
+    publish = False
+    if publish:
+        bench.report.publish_gh_pages(
+            github_user="your_username",
+            repo_name="your_reports_repo",
+            folder_name="my_benchmark",
+        )
 
     return bench
 

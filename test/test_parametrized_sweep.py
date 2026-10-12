@@ -3,6 +3,7 @@ import unittest
 
 import holoviews as hv
 import param
+import pytest
 
 from bencher.variables.inputs import BoolSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
@@ -44,7 +45,7 @@ class TestParametrizedSweep(unittest.TestCase):
         # Tests that the method works when a callback function is provided
 
     def test_callback_provided(self):
-        def callback(**kwargs):  # pylint: disable=unused-argument
+        def callback(**kwargs):
             return {"hmap": hv.Curve([1, 2, 3])}
 
         p = ParametrizedSweep()
@@ -64,13 +65,20 @@ class TestParametrizedSweep(unittest.TestCase):
             bool_var = BoolSweep(default=False)
 
         instance = BoolDefaultFalse()
-        self.assertEqual(instance.bool_var, False)
+        assert instance.bool_var is False
         dims = BoolDefaultFalse.get_inputs_as_dims()
 
-        self.assertListEqual(dims[0].values, [False, True])
+        assert dims[0].values == [False, True]
 
         class BoolDefaultTrue(ParametrizedSweep):
             bool_var = BoolSweep(default=True)
 
         instance = BoolDefaultTrue()
-        self.assertEqual(instance.bool_var, True)
+        assert instance.bool_var is True
+
+    def test_get_input_defaults_rejects_non_list(self) -> None:
+        class OneInput(ParametrizedSweep):
+            x = BoolSweep(default=False)
+
+        with pytest.raises(TypeError, match="override_defaults must be a list, got tuple"):
+            OneInput.get_input_defaults(override_defaults=("x", 1))

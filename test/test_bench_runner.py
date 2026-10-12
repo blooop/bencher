@@ -2,6 +2,8 @@
 import unittest
 from unittest.mock import Mock
 
+import pytest
+
 import bencher as bn
 from bencher.example.benchmark_data import SimpleBenchClass, SimpleBenchClassFloat
 
@@ -10,11 +12,11 @@ class TestBenchRunner(unittest.TestCase):
     # Tests that bn.BenchRunner can be created with default configuration and the import statement in the bn.BenchRunner class is fixed
     def test_benchrunner_default_configuration_fixed(self):
         bench_runner = bn.BenchRunner("bench_runner_test")
-        self.assertEqual(bench_runner.run_cfg.cache_samples, False)
-        self.assertEqual(bench_runner.run_cfg.only_hash_tag, False)
-        self.assertEqual(bench_runner.run_cfg.subsampling_divisions, 2)
-        self.assertEqual(bench_runner.publisher, None)
-        self.assertEqual(bench_runner.bench_fns, [])
+        assert bench_runner.run_cfg.cache_samples is False
+        assert bench_runner.run_cfg.only_hash_tag is False
+        assert bench_runner.run_cfg.subsampling_divisions == 2
+        assert bench_runner.publisher is None
+        assert bench_runner.bench_fns == []
 
     # Tests that Benchable functions can be added to bn.BenchRunner instance
     def test_benchrunner_add_benchable_functions(self):
@@ -23,21 +25,21 @@ class TestBenchRunner(unittest.TestCase):
         bench_fn2 = Mock()
         bench_runner.add(bench_fn1)
         bench_runner.add(bench_fn2)
-        self.assertEqual(len(bench_runner.bench_fns), 2)
-        self.assertIn(bench_fn1, bench_runner.bench_fns)
-        self.assertIn(bench_fn2, bench_runner.bench_fns)
+        assert len(bench_runner.bench_fns) == 2
+        assert bench_fn1 in bench_runner.bench_fns
+        assert bench_fn2 in bench_runner.bench_fns
 
     def test_benchrunner_handle_empty_list(self):
         bench_runner = bn.BenchRunner("bench_runner_test")
         results = bench_runner.run()
-        self.assertEqual(len(results), 0)
+        assert len(results) == 0
 
     def test_benchrunner_benchable_class(self):
         bench_runner = bn.BenchRunner("bench_runner_test")
         bench_runner.add_bench(SimpleBenchClass())
         results = bench_runner.run(run_cfg=bn.BenchRunCfg(run_tag="1"))
 
-        self.assertEqual(results[0].bench_cfg.run_tag, "1")
+        assert results[0].bench_cfg.run_tag == "1"
 
     def test_benchrunner_cache(self):
         from datetime import datetime
@@ -49,7 +51,6 @@ class TestBenchRunner(unittest.TestCase):
         )
 
         bench_class = SimpleBenchClass()
-        # bench = bn.Bench("test_bench", bench_class, run_cfg=run_cfg, report=report            )
 
         def run_bench_class(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.Bench:
             bench = bn.Bench("test_bench1_cache", bench_class, run_cfg=run_cfg, report=report)
@@ -60,38 +61,30 @@ class TestBenchRunner(unittest.TestCase):
 
         # run with unique tag and with cache, should not hit cache because unique tag
         results = bench_runner.run()
-        self.assertEqual(results[0].sample_cache.worker_wrapper_call_count, 2)
-        self.assertEqual(results[0].sample_cache.worker_fn_call_count, 2)
-        self.assertEqual(results[0].sample_cache.worker_cache_call_count, 0)
-        self.assertEqual(results[0].run_cfg.run_tag, run_tag)
+        assert results[0].sample_cache.worker_wrapper_call_count == 2
+        assert results[0].sample_cache.worker_fn_call_count == 2
+        assert results[0].sample_cache.worker_cache_call_count == 0
+        assert results[0].run_cfg.run_tag == run_tag
 
         # run again with the same tag, should hit cache because it was already run
         results = bench_runner.run()
-        self.assertEqual(results[0].sample_cache.worker_wrapper_call_count, 2)
-        self.assertEqual(results[0].sample_cache.worker_fn_call_count, 2)
-        self.assertEqual(results[0].sample_cache.worker_cache_call_count, 0)
-        self.assertEqual(results[0].run_cfg.run_tag, run_tag)
+        assert results[0].sample_cache.worker_wrapper_call_count == 2
+        assert results[0].sample_cache.worker_fn_call_count == 2
+        assert results[0].sample_cache.worker_cache_call_count == 0
+        assert results[0].run_cfg.run_tag == run_tag
 
         # run with the same tag but set use cache to false, should not hit cache because even tho the tag is the same, cache_samples=false
         results = bench_runner.run(cache_samples=False)
-        self.assertEqual(results[0].sample_cache.worker_wrapper_call_count, 2)
-        self.assertEqual(results[0].sample_cache.worker_fn_call_count, 2)
-        self.assertEqual(results[0].sample_cache.worker_cache_call_count, 0)
-        self.assertEqual(results[0].run_cfg.run_tag, run_tag)
+        assert results[0].sample_cache.worker_wrapper_call_count == 2
+        assert results[0].sample_cache.worker_fn_call_count == 2
+        assert results[0].sample_cache.worker_cache_call_count == 0
+        assert results[0].run_cfg.run_tag == run_tag
 
     def test_benchrunner_benchable_class_run_constructor(self):
         bench_runner = bn.BenchRunner("bench_runner_test", run_cfg=bn.BenchRunCfg(run_tag="1"))
         bench_runner.add_bench(SimpleBenchClass())
         results = bench_runner.run()
-        self.assertEqual(results[0].bench_cfg.run_tag, "1")
-
-    # def test_benchrunner_level_1(self):
-    #     results = bn.BenchRunner("bench_runner_test", AllSweepVars()).run(min_subsampling_divisions=1)
-    #     self.assertEqual(results[0].result_samples(), 1)
-
-    # def test_benchrunner_level_1_only(self):
-    #     results = bn.BenchRunner("bench_runner_test", AllSweepVars()).run(subsampling_divisions=1)
-    #     self.assertEqual(results[0].result_samples(), 1)
+        assert results[0].bench_cfg.run_tag == "1"
 
     def test_benchrunner_repeats(self):
         res = bn.Bench(
@@ -99,14 +92,14 @@ class TestBenchRunner(unittest.TestCase):
             SimpleBenchClassFloat(),
             run_cfg=bn.BenchRunCfg(subsampling_divisions=2, repeats=1),
         ).plot_sweep("float")
-        self.assertEqual(res.result_samples(), 2)
+        assert res.result_samples() == 2
 
         res = bn.Bench(
             "float",
             SimpleBenchClassFloat(),
             run_cfg=bn.BenchRunCfg(subsampling_divisions=2, repeats=5),
         ).plot_sweep("float")
-        self.assertEqual(res.result_samples(), 10)
+        assert res.result_samples() == 10
 
     def test_benchrunner_unified_interface(self):
         """Test the new unified interface with subsampling_divisions/repeats and max_subsampling_divisions/max_repeats."""
@@ -123,9 +116,9 @@ class TestBenchRunner(unittest.TestCase):
         br1.add(simple_benchmark)
         executed_configs.clear()
         results = br1.run(subsampling_divisions=2, repeats=1)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(len(executed_configs), 1)
-        self.assertEqual(executed_configs[0], (2, 1))
+        assert len(results) == 1
+        assert len(executed_configs) == 1
+        assert executed_configs[0] == (2, 1)
 
         # Test 2: Progressive subsampling_divisions (subsampling_divisions=2, max_subsampling_divisions=3, repeats=1)
         br2 = bn.BenchRunner()
@@ -134,8 +127,8 @@ class TestBenchRunner(unittest.TestCase):
         results = br2.run(subsampling_divisions=2, repeats=1, max_subsampling_divisions=3)
         # Should run at subsampling_divisions 2 and 3 = 2 results
         fidelities = sorted([config[0] for config in executed_configs])
-        self.assertEqual(fidelities, [2, 3])
-        self.assertEqual(len(executed_configs), 2)
+        assert fidelities == [2, 3]
+        assert len(executed_configs) == 2
 
         # Test 3: Progressive repeats (subsampling_divisions=2, repeats=1, max_repeats=2)
         br3 = bn.BenchRunner()
@@ -144,8 +137,8 @@ class TestBenchRunner(unittest.TestCase):
         results = br3.run(subsampling_divisions=2, repeats=1, max_repeats=2)
         # Should run with repeats 1 and 2 = 2 results
         repeats = sorted([config[1] for config in executed_configs])
-        self.assertEqual(repeats, [1, 2])
-        self.assertEqual(len(executed_configs), 2)
+        assert repeats == [1, 2]
+        assert len(executed_configs) == 2
 
         # Test 4: Both progressive (subsampling_divisions=2-3, repeats=1-2) = 4 combinations
         br4 = bn.BenchRunner()
@@ -156,8 +149,8 @@ class TestBenchRunner(unittest.TestCase):
         )
         # Check all combinations were executed
         expected_combinations = [(2, 1), (2, 2), (3, 1), (3, 2)]
-        self.assertEqual(sorted(executed_configs), sorted(expected_combinations))
-        self.assertEqual(len(executed_configs), 4)
+        assert sorted(executed_configs) == sorted(expected_combinations)
+        assert len(executed_configs) == 4
 
     def test_benchrunner_deprecation_warnings(self):
         """Test that legacy parameters show deprecation warnings."""
@@ -166,7 +159,7 @@ class TestBenchRunner(unittest.TestCase):
         bench_runner = bn.BenchRunner("test_deprecation")
 
         # Very simple function that returns immediately
-        def simple_test(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:  # pylint: disable=unused-argument
+        def simple_test(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
             cfg = bn.BenchCfg()
             cfg.run_cfg = run_cfg
             return cfg
@@ -177,17 +170,13 @@ class TestBenchRunner(unittest.TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             bench_runner.run(min_level=3)
-            self.assertTrue(
-                any("min_level parameter is deprecated" in str(warning.message) for warning in w)
-            )
+            assert any("min_level parameter is deprecated" in str(warning.message) for warning in w)
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             bench_runner.run(start_repeats=2)
-            self.assertTrue(
-                any(
-                    "start_repeats parameter is deprecated" in str(warning.message) for warning in w
-                )
+            assert any(
+                "start_repeats parameter is deprecated" in str(warning.message) for warning in w
             )
 
     def test_benchrunner_level_kwarg_deprecation(self):
@@ -196,7 +185,7 @@ class TestBenchRunner(unittest.TestCase):
 
         bench_runner = bn.BenchRunner("test_level_deprecation")
 
-        def simple_test(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:  # pylint: disable=unused-argument
+        def simple_test(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
             cfg = bn.BenchCfg()
             cfg.run_cfg = run_cfg
             return cfg
@@ -206,9 +195,7 @@ class TestBenchRunner(unittest.TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             bench_runner.run(level=3)
-            self.assertTrue(
-                any("'level' parameter is deprecated" in str(warning.message) for warning in w)
-            )
+            assert any("'level' parameter is deprecated" in str(warning.message) for warning in w)
 
     def test_setup_run_cfg_level_kwarg_deprecation(self):
         """Test that passing level= to setup_run_cfg() emits DeprecationWarning."""
@@ -219,10 +206,8 @@ class TestBenchRunner(unittest.TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             cfg = bench_runner.setup_run_cfg(level=4)
-            self.assertEqual(cfg.subsampling_divisions, 4)
-            self.assertTrue(
-                any("'level' parameter is deprecated" in str(warning.message) for warning in w)
-            )
+            assert cfg.subsampling_divisions == 4
+            assert any("'level' parameter is deprecated" in str(warning.message) for warning in w)
 
     def test_benchruncfg_level_kwarg_deprecation(self):
         """Test that BenchRunCfg(level=5) emits DeprecationWarning and sets subsampling_divisions."""
@@ -231,10 +216,8 @@ class TestBenchRunner(unittest.TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             cfg = bn.BenchRunCfg(level=5)
-            self.assertEqual(cfg.subsampling_divisions, 5)
-            self.assertTrue(
-                any("'level' parameter is deprecated" in str(warning.message) for warning in w)
-            )
+            assert cfg.subsampling_divisions == 5
+            assert any("'level' parameter is deprecated" in str(warning.message) for warning in w)
 
     def test_with_defaults_level_kwarg_deprecation(self):
         """Test that BenchRunCfg.with_defaults(level=4) emits DeprecationWarning."""
@@ -243,30 +226,28 @@ class TestBenchRunner(unittest.TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             cfg = bn.BenchRunCfg.with_defaults(None, level=4)
-            self.assertEqual(cfg.subsampling_divisions, 4)
-            self.assertTrue(
-                any("'level' parameter is deprecated" in str(warning.message) for warning in w)
-            )
+            assert cfg.subsampling_divisions == 4
+            assert any("'level' parameter is deprecated" in str(warning.message) for warning in w)
 
     def test_benchrunner_run_level_and_subsampling_divisions_conflict_raises(self):
         """Passing both level= and subsampling_divisions= to BenchRunner.run() raises TypeError."""
         br = bn.BenchRunner("conflict_test")
         br.add(lambda run_cfg, report: bn.BenchCfg())
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             br.run(subsampling_divisions=3, level=4)
 
     def test_benchrunner_run_level_and_subsampling_divisions_default_conflict_raises(self):
         """Passing subsampling_divisions=2 (the default) plus level= still raises TypeError."""
         br = bn.BenchRunner("conflict_test_default")
         br.add(lambda run_cfg, report: bn.BenchCfg())
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             br.run(subsampling_divisions=2, level=4)
 
     def test_benchrunner_run_max_level_and_max_subsampling_divisions_conflict_raises(self):
         """Passing both max_level= and max_subsampling_divisions= to BenchRunner.run() raises TypeError."""
         br = bn.BenchRunner("conflict_test_max")
         br.add(lambda run_cfg, report: bn.BenchCfg())
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             br.run(max_subsampling_divisions=3, max_level=4)
 
     def test_benchrunner_run_max_level_deprecation_translates(self):
@@ -285,17 +266,17 @@ class TestBenchRunner(unittest.TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             br.run(subsampling_divisions=2, max_level=3)
-            self.assertTrue(any("'max_level' parameter is deprecated" in str(x.message) for x in w))
-        self.assertEqual(sorted(set(seen)), [2, 3])
+            assert any("'max_level' parameter is deprecated" in str(x.message) for x in w)
+        assert sorted(set(seen)) == [2, 3]
 
     def test_setup_run_cfg_level_and_subsampling_divisions_conflict_raises(self):
         """Passing both level= and subsampling_divisions= to setup_run_cfg() raises TypeError."""
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             bn.BenchRunner.setup_run_cfg(subsampling_divisions=3, level=4)
 
     def test_setup_run_cfg_level_and_subsampling_divisions_default_conflict_raises(self):
         """Passing subsampling_divisions=2 (the default) plus level= still raises TypeError."""
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             bn.BenchRunner.setup_run_cfg(subsampling_divisions=2, level=4)
 
     def test_benchrunner_no_name_instantiation(self):
@@ -303,9 +284,9 @@ class TestBenchRunner(unittest.TestCase):
         bench_runner = bn.BenchRunner()
 
         # Should have auto-generated name
-        self.assertIsNotNone(bench_runner.name)
-        self.assertIsInstance(bench_runner.name, str)
-        self.assertTrue(bench_runner.name.startswith("bench_runner_"))
+        assert bench_runner.name is not None
+        assert isinstance(bench_runner.name, str)
+        assert bench_runner.name.startswith("bench_runner_")
 
         # Should work normally
         def test_benchmark(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
@@ -314,81 +295,7 @@ class TestBenchRunner(unittest.TestCase):
 
         bench_runner.add(test_benchmark)
         results = bench_runner.run(subsampling_divisions=2, repeats=1)
-        self.assertEqual(len(results), 1)
-
-    # def test_benchrunner_cache(self):
-    #     res = bn.Bench(
-    #         "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(subsampling_divisions=2, repeats=1)
-    #     ).plot_sweep("float")
-
-    #     res = bn.Bench(
-    #         "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(subsampling_divisions=2, repeats=5)
-    #     ).plot_sweep("float")
-    #     self.assertEqual(res.result_samples(), 10)
-
-    # # Tests that bn.BenchRunner can run Benchable functions with default configuration (fixed)
-    # def test_benchrunner_run_default_configuration_fixed(self):
-
-    #     bench_runner = bn.BenchRunner()
-    #     bench_fn1 = Mock()
-    #     bench_fn2 = Mock()
-    #     bench_runner.add_run(bench_fn1)
-    #     bench_runner.add_run(bench_fn2)
-    #     results = bench_runner.run()
-
-    #     self.assertEqual(len(results), 10)
-    #     self.assertEqual(results[0].subsampling_divisions, 1)
-    #     self.assertEqual(results[1].subsampling_divisions, 1)
-    #     self.assertEqual(results[2].subsampling_divisions, 2)
-    #     self.assertEqual(results[3].subsampling_divisions, 2)
-    #     self.assertEqual(results[4].subsampling_divisions, 3)
-    #     self.assertEqual(results[5].subsampling_divisions, 3)
-    #     self.assertEqual(results[6].subsampling_divisions, 4)
-    #     self.assertEqual(results[7].subsampling_divisions, 4)
-    #     self.assertEqual(results[8].subsampling_divisions, 5)
-    #     self.assertEqual(results[9].subsampling_divisions, 5)
-
-    # Tests that bn.BenchRunner can run Benchable functions with custom configuration, after fixing the import statements
-    # def test_benchrunner_run_custom_configuration_fixed_fixed_import_statements(self):
-
-    #     bench_runner = bn.BenchRunner()
-    #     bench_fn1 = Mock()
-    #     bench_fn2 = Mock()
-    #     bench_runner.add_run(bench_fn1)
-    #     bench_runner.add_run(bench_fn2)
-    #     run_cfg = bn.BenchRunCfg()
-    #     run_cfg.cache_samples = False
-    #     run_cfg.only_hash_tag = False
-    #     run_cfg.subsampling_divisions = 3
-    #     results = bench_runner.run(run_cfg=run_cfg)
-    #     self.assertEqual(len(results), 2)
-    #     self.assertEqual(results[0].subsampling_divisions, 3)
-    #     self.assertEqual(results[1].subsampling_divisions, 3)
-
-    # Tests that bn.BenchRunner can publish results of Benchable functions (fixed)
-    # def test_benchrunner_publish_results_fixed(self):
-    #     class MockBenchable:
-    #         def bench(self, run_cfg: bn.BenchRunCfg) -> bn.BenchCfg:
-    #             return bn.BenchCfg()
-
-    #     bench_runner = bn.BenchRunner(publisher=Mock())
-    #     bench_fn1 = MockBenchable()
-    #     bench_fn2 = MockBenchable()
-    #     bench_runner.add_run(bench_fn1)
-    #     bench_runner.add_run(bench_fn2)
-    #     results = bench_runner.run(publish=True)
-    #     self.assertEqual(len(results), 10)
-    #     self.assertEqual(bench_runner.publisher.call_count, 10)
-    #     self.assertEqual(bench_runner.publisher.call_args_list[0][0][0], results[0])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[1][0][0], results[1])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[2][0][0], results[2])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[3][0][0], results[3])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[4][0][0], results[4])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[5][0][0], results[5])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[6][0][0], results[6])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[7][0][0], results[7])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[8][0][0], results[8])
-    #     self.assertEqual(bench_runner.publisher.call_args_list[9][0][0], results[9])
+        assert len(results) == 1
 
     def test_add_run_deprecation_warning(self):
         """Test that add_run() emits a DeprecationWarning."""
@@ -399,16 +306,16 @@ class TestBenchRunner(unittest.TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             bench_runner.add_run(bench_fn)
-            self.assertTrue(any("add_run() is deprecated" in str(warning.message) for warning in w))
+            assert any("add_run() is deprecated" in str(warning.message) for warning in w)
         # Function should still have been added
-        self.assertIn(bench_fn, bench_runner.bench_fns)
+        assert bench_fn in bench_runner.bench_fns
 
     def test_benchrunner_grouped(self):
         """Test running benchmarks in grouped mode."""
         bench_runner = bn.BenchRunner("test_grouped")
         bench_runner.add_bench(SimpleBenchClass())
         results = bench_runner.run(subsampling_divisions=2, repeats=1, grouped=True)
-        self.assertTrue(len(results) > 0)
+        assert len(results) > 0
 
     def test_benchrunner_v2_signature(self):
         """Test that BenchRunner handles V2 (single-arg) benchmark functions."""
@@ -420,7 +327,7 @@ class TestBenchRunner(unittest.TestCase):
         bench_runner = bn.BenchRunner("test_v2")
         bench_runner.add(v2_benchmark)
         results = bench_runner.run(subsampling_divisions=2, repeats=1)
-        self.assertEqual(len(results), 1)
+        assert len(results) == 1
 
     def test_benchrunner_progressive_subsampling_divisions(self):
         """Test progressive subsampling_divisions runs."""
@@ -434,7 +341,7 @@ class TestBenchRunner(unittest.TestCase):
         br = bn.BenchRunner("test_progressive")
         br.add(tracking_benchmark)
         br.run(subsampling_divisions=2, max_subsampling_divisions=3, repeats=1)
-        self.assertEqual(sorted(executed), [2, 3])
+        assert sorted(executed) == [2, 3]
 
     def test_benchrunner_merge_reports(self):
         """Test the _merge_reports method."""
@@ -446,9 +353,9 @@ class TestBenchRunner(unittest.TestCase):
         source.pane.append("test_pane")
 
         initial_count = len(target.pane)
-        br._merge_reports(target, source)  # pylint: disable=protected-access
+        br._merge_reports(target, source)
         # After merge, target should have more panes
-        self.assertGreater(len(target.pane), initial_count)
+        assert len(target.pane) > initial_count
 
     def test_benchrunner_merge_reports_none(self):
         """Test _merge_reports with None source leaves target unchanged."""
@@ -457,8 +364,8 @@ class TestBenchRunner(unittest.TestCase):
         br = bn.BenchRunner("test_merge_none")
         target = BenchReport("target")
         initial_count = len(target.pane)
-        br._merge_reports(target, None)  # pylint: disable=protected-access
-        self.assertEqual(len(target.pane), initial_count)
+        br._merge_reports(target, None)
+        assert len(target.pane) == initial_count
 
     def test_benchrunner_merge_reports_same(self):
         """Test _merge_reports when target is source leaves target unchanged."""
@@ -467,8 +374,8 @@ class TestBenchRunner(unittest.TestCase):
         br = bn.BenchRunner("test_merge_same")
         report = BenchReport("same")
         initial_count = len(report.pane)
-        br._merge_reports(report, report)  # pylint: disable=protected-access
-        self.assertEqual(len(report.pane), initial_count)
+        br._merge_reports(report, report)
+        assert len(report.pane) == initial_count
 
     def test_benchrunner_name_from_callable(self):
         """Test that BenchRunner auto-names from a callable."""
@@ -478,19 +385,19 @@ class TestBenchRunner(unittest.TestCase):
             return bench.plot_sweep("test")
 
         br = bn.BenchRunner(my_benchmark)
-        self.assertEqual(br.name, "my_benchmark")
-        self.assertEqual(len(br.bench_fns), 1)
+        assert br.name == "my_benchmark"
+        assert len(br.bench_fns) == 1
 
     def test_benchrunner_add_chaining(self):
         """Test that add() supports method chaining."""
         br = bn.BenchRunner("test_chain")
         result = br.add(Mock())
-        self.assertIs(result, br)
+        assert result is br
 
     def test_benchrunner_show_no_results(self):
         """Test that show() raises with no results."""
         br = bn.BenchRunner("test_show_empty")
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             br.show()
 
     def test_benchrunner_shutdown(self):
@@ -498,21 +405,7 @@ class TestBenchRunner(unittest.TestCase):
         br = bn.BenchRunner("test_shutdown")
         br.servers = [Mock()]
         br.shutdown()
-        self.assertEqual(len(br.servers), 0)
-
-    # Tests that bn.BenchRunner can handle empty list of Benchable functions
-    # def test_benchrunner_handle_empty_list(self):
-
-    #     def benchable(run_cfg:bn.BenchRunCfg)->bn.BenchCfg:
-    #         bench = bn.Bench("sbc",SimpleBenchClass(),run_cfg=run_cfg)
-    #         return bench.plot_sweep("sweep1")
-
-    #     bench_runner = bn.BenchRunner()
-    #     bench_runner.add_run(benchable)
-
-    #     results = bench_runner.run(run_cfg=bn.BenchRunCfg(run_tag="1"))
-
-    #     self.assertEqual(results[0].bench_cfg.run_tag, "1")
+        assert len(br.servers) == 0
 
     def test_cache_samples_deprecation_warning(self):
         """Passing the old cache_results kwarg emits a DeprecationWarning."""
@@ -520,7 +413,7 @@ class TestBenchRunner(unittest.TestCase):
 
         bench_runner = bn.BenchRunner("test_cache_deprecation")
 
-        def simple_test(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:  # pylint: disable=unused-argument
+        def simple_test(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
             cfg = bn.BenchCfg()
             cfg.run_cfg = run_cfg
             return cfg
@@ -530,10 +423,8 @@ class TestBenchRunner(unittest.TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             bench_runner.run(cache_results=False)
-            self.assertTrue(
-                any(
-                    "cache_results parameter is deprecated" in str(warning.message) for warning in w
-                )
+            assert any(
+                "cache_results parameter is deprecated" in str(warning.message) for warning in w
             )
 
     def test_progressive_run_auto_enables_cache(self):
@@ -551,8 +442,8 @@ class TestBenchRunner(unittest.TestCase):
 
         # All executed configs should have cache_samples=True
         for cfg in executed_cfgs:
-            self.assertTrue(cfg.cache_samples)
-            self.assertTrue(cfg.only_hash_tag)
+            assert cfg.cache_samples
+            assert cfg.only_hash_tag
 
     def test_single_subsampling_divisions_no_auto_cache(self):
         """Single-subsampling_divisions run (no max_subsampling_divisions) leaves cache_samples=False."""
@@ -567,8 +458,8 @@ class TestBenchRunner(unittest.TestCase):
         br.add(tracking_bench)
         br.run(subsampling_divisions=2)
 
-        self.assertEqual(len(executed_cfgs), 1)
-        self.assertFalse(executed_cfgs[0].cache_samples)
+        assert len(executed_cfgs) == 1
+        assert not executed_cfgs[0].cache_samples
 
     def test_bench_reuse_report_cleared(self):
         """Progressive bn.run() with ParametrizedSweep produces only last subsampling_divisions's report."""
@@ -587,17 +478,15 @@ class TestBenchRunner(unittest.TestCase):
 
         prog_report = getattr(progressive_results[-1], "report", None)
         single_report = getattr(single_results[-1], "report", None)
-        self.assertIsNotNone(prog_report)
-        self.assertIsNotNone(single_report)
+        assert prog_report is not None
+        assert single_report is not None
 
         prog_tabs = len(prog_report.pane)
         single_tabs = len(single_report.pane)
-        self.assertGreater(prog_tabs, 0)
-        self.assertEqual(
-            single_tabs,
-            prog_tabs,
+        assert prog_tabs > 0
+        assert single_tabs == prog_tabs, (
             "Progressive run should not accumulate tabs across subsampling_divisions levels; "
-            "only the last subsampling_divisions's report should be present.",
+            "only the last subsampling_divisions's report should be present."
         )
 
     def test_bench_reuse_cache_hits(self):
@@ -610,10 +499,9 @@ class TestBenchRunner(unittest.TestCase):
             cache_samples=True,
         )
         last_result = results[-1]
-        self.assertIsNotNone(
-            getattr(last_result, "sample_cache", None),
-            "Expected sample_cache on progressive run result",
+        assert getattr(last_result, "sample_cache", None) is not None, (
+            "Expected sample_cache on progressive run result"
         )
-        self.assertGreater(last_result.sample_cache.worker_cache_call_count, 0)
+        assert last_result.sample_cache.worker_cache_call_count > 0
 
     # Tests that bn.BenchRunner can handle empty list of Benchable functions

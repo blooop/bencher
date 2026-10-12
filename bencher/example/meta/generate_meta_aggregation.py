@@ -200,7 +200,7 @@ def example_meta_aggregation():
             "The aggregated view shows a single heatmap because two float "
             "dimensions remain after collapsing both categoricals. The "
             "non-aggregated view below shows the full faceted heatmaps "
-            "(one per direction × scale) — each with a visually distinct "
+            "(one per direction x scale) — each with a visually distinct "
             "gradient pattern."
         ),
         aggregate=["direction", "scale"],

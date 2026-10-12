@@ -23,24 +23,24 @@ class TestWrapViewerControls(unittest.TestCase):
             '<iframe src="A" width="400" height="400" frameborder="0" allowfullscreen></iframe>'
         )
         out = _wrap_viewer_controls(iframe, "A", 400, 400)
-        self.assertIn("requestFullscreen()", out)
-        self.assertIn('target="_blank"', out)
+        assert "requestFullscreen()" in out
+        assert 'target="_blank"' in out
 
     def test_anchor_href_is_set_at_construction(self):
         """Middle-click / Cmd-click rely on a real ``href`` attribute, not onclick."""
         iframe = '<iframe src="/some/url" width="100" height="100" frameborder="0" allowfullscreen></iframe>'
         out = _wrap_viewer_controls(iframe, "/some/url", 100, 100)
         # Anchor must carry the URL directly, not a placeholder filled in by JS.
-        self.assertIn('href="/some/url"', out)
-        self.assertNotIn("about:blank", out)
+        assert 'href="/some/url"' in out
+        assert "about:blank" not in out
         # The new-tab anchor must not depend on onclick — only the fullscreen
         # button should have an onclick handler.
-        self.assertEqual(out.count("onclick="), 1)
+        assert out.count("onclick=") == 1
 
     def test_preserves_iframe_html_verbatim(self):
         iframe = '<iframe src="X" width="1" height="2" frameborder="0" allowfullscreen></iframe>'
         out = _wrap_viewer_controls(iframe, "X", 1, 2)
-        self.assertIn(iframe, out)
+        assert iframe in out
 
 
 class TestRrdUrlRegex(unittest.TestCase):
@@ -54,13 +54,13 @@ class TestRrdUrlRegex(unittest.TestCase):
         # Bokeh serialises HTML inside JSON, producing a double-entity encoding.
         bokeh_encoded = html.escape(html.escape(wrapped))
         matches = _RRD_URL_RE.findall(bokeh_encoded)
-        self.assertEqual(matches, [("0.32.0", "job/foo.rrd"), ("0.32.0", "job/foo.rrd")])
+        assert matches == [("0.32.0", "job/foo.rrd"), ("0.32.0", "job/foo.rrd")]
 
     def test_does_not_match_outside_quotes(self):
         # A bare /rrd_static/... reference (not wrapped in &amp;quot;) should
         # not match — otherwise debug log lines could be mangled.
         bare = "see /rrd_static/viewer_0.32.0.html?url=/rrd_static/job/foo.rrd in logs"
-        self.assertIsNone(_RRD_URL_RE.search(bare))
+        assert _RRD_URL_RE.search(bare) is None
 
 
 class TestInlineRrdIframes(unittest.TestCase):
@@ -108,14 +108,14 @@ class TestInlineRrdIframes(unittest.TestCase):
         rewritten = html_path.read_text(encoding="utf-8")
         # No /rrd_static/ URLs should remain — both iframe src and anchor href
         # must be rewritten to the relative ``_rrd/...`` path.
-        self.assertNotIn("/rrd_static/", rewritten)
+        assert "/rrd_static/" not in rewritten
         # The sidecar viewer + rrd should now exist next to the report.
-        self.assertTrue((report_dir / "_rrd" / "viewer_0.32.0.html").is_file())
-        self.assertTrue((report_dir / "_rrd" / "jobA" / "foo.rrd").is_file())
+        assert (report_dir / "_rrd" / "viewer_0.32.0.html").is_file()
+        assert (report_dir / "_rrd" / "jobA" / "foo.rrd").is_file()
         # The relative path should appear twice — once for the iframe, once for
         # the anchor href.
         relative = "_rrd/viewer_0.32.0.html?url=jobA/foo.rrd"
-        self.assertEqual(rewritten.count(relative), 2)
+        assert rewritten.count(relative) == 2
 
     def test_idempotent_per_recording(self):
         """Memoization avoids writing the sidecar files twice per recording."""
@@ -127,7 +127,6 @@ class TestInlineRrdIframes(unittest.TestCase):
 
         # The iframe src and anchor href both contain the same URL.  Patch
         # _write_rrd_sidecar to count invocations.
-        # pylint: disable=protected-access
         import bencher.utils_rrd as mod
 
         original = mod._write_rrd_sidecar
@@ -141,10 +140,8 @@ class TestInlineRrdIframes(unittest.TestCase):
         with mock.patch.object(mod, "_write_rrd_sidecar", counting):
             inline_rrd_iframes(html_path)
 
-        self.assertEqual(
-            call_count,
-            1,
-            "_write_rrd_sidecar should run once per recording, not once per URL match",
+        assert call_count == 1, (
+            "_write_rrd_sidecar should run once per recording, not once per URL match"
         )
 
     def test_logs_warning_when_url_present_but_regex_misses(self):
@@ -163,8 +160,8 @@ class TestInlineRrdIframes(unittest.TestCase):
             inline_rrd_iframes(html_path)
 
         joined = "\n".join(captured.output)
-        self.assertIn("/rrd_static/", joined)
-        self.assertIn("URL regex matched nothing", joined)
+        assert "/rrd_static/" in joined
+        assert "URL regex matched nothing" in joined
 
 
 # --- Extra guards on the wrapper output ---
@@ -175,17 +172,17 @@ class TestWrapperOutputShape(unittest.TestCase):
         """The JS selectors look for ``.bencher-rrd-wrap`` — the wrapper must use it."""
         iframe = '<iframe src="X" width="1" height="2" frameborder="0" allowfullscreen></iframe>'
         out = _wrap_viewer_controls(iframe, "X", 1, 2)
-        self.assertIn('class="bencher-rrd-wrap"', out)
+        assert 'class="bencher-rrd-wrap"' in out
         # The fullscreen onclick references the class — check the literal that
         # appears in the rendered HTML.
-        self.assertIn(".bencher-rrd-wrap", out)
+        assert ".bencher-rrd-wrap" in out
 
     def test_dimensions_propagate_to_wrapper(self):
         iframe = (
             '<iframe src="X" width="321" height="123" frameborder="0" allowfullscreen></iframe>'
         )
         out = _wrap_viewer_controls(iframe, "X", 321, 123)
-        self.assertRegex(out, re.compile(r"width:321px;height:123px"))
+        assert re.search(re.compile(r"width:321px;height:123px"), out)
 
 
 if __name__ == "__main__":

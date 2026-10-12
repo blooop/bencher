@@ -1,25 +1,28 @@
 """Serve files from a directory over HTTP with CORS headers (stdlib only)."""
 
 import functools
+import logging
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class _CORSHandler(SimpleHTTPRequestHandler):
     """Static file handler with full CORS support (including preflight)."""
 
-    def end_headers(self):
+    def end_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "*")
         super().end_headers()
 
-    def do_OPTIONS(self):
+    def do_OPTIONS(self) -> None:
         self.send_response(200)
         self.end_headers()
 
-    def log_message(self, *_args, **_kwargs):
+    def log_message(self, *_args: object, **_kwargs: object) -> None:
         pass  # suppress per-request console spam
 
 
@@ -27,13 +30,18 @@ class _ReusableServer(ThreadingHTTPServer):
     allow_reuse_address = True
 
 
-def create_server(directory, port=8001):
+def create_server(directory: str | Path, port: int = 8001) -> ThreadingHTTPServer:
     """Create an HTTP server serving *directory* on *port*."""
     handler = functools.partial(_CORSHandler, directory=str(directory))
-    return _ReusableServer(("0.0.0.0", port), handler)
+    return _ReusableServer(
+        ("0.0.0.0", port),  # noqa: S104 - serves rerun files to viewers in other containers
+        handler,
+    )
 
 
-def run_file_server(directory=None, port=8001):
+def run_file_server(
+    directory: str | Path | None = None, port: int = 8001
+) -> ThreadingHTTPServer | None:
     """Start a background HTTP file server (daemon thread).
 
     If *port* is already in use the existing server is assumed to be running
@@ -47,9 +55,9 @@ def run_file_server(directory=None, port=8001):
     try:
         server = create_server(directory, port)
     except OSError:
-        print(f"File server port {port} already in use — assuming server is already running")
+        logger.info(f"File server port {port} already in use — assuming server is already running")
         return None
     threading.Thread(target=server.serve_forever, daemon=True).start()
     actual_port = server.server_address[1]
-    print(f"File server is running on port {actual_port} serving files from {directory}")
+    logger.info(f"File server is running on port {actual_port} serving files from {directory}")
     return server

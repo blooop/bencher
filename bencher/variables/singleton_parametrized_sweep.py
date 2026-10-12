@@ -32,9 +32,12 @@ Example (context-manager style — auto-resets on failure)::
 from __future__ import annotations
 
 import threading
-from typing import ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast
 
 from .parametrised_sweep import ParametrizedSweep
+
+if TYPE_CHECKING:
+    from types import TracebackType
 
 
 class _SingletonInitResult:
@@ -48,7 +51,7 @@ class _SingletonInitResult:
 
     __slots__ = ("_cls", "_is_first")
 
-    def __init__(self, cls, is_first: bool):
+    def __init__(self, cls: type[ParametrizedSweepSingleton], is_first: bool) -> None:
         self._cls = cls
         self._is_first = is_first
 
@@ -57,10 +60,15 @@ class _SingletonInitResult:
         return self._is_first
 
     # -- context-manager protocol ---------------------------------------------
-    def __enter__(self):
+    def __enter__(self) -> bool:
         return self._is_first
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> Literal[False]:
         if exc_type is not None and self._is_first:
             self._cls.reset_singleton()
         return False  # never swallow exceptions
@@ -81,13 +89,13 @@ class ParametrizedSweepSingleton(ParametrizedSweep):
     _seen: ClassVar[set[type]] = set()
     _lock = threading.Lock()
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *_args: Any, **_kwargs: Any) -> Self:
         with cls._lock:
             if cls not in cls._instances:
                 cls._instances[cls] = super().__new__(cls)
-            return cls._instances[cls]
+            return cast("Self", cls._instances[cls])
 
-    def __init__(self, **params):
+    def __init__(self, **params: Any) -> None:
         # Only run the Parametrized init chain once
         if getattr(self, "_singleton_inited", False):
             return

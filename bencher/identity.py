@@ -188,6 +188,14 @@ def sweep_identity(
         bench_name: Overrides the name, which is otherwise the worker's class name
             -- matching :func:`bencher.factories.create_bench`. ``bench_name`` is
             hashed, so this is the field a rename moves.
+        input_vars: The swept inputs, as for ``plot_sweep``.
+        result_vars: The results, as for ``plot_sweep``.
+        const_vars: The inputs held constant, as for ``plot_sweep``.
+        tag: Run tag; hashed, and prefixed by ``run_cfg.run_tag``.
+        title: Sweep title, as for ``plot_sweep``.
+        description: Sweep description, as for ``plot_sweep``.
+        post_description: Text shown after the sweep, as for ``plot_sweep``.
+        run_cfg: The run configuration the real run uses (see above).
         repeats: Convenience override of ``run_cfg.repeats``.
         over_time: Convenience override of ``run_cfg.over_time``.
 

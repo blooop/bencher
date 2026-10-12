@@ -65,7 +65,7 @@ class TestExplainMatchesSelect(unittest.TestCase):
         reg = get_registry()
         selected = [(p.name, p.backend) for p in reg.select(data, **kwargs)]
         chosen = [(d.name, d.backend) for d in reg.explain(data, **kwargs) if d.chosen]
-        self.assertEqual(chosen, selected)
+        assert chosen == selected
 
     def test_parity_across_shapes_and_filters(self):
         for shape, res in self.results.items():
@@ -81,18 +81,18 @@ class TestExplainMatchesSelect(unittest.TestCase):
         reg = get_registry()
         data = self.results["1_float"].to_bench_data()
         decisions = reg.explain(data)
-        self.assertEqual(len(decisions), len(list(reg.all())))
-        self.assertTrue(all(d.reason for d in decisions))
+        assert len(decisions) == len(list(reg.all()))
+        assert all(d.reason for d in decisions)
 
     def test_rejection_reasons(self):
         reg = get_registry()
         data = self.results["1_float"].to_bench_data()
         by_name = {d.name: d for d in reg.explain(data)}
         violin = by_name["violin"]  # named-only builtin
-        self.assertFalse(violin.chosen)
-        self.assertIn("named-only", violin.reason)
+        assert not violin.chosen
+        assert "named-only" in violin.reason
         line = by_name["line"]
-        self.assertTrue(line.chosen)
+        assert line.chosen
 
     def test_shape_filter_rejection_reason(self):
         """Built-ins register a permissive default filter (shape gating still lives
@@ -116,13 +116,13 @@ class TestExplainMatchesSelect(unittest.TestCase):
             data = self.results["1_float"].to_bench_data()
             by_name = {d.name: d for d in get_registry().explain(data)}
             decision = by_name["needs_two_floats"]
-            self.assertFalse(decision.chosen)
-            self.assertIn("shape filter mismatch", decision.reason)
-            self.assertIn("float", decision.reason)
+            assert not decision.chosen
+            assert "shape filter mismatch" in decision.reason
+            assert "float" in decision.reason
             # and on a matching shape it is chosen
             data2 = self.results["2_float"].to_bench_data()
             by_name2 = {d.name: d for d in get_registry().explain(data2)}
-            self.assertTrue(by_name2["needs_two_floats"].chosen)
+            assert by_name2["needs_two_floats"].chosen
         finally:
             unregister_plugin("needs_two_floats")
 
@@ -133,29 +133,26 @@ class TestExplainMatchesSelect(unittest.TestCase):
 
         # chosen plugin still reports the "only" reason
         chosen = [d for d in decisions if d.chosen]
-        self.assertEqual([d.name for d in chosen], ["table"])
-        self.assertIn("only", chosen[0].reason)
+        assert [d.name for d in chosen] == ["table"]
+        assert "only" in chosen[0].reason
 
         # rejected plugins should report the "not requested (only=...)" message
         rejected = [d for d in decisions if not d.chosen]
-        self.assertTrue(
-            rejected,
-            msg="Expected at least one rejected plugin when using only='table'",
-        )
+        assert rejected, "Expected at least one rejected plugin when using only='table'"
         for r in rejected:
-            self.assertIn("not requested (only=", r.reason)
+            assert "not requested (only=" in r.reason
 
 
 class TestExplainFacade(unittest.TestCase):
     def test_explain_selection_table(self):
         res = run_sweep(Linear, [Linear.param.x])
         table = res.explain_selection()
-        self.assertIn("chart type", table)
-        self.assertIn("line", table)
-        self.assertIn("named-only", table)  # violin et al. appear with their reason
+        assert "chart type" in table
+        assert "line" in table
+        assert "named-only" in table  # violin et al. appear with their reason
         # plot_list entries go through the same normalization as to_auto
         table_named = res.explain_selection(plot_list=["violin"])
-        self.assertIn("not named in include", table_named)
+        assert "not named in include" in table_named
 
 
 if __name__ == "__main__":

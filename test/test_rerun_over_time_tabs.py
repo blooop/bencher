@@ -12,6 +12,7 @@ not what the rerun viewer does with an .rrd.
 
 import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pandas as pd
 import panel as pn
@@ -24,7 +25,7 @@ SNAPSHOTS = 3
 
 def file_contents(path: str) -> pn.pane.Markdown:
     """A declared container that renders the file rather than the rerun viewer."""
-    with open(path, encoding="utf-8") as handle:
+    with Path(path).open(encoding="utf-8") as handle:
         return pn.pane.Markdown(f"contents: {handle.read()}")
 
 
@@ -43,7 +44,7 @@ class RerunSweep(bn.ParametrizedSweep):
             self.recording = f"{filename}.never-written"
             return
         self.recording = filename
-        with open(filename, "w", encoding="utf-8") as handle:
+        with Path(filename).open("w", encoding="utf-8") as handle:
             handle.write(f"sides {self.sides} run {self.offset}")
 
 
@@ -109,7 +110,7 @@ def tab_contents(tabs: pn.Tabs) -> list[str]:
 
 def tab_names(tabs: pn.Tabs) -> list[str]:
     """The label of each tab, in order."""
-    return list(tabs._names)  # pylint: disable=protected-access
+    return list(tabs._names)
 
 
 class TestRerunOverTimeTabs(unittest.TestCase):
@@ -119,36 +120,32 @@ class TestRerunOverTimeTabs(unittest.TestCase):
         res = run_over_time("test_rerun_tabs_no_inputs", bn.PaneLayout.tabs, [])
         tabs = history_tabs(report_view(res))
 
-        self.assertEqual(len(tabs), 1)
-        self.assertEqual(
-            tab_contents(tabs[0]), [f"contents: sides 3 run {i}" for i in range(SNAPSHOTS)]
-        )
+        assert len(tabs) == 1
+        assert tab_contents(tabs[0]) == [f"contents: sides 3 run {i}" for i in range(SNAPSHOTS)]
 
     def test_tabs_are_named_by_time_label_and_open_on_the_latest_run(self):
         res = run_over_time("test_rerun_tabs_labels", bn.PaneLayout.tabs, [])
         tabs = history_tabs(report_view(res))[0]
 
-        self.assertEqual(len(set(tab_names(tabs))), SNAPSHOTS)
-        self.assertTrue(all("2000-01-01" in name for name in tab_names(tabs)))
-        self.assertEqual(tabs.active, SNAPSHOTS - 1)
+        assert len(set(tab_names(tabs))) == SNAPSHOTS
+        assert all("2000-01-01" in name for name in tab_names(tabs))
+        assert tabs.active == SNAPSHOTS - 1
 
     def test_tabs_layout_gives_every_swept_value_its_own_history(self):
         res = run_over_time("test_rerun_tabs_one_input", bn.PaneLayout.tabs, ["sides"])
         tabs = history_tabs(report_view(res))
 
         contents = sorted(tab_contents(t)[0] for t in tabs)
-        self.assertEqual(contents, ["contents: sides 3 run 0", "contents: sides 4 run 0"])
-        self.assertTrue(all(len(t) == SNAPSHOTS for t in tabs))
+        assert contents == ["contents: sides 3 run 0", "contents: sides 4 run 0"]
+        assert all(len(t) == SNAPSHOTS for t in tabs)
 
     def test_tabs_and_grid_tabs_the_history_when_it_is_the_only_dimension(self):
         res = run_over_time("test_rerun_tabs_and_grid_no_inputs", bn.PaneLayout.tabs_and_grid, [])
         tabs = history_tabs(report_view(res))
 
-        self.assertEqual(len(tabs), 1)
-        self.assertEqual(
-            tab_contents(tabs[0]), [f"contents: sides 3 run {i}" for i in range(SNAPSHOTS)]
-        )
-        self.assertEqual(tabs[0].active, SNAPSHOTS - 1)
+        assert len(tabs) == 1
+        assert tab_contents(tabs[0]) == [f"contents: sides 3 run {i}" for i in range(SNAPSHOTS)]
+        assert tabs[0].active == SNAPSHOTS - 1
 
     def test_tabs_and_grid_tabs_the_swept_values_and_rows_each_history(self):
         res = run_over_time(
@@ -156,14 +153,13 @@ class TestRerunOverTimeTabs(unittest.TestCase):
         )
         view = report_view(res)
 
-        self.assertEqual(history_tabs(view), [])
+        assert history_tabs(view) == []
         outer = [t for t in view.select(pn.Tabs) if len(t) == 2]
-        self.assertEqual(len(outer), 1)
-        for tab, sides in zip(outer[0], (3, 4)):
-            self.assertEqual(
-                sorted(recordings(tab)),
-                [f"contents: sides {sides} run {i}" for i in range(SNAPSHOTS)],
-            )
+        assert len(outer) == 1
+        for tab, sides in zip(outer[0], (3, 4), strict=True):
+            assert sorted(recordings(tab)) == [
+                f"contents: sides {sides} run {i}" for i in range(SNAPSHOTS)
+            ]
 
     def test_tabs_skip_runs_without_a_file_and_open_on_the_latest_that_has_one(self):
         res = run_over_time(
@@ -174,10 +170,10 @@ class TestRerunOverTimeTabs(unittest.TestCase):
         )
         tabs = history_tabs(report_view(res))
 
-        self.assertEqual(len(tabs), 1)
+        assert len(tabs) == 1
         recorded = [i for i in range(SNAPSHOTS) if i not in {1, SNAPSHOTS - 1}]
-        self.assertEqual(tab_contents(tabs[0]), [f"contents: sides 3 run {i}" for i in recorded])
-        self.assertEqual(tabs[0].active, len(recorded) - 1)
+        assert tab_contents(tabs[0]) == [f"contents: sides 3 run {i}" for i in recorded]
+        assert tabs[0].active == len(recorded) - 1
 
     def test_skipping_a_middle_run_keeps_each_tab_on_its_own_time_label(self):
         res = run_over_time(
@@ -188,15 +184,10 @@ class TestRerunOverTimeTabs(unittest.TestCase):
         )
         tabs = history_tabs(report_view(res))
 
-        self.assertEqual(len(tabs), 1)
-        self.assertEqual(
-            tab_contents(tabs[0]), ["contents: sides 3 run 0", "contents: sides 3 run 2"]
-        )
-        self.assertEqual(
-            tab_names(tabs[0]),
-            ["2000-01-01 00:00:00", "2000-01-01 00:00:02"],
-        )
-        self.assertEqual(tabs[0].active, 1)
+        assert len(tabs) == 1
+        assert tab_contents(tabs[0]) == ["contents: sides 3 run 0", "contents: sides 3 run 2"]
+        assert tab_names(tabs[0]) == ["2000-01-01 00:00:00", "2000-01-01 00:00:02"]
+        assert tabs[0].active == 1
 
     def test_tabs_report_no_data_when_no_run_has_a_file(self):
         res = run_over_time(
@@ -207,16 +198,16 @@ class TestRerunOverTimeTabs(unittest.TestCase):
         )
         view = report_view(res)
 
-        self.assertEqual(history_tabs(view), [])
-        self.assertEqual(recordings(view), [])
-        self.assertIn("*No rerun data available*", markdown_texts(view))
+        assert history_tabs(view) == []
+        assert recordings(view) == []
+        assert "*No rerun data available*" in markdown_texts(view)
 
     def test_grid_layout_keeps_the_row(self):
         res = run_over_time("test_rerun_tabs_grid", bn.PaneLayout.grid, [])
         view = report_view(res)
 
-        self.assertEqual(history_tabs(view), [])
-        self.assertEqual(len(recordings(view)), SNAPSHOTS)
+        assert history_tabs(view) == []
+        assert len(recordings(view)) == SNAPSHOTS
 
 
 class TestRerunOverTimeExample(unittest.TestCase):
@@ -229,9 +220,9 @@ class TestRerunOverTimeExample(unittest.TestCase):
         latest = [str(pd.to_datetime(t)) for t in res.ds.coords["over_time"].values[-kept:]]
         history = [tabs for tabs in report_view(res).select(pn.Tabs) if tab_names(tabs) == latest]
 
-        self.assertEqual(res.ds.sizes["over_time"], 4)
-        self.assertEqual(len(history), 1)
-        self.assertEqual(history[0].active, kept - 1)
+        assert res.ds.sizes["over_time"] == 4
+        assert len(history) == 1
+        assert history[0].active == kept - 1
 
 
 if __name__ == "__main__":
