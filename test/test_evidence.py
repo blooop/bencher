@@ -125,6 +125,26 @@ def test_a_metric_that_reads_zero_on_both_sides_still_charts(monkeypatch):
     assert "bar [0, 0]" in _chart(bn.evidence_markdown(base, cand))
 
 
+_NUMBER = r"-?\d+(\.\d+)?"
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "bars"),
+    [
+        (1e5, 2e5, "bar [100000, 200000, 300000]"),
+        (2e-6, 1e-6, "bar [0.000002, 0.000004, 0.000006]"),
+    ],
+)
+def test_large_and_small_values_are_written_without_an_exponent(before, after, bars):
+    # Mermaid's xychart grammar has no exponent: "1e+05" is a parse error on GitHub.
+    chart = _chart(bn.evidence_markdown(_collect(before), _collect(after)))
+    assert bars in chart
+    axis = re.search(r"y-axis \"[^\"]*\" (\S+) --> (\S+)", chart)
+    assert all(re.fullmatch(_NUMBER, bound) for bound in axis.groups())
+    for series in re.findall(r"(?:bar|line) \[(.*)\]", chart):
+        assert all(re.fullmatch(_NUMBER, v) for v in series.split(", "))
+
+
 @pytest.fixture(name="saved")
 def saved_pair(tmp_path):
     a = save_result(_collect(0.3, input_vars=("speed", "load")), tmp_path / "a.pkl")

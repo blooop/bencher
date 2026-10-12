@@ -218,6 +218,13 @@ def _num(value: float) -> str:
     return f"{value:.4g}"
 
 
+def _chart_num(value: float, digits: int = 4) -> str:
+    """A number xychart parses: positional, since its grammar has no exponent (1e+05)."""
+    return np.format_float_positional(
+        value, precision=digits, unique=False, fractional=False, trim="-"
+    )
+
+
 def mermaid_chart(
     name: str, units: str | None, plan: BeforeAfterBars | SweepChart, claim: Claim | None
 ) -> str:
@@ -228,15 +235,15 @@ def mermaid_chart(
             title = f"{metric}: before vs after"
             x_axis = 'x-axis ["before", "after"]'
             lo, hi = _y_range([before], [after], claim)
-            series = [f"bar [{_num(before)}, {_num(after)}]"]
+            series = [f"bar [{_chart_num(before)}, {_chart_num(after)}]"]
         case SweepChart(input_name=input_name, labels=labels, before=before, after=after):
             title = f"{metric}: bars = before, line = after"
             quoted = ", ".join(f'"{_mermaid_text(label)}"' for label in labels)
             x_axis = f'x-axis "{_mermaid_text(input_name)}" [{quoted}]'
             lo, hi = _y_range(before, after, claim)
             series = [
-                f"bar [{', '.join(_num(v) for v in before)}]",
-                f"line [{', '.join(_num(v) for v in after)}]",
+                f"bar [{', '.join(_chart_num(v) for v in before)}]",
+                f"line [{', '.join(_chart_num(v) for v in after)}]",
             ]
         case _ as unreachable:
             assert_never(unreachable)
@@ -245,7 +252,7 @@ def mermaid_chart(
         "xychart-beta",
         f'    title "{title}"',
         f"    {x_axis}",
-        f'    y-axis "{metric}" {lo:.6g} --> {hi:.6g}',
+        f'    y-axis "{metric}" {_chart_num(lo, 6)} --> {_chart_num(hi, 6)}',
         *(f"    {s}" for s in series),
         "```",
     ]
