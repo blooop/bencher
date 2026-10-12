@@ -74,7 +74,7 @@ test = [
     "jupyter_bokeh",
     "pytest-cov>=4.1,<=7.1.0",
     "pytest>=7.4,<=9.1.1",
-    "hypothesis>=6.104.2,<=6.168.3",
+    "hypothesis>=6.104.2,<=6.168.5",
     # Pinned to the 0.16 minor because ruff.toml selects ALL rules: a minor release
     # stabilises new rules, which then fire here. Bump the minor deliberately, then fix
     # or justify each new finding in ruff.toml.
@@ -85,7 +85,7 @@ test = [
     # Pinned exactly: ty is pre-1.0 and the gate's meaning depends on per-rule defaults
     # (see test_ty_gate.py's OFF_BY_DEFAULT_IN_TY). On a bump: `pixi update ty`, then
     # re-run test/test_ty_gate.py.
-    "ty>=0.0.66,<=0.0.84",
+    "ty>=0.0.66,<=0.0.85",
 ]
 
 docs = [
