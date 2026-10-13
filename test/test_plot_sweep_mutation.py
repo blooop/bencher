@@ -11,6 +11,8 @@ import random
 import unittest
 from copy import deepcopy
 
+import pytest
+
 import bencher as bn
 from bencher import Bench, BenchRunCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
@@ -34,10 +36,10 @@ class TestSelfVarsMutationSafety(unittest.TestCase):
             run_cfg=self.run_cfg,
         )
 
-        self.assertEqual(len(self.bench.input_vars), len(snapshot))
-        for orig, snap in zip(self.bench.input_vars, snapshot):
-            self.assertEqual(orig.name, snap.name)
-            self.assertEqual(orig.default, snap.default)
+        assert len(self.bench.input_vars) == len(snapshot)
+        for orig, snap in zip(self.bench.input_vars, snapshot, strict=True):
+            assert orig.name == snap.name
+            assert orig.default == snap.default
 
     def test_plot_sweep_does_not_mutate_self_result_vars(self):
         self.bench.result_vars = [ExampleBenchCfg.param.out_sin]
@@ -49,9 +51,9 @@ class TestSelfVarsMutationSafety(unittest.TestCase):
             run_cfg=self.run_cfg,
         )
 
-        self.assertEqual(len(self.bench.result_vars), len(snapshot))
-        for orig, snap in zip(self.bench.result_vars, snapshot):
-            self.assertEqual(orig.name, snap.name)
+        assert len(self.bench.result_vars) == len(snapshot)
+        for orig, snap in zip(self.bench.result_vars, snapshot, strict=True):
+            assert orig.name == snap.name
 
     def test_plot_sweep_does_not_mutate_self_const_vars(self):
         self.bench.const_vars = [(ExampleBenchCfg.param.offset, 0.1)]
@@ -64,10 +66,10 @@ class TestSelfVarsMutationSafety(unittest.TestCase):
             run_cfg=self.run_cfg,
         )
 
-        self.assertEqual(len(self.bench.const_vars), len(snapshot))
-        for orig, snap in zip(self.bench.const_vars, snapshot):
-            self.assertEqual(orig[0].name, snap[0].name)
-            self.assertEqual(orig[1], snap[1])
+        assert len(self.bench.const_vars) == len(snapshot)
+        for orig, snap in zip(self.bench.const_vars, snapshot, strict=True):
+            assert orig[0].name == snap[0].name
+            assert orig[1] == snap[1]
 
 
 class TestCallerVarsMutationSafety(unittest.TestCase):
@@ -89,10 +91,10 @@ class TestCallerVarsMutationSafety(unittest.TestCase):
             run_cfg=self.run_cfg,
         )
 
-        self.assertEqual(len(caller_input_vars), len(snapshot))
-        for orig, snap in zip(caller_input_vars, snapshot):
-            self.assertEqual(orig.name, snap.name)
-            self.assertEqual(orig.default, snap.default)
+        assert len(caller_input_vars) == len(snapshot)
+        for orig, snap in zip(caller_input_vars, snapshot, strict=True):
+            assert orig.name == snap.name
+            assert orig.default == snap.default
 
     def test_plot_sweep_does_not_mutate_caller_result_vars(self):
         caller_result_vars = [ExampleBenchCfg.param.out_sin]
@@ -105,9 +107,9 @@ class TestCallerVarsMutationSafety(unittest.TestCase):
             run_cfg=self.run_cfg,
         )
 
-        self.assertEqual(len(caller_result_vars), len(snapshot))
-        for orig, snap in zip(caller_result_vars, snapshot):
-            self.assertEqual(orig.name, snap.name)
+        assert len(caller_result_vars) == len(snapshot)
+        for orig, snap in zip(caller_result_vars, snapshot, strict=True):
+            assert orig.name == snap.name
 
     def test_plot_sweep_does_not_mutate_caller_const_vars(self):
         caller_const_vars = [(ExampleBenchCfg.param.offset, 0.1)]
@@ -121,10 +123,10 @@ class TestCallerVarsMutationSafety(unittest.TestCase):
             run_cfg=self.run_cfg,
         )
 
-        self.assertEqual(len(caller_const_vars), len(snapshot))
-        for orig, snap in zip(caller_const_vars, snapshot):
-            self.assertEqual(orig[0].name, snap[0].name)
-            self.assertEqual(orig[1], snap[1])
+        assert len(caller_const_vars) == len(snapshot)
+        for orig, snap in zip(caller_const_vars, snapshot, strict=True):
+            assert orig[0].name == snap[0].name
+            assert orig[1] == snap[1]
 
 
 class TestPlotSweepResultConsistency(unittest.TestCase):
@@ -152,11 +154,9 @@ class TestPlotSweepResultConsistency(unittest.TestCase):
         ds1 = result1.ds
         ds2 = result2.ds
 
-        self.assertEqual(set(ds1.data_vars), set(ds2.data_vars))
+        assert set(ds1.data_vars) == set(ds2.data_vars)
         for var in ds1.data_vars:
-            self.assertTrue(
-                ds1[var].equals(ds2[var]), f"Data variable '{var}' differs between runs"
-            )
+            assert ds1[var].equals(ds2[var]), f"Data variable '{var}' differs between runs"
 
     def test_plot_sweep_with_self_vars_matches_explicit(self):
         """Using self.input_vars should produce the same result as passing them explicitly."""
@@ -183,9 +183,9 @@ class TestPlotSweepResultConsistency(unittest.TestCase):
         ds1 = result_explicit.ds
         ds2 = result_default.ds
 
-        self.assertEqual(set(ds1.data_vars), set(ds2.data_vars))
+        assert set(ds1.data_vars) == set(ds2.data_vars)
         for var in ds1.data_vars:
-            self.assertTrue(ds1[var].equals(ds2[var]), f"Data variable '{var}' differs")
+            assert ds1[var].equals(ds2[var]), f"Data variable '{var}' differs"
 
 
 class TestBoundsAPI(unittest.TestCase):
@@ -204,10 +204,10 @@ class TestBoundsAPI(unittest.TestCase):
             result_vars=[ExampleBenchCfg.param.out_sin],
             run_cfg=self.run_cfg,
         )
-        self.assertEqual(res.result_samples(), 6)
+        assert res.result_samples() == 6
         theta_coords = res.ds.coords["theta"].values
-        self.assertAlmostEqual(float(theta_coords.min()), 0.0)
-        self.assertAlmostEqual(float(theta_coords.max()), 1.0)
+        assert float(theta_coords.min()) == pytest.approx(0.0, abs=1e-7)
+        assert float(theta_coords.max()) == pytest.approx(1.0, abs=1e-7)
 
     def test_callable_bounds_default_samples(self):
         """Cfg.param.theta(bounds=(lo, hi)) keeps default sample count."""
@@ -217,7 +217,7 @@ class TestBoundsAPI(unittest.TestCase):
             result_vars=[ExampleBenchCfg.param.out_sin],
             run_cfg=self.run_cfg,
         )
-        self.assertEqual(res.result_samples(), 30)
+        assert res.result_samples() == 30
 
     def test_sweep_string_bounds_with_samples(self):
         """bn.sweep("theta", bounds=(lo, hi), samples=N) works."""
@@ -227,10 +227,10 @@ class TestBoundsAPI(unittest.TestCase):
             result_vars=[ExampleBenchCfg.param.out_sin],
             run_cfg=self.run_cfg,
         )
-        self.assertEqual(res.result_samples(), 4)
+        assert res.result_samples() == 4
         theta_coords = res.ds.coords["theta"].values
-        self.assertAlmostEqual(float(theta_coords.min()), 0.0)
-        self.assertAlmostEqual(float(theta_coords.max()), 1.0)
+        assert float(theta_coords.min()) == pytest.approx(0.0, abs=1e-7)
+        assert float(theta_coords.max()) == pytest.approx(1.0, abs=1e-7)
 
     def test_sweep_string_bounds_default_samples(self):
         """bn.sweep("theta", bounds=(lo, hi)) keeps default sample count."""
@@ -240,7 +240,7 @@ class TestBoundsAPI(unittest.TestCase):
             result_vars=[ExampleBenchCfg.param.out_sin],
             run_cfg=self.run_cfg,
         )
-        self.assertEqual(res.result_samples(), 30)
+        assert res.result_samples() == 30
 
     def test_sweep_obj_bounds(self):
         """bn.sweep(Cfg.param.theta, bounds=(lo, hi), samples=N) with SweepBase object."""
@@ -250,7 +250,7 @@ class TestBoundsAPI(unittest.TestCase):
             result_vars=[ExampleBenchCfg.param.out_sin],
             run_cfg=self.run_cfg,
         )
-        self.assertEqual(res.result_samples(), 5)
+        assert res.result_samples() == 5
 
     def test_p_deprecation_warning(self):
         """bn.p() still works but emits a DeprecationWarning."""
@@ -259,7 +259,7 @@ class TestBoundsAPI(unittest.TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             result = bn.p("theta", [0.0, 1.0])
-            self.assertEqual(len(w), 1)
-            self.assertTrue(issubclass(w[0].category, DeprecationWarning))
-            self.assertIn("bn.sweep()", str(w[0].message))
-        self.assertEqual(result["name"], "theta")
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "bn.sweep()" in str(w[0].message)
+        assert result["name"] == "theta"

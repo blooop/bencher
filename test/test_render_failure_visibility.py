@@ -44,7 +44,7 @@ def _pane_texts(panel) -> list[str]:
 def _already_handled_exception() -> ValueError:
     """An exception whose ``except`` block has been left, so ``sys.exc_info()`` is clear."""
     try:
-        raise ValueError("boom")
+        raise ValueError("boom")  # noqa: TRY301 - the test needs a caught, finished exception
     except ValueError as exc:
         return exc
 
@@ -95,27 +95,25 @@ class TestFailureIsVisible(unittest.TestCase):
         """A warning reaches a test runner that never configured logging."""
         _, caught = self._to_auto()
         msgs = [str(w.message) for w in caught if issubclass(w.category, RenderFailedWarning)]
-        self.assertTrue(msgs, "expected a RenderFailedWarning")
-        self.assertIn("synthetic plot failure", " ".join(msgs))
+        assert msgs, "expected a RenderFailedWarning"
+        assert "synthetic plot failure" in " ".join(msgs)
 
     def test_failure_leaves_a_visible_pane(self):
         """The gap is legible to whoever opens the HTML, not only whoever re-runs it."""
         panes, _ = self._to_auto()
         markers = [p for p in panes if isinstance(p, pn.pane.Markdown)]
-        self.assertTrue(
-            any("failed to render" in m.object for m in markers),
-            "expected a visible failure pane",
+        assert any("failed to render" in m.object for m in markers), (
+            "expected a visible failure pane"
         )
-        self.assertTrue(
-            any("_failing_plot" in m.object for m in markers),
-            "failure pane should name what failed",
+        assert any("_failing_plot" in m.object for m in markers), (
+            "failure pane should name what failed"
         )
 
     def test_working_plot_still_renders(self):
         """One failure must not cost the plots that did work."""
         panes, _ = self._to_auto()
         objs = [getattr(p, "object", "") for p in panes]
-        self.assertIn("WORKING_PLOT", objs)
+        assert "WORKING_PLOT" in objs
 
     def test_failure_does_not_raise(self):
         """Unchanged contract: a bad plot never aborts the report."""
@@ -129,11 +127,11 @@ class TestReportRenderFailureHelper(unittest.TestCase):
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             pane = report_render_failure("Thing 'x'", ValueError("boom"))
-        self.assertIsInstance(pane, pn.pane.Markdown)
-        self.assertIn("Thing 'x'", pane.object)
-        self.assertIn("boom", pane.object)
-        self.assertEqual(1, len(caught))
-        self.assertTrue(issubclass(caught[0].category, RenderFailedWarning))
+        assert isinstance(pane, pn.pane.Markdown)
+        assert "Thing 'x'" in pane.object
+        assert "boom" in pane.object
+        assert len(caught) == 1
+        assert issubclass(caught[0].category, RenderFailedWarning)
 
     def test_helper_still_logs(self):
         """Callers already capturing the logger keep working."""
@@ -143,7 +141,7 @@ class TestReportRenderFailureHelper(unittest.TestCase):
         ):
             warnings.simplefilter("always")
             report_render_failure("Thing 'y'", ValueError("boom"))
-        self.assertTrue(any("Thing 'y'" in m for m in captured.output))
+        assert any("Thing 'y'" in m for m in captured.output)
 
     def test_logged_traceback_comes_from_the_exception(self):
         """The traceback must not depend on the caller still being in ``except``.
@@ -161,14 +159,14 @@ class TestReportRenderFailureHelper(unittest.TestCase):
             warnings.simplefilter("always")
             report_render_failure("Thing 'z'", exc)
         joined = "\n".join(captured.output)
-        self.assertIn("ValueError: boom", joined)
+        assert "ValueError: boom" in joined
         # Only a real traceback renders this header; the sys.exc_info() fallback
         # would emit a placeholder line instead.
-        self.assertIn("Traceback (most recent call last)", joined)
+        assert "Traceback (most recent call last)" in joined
 
     def test_warning_is_publicly_importable(self):
         """Filtering the warning is the point, so the class must be public API."""
-        self.assertIs(bn.RenderFailedWarning, RenderFailedWarning)
+        assert bn.RenderFailedWarning is RenderFailedWarning
 
 
 class TestRegressionOverlayFailureIsVisible(unittest.TestCase):
@@ -200,9 +198,9 @@ class TestRegressionOverlayFailureIsVisible(unittest.TestCase):
 
     def test_failing_overlay_warns_and_leaves_a_visible_pane(self):
         report = self.res.regression_report
-        self.assertIsNotNone(report, "fixture should produce a regression report")
+        assert report is not None, "fixture should produce a regression report"
         for r in report.results:
-            self.assertIsNotNone(r.historical, "fixture needs history for the overlay path")
+            assert r.historical is not None, "fixture needs history for the overlay path"
             r.render_overlay = _raise_overlay_failure
 
         with warnings.catch_warnings(record=True) as caught:
@@ -210,13 +208,12 @@ class TestRegressionOverlayFailureIsVisible(unittest.TestCase):
             panel = self.res.to_auto_plots()
 
         msgs = [str(w.message) for w in caught if issubclass(w.category, RenderFailedWarning)]
-        self.assertTrue(msgs, "expected a RenderFailedWarning for the failing overlay")
-        self.assertIn("synthetic overlay failure", " ".join(msgs))
-        self.assertIsNotNone(panel, "one bad overlay must not abort the report")
+        assert msgs, "expected a RenderFailedWarning for the failing overlay"
+        assert "synthetic overlay failure" in " ".join(msgs)
+        assert panel is not None, "one bad overlay must not abort the report"
         objs = _pane_texts(panel)
-        self.assertTrue(
-            any("Regression overlay" in o and "failed to render" in o for o in objs),
-            "expected a visible failure pane naming the failing overlay",
+        assert any("Regression overlay" in o and "failed to render" in o for o in objs), (
+            "expected a visible failure pane naming the failing overlay"
         )
 
 

@@ -96,7 +96,7 @@ def test_to_latex():
 
 
 @pytest.mark.parametrize(
-    "name,values,expected_size",
+    ("name", "values", "expected_size"),
     [
         ("short", [1, 2, 3], "3"),
         ("long", list(range(10)), "10"),

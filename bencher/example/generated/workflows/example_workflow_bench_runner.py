@@ -18,12 +18,10 @@ class SineWave(bn.ParametrizedSweep):
 def example_workflow_bench_runner(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """BenchRunner — run multiple benchmarks in one session."""
     # This example shows the building block that BenchRunner orchestrates.
-    # To combine multiple independent benchmarks into one session, use:
-    #
-    #   runner = bn.BenchRunner("comparison")
-    #   runner.add(sine_benchmark_fn)    # each fn returns a Bench
-    #   runner.add(cosine_benchmark_fn)
-    #   runner.run(subsampling_divisions=3)              # runs all, collects reports
+    # To combine multiple independent benchmarks into one session, create a
+    # `bn.BenchRunner("comparison")`, call `runner.add(fn)` once for each benchmark
+    # function (each one returns a Bench), then call `runner.run(subsampling_divisions=3)`
+    # to run them all and collect the reports.
     #
     # BenchRunner is useful when you have separate benchmark functions
     # that you want to run together and compare side by side.

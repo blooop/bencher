@@ -65,7 +65,7 @@ def _collect_histograms(panel_obj) -> list[hv.Histogram]:
 class TestHistogramResult(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        DeterministicWorker._counter[0] = 0  # pylint: disable=protected-access
+        DeterministicWorker._counter[0] = 0
         bench = DeterministicWorker().to_bench(_repeats_run_cfg())
         cls.res = bench.plot_sweep(
             "test_hist",
@@ -88,7 +88,7 @@ class TestHistogramResult(unittest.TestCase):
 
     def _single_histogram(self, plot) -> hv.Histogram:
         hists = plot.traverse(lambda x: x, [hv.Histogram])
-        self.assertEqual(len(hists), 1)
+        assert len(hists) == 1
         return hists[0]
 
     def test_to_histogram_ds_dimension_names(self):
@@ -96,8 +96,8 @@ class TestHistogramResult(unittest.TestCase):
         rv = self.res.bench_cfg.result_vars[0]
         plot = self.res.to_histogram_ds(self.raw_ds, rv)
         hist = self._single_histogram(plot)
-        self.assertEqual(hist.kdims[0].name, "value")
-        self.assertEqual(hist.vdims[0].name, "value_count")
+        assert hist.kdims[0].name == "value"
+        assert hist.vdims[0].name == "value_count"
 
     def test_binning_counts_and_edges(self):
         """All N samples are binned and the bin edges span the data range [0, N-1]."""
@@ -105,9 +105,9 @@ class TestHistogramResult(unittest.TestCase):
         plot = self.res.to_histogram_ds(self.raw_ds, rv)
         hist = self._single_histogram(plot)
         frequencies = hist.dimension_values(1)
-        self.assertEqual(frequencies.sum(), N_REPEATS)
-        self.assertEqual(hist.edges[0], 0.0)
-        self.assertEqual(hist.edges[-1], float(N_REPEATS - 1))
+        assert frequencies.sum() == N_REPEATS
+        assert hist.edges[0] == 0.0
+        assert hist.edges[-1] == float(N_REPEATS - 1)
 
     def test_binning_respects_bins_kwarg(self):
         """A bins= kwarg is forwarded to hvplot and controls the bin count."""
@@ -115,43 +115,43 @@ class TestHistogramResult(unittest.TestCase):
         plot = self.res.to_histogram_ds(self.raw_ds, rv, bins=5)
         hist = self._single_histogram(plot)
         frequencies = hist.dimension_values(1)
-        self.assertEqual(len(frequencies), 5)
-        self.assertEqual(frequencies.sum(), N_REPEATS)
+        assert len(frequencies) == 5
+        assert frequencies.sum() == N_REPEATS
 
     def test_axis_labels_and_title(self):
         """Title contains the result var name; x axis shows units, y axis is 'count'."""
         rv = self.res.bench_cfg.result_vars[0]
         plot = self.res.to_histogram_ds(self.raw_ds, rv)
         opts = plot.opts.get().kwargs
-        self.assertEqual(opts["title"], "value vs Count")
-        self.assertEqual(opts["xlabel"], "value [m]")
-        self.assertEqual(opts["ylabel"], "count")
-        self.assertEqual(opts["xrotation"], 30)
+        assert opts["title"] == "value vs Count"
+        assert opts["xlabel"] == "value [m]"
+        assert opts["ylabel"] == "count"
+        assert opts["xrotation"] == 30
 
     def test_to_plot_repeats_only_sweep(self):
         """to_plot natively matches a 0-input repeats sweep (no override needed)."""
         pane = self.res.to(HistogramResult, override=False)
         hists = _collect_histograms(pane)
-        self.assertEqual(len(hists), 1)
-        self.assertEqual(hists[0].kdims[0].name, "value")
-        self.assertEqual(hists[0].dimension_values(1).sum(), N_REPEATS)
+        assert len(hists) == 1
+        assert hists[0].kdims[0].name == "value"
+        assert hists[0].dimension_values(1).sum() == N_REPEATS
 
     def test_to_plot_rejects_float_input_sweep(self):
         """The filter (0 floats, 0 inputs) rejects a float-input sweep without override."""
         pane = self.res_float.to(HistogramResult, override=False)
-        self.assertEqual(_collect_histograms(pane), [])
+        assert _collect_histograms(pane) == []
 
     def test_to_plot_override_float_input_sweep(self):
         """With override the histogram renders, binning one sample per input point."""
         pane = self.res_float.to(HistogramResult)
         hists = _collect_histograms(pane)
-        self.assertEqual(len(hists), 1)
-        self.assertEqual(hists[0].kdims[0].name, "value")
-        self.assertEqual(hists[0].dimension_values(1).sum(), 3)
+        assert len(hists) == 1
+        assert hists[0].kdims[0].name == "value"
+        assert hists[0].dimension_values(1).sum() == 3
 
     def test_nan_values_are_dropped_not_fatal(self):
         """A NaN sample must not crash rendering; it is excluded from the bin counts."""
-        NanWorker._counter[0] = 0  # pylint: disable=protected-access
+        NanWorker._counter[0] = 0
         bench = NanWorker().to_bench(_repeats_run_cfg())
         res = bench.plot_sweep(
             "test_hist_nan",
@@ -166,11 +166,11 @@ class TestHistogramResult(unittest.TestCase):
         plot = res.to_histogram_ds(raw_ds, rv)
         hist = self._single_histogram(plot)
         frequencies = hist.dimension_values(1)
-        self.assertTrue(np.isfinite(frequencies).all())
-        self.assertEqual(frequencies.sum(), N_REPEATS - 1)
+        assert np.isfinite(frequencies).all()
+        assert frequencies.sum() == N_REPEATS - 1
 
         pane = res.to(HistogramResult, override=False)
-        self.assertEqual(len(_collect_histograms(pane)), 1)
+        assert len(_collect_histograms(pane)) == 1
 
 
 if __name__ == "__main__":

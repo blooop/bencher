@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.138.0] - 2026-10-13
+## [1.139.0] - 2026-10-13
 
 ### Added
 - **The rerun backend draws a ±1σ band around a mean.** With `repeats > 1`, a numeric
@@ -33,6 +33,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `rerun.chunk` and `rerun.experimental` for `Chunk` and `RrdReader`, because 0.37 had
   no `rerun.chunk`. Every rerun in the new window has it, so callers import from
   `rerun.chunk` directly.
+## [1.138.0] - 2026-10-12
+
+### Changed
+- **Ruff replaces pylint.** `ruff.toml` selects `ALL` under `ruff>=0.16.10,<0.17`, each
+  rule left off says why, and `pixi run lint` runs ruff and ty. The library is fully
+  annotated; `plot_sweep` and `sweep_sequential` take any sequence for `input_vars` and
+  `result_vars`, and a `Parameter`-keyed mapping for `const_vars`.
+- **Input checks raise `TypeError`, not `AssertionError`**: a non-list
+  `override_defaults`, and `ResultFloat(units=...)` with a non-`str` unit.
+- **`bn.curve` raises `ValueError` when its x and y lengths differ.** It used to drop the
+  extra points silently.
+- The optuna Pareto message, the `zip_results1D*` output and the `file_server` messages
+  go to `logging` instead of stdout. `Shape._deep_copy` is now `Shape.deep_copy`.
+
+### Fixed
+- **A loaded or cached result kept its `ResultReference` plot.** `save_result` and the
+  result cache drop the referenced objects, so the `panes` plot raised `IndexError` and
+  was removed from the report. It now shows a placeholder that says the object was not
+  persisted. An over_time history cell shows the same placeholder instead of the latest
+  run's object, and a run that did not record the reference leaves a gap.
+- **`to_holomap_list` returned an empty column.** It built each HoloMap and dropped it.
+- **The optuna NaT guard never fired.** It checked `isnull`, which `pd.NaT` lacks; it now
+  uses `pd.isna`.
 
 ## [1.137.0] - 2026-10-08
 

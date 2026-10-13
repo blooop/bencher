@@ -143,7 +143,7 @@ def _hide_toolbars(page) -> None:
     for handle in _query_all_frames(page, TOOLBAR_SELECTOR):
         try:
             handle.evaluate("el => { el.style.display = 'none'; }")
-        except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             # A toolbar we cannot hide is cosmetic; keep going rather than lose the thumbnail.
             print(f"  WARNING: Could not hide plot toolbar: {e}")
 
@@ -327,7 +327,7 @@ def _take_thumbnail(
 
     # Only the standalone path needs playwright itself; with a caller-supplied page the
     # capture works without it installed, which keeps the crop logic unit-testable.
-    from playwright.sync_api import sync_playwright  # pylint: disable=import-error
+    from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -419,10 +419,10 @@ def generate_python_files():
     # can emit imports in any order without leaving `pixi run lint` dirty.
     if shutil.which("ruff"):
         subprocess.run(
-            ["ruff", "check", "--fix-only", "--quiet", str(GENERATED_DIR)],
+            ["ruff", "check", "--fix-only", "--quiet", str(GENERATED_DIR)],  # noqa: S607 - ruff from PATH
             check=False,
         )
-        subprocess.run(["ruff", "format", str(GENERATED_DIR)], check=False)
+        subprocess.run(["ruff", "format", str(GENERATED_DIR)], check=False)  # noqa: S607 - ruff from PATH
 
 
 def _import_example_module(py_file: Path):
@@ -498,7 +498,7 @@ def run_example_and_save(
             _take_thumbnail(Path(report_path), thumb_path, page=page)
             thumb_elapsed = time.perf_counter() - t_thumb_start
             print(f"  Saved thumbnail to {thumb_path} ({thumb_elapsed:.1f}s)")
-        except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             thumb_elapsed = time.perf_counter() - t_thumb_start
             print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
 
@@ -874,7 +874,7 @@ def generate_all(only: list[str] | None = None, force_skip_thumbnails: bool = Fa
     page = None
     if not skip_thumbnails:
         try:
-            from playwright.sync_api import sync_playwright  # pylint: disable=import-error
+            from playwright.sync_api import sync_playwright
 
             pw_context = sync_playwright().start()
             browser = pw_context.chromium.launch(headless=True)
@@ -883,7 +883,7 @@ def generate_all(only: list[str] | None = None, force_skip_thumbnails: bool = Fa
                 device_scale_factor=THUMB_SCALE,
             )
             print("Started headless Chromium for thumbnail screenshots")
-        except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             skip_thumbnails = True
             print(f"WARNING: Could not start browser for thumbnails: {e}")
 

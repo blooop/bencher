@@ -19,7 +19,7 @@ class TestExplorerResult(unittest.TestCase):
         )
         # Call ExplorerResult.to_plot via the result object (it inherits from ExplorerResult)
         result = ExplorerResult.to_plot(res)
-        self.assertIsNotNone(result)
+        assert result is not None
 
     def test_to_plot_without_inputs(self):
         bench = BenchableObject().to_bench()
@@ -32,4 +32,4 @@ class TestExplorerResult(unittest.TestCase):
         )
         # Falls back to pandas hvplot explorer for 0D
         result = ExplorerResult.to_plot(res)
-        self.assertIsNotNone(result)
+        assert result is not None

@@ -23,12 +23,11 @@ the same thing for ``ResultImage``/``ResultVideo`` samples.
 from __future__ import annotations
 
 import logging
-import os
 from copy import deepcopy
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import panel as pn
-import xarray as xr
-from param import Parameter
 
 from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
@@ -41,6 +40,10 @@ from bencher.results.composable_container.composable_container_rerun import (
 )
 from bencher.utils import callable_name
 from bencher.variables.results import ResultRerun, result_is_missing
+
+if TYPE_CHECKING:
+    import xarray as xr
+    from param import Parameter
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +61,7 @@ def leaf_recording_path(
     if result_is_missing(result_var, value):
         return None
     path = str(value)
-    if not path or not os.path.isfile(path):
+    if not path or not Path(path).is_file():
         logger.debug("rerun recording %s missing on disk", path)
         return None
     return path
@@ -70,8 +73,8 @@ class RerunSummaryResult(BenchResultBase):
     def to_rerun_summary(
         self,
         result_var: Parameter | None = None,
-        result_types=(ResultRerun,),
-        **kwargs,
+        result_types: type | tuple[type, ...] = (ResultRerun,),
+        **kwargs: Any,
     ) -> pn.panel | None:
         """Merge every recording into one viewer, played back as a time sequence.
 
@@ -97,12 +100,12 @@ class RerunSummaryResult(BenchResultBase):
     def to_rerun_grid(
         self,
         result_var: Parameter | None = None,
-        result_types=(ResultRerun,),
+        result_types: type | tuple[type, ...] = (ResultRerun,),
         pane_collection: pn.pane = None,
         time_sequence_dimension: int = 0,
         compose_method_list: list | None = None,
         reverse: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ) -> pn.panel | None:
         """Merge every recording of the sweep into one embedded rerun viewer.
 
@@ -163,8 +166,8 @@ class RerunSummaryResult(BenchResultBase):
         target_dimension: int = 0,
         width: int | None = None,
         height: int | None = None,
-        **_kwargs,
-    ) -> pn.pane.HTML | None:
+        **_kwargs: Any,
+    ) -> pn.pane.HTML | pn.pane.Markdown | None:
         """Merge *result_var*'s recordings in *dataset* into one viewer pane.
 
         Args:
@@ -180,7 +183,8 @@ class RerunSummaryResult(BenchResultBase):
                 callbacks are invoked with ``override=``).
 
         Returns:
-            pn.pane.HTML | None: the viewer pane, or None if nothing was recorded.
+            pn.pane.HTML | pn.pane.Markdown | None: the viewer pane, or None if nothing
+                was recorded.
         """
         merged = self._compose_ds(
             dataset,
@@ -235,7 +239,7 @@ class RerunSummaryResult(BenchResultBase):
         num_dims = len(dataset.sizes)
         dims = list(dataset.sizes)
         if reverse:
-            dims = list(reversed(dims))
+            dims.reverse()
 
         if compose_method_list is None:
             compose_method_list = compose_method_list_for_dims(

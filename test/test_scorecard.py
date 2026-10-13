@@ -1,12 +1,10 @@
 """Tests for bencher.scorecard."""
 
-# pylint: disable=redefined-outer-name  # pytest fixtures are injected by name
-
 from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -22,6 +20,9 @@ from bencher.scorecard import (
     metric_columns,
     unify_metric_names,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_explicit_generation_time_makes_retries_reproducible(tmp_path):
@@ -105,7 +106,7 @@ def _write_summary(reports_dir, tag, bench_name, metrics, regressions, time_even
     (tag_dir / f"{bench_name}.summary.json").write_text(json.dumps(data))
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_reports(tmp_path: Path) -> Path:
     """Create mock summary.json files across categories and verdicts."""
     t0 = "2026-06-10 09:00 0000000"
@@ -617,7 +618,7 @@ class TestBuildCell:
         assert tooltip.endswith("1 run")
 
     def test_tooltip_names_the_column(self, mock_reports: Path):
-        # μ/σ live only on the tooltip now, so it has to say which metric it is:
+        # The mean and std live only on the tooltip now, so it has to say which metric it is:
         # in a wide table the column header may be scrolled out of view.
         rec = next(
             r for r in discover_summaries(mock_reports, CONFIG) if r["tag"] == "test_bench_latency"
@@ -755,7 +756,7 @@ class TestCellFitsItsColumn:
 
     def test_units_are_shown_once_in_the_header(self, mock_reports: Path):
         # Not on the value, the mean and the std of every cell: that repetition is
-        # the width that μ and σ need to stay on the cell at all.
+        # the width that the mean and std need to stay on the cell at all.
         generate_scorecard(mock_reports, CONFIG)
         html = (mock_reports / "index.html").read_text()
         assert '<span class="unit">(s)</span>' in html
@@ -764,7 +765,7 @@ class TestCellFitsItsColumn:
         assert '<span class="cmean">μ 4.5 s</span>' not in html
 
     def test_distribution_reads_without_hovering(self, mock_reports: Path):
-        # μ/σ are what a reader scans the page for, so they are on the cell — one
+        # The mean and std are what a reader scans the page for, so they are on the cell — one
         # line under the value, in the unit the header already names.
         generate_scorecard(mock_reports, CONFIG)
         html = (mock_reports / "index.html").read_text()

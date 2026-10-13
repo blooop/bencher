@@ -40,27 +40,27 @@ class TestSurfaceResult(unittest.TestCase):
 
     def test_to_surface(self):
         result = self.res_2d.to_surface()
-        self.assertIsNotNone(result)
+        assert result is not None
 
     def test_to_plot(self):
         """Test to_plot delegates to to_surface."""
         from bencher.results.holoview_results.surface_result import SurfaceResult
 
         result = SurfaceResult.to_plot(self.res_2d)
-        self.assertIsNotNone(result)
+        assert result is not None
 
     def test_to_surface_ds(self):
         ds = self.res_2d_r2.to_dataset()
         rv = self.res_2d_r2.bench_cfg.result_vars[0]
         result = self.res_2d_r2.to_surface_ds(ds, rv)
-        self.assertIsInstance(result, pn.pane.Plotly)
+        assert isinstance(result, pn.pane.Plotly)
 
     def test_to_surface_ds_with_std(self):
         ds = self.res_2d_r2.to_dataset()
         rv = self.res_2d_r2.bench_cfg.result_vars[0]
         # With repeats > 1, should show std-dev bounds
         result = self.res_2d_r2.to_surface_ds(ds, rv)
-        self.assertIsInstance(result, pn.pane.Plotly)
+        assert isinstance(result, pn.pane.Plotly)
 
     def test_to_surface_1d_filter_fail(self):
         """1D data doesn't match the 2-float requirement for surface plots."""
@@ -68,4 +68,4 @@ class TestSurfaceResult(unittest.TestCase):
 
         result = SurfaceResult.to_surface(self.res_1d, override=False)
         # Filter rejects — returns None or a Markdown debug panel, not a Plotly surface
-        self.assertNotIsInstance(result, pn.pane.Plotly)
+        assert not isinstance(result, pn.pane.Plotly)

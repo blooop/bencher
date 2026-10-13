@@ -8,7 +8,8 @@ The public surface a plugin author depends on:
     - PlotFilter / VarRange (re-exported): for declaring match rules.
 
 Bencher's internal call sites do not yet depend on this package. Migration of the
-built-in chart types onto the plugin mechanism happens in subsequent PRs."""
+built-in chart types onto the plugin mechanism happens in subsequent PRs.
+"""
 
 from __future__ import annotations
 

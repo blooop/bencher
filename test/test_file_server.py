@@ -9,6 +9,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import pytest
+
 from bencher.file_server import create_server, run_file_server
 
 
@@ -37,8 +39,8 @@ class TestFileServer(unittest.TestCase):
 
             try:
                 with urllib.request.urlopen(f"http://127.0.0.1:{port}/test.txt") as resp:
-                    self.assertEqual(resp.status, 200)
-                    self.assertEqual(resp.read(), b"hello world")
+                    assert resp.status == 200
+                    assert resp.read() == b"hello world"
             finally:
                 server.shutdown()
                 server.server_close()
@@ -51,11 +53,9 @@ class TestFileServer(unittest.TestCase):
             wait_for_port(port)
 
             try:
-                with self.assertRaises(urllib.error.HTTPError) as ctx:
-                    urllib.request.urlopen(  # pylint: disable=consider-using-with
-                        f"http://127.0.0.1:{port}/nonexistent.txt"
-                    )
-                self.assertEqual(ctx.exception.code, 404)
+                with pytest.raises(urllib.error.HTTPError) as ctx:
+                    urllib.request.urlopen(f"http://127.0.0.1:{port}/nonexistent.txt")
+                assert ctx.value.code == 404
             finally:
                 server.shutdown()
                 server.server_close()
@@ -71,7 +71,7 @@ class TestFileServer(unittest.TestCase):
 
             try:
                 with urllib.request.urlopen(f"http://127.0.0.1:{port}/health.txt") as resp:
-                    self.assertEqual(resp.read(), b"ok")
+                    assert resp.read() == b"ok"
             finally:
                 server.shutdown()
                 server.server_close()

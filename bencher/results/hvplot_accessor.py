@@ -28,7 +28,6 @@ def hvplot_of(obj: Any) -> Any:
     Typed loosely because the accessor differs by argument: pandas objects get
     ``hvPlotTabular``, xarray objects ``hvPlot``, and neither is re-exported.
     """
-    # pylint: disable=import-outside-toplevel,unused-import
     import hvplot.pandas
     import hvplot.xarray  # noqa: F401
 

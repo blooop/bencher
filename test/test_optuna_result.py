@@ -5,6 +5,7 @@ import unittest
 import numpy as np
 import optuna
 import panel as pn
+import pytest
 
 import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
@@ -44,54 +45,54 @@ class TestOptunaResult(unittest.TestCase):
 
     def test_bench_results_to_optuna_trials_with_meta(self):
         trials = self.res_1d.bench_results_to_optuna_trials(include_meta=True)
-        self.assertIsInstance(trials, list)
-        self.assertGreater(len(trials), 0)
-        self.assertIsInstance(trials[0], optuna.trial.FrozenTrial)
+        assert isinstance(trials, list)
+        assert len(trials) > 0
+        assert isinstance(trials[0], optuna.trial.FrozenTrial)
         # include_meta=True should include repeat as a trial parameter
-        self.assertIn("repeat", trials[0].params)
+        assert "repeat" in trials[0].params
 
     def test_bench_results_to_optuna_trials_without_meta(self):
         trials = self.res_1d.bench_results_to_optuna_trials(include_meta=False)
-        self.assertIsInstance(trials, list)
-        self.assertGreater(len(trials), 0)
+        assert isinstance(trials, list)
+        assert len(trials) > 0
         # include_meta=False should NOT include repeat
-        self.assertNotIn("repeat", trials[0].params)
+        assert "repeat" not in trials[0].params
 
     def test_include_meta_true_no_aggregation(self):
         """include_meta=True should produce one trial per raw data point (no aggregation)."""
         trials_meta = self.res_2d_r2.bench_results_to_optuna_trials(include_meta=True)
         trials_no_meta = self.res_2d_r2.bench_results_to_optuna_trials(include_meta=False)
         # With repeats=2, meta trials should have ~2x as many entries
-        self.assertGreater(len(trials_meta), len(trials_no_meta))
+        assert len(trials_meta) > len(trials_no_meta)
         # All meta trials should have repeat as a parameter
         for t in trials_meta:
-            self.assertIn("repeat", t.params)
+            assert "repeat" in t.params
 
     def test_bench_result_to_study(self):
         study = self.res_1d.bench_result_to_study(include_meta=True)
-        self.assertIsInstance(study, optuna.Study)
-        self.assertGreater(len(study.trials), 0)
+        assert isinstance(study, optuna.Study)
+        assert len(study.trials) > 0
 
     def test_get_best_trial_params(self):
         params = self.res_1d.get_best_trial_params()
-        self.assertIsInstance(params, dict)
-        self.assertIn("float1", params)
+        assert isinstance(params, dict)
+        assert "float1" in params
 
     def test_get_best_trial_params_canonical(self):
         result = self.res_1d.get_best_trial_params(canonical=True)
-        self.assertIsNotNone(result)
+        assert result is not None
 
     def test_collect_optuna_plots_single_result(self):
         plots = self.res_2d.collect_optuna_plots()
-        self.assertIsInstance(plots, (pn.Row, pn.Column, pn.Tabs))
+        assert isinstance(plots, (pn.Row, pn.Column, pn.Tabs))
 
     def test_to_optuna_plots(self):
         plots = self.res_2d.to_optuna_plots()
-        self.assertIsInstance(plots, (pn.Row, pn.Column, pn.Tabs))
+        assert isinstance(plots, (pn.Row, pn.Column, pn.Tabs))
 
     def test_collect_optuna_plots_with_repeats(self):
         plots = self.res_2d_r2.collect_optuna_plots()
-        self.assertIsInstance(plots, pn.Tabs)
+        assert isinstance(plots, pn.Tabs)
 
 
 class _AggCfg(bn.ParametrizedSweep):
@@ -154,15 +155,15 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
         )
 
         study = res.to_optuna_from_results(cfg, n_trials=10)
-        self.assertIsInstance(study, optuna.Study)
-        self.assertIn("param1", study.best_params)
-        self.assertNotIn("algorithm", study.best_params)
+        assert isinstance(study, optuna.Study)
+        assert "param1" in study.best_params
+        assert "algorithm" not in study.best_params
 
         # Verify the objective value matches mean aggregation over algorithms
         # _AggCfg.score = (param1 - 0.3)^2, same for both algorithms, so mean == value
         best_p1 = study.best_params["param1"]
         expected = (best_p1 - 0.3) ** 2
-        self.assertAlmostEqual(study.best_value, expected, places=5)
+        assert study.best_value == pytest.approx(expected, abs=1e-5)
 
     def test_optimize_false_trials_exclude_non_optimized(self):
         """bench_results_to_optuna_trials should only include optimized vars in trial params
@@ -178,21 +179,21 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
         )
 
         trials = res.bench_results_to_optuna_trials(include_meta=False)
-        self.assertGreater(len(trials), 0)
+        assert len(trials) > 0
         for trial in trials:
-            self.assertNotIn("category", trial.params)
-            self.assertIn("value", trial.params)
+            assert "category" not in trial.params
+            assert "value" in trial.params
 
         # Number of trials should equal unique optimized-param combinations (samples=3)
         unique_values = {t.params["value"] for t in trials}
-        self.assertEqual(len(trials), len(unique_values))
+        assert len(trials) == len(unique_values)
 
         # Each trial's value should be the mean over categories.
         # _TrialCfg.result = value * 2 (same for both categories), so mean == value * 2
         for trial in trials:
             val = trial.params["value"]
             expected_mean = val * 2
-            self.assertAlmostEqual(trial.values[0], expected_mean, places=5)
+            assert trial.values[0] == pytest.approx(expected_mean, abs=1e-5)
 
     def test_multi_output_aggregation(self):
         """Multi-output aggregation should average each result var independently."""
@@ -208,14 +209,14 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
 
         study = res.to_optuna_from_results(cfg, n_trials=10)
         # Multi-objective study: use best_trials instead of best_params
-        self.assertGreater(len(study.best_trials), 0)
+        assert len(study.best_trials) > 0
         for trial in study.best_trials:
-            self.assertIn("param1", trial.params)
-            self.assertNotIn("algorithm", trial.params)
+            assert "param1" in trial.params
+            assert "algorithm" not in trial.params
 
         # Verify both objectives are present in trial values
         for trial in study.trials:
-            self.assertEqual(len(trial.values), 2)
+            assert len(trial.values) == 2
             # aux_score should be score + 0.1
             np.testing.assert_almost_equal(trial.values[1], trial.values[0] + 0.1, decimal=5)
 
@@ -232,12 +233,12 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
         )
 
         trials = res.bench_results_to_optuna_trials(include_meta=False)
-        self.assertGreater(len(trials), 0)
+        assert len(trials) > 0
         for trial in trials:
-            self.assertNotIn("algorithm", trial.params)
-            self.assertIn("param1", trial.params)
-            self.assertEqual(len(trial.values), 2)
-            # aux_score == score + 0.1
+            assert "algorithm" not in trial.params
+            assert "param1" in trial.params
+            assert len(trial.values) == 2
+            # aux_score is score plus 0.1
             np.testing.assert_almost_equal(trial.values[1], trial.values[0] + 0.1, decimal=5)
 
     def test_all_optimize_false_raises(self):
@@ -252,7 +253,7 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
             plot_callbacks=False,
         )
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError, match="At least one input variable must have optimize=True"):
             res.to_optuna_from_results(cfg, n_trials=5)
 
     def test_all_optimize_false_raises_in_trials(self):
@@ -267,7 +268,7 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
             plot_callbacks=False,
         )
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError, match="At least one input variable must have optimize=True"):
             res.bench_results_to_optuna_trials(include_meta=False)
 
     def test_all_optimize_false_include_meta_true_succeeds(self):
@@ -284,10 +285,10 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
         )
 
         trials = res.bench_results_to_optuna_trials(include_meta=True)
-        self.assertGreater(len(trials), 0)
+        assert len(trials) > 0
         # x and repeat should both appear as trial params
-        self.assertIn("x", trials[0].params)
-        self.assertIn("repeat", trials[0].params)
+        assert "x" in trials[0].params
+        assert "repeat" in trials[0].params
 
 
 class TestOptunaReportRouting(unittest.TestCase):
@@ -315,8 +316,8 @@ class TestOptunaReportRouting(unittest.TestCase):
             run_cfg=bn.BenchRunCfg(repeats=1),
         )
 
-        self.assertEqual(len(bench.results), 2)
-        self.assertEqual(len(bench.report.pane), 2)
+        assert len(bench.results) == 2
+        assert len(bench.report.pane) == 2
 
         items_before = [len(bench.report.pane[i].objects) for i in range(2)]
 
@@ -326,10 +327,8 @@ class TestOptunaReportRouting(unittest.TestCase):
 
         # Each tab should have grown by exactly one item
         for i in range(2):
-            self.assertEqual(
-                len(bench.report.pane[i].objects),
-                items_before[i] + 1,
-                f"Tab {i} should have exactly one new optuna pane",
+            assert len(bench.report.pane[i].objects) == items_before[i] + 1, (
+                f"Tab {i} should have exactly one new optuna pane"
             )
 
     def test_optimize_routes_plots_to_correct_tabs(self):
@@ -356,8 +355,6 @@ class TestOptunaReportRouting(unittest.TestCase):
 
         # Both tabs should have gained optuna content
         for i in range(2):
-            self.assertGreater(
-                len(bench.report.pane[i].objects),
-                items_before[i],
-                f"Tab {i} should have optuna content after optimize(plot=True)",
+            assert len(bench.report.pane[i].objects) > items_before[i], (
+                f"Tab {i} should have optuna content after optimize(plot=True)"
             )

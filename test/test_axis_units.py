@@ -83,14 +83,14 @@ class _LabelBench(bn.ParametrizedSweep):
 
 class TestLabelWithUnits(unittest.TestCase):
     def test_name_and_units(self):
-        self.assertEqual(label_with_units(_LabelBench.param.with_units), "with_units [ms]")
+        assert label_with_units(_LabelBench.param.with_units) == "with_units [ms]"
 
     def test_no_units(self):
-        self.assertEqual(label_with_units(_LabelBench.param.no_units), "no_units")
+        assert label_with_units(_LabelBench.param.no_units) == "no_units"
 
     def test_unitless_convention(self):
         """'ul' is the sweep-variable convention for unitless and must not be shown."""
-        self.assertEqual(label_with_units(_LabelBench.param.unitless), "unitless")
+        assert label_with_units(_LabelBench.param.unitless) == "unitless"
 
     def test_no_units_attribute(self):
         """Objects without a ``units`` attribute fall back to just the name."""
@@ -98,7 +98,7 @@ class TestLabelWithUnits(unittest.TestCase):
         class _NoUnits:
             name = "bare"
 
-        self.assertEqual(label_with_units(_NoUnits()), "bare")
+        assert label_with_units(_NoUnits()) == "bare"
 
     def test_units_none(self):
         """``units=None`` is treated the same as no units."""
@@ -107,7 +107,7 @@ class TestLabelWithUnits(unittest.TestCase):
             name = "nothing"
             units = None
 
-        self.assertEqual(label_with_units(_NoneUnits()), "nothing")
+        assert label_with_units(_NoneUnits()) == "nothing"
 
 
 class TestCurveAxisUnits(unittest.TestCase):
@@ -117,10 +117,10 @@ class TestCurveAxisUnits(unittest.TestCase):
 
     def test_curve_axis_labels_show_units(self):
         curve = _find_element(self.res.to_curve(), hv.Curve)
-        self.assertIsNotNone(curve)
+        assert curve is not None
         opts = curve.opts.get().kwargs
-        self.assertEqual(opts["xlabel"], "distance [m]")
-        self.assertEqual(opts["ylabel"], "throughput [ops/s]")
+        assert opts["xlabel"] == "distance [m]"
+        assert opts["ylabel"] == "throughput [ops/s]"
 
 
 class TestLineAxisUnits(unittest.TestCase):
@@ -129,10 +129,10 @@ class TestLineAxisUnits(unittest.TestCase):
         cls.res = _run_sweep(FloatBench, "units_line", ["distance"], ["throughput"], repeats=1)
 
     def _assert_line_axis_labels(self, curve):
-        self.assertIsNotNone(curve)
+        assert curve is not None
         opts = curve.opts.get().kwargs
-        self.assertEqual(opts["xlabel"], "distance [m]")
-        self.assertEqual(opts["ylabel"], "throughput [ops/s]")
+        assert opts["xlabel"] == "distance [m]"
+        assert opts["ylabel"] == "throughput [ops/s]"
 
     def test_line_axis_labels_show_units(self):
         # float-x path: LineResult.to_line_ds
@@ -150,11 +150,11 @@ class TestScatterAxisUnits(unittest.TestCase):
 
     def test_scatter_axis_labels_show_units(self):
         scatter = _find_element(self.res.to_scatter(), hv.Scatter)
-        self.assertIsNotNone(scatter)
+        assert scatter is not None
         opts = scatter.opts.get().kwargs
-        self.assertEqual(opts["ylabel"], "score [m]")
+        assert opts["ylabel"] == "score [m]"
         # StringSweep defaults to unitless ("ul"), so the x label stays the bare name
-        self.assertEqual(opts["xlabel"], "method")
+        assert opts["xlabel"] == "method"
 
 
 if __name__ == "__main__":

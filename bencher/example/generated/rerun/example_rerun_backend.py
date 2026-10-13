@@ -21,7 +21,7 @@ class RerunBackendSweep(bn.ParametrizedSweep):
 
     def benchmark(self):
         inside = {
-            "cube": lambda x, y, z: True,
+            "cube": lambda _x, _y, _z: True,
             "sphere": lambda x, y, z: x * x + y * y + z * z <= 1.0,
             # Apex at z=+1, unit-radius base at z=-1.
             "cone": lambda x, y, z: x * x + y * y <= (1.0 - z) ** 2 / 4,

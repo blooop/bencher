@@ -12,10 +12,11 @@ import json
 import os
 import subprocess
 import time
-from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from http import HTTPStatus
 from http.client import HTTPException
+from typing import TYPE_CHECKING
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
@@ -41,6 +42,9 @@ from bencher.object_store import (
     validate_listing,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
 # gcloud ships its own interpreter, and an inherited PYTHONPATH puts a foreign
 # standard library ahead of its own: gcloud then prints no access token at all,
 # which reads as an authentication problem rather than the leaked environment it
@@ -48,6 +52,11 @@ from bencher.object_store import (
 # every entry point, and neither is ever right for a subprocess that is not this
 # Python.
 _FOREIGN_INTERPRETER_VARS = ("PYTHONPATH", "PYTHONHOME")
+
+# Version tokens encode [bucket, name, generation, metageneration]; listing tokens
+# encode [bucket, prefix, page token].
+_VERSION_TOKEN_PARTS = 4
+_LISTING_TOKEN_PARTS = 3
 
 
 def gcloud_env(env: Mapping[str, str]) -> dict[str, str]:
@@ -67,10 +76,13 @@ class TransportFailed:
     submitted: bool
 
 
-def request(method, url, data, headers, timeout) -> Response | TransportFailed:
+def request(
+    method: str, url: str, data: bytes | None, headers: dict[str, str], timeout: float
+) -> Response | TransportFailed:
     try:
-        with urlopen(
-            Request(url, data=data, headers=headers, method=method), timeout=timeout
+        with urlopen(  # noqa: S310 - _call only builds https://storage.googleapis.com URLs
+            Request(url, data=data, headers=headers, method=method),  # noqa: S310 - as above
+            timeout=timeout,
         ) as out:
             return Response(out.status, out.read())
     except HTTPError as exc:
@@ -152,7 +164,16 @@ class GcloudStore:
         self._token_deadline = time.monotonic() + 3000
         return self._token
 
-    def _call(self, method, path, *, query=None, data=None, content_type=None, upload=False):
+    def _call(
+        self,
+        method: str,
+        path: str,
+        *,
+        query: dict[str, str] | None = None,
+        data: bytes | None = None,
+        content_type: str | None = None,
+        upload: bool = False,
+    ) -> Response | TransportFailed:
         token = self._auth()
         if isinstance(token, TransportFailed):
             return token
@@ -190,7 +211,7 @@ class GcloudStore:
         decoded = decode_token(condition.version)
         if (
             not isinstance(decoded, list)
-            or len(decoded) != 4
+            or len(decoded) != _VERSION_TOKEN_PARTS
             or decoded[:2] != [self.bucket, self._name(key)]
         ):
             raise ValueError("version token belongs to another object")
@@ -215,9 +236,9 @@ class GcloudStore:
     def read(self, key: str) -> Present | Absent | ReadFailed:
         path = self._path(key)
         result = self._call("GET", path)
-        if isinstance(result, Response) and result.status == 404:
+        if isinstance(result, Response) and result.status == HTTPStatus.NOT_FOUND:
             return Absent()
-        if not isinstance(result, Response) or result.status != 200:
+        if not isinstance(result, Response) or result.status != HTTPStatus.OK:
             return ReadFailed(self._failure(result))
         try:
             metadata = json.loads(result.data)
@@ -238,7 +259,7 @@ class GcloudStore:
                 "ifMetagenerationMatch": metageneration,
             },
         )
-        if not isinstance(media, Response) or media.status != 200:
+        if not isinstance(media, Response) or media.status != HTTPStatus.OK:
             return ReadFailed(f"generation-pinned download: {self._failure(media)}")
         if len(media.data) != size:
             return ReadFailed("generation-pinned download size mismatch")
@@ -277,10 +298,13 @@ class GcloudStore:
         )
         if isinstance(result, TransportFailed):
             return WriteFailed(result.reason, outcome_unknown=result.submitted)
-        if result.status == 412:
+        if result.status == HTTPStatus.PRECONDITION_FAILED:
             return Conflict()
-        if result.status not in {200, 201}:
-            return WriteFailed(self._failure(result), outcome_unknown=result.status >= 500)
+        if result.status not in {HTTPStatus.OK, HTTPStatus.CREATED}:
+            return WriteFailed(
+                self._failure(result),
+                outcome_unknown=result.status >= HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
         try:
             return Written(self._version(key, json.loads(result.data)))
         except (ValueError, KeyError, TypeError) as exc:
@@ -296,13 +320,13 @@ class GcloudStore:
             decoded = decode_token(token)
             if (
                 not isinstance(decoded, list)
-                or len(decoded) != 3
+                or len(decoded) != _LISTING_TOKEN_PARTS
                 or decoded[:2] != [self.bucket, remote_prefix]
             ):
                 raise ValueError("listing token belongs to another query")
             query["pageToken"] = decoded[2]
         result = self._call("GET", f"b/{quote(self.bucket, safe='')}/o", query=query)
-        if not isinstance(result, Response) or result.status != 200:
+        if not isinstance(result, Response) or result.status != HTTPStatus.OK:
             return ListFailed(self._failure(result))
         try:
             document = json.loads(result.data)
@@ -319,7 +343,7 @@ class GcloudStore:
         except (ValueError, KeyError, TypeError) as exc:
             return ListFailed(f"invalid GCS listing: {type(exc).__name__}")
 
-    def renew(  # pylint: disable=too-many-return-statements
+    def renew(
         self, key: str, expected_version: str
     ) -> Renewed | Conflict | Absent | Unsupported | WriteFailed:
         self._path(key)

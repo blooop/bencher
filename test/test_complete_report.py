@@ -140,7 +140,7 @@ def test_missing_asset_does_not_finalize(tmp_path, monkeypatch):
     result = collect()
     report.append_result(result)
     report.append_tab(pn.pane.HTML('<img src="missing.png">'), "missing")
-    with pytest.raises(FileNotFoundError, match="missing.png"):
+    with pytest.raises(FileNotFoundError, match=r"missing\.png"):
         report.save_report(tmp_path / "reports")
     assert not (tmp_path / "reports" / result.bench_cfg.execution.uuid).exists()
 
@@ -149,7 +149,7 @@ def test_inventory_rejects_modified_bytes_and_unsafe_paths(tmp_path, monkeypatch
     monkeypatch.chdir(tmp_path)
     entry = bn.render_report(collect(), tmp_path / "reports", complete=True)
     entry.write_text("changed")
-    with pytest.raises(ValueError, match="digest|inventory"):
+    with pytest.raises(ValueError, match=r"digest|inventory"):
         bn.verify_report(entry.parent)
 
 

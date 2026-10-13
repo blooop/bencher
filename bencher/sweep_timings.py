@@ -5,6 +5,10 @@ from __future__ import annotations
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, fields
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
 
 
 @dataclass
@@ -41,7 +45,7 @@ class SweepTimings:
 
 
 @contextmanager
-def phase_timer():
+def phase_timer() -> Iterator[Callable[[], float]]:
     """Context manager that yields a callable returning elapsed milliseconds.
 
     Usage::
@@ -53,7 +57,7 @@ def phase_timer():
     t0 = time.perf_counter()
     result = [0.0]
 
-    def _elapsed():
+    def _elapsed() -> float:
         return result[0]
 
     yield _elapsed

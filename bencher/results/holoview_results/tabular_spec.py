@@ -13,13 +13,15 @@ and collect/render split.
 
 from __future__ import annotations
 
-from collections.abc import Hashable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import holoviews as hv
 import pandas as pd
 import xarray as xr
+
+if TYPE_CHECKING:
+    from collections.abc import Hashable, Mapping, Sequence
 
 
 def promote_named_index(df: pd.DataFrame) -> pd.DataFrame:
@@ -81,6 +83,10 @@ def check_column(df: pd.DataFrame, name: Hashable, role: str, chart: str) -> Has
     return name
 
 
+# Inference needs one numeric column for x and one for y.
+_XY_COLUMN_COUNT = 2
+
+
 def resolve_axes(
     df: pd.DataFrame, x: Hashable | None, y: Hashable | None, chart: str
 ) -> tuple[Hashable, Hashable]:
@@ -97,7 +103,7 @@ def resolve_axes(
     if x is not None and y is not None:
         return check_column(df, x, "x", chart), check_column(df, y, "y", chart)
     numeric = list(df.select_dtypes("number").columns)
-    if len(numeric) < 2:
+    if len(numeric) < _XY_COLUMN_COUNT:
         raise ValueError(
             f"{chart} needs two numeric columns to infer x and y, found "
             f"{numeric}; pass x= and y= explicitly"
@@ -241,15 +247,21 @@ class TabularSpec:
         """Validate that *name* is a column of *df*, naming this chart on failure."""
         return check_column(df, name, role, self.chart_name)
 
-    def axes(self, df: pd.DataFrame, x: Hashable | None, y: Hashable | None):
+    def axes(
+        self, df: pd.DataFrame, x: Hashable | None, y: Hashable | None
+    ) -> tuple[Hashable, Hashable]:
         """The x and y columns for this chart (see :func:`resolve_axes`)."""
         return resolve_axes(df, x, y, self.chart_name)
 
-    def columns(self, df: pd.DataFrame, columns: Hashable | Sequence[Hashable] | None, role: str):
+    def columns(
+        self, df: pd.DataFrame, columns: Hashable | Sequence[Hashable] | None, role: str
+    ) -> list[Hashable]:
         """The one-or-more columns for this chart (see :func:`resolve_columns`)."""
         return resolve_columns(df, columns, role, self.chart_name)
 
-    def frame(self, df: pd.DataFrame, columns: Sequence[Hashable]):
+    def frame(
+        self, df: pd.DataFrame, columns: Sequence[Hashable]
+    ) -> tuple[pd.DataFrame, dict[Hashable, str]]:
         """The plotted columns with string dimension names (see :func:`plot_frame`)."""
         return plot_frame(df, columns, self.chart_name)
 

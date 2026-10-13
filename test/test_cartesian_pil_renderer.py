@@ -7,7 +7,6 @@ do not silently change the visual output.
 # TimelineShape._skip_labels is set directly: it is the renderer's own overlay-mode
 # switch, and turning it off is what makes the golden hash independent of the host's
 # fonts. There is no public way to ask for a label-less strip.
-# pylint: disable=protected-access
 
 from __future__ import annotations
 
@@ -37,7 +36,7 @@ def _render_hash(shape: Shape, w: int = 200, h: int = 200) -> str:
     img = Image.new("RGB", (w, h), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     shape.draw(draw, 10, 10)
-    return hashlib.md5(img.tobytes()).hexdigest()
+    return hashlib.md5(img.tobytes(), usedforsecurity=False).hexdigest()
 
 
 def _simple_cfg() -> CartesianProductCfg:

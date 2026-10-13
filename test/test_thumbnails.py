@@ -72,9 +72,8 @@ class FakePage:
         self.waits = []
 
     def evaluate(self, script):
-        assert "scrollWidth" in script and "scrollHeight" in script, (
-            "page size should be fetched in a single round-trip"
-        )
+        assert "scrollWidth" in script, "page size should be fetched in a single round-trip"
+        assert "scrollHeight" in script, "page size should be fetched in a single round-trip"
         return [self._page_w, self._page_h]
 
     def wait_for_timeout(self, ms):
@@ -334,7 +333,8 @@ class TestResizeAndSave:
         out = tmp_path / "thumb.png"
         _resize_and_save_png(_png_bytes(1232, 1232), out)
         w, h = Image.open(out).size
-        assert w <= THUMB_MAX_W and h <= THUMB_MAX_H
+        assert w <= THUMB_MAX_W
+        assert h <= THUMB_MAX_H
         # Square input stays square — no distortion to fill the box.
         assert w == h == THUMB_MAX_H
 

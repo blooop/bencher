@@ -30,7 +30,7 @@ def execution_for_results(results: Sequence[BenchResult]) -> Execution:
     if len(executions) != 1 or None in executions:
         raise ValueError("a complete report requires results from one recorded execution")
     execution = next(iter(executions))
-    assert execution is not None
+    assert execution is not None  # noqa: S101 - type narrowing; None excluded above
     return execution
 
 
@@ -155,9 +155,7 @@ class _Assets:
         target = self._copy(original)
         query = []
         for key, value in parse_qsl(parts.query, keep_blank_values=True):
-            if key == "url":
-                value = self._url(value, original, target)
-            query.append((key, value))
+            query.append((key, self._url(value, original, target) if key == "url" else value))
         relative = quote(Path(os.path.relpath(target, destination.parent)).as_posix(), safe="/")
         return urlunsplit(("", "", relative, urlencode(query), parts.fragment))
 

@@ -13,8 +13,7 @@ from unittest import mock
 import numpy as np
 import pandas as pd
 import xarray as xr
-from hypothesis import given, settings
-from hypothesis import strategies as st
+from hypothesis import given, settings, strategies as st
 
 import bencher as bn
 from bencher.bench_cfg import BenchCfg
@@ -33,12 +32,12 @@ class TestResultCollector(unittest.TestCase):
     def test_init_default_cache_size(self):
         """Test default cache size is set."""
         collector = ResultCollector()
-        self.assertEqual(collector.cache_size, int(100e9))
+        assert collector.cache_size == int(100000000000.0)
 
     def test_init_custom_cache_size(self):
         """Test custom cache size is set."""
         collector = ResultCollector(cache_size=int(50e9))
-        self.assertEqual(collector.cache_size, int(50e9))
+        assert collector.cache_size == int(50000000000.0)
 
     def test_setup_dataset_creates_bench_result(self):
         """Test xarray dataset has correct structure."""
@@ -56,11 +55,11 @@ class TestResultCollector(unittest.TestCase):
             bench_cfg, datetime(2024, 1, 1)
         )
 
-        self.assertIsNotNone(bench_res)
-        self.assertIsNotNone(bench_res.ds)
-        self.assertIn("theta", dims_name)
-        self.assertIn("repeat", dims_name)
-        self.assertGreater(total_jobs, 0)
+        assert bench_res is not None
+        assert bench_res.ds is not None
+        assert "theta" in dims_name
+        assert "repeat" in dims_name
+        assert total_jobs > 0
 
     def test_setup_dataset_result_vars_scalar(self):
         """Test ResultFloat creates float data_vars."""
@@ -78,8 +77,8 @@ class TestResultCollector(unittest.TestCase):
 
         bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
-        self.assertIn("out_sin", bench_res.ds.data_vars)
-        self.assertEqual(bench_res.ds["out_sin"].dtype, np.float64)
+        assert "out_sin" in bench_res.ds.data_vars
+        assert bench_res.ds["out_sin"].dtype == np.float64
 
     def test_define_extra_vars_repeat(self):
         """Test repeat meta variable creation."""
@@ -95,9 +94,9 @@ class TestResultCollector(unittest.TestCase):
 
         extra_vars = self.collector.define_extra_vars(bench_cfg, 5, datetime(2024, 1, 1))
 
-        self.assertEqual(len(extra_vars), 1)
-        self.assertEqual(extra_vars[0].name, "repeat")
-        self.assertEqual(len(extra_vars[0].values()), 5)
+        assert len(extra_vars) == 1
+        assert extra_vars[0].name == "repeat"
+        assert len(extra_vars[0].values()) == 5
 
     def test_define_extra_vars_time_snapshot(self):
         """Test TimeSnapshot creation for datetime."""
@@ -113,8 +112,8 @@ class TestResultCollector(unittest.TestCase):
 
         extra_vars = self.collector.define_extra_vars(bench_cfg, 1, datetime(2024, 1, 1))
 
-        self.assertEqual(len(extra_vars), 2)
-        self.assertEqual(extra_vars[1].name, "over_time")
+        assert len(extra_vars) == 2
+        assert extra_vars[1].name == "over_time"
 
     def test_define_extra_vars_time_event(self):
         """Test TimeEvent creation for string."""
@@ -130,8 +129,8 @@ class TestResultCollector(unittest.TestCase):
 
         extra_vars = self.collector.define_extra_vars(bench_cfg, 1, "event_123")
 
-        self.assertEqual(len(extra_vars), 2)
-        self.assertEqual(extra_vars[1].name, "over_time")
+        assert len(extra_vars) == 2
+        assert extra_vars[1].name == "over_time"
 
     def _over_time_dataset(self, time_src):
         """Build an over_time dataset from a time source, and return it."""
@@ -151,7 +150,7 @@ class TestResultCollector(unittest.TestCase):
     def test_over_time_coord_naive_datetime_is_datetime64(self):
         """A naive time_src gives a real datetime64 over_time coordinate."""
         ds = self._over_time_dataset(datetime(2024, 1, 1))
-        self.assertTrue(np.issubdtype(ds["over_time"].dtype, np.datetime64))
+        assert np.issubdtype(ds["over_time"].dtype, np.datetime64)
 
     def test_over_time_coord_aware_datetime_is_object(self):
         """A tz-aware time_src degrades over_time to an object coordinate.
@@ -164,7 +163,7 @@ class TestResultCollector(unittest.TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             ds = self._over_time_dataset(datetime(2024, 1, 1, tzinfo=UTC))
-        self.assertEqual(ds["over_time"].dtype, object)
+        assert ds["over_time"].dtype == object
 
     def _aware_over_time_warning(self):
         """Run the over_time integration point with an aware time_src, return its warning."""
@@ -186,8 +185,8 @@ class TestResultCollector(unittest.TestCase):
         with self.assertWarns(UserWarning) as caught:
             TimeSnapshot(datetime(2024, 1, 1, tzinfo=UTC))
         message = str(caught.warning)
-        self.assertIn("timezone-aware", message)
-        self.assertIn("object", message)
+        assert "timezone-aware" in message
+        assert "object" in message
 
     def test_plain_input_var_warning_does_not_claim_history_loss(self):
         """An aware TimeSnapshot that is not the history axis must not claim history loss.
@@ -202,15 +201,15 @@ class TestResultCollector(unittest.TestCase):
         with self.assertWarns(UserWarning) as caught:
             TimeSnapshot(datetime(2024, 1, 1, tzinfo=UTC))
         message = str(caught.warning)
-        self.assertIn("object", message)
-        self.assertNotIn("history", message)
+        assert "object" in message
+        assert "history" not in message
 
     def test_over_time_snapshot_warning_names_the_history_loss(self):
         """The over_time axis is the one place history is at stake, so that is where it is said."""
         message = self._aware_over_time_warning()
-        self.assertIn("timezone-aware", message)
-        self.assertIn("object", message)
-        self.assertIn("history", message)
+        assert "timezone-aware" in message
+        assert "object" in message
+        assert "history" in message
 
     def test_time_snapshot_warning_does_not_prescribe_switching_to_naive(self):
         """The warning must not tell an aware-history caller to do the destructive thing.
@@ -221,22 +220,22 @@ class TestResultCollector(unittest.TestCase):
         transitions.
         """
         message = self._aware_over_time_warning()
-        self.assertIn("either direction", message)
-        self.assertNotIn("Pass a naive datetime", message)
+        assert "either direction" in message
+        assert "Pass a naive datetime" not in message
 
     def test_time_snapshot_does_not_warn_on_naive_datetime(self):
         """The ordinary naive case stays quiet."""
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             TimeSnapshot(datetime(2024, 1, 1))
-        self.assertEqual([w for w in caught if issubclass(w.category, UserWarning)], [])
+        assert [w for w in caught if issubclass(w.category, UserWarning)] == []
 
     def _assert_tz_warning_at(self, caught, expected_line):
         """Assert the one tz warning blames this file's expected_line, not a bencher frame."""
         tz = [w for w in caught if "timezone-aware" in str(w.message)]
-        self.assertEqual(len(tz), 1, "one bad time_src must produce exactly one warning")
-        self.assertEqual(Path(tz[0].filename).resolve(), Path(__file__).resolve())
-        self.assertEqual(tz[0].lineno, expected_line)
+        assert len(tz) == 1, "one bad time_src must produce exactly one warning"
+        assert Path(tz[0].filename).resolve() == Path(__file__).resolve()
+        assert tz[0].lineno == expected_line
 
     def test_aware_time_src_warning_is_attributed_to_the_users_call(self):
         """The warning names the caller's plot_sweep line, not a file under bencher/.
@@ -306,15 +305,15 @@ class TestResultCollector(unittest.TestCase):
         extra_vars = self.collector.define_extra_vars(bench_cfg, repeats, datetime(2024, 1, 1))
 
         # Always has repeat
-        self.assertGreaterEqual(len(extra_vars), 1)
-        self.assertEqual(extra_vars[0].name, "repeat")
+        assert len(extra_vars) >= 1
+        assert extra_vars[0].name == "repeat"
 
         # Has time if over_time
         if over_time:
-            self.assertEqual(len(extra_vars), 2)
-            self.assertEqual(extra_vars[1].name, "over_time")
+            assert len(extra_vars) == 2
+            assert extra_vars[1].name == "over_time"
         else:
-            self.assertEqual(len(extra_vars), 1)
+            assert len(extra_vars) == 1
 
 
 class TestCacheReuse(unittest.TestCase):
@@ -330,26 +329,26 @@ class TestCacheReuse(unittest.TestCase):
         """The same Cache instance should be returned on repeated access."""
         cache1 = self.collector.get_benchmark_cache()
         cache2 = self.collector.get_benchmark_cache()
-        self.assertIs(cache1, cache2)
+        assert cache1 is cache2
 
     def test_history_cache_reused_across_calls(self):
         """The same history Cache instance should be returned on repeated access."""
         cache1 = self.collector.get_history_cache()
         cache2 = self.collector.get_history_cache()
-        self.assertIs(cache1, cache2)
+        assert cache1 is cache2
 
     def test_benchmark_and_history_caches_are_distinct(self):
         """Benchmark and history caches should be different instances."""
         bc = self.collector.get_benchmark_cache()
         hc = self.collector.get_history_cache()
-        self.assertIsNot(bc, hc)
+        assert bc is not hc
 
     def test_close_caches_allows_reopen(self):
         """After close_caches(), new instances should be created on next access."""
         cache1 = self.collector.get_benchmark_cache()
         self.collector.close_caches()
         cache2 = self.collector.get_benchmark_cache()
-        self.assertIsNot(cache1, cache2)
+        assert cache1 is not cache2
 
     def test_close_caches_idempotent(self):
         """Calling close_caches() multiple times should not raise."""
@@ -375,8 +374,8 @@ class TestCacheReuse(unittest.TestCase):
 
         # Both writes should have gone to the same cache instance
         cache = self.collector.get_benchmark_cache()
-        self.assertIn("hash-a", cache)
-        self.assertIn("hash-b", cache)
+        assert "hash-a" in cache
+        assert "hash-b" in cache
 
     def test_sequential_plot_sweep_calls_reuse_cache(self):
         """Multiple sequential cache operations should reuse the same Cache instance.
@@ -399,12 +398,12 @@ class TestCacheReuse(unittest.TestCase):
             bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
             self.collector.cache_results(bench_res, f"seq-hash-{i}", all_hashes)
 
-        self.assertEqual(all_hashes, ["seq-hash-0", "seq-hash-1", "seq-hash-2"])
+        assert all_hashes == ["seq-hash-0", "seq-hash-1", "seq-hash-2"]
 
         # All results retrievable from the single persistent cache
         cache = self.collector.get_benchmark_cache()
         for i in range(3):
-            self.assertIn(f"seq-hash-{i}", cache)
+            assert f"seq-hash-{i}" in cache
 
 
 class TestCacheOperations(unittest.TestCase):
@@ -441,11 +440,11 @@ class TestCacheOperations(unittest.TestCase):
 
         # Cache first result
         self.collector.cache_results(bench_res, "hash-1", bench_cfg_hashes)
-        self.assertEqual(bench_cfg_hashes, ["hash-1"])
+        assert bench_cfg_hashes == ["hash-1"]
 
         # Cache second result - should append, not replace
         self.collector.cache_results(bench_res, "hash-2", bench_cfg_hashes)
-        self.assertEqual(bench_cfg_hashes, ["hash-1", "hash-2"])
+        assert bench_cfg_hashes == ["hash-1", "hash-2"]
 
     def test_cache_results_preserves_object_index_in_memory(self):
         """cache_results should restore object_index after caching."""
@@ -468,7 +467,7 @@ class TestCacheOperations(unittest.TestCase):
         self.collector.cache_results(bench_res, "hash-1", bench_cfg_hashes)
 
         # object_index should be restored in memory
-        self.assertEqual(bench_res.object_index, ["obj-1", "obj-2"])
+        assert bench_res.object_index == ["obj-1", "obj-2"]
 
     def test_load_history_cache_no_existing_history(self):
         """load_history_cache should return dataset unchanged when no history exists."""
@@ -480,7 +479,7 @@ class TestCacheOperations(unittest.TestCase):
         result = self.collector.load_history_cache(dataset, unique_hash, False)
 
         # Should return the same dataset (no concat)
-        self.assertTrue(result.equals(dataset))
+        assert result.equals(dataset)
 
     def test_load_history_cache_clear_history_flag(self):
         """load_history_cache with clear_history=True should not concat."""
@@ -509,12 +508,12 @@ class TestCacheOperations(unittest.TestCase):
         self.collector.add_metadata_to_dataset(bench_res, instance.param.theta)
 
         # Check result var has units and long_name
-        self.assertEqual(bench_res.ds["out_sin"].attrs.get("units"), "v")
-        self.assertEqual(bench_res.ds["out_sin"].attrs.get("long_name"), "out_sin")
+        assert bench_res.ds["out_sin"].attrs.get("units") == "v"
+        assert bench_res.ds["out_sin"].attrs.get("long_name") == "out_sin"
 
         # Check input var coordinate has metadata
-        self.assertEqual(bench_res.ds["theta"].attrs.get("long_name"), "theta")
-        self.assertEqual(bench_res.ds["theta"].attrs.get("units"), "rad")
+        assert bench_res.ds["theta"].attrs.get("long_name") == "theta"
+        assert bench_res.ds["theta"].attrs.get("units") == "rad"
 
 
 class TestMaxTimeEvents(unittest.TestCase):
@@ -540,11 +539,11 @@ class TestMaxTimeEvents(unittest.TestCase):
             dataset, unique_hash, clear_history=False, max_time_events=3
         )
 
-        self.assertEqual(result.sizes["over_time"], 3)
+        assert result.sizes["over_time"] == 3
         # Should keep the last 3 slices (values 2, 3, 4)
         expected = [2.0, 3.0, 4.0]
         actual = list(result["var"].values[0])
-        self.assertEqual(actual, expected)
+        assert actual == expected
 
     def test_max_time_events_none_unlimited(self):
         """max_time_events=None should not trim anything."""
@@ -555,7 +554,7 @@ class TestMaxTimeEvents(unittest.TestCase):
             dataset, unique_hash, clear_history=False, max_time_events=None
         )
 
-        self.assertEqual(result.sizes["over_time"], 5)
+        assert result.sizes["over_time"] == 5
 
     def test_max_time_events_exact_count_no_trim(self):
         """When over_time count equals max_time_events, no trimming occurs."""
@@ -566,10 +565,10 @@ class TestMaxTimeEvents(unittest.TestCase):
             dataset, unique_hash, clear_history=False, max_time_events=3
         )
 
-        self.assertEqual(result.sizes["over_time"], 3)
+        assert result.sizes["over_time"] == 3
         expected = [0.0, 1.0, 2.0]
         actual = list(result["var"].values[0])
-        self.assertEqual(actual, expected)
+        assert actual == expected
 
     def test_max_time_events_with_clear_history(self):
         """clear_history + max_time_events: in practice clear_history yields a single slice,
@@ -581,10 +580,10 @@ class TestMaxTimeEvents(unittest.TestCase):
             dataset, unique_hash, clear_history=True, max_time_events=2
         )
 
-        self.assertEqual(result.sizes["over_time"], 2)
+        assert result.sizes["over_time"] == 2
         expected = [3.0, 4.0]
         actual = list(result["var"].values[0])
-        self.assertEqual(actual, expected)
+        assert actual == expected
 
     def test_max_time_events_incremental_accumulation(self):
         """Simulates repeated plot_sweep() calls: cache should stay bounded."""
@@ -597,10 +596,10 @@ class TestMaxTimeEvents(unittest.TestCase):
             )
 
         # After 10 incremental calls with max_time_events=3, only the last 3 should remain
-        self.assertEqual(result.sizes["over_time"], 3)
+        assert result.sizes["over_time"] == 3
         expected = [7.0, 8.0, 9.0]
         actual = list(result["var"].values[0])
-        self.assertEqual(actual, expected)
+        assert actual == expected
 
     def test_max_time_events_no_over_time_dim(self):
         """max_time_events should be a no-op when dataset has no over_time dim."""
@@ -611,7 +610,7 @@ class TestMaxTimeEvents(unittest.TestCase):
             dataset, unique_hash, clear_history=False, max_time_events=2
         )
 
-        self.assertTrue(result.equals(dataset))
+        assert result.equals(dataset)
 
 
 class TestPerVariableMaxTimeEvents(unittest.TestCase):
@@ -619,6 +618,10 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
 
     def setUp(self):
         self.collector = ResultCollector()
+        # Nulling a media entry deletes the file it names, so the fake media paths
+        # point into a private directory rather than the shared /tmp.
+        self.media_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.media_dir, ignore_errors=True)
 
     def _make_mixed_dataset(self, n_slices):
         """Create a dataset with a float var and an object (path) var."""
@@ -627,7 +630,10 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
             ds = xr.Dataset(
                 {
                     "metric": (["x", "over_time"], [[float(i)]]),
-                    "media": (["x", "over_time"], np.array([[f"/tmp/file_{i}.rrd"]], dtype=object)),
+                    "media": (
+                        ["x", "over_time"],
+                        np.array([[f"{self.media_dir}/file_{i}.rrd"]], dtype=object),
+                    ),
                 }
             )
             slices.append(ds)
@@ -650,20 +656,19 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
         )
 
         # Full over_time dimension preserved (5 slices)
-        self.assertEqual(result.sizes["over_time"], 5)
+        assert result.sizes["over_time"] == 5
 
         # metric (no per-variable limit) should be untouched
-        self.assertEqual(list(result["metric"].values[0]), [0.0, 1.0, 2.0, 3.0, 4.0])
+        assert list(result["metric"].values[0]) == [0.0, 1.0, 2.0, 3.0, 4.0]
 
         # media: oldest 3 entries should be sentinel "NAN", last 2 kept
         media_vals = list(result["media"].values[0])
-        self.assertEqual(media_vals[:3], ["NAN", "NAN", "NAN"])
-        self.assertEqual(media_vals[3], "/tmp/file_3.rrd")
-        self.assertEqual(media_vals[4], "/tmp/file_4.rrd")
+        assert media_vals[:3] == ["NAN", "NAN", "NAN"]
+        assert media_vals[3] == f"{self.media_dir}/file_3.rrd"
+        assert media_vals[4] == f"{self.media_dir}/file_4.rrd"
 
     def test_per_variable_deletes_media_files(self):
         """Nulling a media entry should delete the referenced file from disk."""
-        import os
 
         from bencher.variables.results import ResultImage
 
@@ -672,8 +677,8 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
         try:
             paths = []
             for i in range(4):
-                p = os.path.join(tmpdir, f"img_{i}.png")
-                with open(p, "wb") as f:
+                p = str(Path(tmpdir, f"img_{i}.png"))
+                with Path(p).open("wb") as f:
                     f.write(b"data")
                 paths.append(p)
 
@@ -694,10 +699,10 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
             )
 
             # Oldest 2 files should be deleted, newest 2 should still exist
-            self.assertFalse(os.path.exists(paths[0]))
-            self.assertFalse(os.path.exists(paths[1]))
-            self.assertTrue(os.path.exists(paths[2]))
-            self.assertTrue(os.path.exists(paths[3]))
+            assert not Path(paths[0]).exists()
+            assert not Path(paths[1]).exists()
+            assert Path(paths[2]).exists()
+            assert Path(paths[3]).exists()
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
@@ -710,7 +715,6 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
         the file when the old cell ages out would break the live one, which is why
         ResultDataSet is excluded from ``_MEDIA_RESULT_TYPES``.
         """
-        import os
 
         from bencher.blob_store import materialize_blob
         from bencher.variables.results import ResultDataSet
@@ -725,7 +729,7 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
                 pd.DataFrame({"v": [0.0]}),
             ]
             names = [materialize_blob(p, tmpdir) for p in payloads]
-            self.assertEqual(names[0], names[3], "content addressing should dedup these")
+            assert names[0] == names[3], "content addressing should dedup these"
 
             slices = [
                 xr.Dataset({"table": (["x", "over_time"], np.array([[n]], dtype=object))})
@@ -743,14 +747,14 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
 
             # The cells age exactly like any other reference-valued result...
             cells = list(result["table"].values[0])
-            self.assertEqual(cells[:2], ["NAN", "NAN"])
-            self.assertEqual(cells[2:], [names[2], names[3]])
+            assert cells[:2] == ["NAN", "NAN"]
+            assert cells[2:] == [names[2], names[3]]
 
             # ...but every blob survives, including the one the aged cell shared with
             # the live event at index 3, and the one no live cell references at all.
             for name in names:
                 blob = Path(tmpdir) / "blobs" / name
-                self.assertTrue(os.path.exists(blob), f"aging deleted blob {blob}")
+                assert Path(blob).exists(), f"aging deleted blob {blob}"
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
@@ -775,14 +779,14 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
         )
 
         # Global trim to 5 slices first (keeps indices 5-9)
-        self.assertEqual(result.sizes["over_time"], 5)
-        self.assertEqual(list(result["metric"].values[0]), [5.0, 6.0, 7.0, 8.0, 9.0])
+        assert result.sizes["over_time"] == 5
+        assert list(result["metric"].values[0]) == [5.0, 6.0, 7.0, 8.0, 9.0]
 
         # Per-variable: media keeps only last 2 of those 5
         media_vals = list(result["media"].values[0])
-        self.assertEqual(media_vals[:3], ["NAN", "NAN", "NAN"])
-        self.assertEqual(media_vals[3], "/tmp/file_8.rrd")
-        self.assertEqual(media_vals[4], "/tmp/file_9.rrd")
+        assert media_vals[:3] == ["NAN", "NAN", "NAN"]
+        assert media_vals[3] == f"{self.media_dir}/file_8.rrd"
+        assert media_vals[4] == f"{self.media_dir}/file_9.rrd"
 
     def test_per_variable_no_limit_unaffected(self):
         """Variables without max_time_events should not be touched."""
@@ -803,7 +807,7 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
             dataset, unique_hash, clear_history=False, result_vars=[rv]
         )
 
-        self.assertEqual(list(result["val"].values[0]), [0.0, 1.0, 2.0, 3.0, 4.0])
+        assert list(result["val"].values[0]) == [0.0, 1.0, 2.0, 3.0, 4.0]
 
     def test_per_variable_result_vec(self):
         """ResultVec with max_time_events should null all component columns."""
@@ -829,18 +833,18 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
             dataset, unique_hash, clear_history=False, result_vars=[rv]
         )
 
-        self.assertEqual(result.sizes["over_time"], 5)
+        assert result.sizes["over_time"] == 5
         # Oldest 3 entries should be NaN, last 2 kept
         x_vals = list(result["pos_x"].values[0])
         y_vals = list(result["pos_y"].values[0])
         for v in x_vals[:3]:
-            self.assertTrue(np.isnan(v))
-        self.assertEqual(x_vals[3], 3.0)
-        self.assertEqual(x_vals[4], 4.0)
+            assert np.isnan(v)
+        assert x_vals[3] == 3.0
+        assert x_vals[4] == 4.0
         for v in y_vals[:3]:
-            self.assertTrue(np.isnan(v))
-        self.assertEqual(y_vals[3], 30.0)
-        self.assertEqual(y_vals[4], 40.0)
+            assert np.isnan(v)
+        assert y_vals[3] == 30.0
+        assert y_vals[4] == 40.0
 
     def test_per_variable_skips_already_nulled(self):
         """Re-nulling sentinel entries should not crash (idempotent)."""
@@ -861,7 +865,7 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
             result, unique_hash, clear_history=True, result_vars=[rv]
         )
         media_vals = list(result["media"].values[0])
-        self.assertEqual(media_vals[:3], ["NAN", "NAN", "NAN"])
+        assert media_vals[:3] == ["NAN", "NAN", "NAN"]
 
 
 class TestDTypeIncompatibleHistory(unittest.TestCase):
@@ -890,11 +894,9 @@ class TestDTypeIncompatibleHistory(unittest.TestCase):
             result = self.collector.load_history_cache(ds_string, unique_hash, clear_history=False)
 
         # Should warn about discarded history
-        self.assertTrue(
-            any("Discarding incompatible historical data" in msg for msg in captured_logs.output)
-        )
+        assert any("Discarding incompatible historical data" in msg for msg in captured_logs.output)
         # Old data discarded, result matches the new dataset exactly
-        self.assertTrue(result.equals(ds_string))
+        assert result.equals(ds_string)
 
     def test_string_then_datetime_over_time_no_crash(self):
         """Switching from string to datetime over_time coords should not crash."""
@@ -917,10 +919,8 @@ class TestDTypeIncompatibleHistory(unittest.TestCase):
                 ds_datetime, unique_hash, clear_history=False
             )
 
-        self.assertTrue(
-            any("Discarding incompatible historical data" in msg for msg in captured_logs.output)
-        )
-        self.assertTrue(result.equals(ds_datetime))
+        assert any("Discarding incompatible historical data" in msg for msg in captured_logs.output)
+        assert result.equals(ds_datetime)
 
 
 class TestStaleCacheRecovery(unittest.TestCase):
@@ -952,11 +952,9 @@ class TestStaleCacheRecovery(unittest.TestCase):
         ):
             result = self.collector.load_history_cache(dataset, unique_hash, clear_history=False)
 
-        self.assertTrue(
-            any("Failed to deserialize cached history" in msg for msg in captured_logs.output)
-        )
+        assert any("Failed to deserialize cached history" in msg for msg in captured_logs.output)
         # Should return the fresh dataset without crashing
-        self.assertTrue(result.equals(dataset))
+        assert result.equals(dataset)
 
     def test_module_not_found_error_on_deserialize_discards_entry(self):
         """A cache entry referencing a removed module should be discarded gracefully."""
@@ -976,10 +974,8 @@ class TestStaleCacheRecovery(unittest.TestCase):
         ):
             result = self.collector.load_history_cache(dataset, unique_hash, clear_history=False)
 
-        self.assertTrue(
-            any("Failed to deserialize cached history" in msg for msg in captured_logs.output)
-        )
-        self.assertTrue(result.equals(dataset))
+        assert any("Failed to deserialize cached history" in msg for msg in captured_logs.output)
+        assert result.equals(dataset)
 
 
 class TestLazyCartesianProduct(unittest.TestCase):
@@ -1006,9 +1002,9 @@ class TestLazyCartesianProduct(unittest.TestCase):
         _, func_inputs, _, total_jobs = self.collector.setup_dataset(
             bench_cfg, datetime(2024, 1, 1)
         )
-        self.assertNotIsInstance(func_inputs, list)
-        self.assertIsInstance(func_inputs, zip)
-        self.assertEqual(total_jobs, 3 * 2)  # theta_samples * repeats
+        assert not isinstance(func_inputs, list)
+        assert isinstance(func_inputs, zip)
+        assert total_jobs == 3 * 2  # theta_samples * repeats
 
     def test_total_jobs_matches_iterator_length(self):
         """total_jobs count must match the number of items yielded by the iterator."""
@@ -1017,7 +1013,7 @@ class TestLazyCartesianProduct(unittest.TestCase):
             bench_cfg, datetime(2024, 1, 1)
         )
         items = list(func_inputs)
-        self.assertEqual(len(items), total_jobs)
+        assert len(items) == total_jobs
 
     def test_iterator_yields_correct_values(self):
         """Materialized iterator should match the expected Cartesian product."""
@@ -1026,13 +1022,13 @@ class TestLazyCartesianProduct(unittest.TestCase):
         items = list(func_inputs)
         # Each item is (index_tuple, value_tuple)
         # With 3 theta samples and 2 repeats, expect 6 items
-        self.assertEqual(len(items), 6)
+        assert len(items) == 6
         # First element should be indices, second should be values
         for idx_tuple, val_tuple in items:
-            self.assertIsInstance(idx_tuple, tuple)
-            self.assertIsInstance(val_tuple, tuple)
-            self.assertEqual(len(idx_tuple), 2)  # theta dim + repeat dim
-            self.assertEqual(len(val_tuple), 2)
+            assert isinstance(idx_tuple, tuple)
+            assert isinstance(val_tuple, tuple)
+            assert len(idx_tuple) == 2  # theta dim + repeat dim
+            assert len(val_tuple) == 2
 
     def test_iteration_does_not_mutate_bench_cfg(self):
         """Consuming the iterator must not change bench_cfg."""
@@ -1044,9 +1040,9 @@ class TestLazyCartesianProduct(unittest.TestCase):
         # Consume the iterator fully
         _ = list(func_inputs)
 
-        self.assertEqual(bench_cfg.input_vars, input_vars_before)
+        assert bench_cfg.input_vars == input_vars_before
         if all_vars_before is not None:
-            self.assertEqual(list(bench_cfg.all_vars), all_vars_before)
+            assert list(bench_cfg.all_vars) == all_vars_before
 
 
 class TestSetXarrayMultidim(unittest.TestCase):
@@ -1056,22 +1052,22 @@ class TestSetXarrayMultidim(unittest.TestCase):
         """Test setting value in 2D array."""
         data = xr.DataArray(np.zeros((3, 3)), dims=["x", "y"])
         set_xarray_multidim(data, (1, 2), 5.0)
-        self.assertEqual(data[1, 2].item(), 5.0)
+        assert data[1, 2].item() == 5.0
 
     def test_set_value_3d(self):
         """Test setting value in 3D array."""
         data = xr.DataArray(np.zeros((2, 2, 2)), dims=["x", "y", "z"])
         set_xarray_multidim(data, (1, 0, 1), 7.5)
-        self.assertEqual(data[1, 0, 1].item(), 7.5)
+        assert data[1, 0, 1].item() == 7.5
 
     def test_set_value_preserves_other_values(self):
         """Test setting one value doesn't affect others."""
         data = xr.DataArray(np.ones((3, 3)), dims=["x", "y"])
         set_xarray_multidim(data, (0, 0), 99.0)
 
-        self.assertEqual(data[0, 0].item(), 99.0)
-        self.assertEqual(data[1, 1].item(), 1.0)
-        self.assertEqual(data[2, 2].item(), 1.0)
+        assert data[0, 0].item() == 99.0
+        assert data[1, 1].item() == 1.0
+        assert data[2, 2].item() == 1.0
 
     @settings(deadline=10000)
     @given(
@@ -1081,7 +1077,7 @@ class TestSetXarrayMultidim(unittest.TestCase):
         """Property: set_xarray_multidim works for various values."""
         data = xr.DataArray(np.zeros((3, 3)), dims=["x", "y"])
         set_xarray_multidim(data, (1, 1), value)
-        self.assertEqual(data[1, 1].item(), value)
+        assert data[1, 1].item() == value
 
 
 if __name__ == "__main__":

@@ -11,14 +11,22 @@ import json
 import math
 import os
 import tempfile
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
 if TYPE_CHECKING:
-    from bencher.publishing import CompleteReportPublisher
+    from collections.abc import Mapping
+
+    from bencher.gcloud_store import GcloudStore
+    from bencher.object_store import LocalStore
+    from bencher.publishing import (
+        CompleteReportPublisher,
+        PublicationReceipt,
+        Published,
+        PublishFailed,
+    )
 
 STORE_ENV = "BENCHER_PUBLISH_STORE"
 PREFIX_ENV = "BENCHER_PUBLISH_PREFIX"
@@ -31,7 +39,7 @@ _REQUIRED = (STORE_ENV, PREFIX_ENV, HTTP_BASE_ENV)
 _ALL = (*_REQUIRED, RECEIPT_ENV, EXPIRY_DAYS_ENV, MINIMUM_REMAINING_DAYS_ENV)
 
 
-class PublicationFailed(RuntimeError):
+class PublicationFailed(RuntimeError):  # noqa: N818 - public name, renaming breaks callers
     """A configured publication did not produce a verified report URL."""
 
 
@@ -121,7 +129,7 @@ class PublicationTarget:
             ),
         )
 
-    def open_store(self):
+    def open_store(self) -> GcloudStore | LocalStore:
         """Build the object store this target names."""
         from bencher.gcloud_store import GcloudStore
         from bencher.object_store import LocalStore
@@ -148,7 +156,7 @@ class PublicationTarget:
         )
 
 
-def receipt_json(receipt) -> str:
+def receipt_json(receipt: PublicationReceipt) -> str:
     """Render a publication receipt as the JSON both entry points hand on."""
     return json.dumps(receipt.to_dict(), indent=2, allow_nan=False)
 
@@ -174,7 +182,7 @@ def publish_frozen_report(
     directory: str | Path,
     target: PublicationTarget,
     publisher: CompleteReportPublisher | None = None,
-):
+) -> Published | PublishFailed:
     """Publish a frozen execution directory, persisting the receipt *target* names.
 
     Args:
@@ -209,7 +217,7 @@ def commit_frozen_report(
     directory: str | Path,
     target: PublicationTarget,
     publisher: CompleteReportPublisher | None = None,
-):
+) -> Published:
     """Publish a frozen execution directory, or raise.
 
     Raises:

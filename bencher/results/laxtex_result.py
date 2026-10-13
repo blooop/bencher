@@ -1,11 +1,18 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import panel as pn
 from panel.pane import LaTeX
 
+if TYPE_CHECKING:
+    from bencher.bench_cfg import BenchCfg
+    from bencher.variables.sweep_base import SweepBase
+
 pn.extension("mathjax")
+
+# More values than this are elided to first/last two with a vertical ellipsis.
+MAX_DISPLAY_VALUES = 5
 
 
 def latex_text(text: str) -> str:
@@ -13,7 +20,7 @@ def latex_text(text: str) -> str:
     return r"\text{" + text.replace("_", " ") + r"} \\"
 
 
-def format_values_list(values: list[Any], max_display: int = 5) -> list[Any]:
+def format_values_list(values: list[Any], max_display: int = MAX_DISPLAY_VALUES) -> list[Any]:
     """Format a list of values, showing ellipsis if too long."""
     if len(values) <= max_display:
         return values
@@ -21,7 +28,7 @@ def format_values_list(values: list[Any], max_display: int = 5) -> list[Any]:
 
 
 def latex_value(val: Any) -> str:
-    """Format a single value for LaTeX, wrapping strings that contain spaces in \\text{}."""
+    r"""Format a single value for LaTeX, wrapping strings that contain spaces in \text{}."""
     s = str(val)
     if " " in s:
         return r"\text{" + s.replace("_", " ") + "}"
@@ -31,12 +38,12 @@ def latex_value(val: Any) -> str:
 def create_matrix_array(values: list[Any]) -> str:
     """Create a LaTeX matrix array from values."""
     displayed_vals = format_values_list(values)
-    if len(values) > 5:
+    if len(values) > MAX_DISPLAY_VALUES:
         displayed_vals[2] = "⋮"
     return r"\\ ".join([latex_value(val) for val in displayed_vals])
 
 
-def input_var_to_latex(input_var) -> str:
+def input_var_to_latex(input_var: SweepBase) -> str:
     """Convert input variable to LaTeX format."""
     vals = input_var.values()
     latex_str = r"\begin{array}{c}"
@@ -48,7 +55,7 @@ def input_var_to_latex(input_var) -> str:
     return latex_str
 
 
-def result_var_to_latex(bench_cfg) -> str:
+def result_var_to_latex(bench_cfg: BenchCfg) -> str:
     """Convert result variables to LaTeX format."""
     sizes = [str(len(i.values())) for i in bench_cfg.all_vars]
     if len(sizes) == 1:
@@ -62,7 +69,7 @@ def result_var_to_latex(bench_cfg) -> str:
     return latex_str
 
 
-def to_latex(bench_cfg) -> pn.pane.LaTeX | None:
+def to_latex(bench_cfg: BenchCfg) -> pn.pane.LaTeX | None:
     """Convert benchmark configuration to LaTeX visualization.
 
     Returns None if there are no variables to display.

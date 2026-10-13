@@ -29,7 +29,7 @@
 		},
 		{
 			"label": "lint",
-			"detail": "Run pylint on files tracked by git",
+			"detail": "Run ruff and ty",
 			"type": "shell",
 			"command": "pixi run lint"
 		},

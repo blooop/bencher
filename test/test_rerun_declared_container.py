@@ -13,6 +13,7 @@ what the rerun viewer does with an .rrd.
 
 import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import panel as pn
 
@@ -24,7 +25,7 @@ SNAPSHOTS = 2
 
 def file_contents(path: str) -> pn.pane.Markdown:
     """A declared container that renders the file rather than the rerun viewer."""
-    with open(path, encoding="utf-8") as handle:
+    with Path(path).open(encoding="utf-8") as handle:
         return pn.pane.Markdown(f"contents: {handle.read()}")
 
 
@@ -38,7 +39,7 @@ class RerunSweep(bn.ParametrizedSweep):
 
     def benchmark(self):
         filename = bn.gen_path("recording", suffix=".txt")
-        with open(filename, "w", encoding="utf-8") as handle:
+        with Path(filename).open("w", encoding="utf-8") as handle:
             handle.write(f"sides {self.sides} run {self.offset}")
         self.recording = filename
 
@@ -77,10 +78,10 @@ class TestRerunDeclaredContainerOverTime(unittest.TestCase):
 
         # One pane per (side, time point): the grid renders the whole history,
         # not just the run being reported.
-        self.assertEqual(len(rendered), len(SIDES) * SNAPSHOTS)
+        assert len(rendered) == len(SIDES) * SNAPSHOTS
         for run in range(SNAPSHOTS):
-            self.assertIn(f"contents: sides 3 run {run}", rendered)
-            self.assertIn(f"contents: sides 4 run {run}", rendered)
+            assert f"contents: sides 3 run {run}" in rendered
+            assert f"contents: sides 4 run {run}" in rendered
 
     def test_single_run_and_history_agree(self):
         """The whole point: one time point and several render through one renderer."""
@@ -90,8 +91,8 @@ class TestRerunDeclaredContainerOverTime(unittest.TestCase):
         single_text = list(markdown_text(single.to_auto(plot_list=["panes"])))
         history_text = list(markdown_text(history.to_auto(plot_list=["panes"])))
 
-        self.assertTrue(any(t.startswith("contents: ") for t in single_text))
-        self.assertTrue(any(t.startswith("contents: ") for t in history_text))
+        assert any(t.startswith("contents: ") for t in single_text)
+        assert any(t.startswith("contents: ") for t in history_text)
 
 
 if __name__ == "__main__":

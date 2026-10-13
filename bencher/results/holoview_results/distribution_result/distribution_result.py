@@ -1,18 +1,22 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import holoviews as hv
-import panel as pn
-import xarray as xr
-from param import Parameter
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult, PlotResult
 from bencher.utils import params_to_str
 from bencher.variables.results import ResultFloat
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import pandas as pd
+    import panel as pn
+    import xarray as xr
+    from param import Parameter
 
 
 class DistributionResult(HoloviewResult):
@@ -63,7 +67,15 @@ class DistributionResult(HoloviewResult):
         )
 
     @staticmethod
-    def _build_distribution_overlay(df, plot_classes, kdims, var_name, result_var, title, **kwargs):
+    def _build_distribution_overlay(
+        df: pd.DataFrame,
+        plot_classes: list[type[hv.Selection1DExpr]],
+        kdims: list[str],
+        var_name: str,
+        result_var: Parameter,
+        title: str,
+        **kwargs: Any,
+    ) -> hv.Overlay:
         """Build an hv.Overlay from one or more distribution plot classes."""
         overlay = hv.Overlay()
         for plot_cls in plot_classes:
@@ -121,7 +133,8 @@ class DistributionResult(HoloviewResult):
         if use_holomap:
             da = dataset[var_name]
 
-            def make_dist(da_window):
+            def make_dist(da_window: xr.DataArray) -> hv.Overlay:
+
                 df = da_window.to_dataframe().reset_index()
                 return self._build_distribution_overlay(
                     df, plot_class, kdims, var_name, result_var, title, **kwargs

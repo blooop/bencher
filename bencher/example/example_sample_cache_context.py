@@ -8,18 +8,11 @@ import bencher as bn
 class ExampleEnum(StrEnum):
     value_1 = auto()
     value_2 = auto()
-    # value3 = auto()
-    # value4 = auto()
 
 
 class Cfg(bn.ParametrizedSweep):
     enum1 = bn.EnumSweep(ExampleEnum)
     result = bn.ResultFloat()
-
-    # def __call__(self,**kwargs) -> Any:
-    #     self.update_params_from_kwargs(**kwargs)
-    #     self.result = float(str(self.enum1)[-1])
-    #     return self.get_results_values_as_dict()
 
 
 def bench_function(cfg: Cfg):
@@ -28,7 +21,7 @@ def bench_function(cfg: Cfg):
 
 def print_assert_equal(msg, first, second):
     print(f"{msg} {first}=={second}")
-    assert first == second
+    assert first == second  # noqa: S101 - the example checks the cache call counts
 
 
 def assert_call_counts(bencher, run_cfg, wrapper_calls=-1, fn_calls=-1, cache_calls=-1):

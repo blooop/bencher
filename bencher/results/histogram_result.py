@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import panel as pn
-import xarray as xr
-from param import Parameter
+from typing import TYPE_CHECKING, Any
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
@@ -10,10 +8,15 @@ from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.hvplot_accessor import hvplot_of
 from bencher.variables.results import ResultFloat
 
+if TYPE_CHECKING:
+    import panel as pn
+    import xarray as xr
+    from param import Parameter
+
 
 class HistogramResult(HoloviewResult):
     def to_plot(
-        self, result_var: Parameter | None = None, target_dimension: int = 2, **kwargs
+        self, result_var: Parameter | None = None, target_dimension: int = 2, **kwargs: Any
     ) -> pn.pane.Pane | None:
         """Generates a histogram plot from benchmark data.
 
@@ -49,7 +52,7 @@ class HistogramResult(HoloviewResult):
             **kwargs,
         )
 
-    def _make_histogram(self, dataset: xr.Dataset, result_var: Parameter, **kwargs):
+    def _make_histogram(self, dataset: xr.Dataset, result_var: Parameter, **kwargs: Any) -> Any:
         """Render a single histogram from a dataset (no over_time handling)."""
         units = getattr(result_var, "units", "") or ""
         xlabel = f"{result_var.name} [{units}]" if units else result_var.name
@@ -64,7 +67,7 @@ class HistogramResult(HoloviewResult):
         )
         return self._apply_opts(plot, xrotation=30)
 
-    def to_histogram_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs):
+    def to_histogram_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs: Any) -> Any:
         """Creates a histogram from the provided dataset.
 
         Given a filtered dataset, this method generates a histogram visualization showing
@@ -82,7 +85,7 @@ class HistogramResult(HoloviewResult):
         if self._use_holomap_for_time(dataset):
             da = dataset[result_var.name]
 
-            def make_hist(da_window):
+            def make_hist(da_window: xr.DataArray) -> Any:
                 ds = da_window.to_dataset()
                 return self._make_histogram(ds, result_var, **kwargs)
 

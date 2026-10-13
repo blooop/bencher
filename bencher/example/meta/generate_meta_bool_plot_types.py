@@ -76,7 +76,7 @@ class ReliabilityCat(bn.ParametrizedSweep):
         rates = {"postgres": 0.95, "redis": 0.85, "memcached": 0.65, "sqlite": 0.40, "local": 0.15}
         self.healthy = random.random() < rates[self.backend]"""
 
-_PASS_RATE_FLOAT_CODE = """\
+_PASSRATE_FLOAT_CLASS_CODE = """\
 class PassRateFloat(bn.ParametrizedSweep):
     \"\"\"Test pass rate that decreases with complexity.\"\"\"
 
@@ -221,7 +221,7 @@ BOOL_PLOT_CONFIGS: dict[str, BoolPlotConfig] = {
         input_vars='["complexity"]',
         result_vars='["passed"]',
         benchable_class="PassRateFloat",
-        class_code=_PASS_RATE_FLOAT_CODE,
+        class_code=_PASSRATE_FLOAT_CLASS_CODE,
     ),
 }
 

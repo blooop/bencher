@@ -22,18 +22,21 @@ table. Only the renderer below performs that interpretation.
 
 from __future__ import annotations
 
-from collections.abc import Hashable, Sequence
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import holoviews as hv
-import pandas as pd
-import panel as pn
-from param import Parameter
 
 from bencher.results.dataset_result import render_data_samples
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.holoview_results.tabular_spec import TabularSpec
+
+if TYPE_CHECKING:
+    from collections.abc import Hashable, Sequence
+
+    import pandas as pd
+    import panel as pn
+    from param import Parameter
 
 
 @dataclass(frozen=True)
@@ -166,7 +169,7 @@ class XYScatterResult(HoloviewResult):
         xlabel: str | None = None,
         ylabel: str | None = None,
         opts: dict[str, Any] | None = None,
-        hv_dataset=None,
+        hv_dataset: hv.Dataset | None = None,
         target_dimension: int = 0,
         subsampling_divisions: int | None = None,
         **kwargs: Any,
