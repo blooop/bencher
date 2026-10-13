@@ -19,6 +19,7 @@ import pytest
 import xarray as xr
 
 from bencher.results.rerun_result import (
+    _SPREAD_ATTR,
     _log_bar_chart,
     _log_line_graph,
     _log_result_var,
@@ -203,13 +204,14 @@ class TestResultVarDispatch(unittest.TestCase):
 
 
 class TestSpreadBand(unittest.TestCase):
-    """A ``<var>_std`` beside the mean (``ReduceType.REDUCE``) draws a ±1σ band."""
+    """A std var named in ``_SPREAD_ATTR`` beside the mean draws a ±1σ band."""
 
     def test_line_graph_logs_mean_with_variance(self):
         rec = _FakeRecording()
         ds = xr.Dataset(
             {"metric": ("x", [1.0, 2.0]), "metric_std": ("x", [0.5, 0.1])},
             coords={"x": [0, 1]},
+            attrs={_SPREAD_ATTR: {"metric": "metric_std"}},
         )
         _log_line_graph(_fake_rr(), rec, ds, "", _Vars.param.metric, "x")
         assert len(rec.logged) == 2
@@ -220,20 +222,29 @@ class TestSpreadBand(unittest.TestCase):
 
     def test_scalar_logs_mean_with_variance(self):
         rec = _FakeRecording()
-        ds = xr.Dataset({"metric": xr.DataArray(3.0), "metric_std": xr.DataArray(2.0)})
+        ds = xr.Dataset(
+            {"metric": xr.DataArray(3.0), "metric_std": xr.DataArray(2.0)},
+            attrs={_SPREAD_ATTR: {"metric": "metric_std"}},
+        )
         _log_result_var(_fake_rr(), rec, ds, "", _Vars.param.metric)
         assert rec.logged == [("metric", ("Measurements", [3.0], [4.0]))]
 
     def test_nan_std_logs_no_band_rather_than_a_fabricated_one(self):
         """One valid repeat gives a NaN std: the point keeps its line, no band."""
         rec = _FakeRecording()
-        ds = xr.Dataset({"metric": xr.DataArray(3.0), "metric_std": xr.DataArray(np.nan)})
+        ds = xr.Dataset(
+            {"metric": xr.DataArray(3.0), "metric_std": xr.DataArray(np.nan)},
+            attrs={_SPREAD_ATTR: {"metric": "metric_std"}},
+        )
         _log_result_var(_fake_rr(), rec, ds, "", _Vars.param.metric)
         assert rec.logged == [("metric", ("Measurements", [3.0], None))]
 
     def test_units_reach_the_legend(self):
         rec = _FakeRecording()
-        ds = xr.Dataset({"timed": xr.DataArray(3.0), "timed_std": xr.DataArray(2.0)})
+        ds = xr.Dataset(
+            {"timed": xr.DataArray(3.0), "timed_std": xr.DataArray(2.0)},
+            attrs={_SPREAD_ATTR: {"timed": "timed_std"}},
+        )
         _log_result_var(_fake_rr(), rec, ds, "", _Vars.param.timed)
         assert rec.logged == [("timed", ("Measurements", [3.0], [4.0], ["s"]))]
 

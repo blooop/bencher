@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 # The most dims one rr.Tensor shows (a volume); a deeper sweep peels float dims first.
 _MAX_TENSOR_DIMS = 3
 
+# Dataset attr mapping each result var reduced across repeats to its std var.
+_SPREAD_ATTR = "rerun_spread"
+
 
 class RerunResult(BenchResultBase):
     """Result class that renders N-dimensional benchmark data into a rerun viewer.
@@ -269,8 +272,10 @@ class RerunResult(BenchResultBase):
         A squeezed dataset keeps the ``repeat`` dim whenever ``repeats > 1``, and the
         ``_log_*`` helpers read one value per cell, so every numeric result var used to
         fail to log at all. Numeric vars are taken from the ``REDUCE`` dataset instead,
-        which carries a ``<var>_std`` beside each mean for :func:`_log_numeric` to draw
-        as a band. ``REDUCE`` drops non-numeric vars, so those stay squeezed.
+        which carries a ``<var>_std`` beside each mean. The ``_SPREAD_ATTR`` attr maps
+        each reduced mean to its std var, and :func:`_log_numeric` draws a band only for
+        the vars it names: a user var that merely ends in ``_std`` is not a spread.
+        ``REDUCE`` drops non-numeric vars, so those stay squeezed.
         """
         dataset = self.to_dataset(reduce=ReduceType.SQUEEZE, result_var=result_var)
         if self.bench_cfg.repeats <= 1 or "repeat" not in dataset.dims:
@@ -284,8 +289,14 @@ class RerunResult(BenchResultBase):
             for name in (rv.name, f"{rv.name}_std")
             if name in reduced.data_vars
         ]
+        spread = {
+            rv.name: f"{rv.name}_std"
+            for rv in result_vars
+            if isinstance(rv, Number) and f"{rv.name}_std" in reduced.data_vars
+        }
         dataset = dataset.drop_vars([n for n in numeric if n in dataset.data_vars])
-        return dataset.assign({name: reduced[name] for name in numeric})
+        dataset = dataset.assign({name: reduced[name] for name in numeric})
+        return dataset.assign_attrs({_SPREAD_ATTR: spread})
 
     def to_rerun_plots(self, **kwargs: Any) -> pn.panel:  # pragma: no cover
         """Plot callback for the rerun backend — drop-in replacement for ``to_auto_plots``.
@@ -479,15 +490,16 @@ def _log_numeric(
 ) -> None:
     """Log one numeric value, with a ±1σ band when the dataset carries its spread.
 
-    ``REDUCE`` puts the std across repeats in ``<var>_std``; ``rr.Measurements`` draws
+    ``dataset.attrs[_SPREAD_ATTR]`` names the std var of each mean that
+    :meth:`RerunResult._rerun_dataset` reduced across repeats; ``rr.Measurements`` draws
     it in a TimeSeriesView as a translucent band of one standard deviation each side
     of the line. A NaN std (a cell with one valid repeat) logs no variance, so that
     point has a line and no band rather than a band of fabricated width. The result
     var's units go to the legend and tooltips, except the unitless default ``ul``.
     """
     rv_name = rv.name if hasattr(rv, "name") else str(rv)
-    std_name = f"{rv_name}_std"
-    if std_name not in dataset.data_vars:
+    std_name = dataset.attrs.get(_SPREAD_ATTR, {}).get(rv_name)
+    if std_name is None:
         recording.log(path, rr.Scalars(float(val)))
         return
     std = float(_extract_scalar(dataset, std_name, sel))

@@ -226,6 +226,16 @@ class FlatSecondDimSweep(RepeatedLineSweep):
     y = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=1)
 
 
+class UserStdSweep(RepeatedLineSweep):
+    """A user result var whose name happens to end in ``_std``."""
+
+    out_std = bn.ResultFloat()
+
+    def benchmark(self):
+        self.out_std = 5.0
+        return super().benchmark()
+
+
 def _record(monkeypatch, sweep, input_vars, result_vars, repeats=2) -> str:
     """Run *sweep* on the rerun backend and return the path of the .rrd it wrote."""
     captured = {}
@@ -300,6 +310,14 @@ class TestRepeatsDrawABand:
         values = [v[0] for b in batches for v in b.column("Measurements:values").to_pylist()]
         assert values == pytest.approx([0.0, 1.0, 2.0])
         assert all("log_tick" in b.schema.names for b in batches)
+
+    def test_a_user_var_named_std_draws_no_band(self, monkeypatch):
+        """With ``repeats=1`` nothing is reduced, so ``/out`` has no spread. A user
+        var named ``out_std`` used to be read as one and drew a fabricated band."""
+        path = _record(monkeypatch, UserStdSweep, ["x"], ["out", "out_std"], repeats=1)
+        columns = {c for b in _entity_batches(path, "/out") for c in b.schema.names}
+        assert "Scalars:scalars" in columns
+        assert not any(c.startswith("Measurements:") for c in columns)
 
 
 if __name__ == "__main__":
