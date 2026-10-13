@@ -57,7 +57,7 @@ python = "3.13.*"
 # The floor of the window the `rerun` extra declares. The default environment
 # resolves the newest release in that window, so without this feature the older
 # minor would be supported on paper only — and bencher's rerun surface includes
-# `rerun.experimental` (RrdReader, Chunk), which is where an alpha API moves.
+# `rerun.chunk` (RrdReader, Chunk), which is where an alpha API moves.
 [tool.pixi.feature.rerun-floor.pypi-dependencies]
 rerun-sdk = ">=0.38.0,<0.39"
 rerun-notebook = ">=0.38.0,<0.39"

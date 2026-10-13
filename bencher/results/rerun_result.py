@@ -66,7 +66,9 @@ class RerunResult(BenchResultBase):
 
     A rerun blueprint is built to control the viewer layout, with typed views
     (TimeSeriesView, TensorView, BarChartView) arranged in Grid/Vertical containers.
-    The ``log_time`` timeline is disabled so only ``log_tick`` is shown.
+    Rerun still stamps ``log_time`` on every row, so when the recording logs on
+    ``log_tick`` (``over_time``, or a 1-float line graph) the blueprint pins the time
+    panel to ``log_tick``; otherwise it pins no timeline.
 
     A ``ResultRerun`` skips all three phases: its samples are already recordings, so
     :class:`~bencher.results.rerun_summary.RerunSummaryResult` merges them into a

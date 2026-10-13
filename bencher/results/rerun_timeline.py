@@ -1325,7 +1325,7 @@ class RerunTimelineResult(BenchResultBase):
         from bencher.utils import gen_rerun_data_path
 
         # Underscore, not the "bencher/timeline" slash style ComposableContainerRerun
-        # uses: rerun 0.37 migrates a slashed application id to a generated entry name
+        # uses: rerun (since 0.37) migrates a slashed application id to a generated entry name
         # and logs a warning on every render saying so.
         recording = rr.RecordingStream(
             "bencher_timeline", make_default=False, make_thread_default=False
