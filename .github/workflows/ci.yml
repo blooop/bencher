@@ -36,7 +36,7 @@ jobs:
   # The rerun extra supports more than one rerun minor; the default environment
   # resolves the newest of them. This job runs the rerun tests against the floor
   # of that window, so the older minor is supported in fact and not just on paper
-  # (bencher calls rerun.experimental, which is where an alpha API moves).
+  # (bencher calls rerun.chunk, which is where an alpha API moves).
   ci-rerun-floor:
     runs-on: ubuntu-latest
     steps:

@@ -1,6 +1,6 @@
 [project]
 name = "holobench"
-version = "1.138.0"
+version = "1.139.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -57,10 +57,10 @@ python = "3.13.*"
 # The floor of the window the `rerun` extra declares. The default environment
 # resolves the newest release in that window, so without this feature the older
 # minor would be supported on paper only — and bencher's rerun surface includes
-# `rerun.experimental` (RrdReader, Chunk), which is where an alpha API moves.
+# `rerun.chunk` (RrdReader, Chunk), which is where an alpha API moves.
 [tool.pixi.feature.rerun-floor.pypi-dependencies]
-rerun-sdk = ">=0.37.0,<0.38"
-rerun-notebook = ">=0.37.0,<0.38"
+rerun-sdk = ">=0.38.0,<0.39"
+rerun-notebook = ">=0.38.0,<0.39"
 
 [tool.pixi.pypi-dependencies]
 holobench = { path = ".", editable = true }
@@ -102,7 +102,7 @@ docs = [
 #adds support for embedding rerun windows (alpha)
 #every minor named here is resolved by an environment and tested: the floor by
 #`rerun-floor`, the ceiling by the default env. Widen this only with a job to match.
-rerun = ["rerun-sdk>=0.37.0,<0.39", "rerun-notebook>=0.37.0,<0.39"]
+rerun = ["rerun-sdk>=0.38.0,<0.40", "rerun-notebook>=0.38.0,<0.40"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]
