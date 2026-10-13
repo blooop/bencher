@@ -16,14 +16,12 @@ from pathlib import Path
 import panel as pn
 import pytest
 import rerun as rr
+from rerun.chunk import RrdReader
 
 import bencher as bn
 from bencher.plugins.registry import get_registry
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.rerun_result import RerunResult
-from bencher.utils_rerun import rerun_chunk_api
-
-RrdReader = rerun_chunk_api().RrdReader
 
 LOGGER = "bencher.results.rerun_result"
 
@@ -201,6 +199,61 @@ class TestNothingRecorded:
         assert panes == []
         assert "No rerun recordings to merge" in caplog.text
         assert "recording" in caplog.text
+
+
+class RepeatedLineSweep(bn.ParametrizedSweep):
+    """A 1-float line whose repeats spread by a known amount at each point."""
+
+    x = bn.FloatSweep(default=0.0, bounds=[0.0, 2.0], samples=3)
+
+    out = bn.ResultFloat()
+    label = bn.ResultString()
+
+    calls = 0
+
+    def benchmark(self):
+        # Successive calls alternate x - 1 and x + 1. With three points and two
+        # repeats, each point gets one of each whichever order the sweep runs in,
+        # so its mean is x and its std (xarray's, ddof=0) is 1.
+        RepeatedLineSweep.calls += 1
+        self.out = self.x + (1.0 if RepeatedLineSweep.calls % 2 else -1.0)
+        self.label = f"x={self.x}"
+        return super().benchmark()
+
+
+class TestRepeatsDrawABand:
+    def test_line_graph_with_repeats_logs_measurements_with_variance(self, monkeypatch):
+        """``repeats > 1`` used to log nothing: a squeezed dataset keeps ``repeat``,
+        and one-value-per-cell reads failed with "can only convert an array of size
+        1". The mean must now reach the recording with its variance for the band."""
+        captured = {}
+
+        def capture(path, **_kwargs):
+            captured["path"] = path
+            return pn.pane.Markdown("viewer")
+
+        monkeypatch.setattr("bencher.utils_rrd.rrd_file_to_pane", capture)
+        RepeatedLineSweep.calls = 0
+        run_cfg = bn.BenchRunCfg(
+            repeats=2, backend="rerun", cache_results=False, cache_samples=False
+        )
+        res = (
+            RepeatedLineSweep()
+            .to_bench(run_cfg)
+            .plot_sweep(input_vars=["x"], result_vars=["out", "label"], plot_callbacks=False)
+        )
+        res.to_rerun(result_var="out")
+
+        reader = RrdReader(str(captured["path"]))
+        values, variances = [], []
+        for chunk in reader.stream(store=reader.recordings()[0]):
+            if str(chunk.entity_path) != "/out":
+                continue
+            batch = chunk.to_record_batch()
+            values += [v[0] for v in batch.column("Measurements:values").to_pylist()]
+            variances += [v[0] for v in batch.column("Measurements:variances").to_pylist()]
+        assert values == pytest.approx([0.0, 1.0, 2.0])
+        assert variances == pytest.approx([1.0, 1.0, 1.0])
 
 
 if __name__ == "__main__":

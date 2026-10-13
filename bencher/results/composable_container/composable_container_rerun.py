@@ -84,6 +84,7 @@ _ARCHETYPE_VIEW_KINDS = {
     "GraphNodes": RerunViewKind.graph,
     "GeoLineStrings": RerunViewKind.map,
     "GeoPoints": RerunViewKind.map,
+    "Measurements": RerunViewKind.time_series,
     "Scalars": RerunViewKind.time_series,
     "SeriesLines": RerunViewKind.time_series,
     "SeriesPoints": RerunViewKind.time_series,
@@ -276,10 +277,7 @@ def _batch_time_bounds(batch) -> dict[str, tuple[int, int]]:
 def _shifted_chunks(chunk, offsets: dict[str, int]) -> list:
     """Return ``chunk`` with each timeline column advanced by ``offsets[timeline]``."""
     import pyarrow as pa
-
-    from bencher.utils_rerun import rerun_chunk_api
-
-    Chunk = rerun_chunk_api().Chunk
+    from rerun.chunk import Chunk
 
     batch = chunk.to_record_batch()
     columns = list(batch.columns)
@@ -322,9 +320,7 @@ class _ComposedItem:
 
 def _read_item(path: str | Path, *, prefix: str, label: str) -> _ComposedItem:
     """Decode one ``.rrd`` file, re-rooting every entity path under ``prefix``."""
-    from bencher.utils_rerun import rerun_chunk_api
-
-    RrdReader = rerun_chunk_api().RrdReader
+    from rerun.chunk import RrdReader
 
     reader = RrdReader(path)
     stores = reader.recordings()

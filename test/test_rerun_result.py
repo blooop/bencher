@@ -38,6 +38,7 @@ class _Vars(param.Parameterized):
     """Owner class so the result-var parameters carry their names."""
 
     metric = ResultFloat()
+    timed = ResultFloat(units="s")
     label = ResultString()
     file_out = ResultPath()
     ref = ResultReference()
@@ -47,6 +48,12 @@ class _Vars(param.Parameterized):
 def _fake_rr() -> SimpleNamespace:
     return SimpleNamespace(
         Scalars=lambda value: ("Scalars", value),
+        Measurements=lambda values, variances=None, units=None: (
+            "Measurements",
+            values,
+            variances,
+            *([units] if units else []),
+        ),
         BarChart=lambda values: ("BarChart", values),
         Tensor=lambda arr, dim_names=None, value_range=None: (
             "Tensor",
@@ -192,6 +199,42 @@ class TestResultVarDispatch(unittest.TestCase):
         out = "\n".join(cm.output)
         self.assertIn("ResultPath", out)
         self.assertIn("file_out", out)
+
+
+class TestSpreadBand(unittest.TestCase):
+    """A ``<var>_std`` beside the mean (``ReduceType.REDUCE``) draws a ±1σ band."""
+
+    def test_line_graph_logs_mean_with_variance(self):
+        rec = _FakeRecording()
+        ds = xr.Dataset(
+            {"metric": ("x", [1.0, 2.0]), "metric_std": ("x", [0.5, 0.1])},
+            coords={"x": [0, 1]},
+        )
+        _log_line_graph(_fake_rr(), rec, ds, "", _Vars.param.metric, "x")
+        self.assertEqual(len(rec.logged), 2)
+        first, second = rec.logged[0][1], rec.logged[1][1]
+        self.assertEqual(first[:2], ("Measurements", [1.0]))
+        self.assertAlmostEqual(first[2][0], 0.25)
+        self.assertAlmostEqual(second[2][0], 0.01)
+
+    def test_scalar_logs_mean_with_variance(self):
+        rec = _FakeRecording()
+        ds = xr.Dataset({"metric": xr.DataArray(3.0), "metric_std": xr.DataArray(2.0)})
+        _log_result_var(_fake_rr(), rec, ds, "", _Vars.param.metric)
+        self.assertEqual(rec.logged, [("metric", ("Measurements", [3.0], [4.0]))])
+
+    def test_nan_std_logs_no_band_rather_than_a_fabricated_one(self):
+        """One valid repeat gives a NaN std: the point keeps its line, no band."""
+        rec = _FakeRecording()
+        ds = xr.Dataset({"metric": xr.DataArray(3.0), "metric_std": xr.DataArray(np.nan)})
+        _log_result_var(_fake_rr(), rec, ds, "", _Vars.param.metric)
+        self.assertEqual(rec.logged, [("metric", ("Measurements", [3.0], None))])
+
+    def test_units_reach_the_legend(self):
+        rec = _FakeRecording()
+        ds = xr.Dataset({"timed": xr.DataArray(3.0), "timed_std": xr.DataArray(2.0)})
+        _log_result_var(_fake_rr(), rec, ds, "", _Vars.param.timed)
+        self.assertEqual(rec.logged, [("timed", ("Measurements", [3.0], [4.0], ["s"]))])
 
 
 if __name__ == "__main__":

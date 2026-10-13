@@ -12,6 +12,7 @@ import panel as pn
 import pytest
 import rerun as rr
 from PIL import Image
+from rerun.chunk import RrdReader
 
 import bencher as bn
 from bencher.plugins.registry import get_registry
@@ -29,9 +30,6 @@ from bencher.results.rerun_timeline import (
     default_timeline_dim,
     encode_index,
 )
-from bencher.utils_rerun import rerun_chunk_api
-
-RrdReader = rerun_chunk_api().RrdReader
 
 NANOS_PER_SECOND = 1_000_000_000
 

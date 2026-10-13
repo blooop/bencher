@@ -46,6 +46,10 @@ class RerunResult(BenchResultBase):
     - 3 dims -> ``rr.Tensor`` (3-D array displayed as volume slices)
     - >3 dims -> peel outermost float dim as entity branch, recurse
 
+    With ``repeats > 1`` a numeric result var is reduced to its mean across repeats,
+    and the scalar and line-graph cases log ``rr.Measurements`` instead of
+    ``rr.Scalars``: the mean with its variance, drawn as a ±1σ band.
+
     A rerun blueprint is built to control the viewer layout, with typed views
     (TimeSeriesView, TensorView, BarChartView) arranged in Grid/Vertical containers.
     The ``log_time`` timeline is disabled so only ``log_tick`` is shown.
@@ -198,7 +202,7 @@ class RerunResult(BenchResultBase):
         # Disable log_time before any logging so wall-clock timestamps are never recorded
         recording.disable_timeline("log_time")
 
-        dataset = self.to_dataset(reduce=ReduceType.SQUEEZE, result_var=result_var)
+        dataset = self._rerun_dataset(result_vars, result_var)
 
         # Classify dimensions
         float_dims = [v.name for v in self.plt_cnt_cfg.float_vars]
@@ -248,6 +252,29 @@ class RerunResult(BenchResultBase):
         with open(rrd_path, "wb") as f:
             f.write(rrd_data)
         return rrd_file_to_pane(rrd_path, width=width, height=height)
+
+    def _rerun_dataset(self, result_vars: list, result_var: Parameter | None) -> xr.Dataset:
+        """The dataset the rerun mapping logs, with repeats reduced to mean and spread.
+
+        A squeezed dataset keeps the ``repeat`` dim whenever ``repeats > 1``, and the
+        ``_log_*`` helpers read one value per cell, so every numeric result var used to
+        fail to log at all. Numeric vars are taken from the ``REDUCE`` dataset instead,
+        which carries a ``<var>_std`` beside each mean for :func:`_log_numeric` to draw
+        as a band. ``REDUCE`` drops non-numeric vars, so those stay squeezed.
+        """
+        dataset = self.to_dataset(reduce=ReduceType.SQUEEZE, result_var=result_var)
+        if self.bench_cfg.repeats <= 1 or "repeat" not in dataset.dims:
+            return dataset
+        reduced = self.to_dataset(reduce=ReduceType.REDUCE, result_var=result_var)
+        numeric = [
+            name
+            for rv in result_vars
+            if isinstance(rv, Number)
+            for name in (rv.name, f"{rv.name}_std")
+            if name in reduced.data_vars
+        ]
+        dataset = dataset.drop_vars([n for n in numeric if n in dataset.data_vars])
+        return dataset.assign({name: reduced[name] for name in numeric})
 
     def to_rerun_plots(self, **kwargs) -> pn.panel:  # pragma: no cover
         """Plot callback for the rerun backend — drop-in replacement for ``to_auto_plots``.
@@ -418,9 +445,36 @@ def _log_line_graph(rr, recording, dataset: xr.Dataset, entity_path: str, rv, fl
                 # gap instead of a fabricated value (plan 23 C12).
                 continue
             recording.set_time("log_tick", sequence=i)
-            recording.log(path, rr.Scalars(float(val)))
+            _log_numeric(rr, recording, dataset, path, rv, val, {float_dim: coord_val})
     except (KeyError, ValueError, TypeError) as e:
         logger.warning("Could not log line graph for %s at %r: %s", rv_name, path, e)
+
+
+def _log_numeric(rr, recording, dataset: xr.Dataset, path: str, rv, val, sel=None):
+    """Log one numeric value, with a ±1σ band when the dataset carries its spread.
+
+    ``REDUCE`` puts the std across repeats in ``<var>_std``; ``rr.Measurements`` draws
+    it in a TimeSeriesView as a translucent band of one standard deviation each side
+    of the line. A NaN std (a cell with one valid repeat) logs no variance, so that
+    point has a line and no band rather than a band of fabricated width. The result
+    var's units go to the legend and tooltips, except the unitless default ``ul``.
+    """
+    rv_name = rv.name if hasattr(rv, "name") else str(rv)
+    std_name = f"{rv_name}_std"
+    if std_name not in dataset.data_vars:
+        recording.log(path, rr.Scalars(float(val)))
+        return
+    std = float(_extract_scalar(dataset, std_name, sel))
+    variances = [std * std] if np.isfinite(std) else None
+    units = getattr(rv, "units", None)
+    recording.log(
+        path,
+        rr.Measurements(
+            values=[float(val)],
+            variances=variances,
+            units=[units] if units and units != "ul" else None,
+        ),
+    )
 
 
 def _log_bar_chart(rr, recording, dataset: xr.Dataset, entity_path: str, rv, cat_dim: str):
@@ -495,9 +549,10 @@ def _log_result_var(rr, recording, dataset: xr.Dataset, entity_path: str, rv):
             recording.log(path, rr.TextDocument(str(val)))
             return
 
-        # Numeric family (ResultFloat/ResultBool/param.Number subclasses) -> Scalars.
+        # Numeric family (ResultFloat/ResultBool/param.Number subclasses) -> Scalars,
+        # or Measurements when repeats give it a spread.
         if isinstance(rv, Number):
-            recording.log(path, rr.Scalars(float(val)))
+            _log_numeric(rr, recording, dataset, path, rv, val)
             return
 
         # No blind float() fallthrough: a type without a rerun mapping (e.g.
@@ -525,7 +580,12 @@ def _build_blueprint(rrb, result_vars, float_dims, cat_dims, time_dim, dim_value
         dim_values=dim_values,
         inside_time_iteration=False,
     )
-    return rrb.Blueprint(root, collapse_panels=True)
+    # Pinned, not left to the viewer: rerun still stamps ``log_time`` on every row
+    # despite ``disable_timeline`` in ``_to_rerun_mapped``. The viewer opened on it,
+    # which spaced the line graph's points by logging time, not by sweep index.
+    return rrb.Blueprint(
+        root, rrb.TimePanel(state="collapsed", timeline="log_tick"), collapse_panels=True
+    )
 
 
 def _peel_dim_as_grid(rrb, entity_path, dim, dim_values, build_child):
