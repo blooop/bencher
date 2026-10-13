@@ -644,6 +644,10 @@ def _build_blueprint(
     # Pinned, not left to the viewer: rerun still stamps ``log_time`` on every row
     # despite ``disable_timeline`` in ``_to_rerun_mapped``. The viewer opened on it,
     # which spaced the line graph's points by logging time, not by sweep index.
+    # Only over_time and a 1-float line graph log on ``log_tick``; pinning it for
+    # any other layout would point the viewer at a timeline with no data.
+    if time_dim is None and len(float_dims) != 1:
+        return rrb.Blueprint(root, collapse_panels=True)
     return rrb.Blueprint(
         root, rrb.TimePanel(state="collapsed", timeline="log_tick"), collapse_panels=True
     )

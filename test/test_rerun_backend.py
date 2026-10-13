@@ -15,12 +15,13 @@ from pathlib import Path
 import panel as pn
 import pytest
 import rerun as rr
+import rerun.blueprint as rrb
 from rerun.chunk import RrdReader
 
 import bencher as bn
 from bencher.plugins.registry import get_registry
 from bencher.results.bench_result_base import ReduceType
-from bencher.results.rerun_result import RerunResult
+from bencher.results.rerun_result import RerunResult, _build_blueprint
 
 LOGGER = "bencher.results.rerun_result"
 
@@ -318,6 +319,36 @@ class TestRepeatsDrawABand:
         columns = {c for b in _entity_batches(path, "/out") for c in b.schema.names}
         assert "Scalars:scalars" in columns
         assert not any(c.startswith("Measurements:") for c in columns)
+
+
+class TestBlueprintTimeline:
+    """The blueprint pins ``log_tick`` only when the recording logs on it."""
+
+    @staticmethod
+    def _pinned_timeline(float_dims, cat_dims, time_dim=None):
+        dims = [*float_dims, *cat_dims]
+        blueprint = _build_blueprint(
+            rrb=rrb,
+            result_vars=[RepeatedLineSweep.param.out],
+            float_dims=float_dims,
+            cat_dims=cat_dims,
+            time_dim=time_dim,
+            dim_values={d: ["0", "1"] for d in dims},
+        )
+        return getattr(getattr(blueprint, "time_panel", None), "timeline", None)
+
+    @pytest.mark.parametrize(
+        ("float_dims", "time_dim"), [(["x"], None), ([], "over_time"), (["x", "y"], "over_time")]
+    )
+    def test_pinned_when_logged_on_log_tick(self, float_dims, time_dim):
+        assert self._pinned_timeline(float_dims, [], time_dim) == "log_tick"
+
+    @pytest.mark.parametrize(
+        ("float_dims", "cat_dims"), [([], []), ([], ["c"]), (["x", "y"], []), (["x", "y"], ["c"])]
+    )
+    def test_not_pinned_when_nothing_is_on_log_tick(self, float_dims, cat_dims):
+        """A recording with no ``log_tick`` rows pinned to it showed an empty view."""
+        assert self._pinned_timeline(float_dims, cat_dims) is None
 
 
 if __name__ == "__main__":
