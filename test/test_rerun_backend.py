@@ -207,6 +207,7 @@ class RepeatedLineSweep(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0.0, bounds=[0.0, 2.0], samples=3)
 
     out = bn.ResultFloat()
+    timed = bn.ResultFloat(units="s")
     label = bn.ResultString()
 
     calls = 0
@@ -214,9 +215,12 @@ class RepeatedLineSweep(bn.ParametrizedSweep):
     def benchmark(self):
         # Successive calls alternate x - 1 and x + 1. With three points and two
         # repeats, each point gets one of each whichever order the sweep runs in,
-        # so its mean is x and its std (xarray's, ddof=0) is 1.
+        # so its mean is x and its std (xarray's, ddof=0) is 1. That needs an odd
+        # sample count: with an even one, every point's calls share one parity.
+        assert self.param.x.samples % 2 == 1, "samples must stay odd"
         RepeatedLineSweep.calls += 1
         self.out = self.x + (1.0 if RepeatedLineSweep.calls % 2 else -1.0)
+        self.timed = self.out
         self.label = f"x={self.x}"
         return super().benchmark()
 
@@ -299,8 +303,22 @@ class TestRepeatsDrawABand:
             batch = chunk.to_record_batch()
             values += [v[0] for v in batch.column("Measurements:values").to_pylist()]
             variances += [v[0] for v in batch.column("Measurements:variances").to_pylist()]
+            assert "Measurements:units" not in batch.schema.names
         assert values == pytest.approx([0.0, 1.0, 2.0])
         assert variances == pytest.approx([1.0, 1.0, 1.0])
+
+    def test_units_reach_the_recording(self, monkeypatch):
+        """The unitless default ``ul`` logs no units; any other unit reaches the legend."""
+        path = _record(monkeypatch, RepeatedLineSweep, ["x"], ["out", "timed"])
+        out_columns = {c for b in _entity_batches(path, "/out") for c in b.schema.names}
+        assert "Measurements:values" in out_columns
+        assert "Measurements:units" not in out_columns
+        units = [
+            u
+            for b in _entity_batches(path, "/timed")
+            for u in b.column("Measurements:units").to_pylist()
+        ]
+        assert units == [["s"]] * 3
 
     def test_one_sample_dim_keeps_the_line_graph(self, monkeypatch):
         """A float dim of one sample is squeezed out with ``repeats=1``, so the sweep

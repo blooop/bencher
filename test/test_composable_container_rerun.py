@@ -14,6 +14,7 @@ from bencher.results.composable_container.composable_container_rerun import (
     RerunRecording,
     RerunViewKind,
     _batch_time_bounds,
+    _batch_view_kinds,
     _SharedViewLayout,
     _StackedViewLayout,
 )
@@ -190,6 +191,20 @@ def test_infers_multiple_view_kinds(tmp_path):
 
     identifiers = _blueprint_column_values(output, "ViewBlueprint:class_identifier")
     assert {value[0] for value in identifiers} == {"3D", "TimeSeries"}
+
+
+def test_measurements_go_to_a_time_series_view(tmp_path):
+    """The rerun backend logs a mean with its spread as ``rr.Measurements``."""
+    source = _write_recording(
+        tmp_path, "band", ("metrics/loss", rr.Measurements(values=[0.5], variances=[0.04]))
+    )
+    reader = RrdReader(source)
+    kinds = [
+        _batch_view_kinds(chunk.to_record_batch())
+        for chunk in reader.stream(store=reader.recordings()[0])
+        if str(chunk.entity_path) == "/metrics/loss"
+    ]
+    assert kinds == [{RerunViewKind.time_series}]
 
 
 def test_view_kind_can_be_overridden(tmp_path):
