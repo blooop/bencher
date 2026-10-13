@@ -8,7 +8,7 @@ from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Generator
 
 
 @dataclass
@@ -45,7 +45,7 @@ class SweepTimings:
 
 
 @contextmanager
-def phase_timer() -> Iterator[Callable[[], float]]:
+def phase_timer() -> Generator[Callable[[], float]]:
     """Context manager that yields a callable returning elapsed milliseconds.
 
     Usage::
