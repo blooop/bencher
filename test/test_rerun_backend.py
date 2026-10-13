@@ -220,6 +220,43 @@ class RepeatedLineSweep(bn.ParametrizedSweep):
         return super().benchmark()
 
 
+class FlatSecondDimSweep(RepeatedLineSweep):
+    """A line over ``x`` with a second float dim of one sample."""
+
+    y = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=1)
+
+
+def _record(monkeypatch, sweep, input_vars, result_vars, repeats=2) -> str:
+    """Run *sweep* on the rerun backend and return the path of the .rrd it wrote."""
+    captured = {}
+
+    def capture(path, **_kwargs):
+        captured["path"] = path
+        return pn.pane.Markdown("viewer")
+
+    monkeypatch.setattr("bencher.utils_rrd.rrd_file_to_pane", capture)
+    RepeatedLineSweep.calls = 0
+    run_cfg = bn.BenchRunCfg(
+        repeats=repeats, backend="rerun", cache_results=False, cache_samples=False
+    )
+    res = (
+        sweep()
+        .to_bench(run_cfg)
+        .plot_sweep(input_vars=input_vars, result_vars=result_vars, plot_callbacks=False)
+    )
+    res.to_rerun()
+    return str(captured["path"])
+
+
+def _entity_batches(path: str, entity: str) -> list:
+    reader = RrdReader(path)
+    return [
+        chunk.to_record_batch()
+        for chunk in reader.stream(store=reader.recordings()[0])
+        if str(chunk.entity_path) == entity
+    ]
+
+
 class TestRepeatsDrawABand:
     def test_line_graph_with_repeats_logs_measurements_with_variance(self, monkeypatch):
         """``repeats > 1`` used to log nothing: a squeezed dataset keeps ``repeat``,
@@ -253,6 +290,16 @@ class TestRepeatsDrawABand:
             variances += [v[0] for v in batch.column("Measurements:variances").to_pylist()]
         assert values == pytest.approx([0.0, 1.0, 2.0])
         assert variances == pytest.approx([1.0, 1.0, 1.0])
+
+    def test_one_sample_dim_keeps_the_line_graph(self, monkeypatch):
+        """A float dim of one sample is squeezed out with ``repeats=1``, so the sweep
+        is a line graph. ``repeats=2`` kept it in the reduced vars, and ``/out`` came
+        back as one 3x1 tensor instead of three points with a band."""
+        path = _record(monkeypatch, FlatSecondDimSweep, ["x", "y"], ["out"])
+        batches = _entity_batches(path, "/out")
+        values = [v[0] for b in batches for v in b.column("Measurements:values").to_pylist()]
+        assert values == pytest.approx([0.0, 1.0, 2.0])
+        assert all("log_tick" in b.schema.names for b in batches)
 
 
 if __name__ == "__main__":

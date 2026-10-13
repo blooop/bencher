@@ -276,6 +276,7 @@ class RerunResult(BenchResultBase):
         if self.bench_cfg.repeats <= 1 or "repeat" not in dataset.dims:
             return dataset
         reduced = self.to_dataset(reduce=ReduceType.REDUCE, result_var=result_var)
+        reduced = reduced.squeeze([d for d in reduced.dims if d not in dataset.dims], drop=True)
         numeric = [
             name
             for rv in result_vars
