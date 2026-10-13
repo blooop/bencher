@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standard deviation wide each side. This is the rerun counterpart of the `hv.Spread`
   band on a holoviews curve. A point with one valid repeat has no std, so it gets the
   line and no band. The result var's units go to the legend and tooltips.
+- `example_rerun_repeats_band` in the Rerun Integration gallery: a noisy sine swept with
+  `repeats=8` on the rerun backend, drawn as the mean line in its ±1σ band.
 - **The rerun mapped viewer opens on the `log_tick` timeline.** rerun still records
   `log_time` on every row, and the viewer opened on it, so a line graph's points were
   spaced by logging time instead of by sweep index. The blueprint now pins `log_tick`.

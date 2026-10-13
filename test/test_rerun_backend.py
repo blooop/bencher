@@ -338,6 +338,26 @@ class TestRepeatsDrawABand:
         assert "Scalars:scalars" in columns
         assert not any(c.startswith("Measurements:") for c in columns)
 
+    def test_gallery_example_draws_the_band(self, monkeypatch):
+        """The Rerun Repeats Band gallery example logs a band with units on every tick."""
+        from bencher.example.generated.rerun.example_rerun_repeats_band import (
+            example_rerun_repeats_band,
+        )
+
+        paths = []
+        monkeypatch.setattr(
+            "bencher.utils_rrd.rrd_file_to_pane",
+            lambda path, **_kwargs: paths.append(path) or pn.pane.Markdown("viewer"),
+        )
+        example_rerun_repeats_band(bn.BenchRunCfg(cache_results=False, cache_samples=False))
+
+        batches = [b for path in paths for b in _entity_batches(path, "/out")]
+        variances = [v[0] for b in batches for v in b.column("Measurements:variances").to_pylist()]
+        units = [u for b in batches for u in b.column("Measurements:units").to_pylist()]
+        assert len(variances) == 20
+        assert all(v > 0 for v in variances)
+        assert units == [["V"]] * 20
+
 
 class TestBlueprintTimeline:
     """The blueprint pins ``log_tick`` only when the recording logs on it."""
