@@ -15,6 +15,13 @@ class TestBenchReport(unittest.TestCase):
         bench_report = BenchReport(bench_name)
         assert bench_report.bench_name == bench_name
 
+    def test_pane_can_be_replaced(self):
+        """``pane`` was a plain attribute, so code that swaps in its own tabs keeps working."""
+        bench_report = BenchReport("swap")
+        tabs = pn.Tabs(name="mine")
+        bench_report.pane = tabs
+        assert bench_report.pane is tabs
+
     def test_publish_without_a_name_says_what_is_missing(self):
         """An unnamed report has no branch to publish to, on either debug setting.
 

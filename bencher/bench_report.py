@@ -173,6 +173,10 @@ class BenchReport(BenchPlotServer):
             self._pane = self._new_pane()
         return self._pane
 
+    @pane.setter
+    def pane(self, tabs: pn.Tabs) -> None:
+        self._pane = tabs
+
     @property
     def bench_results(self) -> tuple[BenchResult, ...]:
         """The results registered via :meth:`append_result`, in registration order.
