@@ -243,3 +243,21 @@ except ImportError as exc:
     proc = _run([sys.executable, "-c", probe], tmp_path, core_env)
     assert proc.returncode == 0, proc.stderr
     assert "pip install holobench" in proc.stdout, proc.stdout
+
+
+def test_the_cli_names_the_missing_install_without_a_traceback(tmp_path, core_env):
+    saved = tmp_path / "core.pkl"
+    probe = HEAVY_FEATURE_PROBE.format(call=f"bn.save_result(res, {str(saved)!r})")
+    assert _run([sys.executable, "-c", probe], tmp_path, core_env).returncode == 0
+    holds_plot = tmp_path / "plot.pkl"
+    holds_plot.write_bytes(pickle.dumps(hv.Curve([(0, 1), (1, 2)])))
+
+    for args in (
+        [str(saved), str(tmp_path / "html")],  # rendering needs panel
+        [str(holds_plot), str(tmp_path / "html")],  # loading needs holoviews
+        ["compare", str(holds_plot), str(holds_plot), "--json", str(tmp_path / "c.json")],
+    ):
+        proc = _run([*BENCHER_CLI, *args], tmp_path, core_env)
+        assert proc.returncode == 1, proc.stderr
+        assert "pip install holobench" in proc.stderr, proc.stderr
+        assert "Traceback" not in proc.stderr, proc.stderr

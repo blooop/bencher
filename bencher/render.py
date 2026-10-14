@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any, BinaryIO
 
 from bencher.bench_report import BenchReport
 from bencher.complete_report import execution_for_results
-from bencher.optional_deps import full_install_required
+from bencher.optional_deps import FullInstallRequiredError, full_install_required
 from bencher.results.bench_result import BenchResult
 
 if TYPE_CHECKING:
@@ -312,6 +312,12 @@ def _compare_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _needs_full_install(exc: FullInstallRequiredError) -> int:
+    # The message says what to install; a traceback would only bury it.
+    print(f"{_prog()}: {exc}", file=sys.stderr)  # noqa: T201 - CLI error output
+    return 1
+
+
 def _load_or_fail(path: str, label: str) -> tuple[BenchResult | None, int]:
     """Load a saved result, returning ``(result, 0)`` or ``(None, exit_code)``.
 
@@ -324,6 +330,8 @@ def _load_or_fail(path: str, label: str) -> tuple[BenchResult | None, int]:
         return None, 2
     try:
         return load_result(path), 0
+    except FullInstallRequiredError as exc:
+        return None, _needs_full_install(exc)
     except Exception:
         logger.exception("Failed to load %s from %s", label, path)
         return None, 1
@@ -416,6 +424,8 @@ def main(argv: list[str] | None = None) -> int:
             from bencher.report_export import result_to_json
 
             result_to_json(bench_res, args.json_path)
+    except FullInstallRequiredError as exc:
+        return _needs_full_install(exc)
     except Exception:
         # Top-level CLI guard: convert any render failure into a clean exit code.
         logger.exception("Failed to render report from %s", args.result_path)
