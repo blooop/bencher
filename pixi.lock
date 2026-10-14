@@ -1531,24 +1531,24 @@ packages:
   size: 27468597
   timestamp: 1767671008593
 - pypi: ./
-  name: holobench
+  name: holobench-core
   requires_dist:
-  - holoviews>=1.15,<=1.23.2
   - numpy>=1.0,<=2.5.1
   - param>=2.0,<=2.4.2
-  - hvplot>=0.12.0,<=0.12.2
-  - panel>=1.9.0,<=1.9.4
   - diskcache>=5.6,<=5.6.3
-  - optuna>=3.2,<=5.0.0
   - xarray>=2023.7,<=2026.9.0
-  - plotly>=5.15,<=7.1.0
   - pandas>=2.0,<=3.0.6
   - strenum>=0.4.0,<=0.4.15
-  - scikit-learn>=1.2,<=1.9.1
-  - moviepy>=2.1.2,<=2.2.1
   - matplotlib>=3.7,<=3.11.2
   - jinja2>=3.0,<=3.1.6
   - pyyaml>=6.0,<=6.0.3
+  - holoviews>=1.15,<=1.23.2 ; extra == 'full'
+  - hvplot>=0.12.0,<=0.12.2 ; extra == 'full'
+  - panel>=1.9.0,<=1.9.4 ; extra == 'full'
+  - optuna>=3.2,<=5.0.0 ; extra == 'full'
+  - plotly>=5.15,<=7.1.0 ; extra == 'full'
+  - scikit-learn>=1.2,<=1.9.1 ; extra == 'full'
+  - moviepy>=2.1.2,<=2.2.1 ; extra == 'full'
   - nbformat ; extra == 'test'
   - nbclient>=0.7,<=0.11.0 ; extra == 'test'
   - ipykernel ; extra == 'test'

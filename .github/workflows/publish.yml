@@ -17,9 +17,21 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    # Two distributions, each published when its version is ahead of PyPI's.
+    # holobench-core (the repo root) goes first: holobench pins holobench-core[full] at
+    # the same version, and its step resolves that pin against the editable install the
+    # first step leaves behind. The GitHub release and its v<version> tag come from the
+    # first step only, so the second does not try to create the tag again.
     steps:
     - uses: etils-actions/pypi-auto-publish@v1
       with:
+        pkg-name: holobench-core
         pypi-token: ${{ secrets.PYPI_API_TOKEN }}
         gh-token: ${{ secrets.GITHUB_TOKEN }}
         parse-changelog: true
+    - uses: etils-actions/pypi-auto-publish@v1
+      with:
+        pkg-name: holobench
+        path: holobench
+        git-ref: skip
+        pypi-token: ${{ secrets.PYPI_API_TOKEN }}

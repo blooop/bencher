@@ -1,0 +1,32 @@
+# The holobench distribution: holobench-core (the bencher package, built from the
+# repository root) with its `full` extra, at the same version. It ships no code of its
+# own, so `pip install holobench` installs and imports exactly what it always has.
+# Bump the version and both pins with the root pyproject.toml (test/test_packaging.py).
+[project]
+name = "holobench"
+version = "1.138.0"
+
+authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
+description = "A package for benchmarking the performance of arbitrary functions"
+readme = "README.md"
+license = "MIT"
+
+requires-python = ">=3.11,<3.14"
+
+dependencies = ["holobench-core[full]==1.138.0"]
+
+[project.optional-dependencies]
+rerun = ["holobench-core[rerun]==1.138.0"]
+
+[project.urls]
+Repository = "https://github.com/blooop/bencher"
+Home = "https://github.com/blooop/bencher"
+Documentation = "https://bencher.readthedocs.io/en/latest/"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Metadata only: the bencher package and the `bencher` command come from holobench-core.
+[tool.hatch.build.targets.wheel]
+bypass-selection = true

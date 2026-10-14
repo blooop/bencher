@@ -1,30 +1,31 @@
+# Two distributions ship from this repo. This file builds holobench-core: the bencher
+# package with only what a sweep, its claims, `bencher compare` and `bencher ab` need.
+# holobench/pyproject.toml builds holobench, which installs holobench-core[full] at the
+# same version -- everything, as `pip install holobench` always has. Bump both versions
+# together (test/test_packaging.py checks they match).
 [project]
-name = "holobench"
-version = "1.139.0"
+name = "holobench-core"
+version = "1.138.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
-description = "A package for benchmarking the performance of arbitrary functions"
+description = "Benchmark arbitrary functions: sweeps, claims and A/B evidence without the plotting stack"
 readme = "README.md"
 license = "MIT"
 
 requires-python = ">=3.11,<3.14"
 
 dependencies = [
-    "holoviews>=1.15,<=1.23.2",
     "numpy>=1.0,<=2.5.1",
     "param>=2.0,<=2.4.2",
-    "hvplot>=0.12.0,<=0.12.2",
-    "panel>=1.9.0,<=1.9.4",
     "diskcache>=5.6,<=5.6.3",
-    "optuna>=3.2,<=5.0.0",
     "xarray>=2023.7,<=2026.9.0",
-    "plotly>=5.15,<=7.1.0",
     "pandas>=2.0,<=3.0.6",
     "strenum>=0.4.0,<=0.4.15",
-    "scikit-learn>=1.2,<=1.9.1",
-    "moviepy>=2.1.2,<=2.2.1",
+    # The evidence PNGs.
     "matplotlib>=3.7,<=3.11.2",
+    # The scorecard templates.
     "jinja2>=3.0,<=3.1.6",
+    # YamlSweep. The full stack always brought it in (bokeh, panel, optuna).
     "pyyaml>=6.0,<=6.0.3",
 ]
 
@@ -64,9 +65,22 @@ rerun-sdk = ">=0.38.0,<0.39"
 rerun-notebook = ">=0.38.0,<0.39"
 
 [tool.pixi.pypi-dependencies]
-holobench = { path = ".", editable = true }
+holobench-core = { path = ".", editable = true, extras = ["full"] }
 
 [project.optional-dependencies]
+# Plotting, the report server, optimisation and video. `pip install holobench` installs
+# holobench-core with this extra; bencher.optional_deps.HEAVY_PACKAGES names what a core
+# install is missing, and test/test_packaging.py keeps the two lists in step.
+full = [
+    "holoviews>=1.15,<=1.23.2",
+    "hvplot>=0.12.0,<=0.12.2",
+    "panel>=1.9.0,<=1.9.4",
+    "optuna>=3.2,<=5.0.0",
+    "plotly>=5.15,<=7.1.0",
+    "scikit-learn>=1.2,<=1.9.1",
+    "moviepy>=2.1.2,<=2.2.1",
+]
+
 test = [
     "nbformat",
     "nbclient>=0.7,<=0.11.0",

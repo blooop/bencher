@@ -11,7 +11,7 @@ from pathlib import Path
 
 copyright = "2025, Austin Gregg-Smith"  # noqa: A001 - Sphinx reads this config name
 author = "Austin Gregg-Smith"
-release = metadata.version("holobench")
+release = metadata.version("holobench-core")
 project = f"bencher {release}"
 
 

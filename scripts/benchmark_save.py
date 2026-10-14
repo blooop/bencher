@@ -41,7 +41,7 @@ import bencher as bn  # noqa: E402 - pn.extension() must run before bencher is i
 try:
     from importlib.metadata import version as _pkg_version
 
-    _BENCHER_VERSION = _pkg_version("holobench")
+    _BENCHER_VERSION = _pkg_version("holobench-core")
 except (ImportError, ModuleNotFoundError):
     _BENCHER_VERSION = "unknown"
 

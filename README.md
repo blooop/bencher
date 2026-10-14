@@ -26,7 +26,11 @@ measurement — no sweep loops, no plotting code, no report scaffolding.
 pip install holobench
 ```
 
-Only gating changes in CI (sweeps, claims, `bencher compare`, `bencher ab`)? See [a light install](docs/how_to_use_bencher.md#a-light-install-for-the-evidence-tools) without the plotting stack.
+To gate a change in CI without the plotting stack — run a sweep, check its claims,
+`bencher compare`, `bencher ab` — install `holobench-core` instead. It is the same
+`bencher` package without Panel, Bokeh, HoloViews, hvplot, Optuna, moviepy, scikit-learn
+or plotly. A sweep there collects without plots, and a feature that needs one of those
+packages says to `pip install holobench`.
 
 ```python
 import math
