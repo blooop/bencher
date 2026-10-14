@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING, Any, BinaryIO
 
 from bencher.bench_report import BenchReport
 from bencher.complete_report import execution_for_results
+from bencher.optional_deps import full_install_required
 from bencher.results.bench_result import BenchResult
 
 if TYPE_CHECKING:
@@ -103,7 +104,8 @@ class _ResultUnpickler(pickle.Unpickler):
 
     def find_class(self, module: str, name: str) -> Any:
         try:
-            return super().find_class(module, name)
+            with full_install_required():
+                return super().find_class(module, name)
         except AttributeError:
             if module != "__main__":
                 raise

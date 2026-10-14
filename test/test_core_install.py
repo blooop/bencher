@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import json
 import os
+import pickle
 import subprocess
 import sys
 import textwrap
 from typing import TYPE_CHECKING
 
+import holoviews as hv
 import pytest
 
 from bencher.optional_deps import HEAVY_PACKAGES
@@ -224,4 +226,20 @@ def test_a_heavy_feature_says_how_to_get_it(tmp_path, core_env, call):
     proc = _run([sys.executable, "-c", HEAVY_FEATURE_PROBE.format(call=call)], tmp_path, core_env)
     assert proc.returncode == 0, proc.stderr
     assert "IMPORT-ERROR:" in proc.stdout, proc.stdout
+    assert "pip install holobench" in proc.stdout, proc.stdout
+
+
+def test_loading_a_result_that_holds_a_plot_says_how_to_get_it(tmp_path, core_env):
+    """A full install can save a result whose dataset holds HoloViews objects."""
+    pkl = tmp_path / "plot.pkl"
+    pkl.write_bytes(pickle.dumps(hv.Curve([(0, 1), (1, 2)])))
+    probe = f"""
+import bencher as bn
+try:
+    bn.load_result({str(pkl)!r})
+except ImportError as exc:
+    print("IMPORT-ERROR:", exc)
+"""
+    proc = _run([sys.executable, "-c", probe], tmp_path, core_env)
+    assert proc.returncode == 0, proc.stderr
     assert "pip install holobench" in proc.stdout, proc.stdout
