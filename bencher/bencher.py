@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from concurrent.futures import as_completed
 from contextlib import suppress
 from copy import deepcopy
-from functools import partial
+from functools import cache, partial
 from itertools import combinations, product
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -79,6 +79,17 @@ PARETO_RANK = "pareto_rank"
 # A warm seed is one recorded sample, so its value is not the reduction an
 # aggregating study ranks on -- see `_warm_start_from_cache`.
 WARM_STARTED = "bencher_warm_started"
+
+
+@cache
+def _warn_collected_without_plots() -> None:
+    # Cached, not left to the warnings registry: any warnings.catch_warnings() block
+    # that runs between two sweeps resets the registry, and the warning repeats.
+    warnings.warn(
+        "bencher: the plotting packages are not installed (holobench-core), so "
+        "the sweep was collected without plots. `pip install holobench` adds them.",
+        stacklevel=4,
+    )
 
 
 def _pareto_design(trial: optuna.trial.FrozenTrial, searched: list) -> dict:
@@ -1044,11 +1055,7 @@ class Bench(BenchPlotServer):
             # draws nothing. Say so once rather than fail a sweep that asked for plots
             # by default; showing or saving the report still raises and says what to
             # install.
-            warnings.warn(
-                "bencher: the plotting packages are not installed (holobench-core), so "
-                "the sweep was collected without plots. `pip install holobench` adds them.",
-                stacklevel=2,
-            )
+            _warn_collected_without_plots()
         if bench_cfg.auto_plot and PLOTTING_INSTALLED:
             with phase_timer() as elapsed:
                 self._append_to_report(bench_res)

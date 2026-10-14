@@ -261,3 +261,13 @@ def test_the_cli_names_the_missing_install_without_a_traceback(tmp_path, core_en
         assert proc.returncode == 1, proc.stderr
         assert "pip install holobench" in proc.stderr, proc.stderr
         assert "Traceback" not in proc.stderr, proc.stderr
+
+
+def test_a_sweep_that_asks_for_plots_warns_once_and_still_collects(tmp_path, core_env):
+    probe = HEAVY_FEATURE_PROBE.replace("res = bench.collect(", "res = bench.plot_sweep(").format(
+        call="bench.plot_sweep(input_vars=['x'], result_vars=['y']); print(res.to_dataset()['y'].size)"
+    )
+    proc = _run([sys.executable, "-c", probe], tmp_path, core_env)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip().splitlines()[-1] == "2", proc.stdout
+    assert proc.stderr.count("collected without plots") == 1, proc.stderr
