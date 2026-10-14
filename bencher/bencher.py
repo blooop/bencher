@@ -13,9 +13,6 @@ from itertools import combinations, product
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import optuna
-import panel as pn
-
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, DimsCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
@@ -33,6 +30,7 @@ from bencher.job import (
     normalize_executor,
 )
 from bencher.launch_env import caches_disabled_by_env, result_path_from_env
+from bencher.optional_deps import PLOTTING_INSTALLED, full_install_required, optuna, pn
 from bencher.optuna_conversions import sweep_var_to_optuna_dist, sweep_var_to_suggest
 from bencher.regression import RegressionError, detect_regressions
 from bencher.result_collector import ResultCollector
@@ -1041,7 +1039,17 @@ class Bench(BenchPlotServer):
             bench_res.post_setup()
         timings.post_setup_ms = elapsed()
 
-        if bench_cfg.auto_plot:
+        if bench_cfg.auto_plot and not PLOTTING_INSTALLED:
+            # A core install (holobench-core) collects, checks claims and compares, but
+            # draws nothing. Say so once rather than fail a sweep that asked for plots
+            # by default; showing or saving the report still raises and says what to
+            # install.
+            warnings.warn(
+                "bencher: the plotting packages are not installed (holobench-core), so "
+                "the sweep was collected without plots. `pip install holobench` adds them.",
+                stacklevel=2,
+            )
+        if bench_cfg.auto_plot and PLOTTING_INSTALLED:
             with phase_timer() as elapsed:
                 self._append_to_report(bench_res)
             timings.render_ms = elapsed()
@@ -1876,7 +1884,8 @@ class Bench(BenchPlotServer):
         """Optuna's Pareto-front scatter of *result* as a panel pane."""
         # Function-scoped: optuna.visualization imports plotly, which is a slow
         # import nothing else on the path needs.
-        from optuna.visualization import plot_pareto_front
+        with full_install_required():
+            from optuna.visualization import plot_pareto_front
 
         figure = plot_pareto_front(result.study, target_names=list(result.target_names))
         return pn.pane.Plotly(figure)

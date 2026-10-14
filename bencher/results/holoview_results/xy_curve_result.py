@@ -27,8 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import holoviews as hv
-
+from bencher.optional_deps import hv
 from bencher.results.dataset_result import render_data_samples
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.holoview_results.tabular_spec import TabularSpec

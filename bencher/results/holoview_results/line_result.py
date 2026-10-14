@@ -3,8 +3,7 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
-import panel as pn
-
+from bencher.optional_deps import pn
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import (
@@ -12,10 +11,12 @@ from bencher.results.holoview_results.holoview_result import (
     use_tap as _use_tap_default,
 )
 from bencher.results.hvplot_accessor import hvplot_of
-from bencher.utils import label_with_units
+from bencher.utils import UNSET, _Unset, label_with_units
 from bencher.variables.results import SCALAR_RESULT_TYPES
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import holoviews as hv
     import xarray as xr
     from param import Parameter
@@ -182,7 +183,7 @@ class LineResult(HoloviewResult):
         dataset: xr.Dataset,
         result_var: Parameter,
         result_var_plots: list[Parameter] | None = None,
-        container: pn.pane.panel = pn.pane.panel,
+        container: Callable[..., Any] | _Unset | None = UNSET,
         **kwargs: Any,
     ) -> pn.Row:
         """Creates an interactive line plot with tap functionality.
@@ -193,11 +194,16 @@ class LineResult(HoloviewResult):
             result_var_plots (list[Parameter], optional): Additional result variables
                 to display when a point is tapped.
             container (pn.pane.panel, optional): Container to display tapped information.
+                Defaults to ``pn.pane.panel``; ``None`` picks one per result variable.
             **kwargs: Additional keyword arguments passed to the line plot options.
 
         Returns:
             pn.Row: A panel row containing the interactive line plot and tap info.
         """
+        # Resolved here rather than as the default, which would read panel when the
+        # module is imported -- and a core install (holobench-core) has no panel.
+        if isinstance(container, _Unset):
+            container = pn.pane.panel
         da_plot = dataset[result_var.name]
         x = self.plt_cnt_cfg.float_vars[0].name
         by = None

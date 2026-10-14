@@ -6,8 +6,7 @@ from dataclasses import dataclass, field
 from importlib import metadata
 from typing import TYPE_CHECKING, Any
 
-import panel as pn
-
+from bencher.optional_deps import pn
 from bencher.plugins.bench_data import BenchData, to_capability
 from bencher.plugins.plugin import PlotPlugin
 

@@ -10,13 +10,12 @@ from pathlib import Path
 from textwrap import wrap
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, assert_never
 
-import holoviews as hv
 import numpy as np
 import pandas as pd
-import panel as pn
 import xarray as xr
 from param import Parameter
 
+from bencher.optional_deps import full_install_required, hv, pn
 from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.plotting.plt_cnt_cfg import PltCntCfg
 from bencher.results.composable_container.composable_container_base import (
@@ -93,7 +92,7 @@ ResolvedReduceType = Literal[
 ]
 
 
-_PaneT = TypeVar("_PaneT", bound=pn.layout.ListPanel)
+_PaneT = TypeVar("_PaneT", bound="pn.layout.ListPanel")
 
 
 class EmptyContainer(Generic[_PaneT]):
@@ -1122,8 +1121,9 @@ class BenchResultBase:
         """
         import base64
 
-        from bokeh.models import CustomJS, Div
-        from bokeh.models.widgets import Slider as BokehSlider
+        with full_install_required():
+            from bokeh.models import CustomJS, Div
+            from bokeh.models.widgets import Slider as BokehSlider
 
         time_vals = list(dataset.coords["over_time"].values)
         over_time_dtype = dataset.coords["over_time"].dtype

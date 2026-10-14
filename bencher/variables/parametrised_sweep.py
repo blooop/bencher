@@ -5,11 +5,10 @@ from copy import deepcopy
 from functools import partial
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-import holoviews as hv
-import panel as pn
 from param import Parameter, Parameterized
 
 from bencher.factories import create_bench, create_bench_runner
+from bencher.optional_deps import hv, pn
 from bencher.utils import hash_sha1
 from bencher.variables.results import ALL_RESULT_TYPES, ResultHmap
 

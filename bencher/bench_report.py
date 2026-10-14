@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import numpy as np
 import pandas as pd
-import panel as pn
 
 from bencher.bench_cfg import BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.blob_store import DEFAULT_CACHE_DIR
+from bencher.optional_deps import PLOTTING_INSTALLED, pn
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -150,7 +150,10 @@ class BenchReport(BenchPlotServer):
         bench_name: str | None = None,
     ) -> None:
         self.bench_name = bench_name
-        self.pane = pn.Tabs(tabs_location="above", name=self.bench_name)
+        # A core install (holobench-core) has no panel, and a sweep there only collects
+        # results, so the tabs are built on first use -- which raises the error that
+        # says to install holobench. A full install builds them here, as it always has.
+        self._pane: pn.Tabs | None = self._new_pane() if PLOTTING_INSTALLED else None
         self.last_save_ms: float = 0.0
         # Each result is stored together with the tab that was created for it
         # (None when its plot() produced nothing), so tab routing can never
@@ -159,6 +162,16 @@ class BenchReport(BenchPlotServer):
         # misrouted once a None plot desynced them.
         self._result_tabs: list[tuple[BenchResult, pn.Column | None]] = []
         self._saved_pages: dict[int, str] = {}
+
+    def _new_pane(self) -> pn.Tabs:
+        return pn.Tabs(tabs_location="above", name=self.bench_name)
+
+    @property
+    def pane(self) -> pn.Tabs:
+        """The report's tabs, one per appended result."""
+        if self._pane is None:
+            self._pane = self._new_pane()
+        return self._pane
 
     @property
     def bench_results(self) -> tuple[BenchResult, ...]:
@@ -175,7 +188,8 @@ class BenchReport(BenchPlotServer):
 
         Not safe to call while the report is being served to a live Panel session.
         """
-        self.pane.clear()
+        if self._pane is not None:
+            self._pane.clear()
         self._result_tabs.clear()
 
     def extend_report(self, other: BenchReport) -> None:

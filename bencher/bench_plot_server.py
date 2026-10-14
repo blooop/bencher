@@ -10,11 +10,11 @@ import socket
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import panel as pn
 from diskcache import Cache
 from tornado.web import StaticFileHandler
 
 from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg, ShowMode, normalize_show
+from bencher.optional_deps import pn
 
 if TYPE_CHECKING:
     from threading import Thread
