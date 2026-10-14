@@ -791,6 +791,28 @@ recorded), `worst_value`, `worst_inputs` (sweep inputs and `repeat`) and `sample
 claim and the candidate holds it" reads straight off the comparison. The claim is not part
 of the variable's cache identity: changing it keeps cached samples and over-time history.
 
+### A light install for the evidence tools
+
+A CI job that only gates a change does not need the plotting stack. Install the package
+without its dependencies, then the light ones by hand:
+
+```bash
+pip install --no-deps holobench
+pip install numpy param diskcache xarray pandas strenum matplotlib jinja2 pyyaml
+```
+
+The second list is holobench's own dependencies without the heavy ones, plus pyyaml, which
+bencher imports and a full install gets through panel. pip then warns that holobench's other requirements (holoviews, panel, hvplot, optuna,
+plotly, scikit-learn, moviepy) are missing; that is expected. It can also warn that a light
+package is newer than holobench's upper pin; add the pin to the second command (for example
+`"numpy<=2.5.1"`) if you want to stay inside it.
+
+What works: `import bencher`, sweeps, claims, `bn.compare_results`, `bencher compare` (JSON,
+Markdown and PNG evidence) and `bencher ab`. A sweep that would plot warns once and collects
+without plots. Plots, HTML reports, the report server, `bencher <result.pkl> <dir>`,
+optimisation and video raise an `ImportError` that says to run `pip install holobench`, which
+adds them.
+
 ## Complete execution reports
 
 `BenchReport.save_report(root)` freezes a complete execution under
