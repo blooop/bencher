@@ -1,15 +1,15 @@
 """The evidence tools work on a ``holobench-core`` install, without the plotting stack.
 
-``holobench-core`` ships the ``bencher`` package with only the light dependencies
-(see ``core/pyproject.toml``). A repo that only wants to *gate* a change -- run a
-sweep, check its claims, compare two runs, ``bencher ab`` -- gets that without
-Panel, Bokeh, HoloViews, hvplot, Optuna, moviepy, scikit-learn or plotly.
+``holobench-core`` ships the ``bencher`` package with only the light dependencies (see
+``pyproject.toml``; ``holobench`` adds the rest). A repo that only wants to *gate* a
+change -- run a sweep, check its claims, compare two runs, ``bencher ab`` -- gets that
+without Panel, Bokeh, HoloViews, hvplot, Optuna, moviepy, scikit-learn or plotly.
 
 The pixi environment has all of them installed, so each test runs its probe in a
-subprocess whose ``sitecustomize`` puts a ``sys.meta_path`` finder in front of the
-real ones: importing a heavy package there fails the way it does when the package is
-absent. ``sitecustomize`` rather than a ``-c`` prelude because ``bencher ab`` starts
-the bench in processes of its own, and those must be core-only too.
+subprocess whose ``sitecustomize`` puts a ``sys.meta_path`` finder in front of the real
+ones: importing a package in ``HEAVY_PACKAGES`` there fails the way it does when the
+package is absent. ``sitecustomize`` rather than a ``-c`` prelude because ``bencher ab``
+starts the bench in processes of its own, and those must be core-only too.
 """
 
 from __future__ import annotations
@@ -23,10 +23,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from bencher.optional_deps import HEAVY_PACKAGES
+
 if TYPE_CHECKING:
     from pathlib import Path
 
-HEAVY = ("panel", "bokeh", "holoviews", "hvplot", "optuna", "moviepy", "sklearn", "plotly")
+HEAVY = tuple(sorted(HEAVY_PACKAGES))
 
 SITECUSTOMIZE = f"""
 import sys

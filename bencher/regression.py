@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from bencher.history import BIRTH_ATTR
+from bencher.optional_deps import full_install_required
 from bencher.variables.results import SCALAR_RESULT_TYPES, OptDir
 
 if TYPE_CHECKING:
@@ -1172,7 +1173,8 @@ def detect_adaptive(
     resid_sigma = _residual_sigma(filtered)
     drift_noise = max(resid_sigma, 1e-6 * abs(baseline), 1e-12)
 
-    from scipy.stats import kendalltau, theilslopes
+    with full_install_required():
+        from scipy.stats import kendalltau, theilslopes
 
     slope = float(theilslopes(filtered, indices)[0])
     # Slope is per index-step; total drift across n points spans (n-1) steps.

@@ -31,8 +31,21 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 # Top-level names of every package holobench installs and holobench-core does not.
+# scipy and tornado are not declared by holobench, but come with what it declares
+# (scikit-learn, panel), and bencher uses them only on paths that need the full install.
 HEAVY_PACKAGES = frozenset(
-    {"bokeh", "holoviews", "hvplot", "moviepy", "optuna", "panel", "plotly", "sklearn"}
+    {
+        "bokeh",
+        "holoviews",
+        "hvplot",
+        "moviepy",
+        "optuna",
+        "panel",
+        "plotly",
+        "scipy",
+        "sklearn",
+        "tornado",
+    }
 )
 
 

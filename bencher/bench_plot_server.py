@@ -7,17 +7,19 @@ import logging
 import os
 import random
 import socket
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from diskcache import Cache
-from tornado.web import StaticFileHandler
 
 from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg, ShowMode, normalize_show
-from bencher.optional_deps import pn
+from bencher.optional_deps import full_install_required, pn
 
 if TYPE_CHECKING:
     from threading import Thread
+
+    from tornado.web import StaticFileHandler
 
 logger = logging.getLogger(__name__)
 
@@ -29,29 +31,42 @@ _PORT_RANGE_MAX = 65535
 _PORT_PROBE_ATTEMPTS = 100
 
 
-class _CorsStaticHandler(StaticFileHandler):
-    """A Tornado static file handler that adds CORS headers.
+@cache
+def _cors_static_handler() -> type[StaticFileHandler]:
+    """The CORS static file handler, built on first use.
 
-    Required for rerun integration: the rerun web viewer fetches .rrd files
-    from the Panel server.  Without Access-Control-Allow-Origin and OPTIONS
-    preflight handling the browser silently blocks the cross-origin fetch
-    and the viewer shows 0 B.
-
-    Note: ``Allow-Origin: *`` is appropriate here because this server is
-    intended for local development only, not public-facing deployments.
+    Built here rather than at module scope because tornado comes with panel, and a
+    core install (holobench-core) has neither.
     """
+    with full_install_required():
+        from tornado.web import StaticFileHandler
 
-    def data_received(self, chunk: bytes) -> None:  # pragma: no cover — abstract in RequestHandler
-        pass
+    class _CorsStaticHandler(StaticFileHandler):
+        """A Tornado static file handler that adds CORS headers.
 
-    def set_default_headers(self) -> None:
-        self.set_header("Access-Control-Allow-Origin", "*")
-        self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.set_header("Access-Control-Allow-Headers", "*")
+        Required for rerun integration: the rerun web viewer fetches .rrd files
+        from the Panel server.  Without Access-Control-Allow-Origin and OPTIONS
+        preflight handling the browser silently blocks the cross-origin fetch
+        and the viewer shows 0 B.
 
-    def options(self, *_args: str, **_kwargs: str) -> None:
-        self.set_status(204)
-        self.finish()
+        Note: ``Allow-Origin: *`` is appropriate here because this server is
+        intended for local development only, not public-facing deployments.
+        """
+
+        # Abstract in RequestHandler.
+        def data_received(self, chunk: bytes) -> None:  # pragma: no cover
+            pass
+
+        def set_default_headers(self) -> None:
+            self.set_header("Access-Control-Allow-Origin", "*")
+            self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            self.set_header("Access-Control-Allow-Headers", "*")
+
+        def options(self, *_args: str, **_kwargs: str) -> None:
+            self.set_status(204)
+            self.finish()
+
+    return _CorsStaticHandler
 
 
 class BenchPlotServer:
@@ -201,7 +216,7 @@ class BenchPlotServer:
             return [
                 (
                     r"/rrd_static/(.*)",
-                    _CorsStaticHandler,
+                    _cors_static_handler(),
                     {"path": str(rrd_dir)},
                 )
             ]
