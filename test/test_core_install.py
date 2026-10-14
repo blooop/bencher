@@ -206,6 +206,9 @@ HEAVY_FEATURE_PROBE = textwrap.dedent(
 )
 
 
+REGRESSION = "bn.RegressionResult('y', 'percentage', True, 2.0, 1.0, 100.0, 5.0, 'minimize', '')"
+
+
 @pytest.mark.parametrize(
     "call",
     [
@@ -213,6 +216,8 @@ HEAVY_FEATURE_PROBE = textwrap.dedent(
         "bench.report.show()",  # the panel server
         "bench.optimize(n_trials=1)",  # optuna
         "vw = bn.VideoWriter(); vw.append(__import__('numpy').zeros((2, 2, 3))); vw.write()",
+        f"{REGRESSION}.render_png()",  # holoviews draws the regression diagnostic
+        f"{REGRESSION}.render_overlay()",
     ],
 )
 def test_a_heavy_feature_says_how_to_get_it(tmp_path, core_env, call):

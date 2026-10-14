@@ -573,7 +573,8 @@ def _ensure_matplotlib_backend_loaded() -> None:
 
     mpl.use("Agg", force=False)
 
-    import holoviews as hv
+    with full_install_required():
+        import holoviews as hv
 
     if "matplotlib" in hv.Store.renderers:
         return
@@ -609,7 +610,8 @@ def build_regression_overlay(
         height: Pixel height for the bokeh backend.
         fig_inches: Figure size in inches for the matplotlib backend.
     """
-    import holoviews as hv
+    with full_install_required():
+        import holoviews as hv
 
     spec = _regression_plot_spec(result, historical, current)
     hist = spec["hist"]
@@ -923,7 +925,8 @@ def render_regression_png(
     Returns:
         Absolute path to the saved PNG as a string.
     """
-    import holoviews as hv
+    with full_install_required():
+        import holoviews as hv
 
     if path is None:
         from bencher.utils import gen_image_path
