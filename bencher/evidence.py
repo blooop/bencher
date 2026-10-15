@@ -192,8 +192,11 @@ def _y_range(
     before: Sequence[float] | np.ndarray,
     after: Sequence[float] | np.ndarray,
     claim: Claim | None,
-) -> tuple[float, float]:
-    """A y range holding both series and the claim, from 0 unless 0 hides the change."""
+) -> tuple[float, float, float]:
+    """A y range holding both series and the claim, from 0 unless 0 hides the change.
+
+    Returns ``(lo, hi, step)``: both ends are whole multiples of ``step``.
+    """
     before, after = np.asarray(before, dtype=float), np.asarray(after, dtype=float)
     values = np.concatenate([before, after, _claim_bounds(claim)])
     lo, hi = float(values.min()), float(values.max())
@@ -211,17 +214,36 @@ def _y_range(
         hi = span
     # Round outward to two significant figures of the span, so the axis reads 0 --> 0.81.
     step = 10.0 ** (math.floor(math.log10(hi - lo)) - 1)
-    return math.floor(lo / step) * step, math.ceil(hi / step) * step
+    return math.floor(lo / step) * step, math.ceil(hi / step) * step, step
 
 
 def _num(value: float) -> str:
     return f"{value:.4g}"
 
 
-def _chart_num(value: float, digits: int = 4) -> str:
-    """A number xychart parses: positional, since its grammar has no exponent (1e+05)."""
+def _chart_nums(values: Sequence[float]) -> list[str]:
+    """Numbers xychart parses, with as few digits as keep distinct values distinct.
+
+    Positional, since xychart's grammar has no exponent (1e+05). Values equal to
+    12 significant digits count as one, so float noise (0.6 vs 0.6000000000000001)
+    does not lengthen every number.
+    """
+    distinct = len({f"{v:.12g}" for v in values})
+    for digits in range(4, 13):
+        text = [
+            np.format_float_positional(v, precision=digits, unique=False, fractional=False, trim="-")
+            for v in values
+        ]
+        if len(set(text)) == distinct:
+            break
+    return text
+
+
+def _axis_end(value: float, step: float) -> str:
+    """An axis end, exact to the ``step`` it is a multiple of, without an exponent."""
+    decimals = max(0, -math.floor(math.log10(step)))
     return np.format_float_positional(
-        value, precision=digits, unique=False, fractional=False, trim="-"
+        value, precision=decimals, unique=False, fractional=True, trim="-"
     )
 
 
@@ -234,16 +256,17 @@ def mermaid_chart(
         case BeforeAfterBars(before=before, after=after):
             title = f"{metric}: before vs after"
             x_axis = 'x-axis ["before", "after"]'
-            lo, hi = _y_range([before], [after], claim)
-            series = [f"bar [{_chart_num(before)}, {_chart_num(after)}]"]
+            lo, hi, step = _y_range([before], [after], claim)
+            series = [f"bar [{', '.join(_chart_nums([before, after]))}]"]
         case SweepChart(input_name=input_name, labels=labels, before=before, after=after):
             title = f"{metric}: bars = before, line = after"
             quoted = ", ".join(f'"{_mermaid_text(label)}"' for label in labels)
             x_axis = f'x-axis "{_mermaid_text(input_name)}" [{quoted}]'
-            lo, hi = _y_range(before, after, claim)
+            lo, hi, step = _y_range(before, after, claim)
+            text = _chart_nums([*before, *after])
             series = [
-                f"bar [{', '.join(_chart_num(v) for v in before)}]",
-                f"line [{', '.join(_chart_num(v) for v in after)}]",
+                f"bar [{', '.join(text[: len(before)])}]",
+                f"line [{', '.join(text[len(before) :])}]",
             ]
         case _ as unreachable:
             assert_never(unreachable)
@@ -252,7 +275,7 @@ def mermaid_chart(
         "xychart-beta",
         f'    title "{title}"',
         f"    {x_axis}",
-        f'    y-axis "{metric}" {_chart_num(lo, 6)} --> {_chart_num(hi, 6)}',
+        f'    y-axis "{metric}" {_axis_end(lo, step)} --> {_axis_end(hi, step)}',
         *(f"    {s}" for s in series),
         "```",
     ]

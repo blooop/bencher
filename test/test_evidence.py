@@ -10,6 +10,7 @@ import pytest
 from matplotlib.image import imread
 
 import bencher as bn
+from bencher.evidence import BeforeAfterBars, mermaid_chart
 from bencher.render import main, save_result
 
 _NOISE = itertools.cycle([0.5, -0.5])
@@ -197,3 +198,15 @@ def test_compare_needs_at_least_one_output(saved):
     with pytest.raises(SystemExit) as exc:
         main(["compare", str(a), str(b)])
     assert exc.value.code == 2
+
+
+@pytest.mark.parametrize(("before", "after"), [(123456.7, 123500.0), (12345678.0, 12345679.0)])
+def test_a_small_change_on_a_large_value_stays_visible_in_the_chart_text(before, after):
+    chart = mermaid_chart("m", None, BeforeAfterBars(before, after), None)
+    bars = re.search(r"bar \[(.*)\]", chart)[1].split(", ")
+    lo, hi = re.search(r"y-axis \"[^\"]*\" (\S+) --> (\S+)", chart).groups()
+    assert all(re.fullmatch(_NUMBER, v) for v in [*bars, lo, hi])
+    assert bars[0] != bars[1]
+    assert float(lo) < float(hi)
+    assert float(lo) <= min(before, after)
+    assert float(hi) >= max(before, after)
