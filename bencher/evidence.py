@@ -238,7 +238,9 @@ def _chart_nums(values: Sequence[float]) -> list[str]:
     distinct = len({f"{v:.12g}" for v in values})
     for digits in range(4, 13):
         text = [
-            np.format_float_positional(v, precision=digits, unique=False, fractional=False, trim="-")
+            np.format_float_positional(
+                v, precision=digits, unique=False, fractional=False, trim="-"
+            )
             for v in values
         ]
         if len(set(text)) == distinct:

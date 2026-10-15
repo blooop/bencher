@@ -234,9 +234,7 @@ class Tuning(bn.ParametrizedSweep):
 
 def _collect_tuning(gain, input_var):
     bench = bn.Bench(f"tuning_{gain}_{input_var}", Tuning())
-    res = bench.collect(
-        input_vars=[input_var], result_vars=["cost"], const_vars=[("gain", gain)]
-    )
+    res = bench.collect(input_vars=[input_var], result_vars=["cost"], const_vars=[("gain", gain)])
     bench.close()
     return res
 
@@ -249,9 +247,7 @@ def test_sweep_labels_are_unique_and_written_without_an_exponent(input_var):
     assert all(re.fullmatch(rf'"{_NUMBER}"', label) for label in labels)
 
 
-def test_a_png_draws_sides_that_swept_different_inputs_each_against_its_own(
-    tmp_path, monkeypatch
-):
+def test_a_png_draws_sides_that_swept_different_inputs_each_against_its_own(tmp_path, monkeypatch):
     figures = []
     save = Figure.savefig
 
@@ -279,9 +275,7 @@ class Margin(bn.ParametrizedSweep):
 
 def _collect_margin(floor):
     bench = bn.Bench(f"margin_{floor}", Margin())
-    res = bench.collect(
-        input_vars=["speed"], result_vars=["margin"], const_vars=[("floor", floor)]
-    )
+    res = bench.collect(input_vars=["speed"], result_vars=["margin"], const_vars=[("floor", floor)])
     bench.close()
     return res
 
