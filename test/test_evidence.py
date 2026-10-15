@@ -297,3 +297,16 @@ def test_an_empty_png_url_base_links_relative_to_the_markdown(tmp_path):
     )
     assert "](png/stop_distance.png)" in md.read_text(encoding="utf-8")
     assert (png_dir / "stop_distance.png").exists()
+
+
+def test_an_image_link_through_a_path_with_spaces_stays_a_link(tmp_path):
+    md = tmp_path / "md dir" / "evidence.md"
+    bn.write_evidence(
+        _collect(0.3, input_vars=("speed", "load")),
+        _collect(0.2, input_vars=("speed", "load")),
+        markdown_path=md,
+        png_dir=tmp_path / "my pngs",
+    )
+    destination = re.search(r"!\[[^\]]*\]\(([^)]*)\)", md.read_text(encoding="utf-8"))[1]
+    assert " " not in destination
+    assert destination.endswith("/stop_distance.png")

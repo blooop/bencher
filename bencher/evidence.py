@@ -27,6 +27,7 @@ import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, assert_never
+from urllib.parse import quote
 
 import numpy as np
 
@@ -585,7 +586,7 @@ def write_evidence(
         base = png_url_base or None
         if base is None:
             rel = os.path.relpath(image_dir.resolve(), written_md.parent.resolve())
-            base = "" if rel == "." else rel.replace(os.sep, "/")
+            base = "" if rel == "." else quote(rel.replace(os.sep, "/"))
         written_md.write_text(_markdown(metrics, comparison, base), encoding="utf-8")
 
     return EvidenceFiles(comparison, written_json, written_md, pngs)
