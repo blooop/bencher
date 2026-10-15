@@ -707,7 +707,9 @@ paste as a PR's `## Evidence` section: per metric, a Mermaid `xychart-beta` char
 baseline as bars and the candidate as a line on the same axes, then a caption with the
 verdict, the mean before → after with the change in percent, the claim outcome on each side
 (see below) and each side's revision and sample count. `--png DIR` writes one PNG per metric
-with a ±1 std band from the repeats and the claim threshold drawn in. Any of `--json`,
+with the claim threshold drawn in and a ±1 std band. The PNG plots against the first swept
+input; the mean and std pool the repeats and every other swept input, so with two or more
+swept inputs the band also holds the spread across the other inputs. Any of `--json`,
 `--markdown` and `--png` may be given; at least one is required.
 
 ```bash
