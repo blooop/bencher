@@ -14,23 +14,29 @@ starts the bench in processes of its own, and those must be core-only too.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import pickle
 import subprocess
 import sys
 import textwrap
-from typing import TYPE_CHECKING
+import tomllib
+from importlib import metadata
+from pathlib import Path
 
 import holoviews as hv
 import pytest
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
 
 from bencher.optional_deps import HEAVY_PACKAGES
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
 HEAVY = tuple(sorted(HEAVY_PACKAGES))
+REPO = Path(__file__).resolve().parents[1]
+PACKAGE_DISTS = metadata.packages_distributions()
+# Extras a core install may add without pulling in the plotting stack.
+CORE_EXTRAS = ("rerun",)
 
 SITECUSTOMIZE = f"""
 import sys
@@ -271,3 +277,64 @@ def test_a_sweep_that_asks_for_plots_warns_once_and_still_collects(tmp_path, cor
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip().splitlines()[-1] == "2", proc.stdout
     assert proc.stderr.count("collected without plots") == 1, proc.stderr
+
+
+def _core_closure() -> set[str]:
+    """Distributions a holobench-core install gets: its light dependencies, extras, and theirs.
+
+    The heavy packages are left out, because a core install does not have them; in the
+    pixi environment they are installed and would hide a light dependency that only
+    arrives through one of them (PyYAML through bokeh).
+    """
+    root = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    heavy = {canonicalize_name(d) for m in HEAVY for d in PACKAGE_DISTS.get(m, [m])}
+    wanted = [Requirement(r) for r in root["dependencies"]]
+    wanted += [Requirement(r) for name in CORE_EXTRAS for r in root["optional-dependencies"][name]]
+    seen: set[str] = set()
+    while wanted:
+        req = wanted.pop()
+        name = canonicalize_name(req.name)
+        if name in seen or name in heavy:
+            continue
+        seen.add(name)
+        try:
+            requires = metadata.requires(name) or []
+        except metadata.PackageNotFoundError:
+            continue
+        for spec in requires:
+            sub = Requirement(spec)
+            if sub.marker is None or sub.marker.evaluate({"extra": ""}):
+                wanted.append(sub)
+    return seen
+
+
+def _directly_imported_by_bencher() -> set[str]:
+    top: set[str] = set()
+    for path in (REPO / "bencher").rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                top.update(alias.name.partition(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                top.add(node.module.partition(".")[0])
+    return top
+
+
+def test_every_package_a_core_import_needs_is_declared(tmp_path, core_env):
+    """``import bencher`` on a core install must not lean on a heavy package's dependencies.
+
+    ``bencher/variables/inputs.py`` imports ``yaml``; PyYAML reached a full install only
+    through bokeh, so a core install without it could not import bencher at all.
+    """
+    probe = "import bencher, json, sys; print(json.dumps(sorted(sys.modules)))"
+    proc = _run([sys.executable, "-c", probe], tmp_path, core_env)
+    assert proc.returncode == 0, proc.stderr
+    loaded = {m.partition(".")[0] for m in json.loads(proc.stdout)}
+    loaded &= _directly_imported_by_bencher()
+    closure = _core_closure()
+    undeclared = {
+        module: dists
+        for module in loaded
+        if (dists := PACKAGE_DISTS.get(module)) and module != "bencher"
+        if not {canonicalize_name(d) for d in dists} & closure
+    }
+    assert not undeclared, f"declare these in [project].dependencies: {undeclared}"
