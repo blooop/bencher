@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Upgrade warning
+- **An in-place `pip install -U holobench` from 1.139.0 or earlier can delete most of
+  `bencher/`.** From this release the `bencher` package ships in a new distribution,
+  `holobench-core`, and `holobench` only depends on it. pip installs `holobench-core` first,
+  then removes the old `holobench`, and that removal deletes the files the old `holobench`
+  owned — the same files `holobench-core` just installed. `import bencher` then fails or
+  finds a package with most of its modules gone. To repair the environment, run
+  `pip install --force-reinstall holobench-core`, or install into a fresh environment. uv
+  upgrades and fresh installs are not affected, and neither are upgrades from this release
+  onwards.
+
+### Changed
+- **`holobench-core` is the light install; `holobench` is still everything.** The repository
+  builds two distributions of the same `bencher` package. `pip install holobench-core` brings
+  only numpy, param, xarray, pandas, diskcache, strenum, matplotlib, jinja2 and pyyaml: enough
+  to run sweeps, check claims, `bencher compare` and `bencher ab`, keep over-time history with
+  the `percentage` and `delta` regression methods, and write JSON and the scorecard. A
+  feature that needs the plotting stack (plots, reports, the report server, Optuna, video and
+  image results, plotly, the `adaptive` regression method) raises an `ImportError` that says
+  to `pip install holobench`. That installs `holobench-core[full]`: the same packages as
+  before. pyyaml is now declared: bencher imports it and used to get it only through
+  bokeh.
+
 ### Added
 - **A result variable can declare a claim.** `bn.ResultFloat(units="m", claim="< 0.7")`
   says what a change is meant to make true; `<`, `<=`, `>`, `>=` and the range `low..high`
