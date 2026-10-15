@@ -7,6 +7,7 @@ import json
 import re
 
 import pytest
+from matplotlib.figure import Figure
 from matplotlib.image import imread
 
 import bencher as bn
@@ -238,3 +239,21 @@ def test_sweep_labels_are_unique_and_written_without_an_exponent(input_var):
     labels = re.search(rf"x-axis \"{input_var}\" \[(.*)\]", _chart(md))[1].split(", ")
     assert len(set(labels)) == len(labels)
     assert all(re.fullmatch(rf'"{_NUMBER}"', label) for label in labels)
+
+
+def test_a_png_draws_sides_that_swept_different_inputs_each_against_its_own(
+    tmp_path, monkeypatch
+):
+    figures = []
+    save = Figure.savefig
+
+    def record(fig, *args, **kwargs):
+        figures.append(fig)
+        return save(fig, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", record)
+    bn.write_evidence_pngs(
+        _collect(0.3, input_vars=("speed",)), _collect(0.2, input_vars=("load",)), tmp_path
+    )
+    (fig,) = figures
+    assert {ax.get_xlabel() for ax in fig.axes} == {"speed", "load"}

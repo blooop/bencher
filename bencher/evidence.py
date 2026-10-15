@@ -430,24 +430,25 @@ def evidence_markdown(
 # --- PNG -------------------------------------------------------------------------
 
 
-def _draw(ax: Axes, m: _Metric) -> None:
-    base, cand = m.base, m.cand
-    if not base.swept and not cand.swept:
+_Side = tuple[_Profile, str, str, str]  # profile, legend label, color, line style
+
+
+def _draw(ax: Axes, sides: Sequence[_Side]) -> None:
+    profiles = [profile for profile, *_ in sides]
+    if not any(p.swept for p in profiles):
         ax.bar(
-            [0, 1],
-            [base.mean[0], cand.mean[0]],
-            yerr=[base.std[0], cand.std[0]],
-            color=[_BEFORE_COLOR, _AFTER_COLOR],
+            range(len(sides)),
+            [p.mean[0] for p in profiles],
+            yerr=[p.std[0] for p in profiles],
+            color=[color for _, _, color, _ in sides],
             capsize=6,
             width=0.5,
         )
-        ax.set_xticks([0, 1], ["before", "after"])
+        ax.set_xticks(range(len(sides)), [label for _, label, _, _ in sides])
         return
-    numeric = all(isinstance(v, (int, float)) for v in base.x + cand.x)
-    for profile, label, color, style in (
-        (base, "before", _BEFORE_COLOR, "--"),
-        (cand, "after", _AFTER_COLOR, "-"),
-    ):
+    xs = tuple(v for p in profiles for v in p.x)
+    numeric = all(isinstance(v, (int, float)) for v in xs)
+    for profile, label, color, style in sides:
         if not profile.swept:
             # One value across the other side's sweep: a level line with its band.
             mean, std = profile.mean[0], profile.std[0]
@@ -457,14 +458,14 @@ def _draw(ax: Axes, m: _Metric) -> None:
         if numeric:
             x = np.asarray(profile.x, dtype=float)
         else:
-            categories = list(dict.fromkeys(base.x + cand.x))
+            categories = list(dict.fromkeys(xs))
             x = np.array([categories.index(v) for v in profile.x], dtype=float)
             ax.set_xticks(range(len(categories)), [_label(c) for c in categories])
         ax.plot(x, profile.mean, style, marker="o", color=color, label=label, linewidth=2)
         ax.fill_between(
             x, profile.mean - profile.std, profile.mean + profile.std, color=color, alpha=0.18
         )
-    ax.set_xlabel(base.swept[0] if base.swept else cand.swept[0])
+    ax.set_xlabel(next(p.swept[0] for p in profiles if p.swept))
 
 
 def _draw_claim(ax: Axes, claim: Claim | None) -> None:
@@ -480,17 +481,32 @@ def _render_png(m: _Metric, path: Path) -> Path:
 
     name = m.entry["variable"]
     fig = Figure(figsize=(8.8, 4.4), dpi=100, facecolor="white")
-    ax = fig.add_subplot()
-    _draw(ax, m)
-    _draw_claim(ax, m.claim)
+    sides: list[_Side] = [
+        (m.base, "before", _BEFORE_COLOR, "--"),
+        (m.cand, "after", _AFTER_COLOR, "-"),
+    ]
+    split = bool(m.base.swept) and bool(m.cand.swept) and m.base.swept[0] != m.cand.swept[0]
+    if split:
+        # Each side swept its own input: one panel per input, sharing the metric axis.
+        axes = list(fig.subplots(1, 2, sharey=True))
+        groups = [sides[:1], sides[1:]]
+    else:
+        axes, groups = [fig.add_subplot()], [sides]
+    for ax, group in zip(axes, groups, strict=True):
+        _draw(ax, group)
+        _draw_claim(ax, m.claim)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="best", frameon=False)
     swept = m.base.swept if len(m.base.swept) >= len(m.cand.swept) else m.cand.swept
     rest = f", mean over {', '.join(swept[1:])}" if len(swept) > 1 else ""
     metric = f"{name} ({m.units})" if m.units else name
     spread = "band" if swept else "error bar"
-    ax.set_title(f"{metric}: before (grey) vs after (blue), {spread} = ±1 std{rest}", fontsize=12)
-    ax.set_ylabel(metric)
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc="best", frameon=False)
+    title = f"{metric}: before (grey) vs after (blue), {spread} = ±1 std{rest}"
+    if split:
+        fig.suptitle(title, fontsize=12)
+    else:
+        axes[0].set_title(title, fontsize=12)
+    axes[0].set_ylabel(metric)
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, facecolor="white")
