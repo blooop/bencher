@@ -177,6 +177,12 @@ class BenchReport(BenchPlotServer):
     def pane(self, tabs: pn.Tabs) -> None:
         self._pane = tabs
 
+    def __setstate__(self, state: dict) -> None:
+        # A report pickled when ``pane`` was a plain attribute stores it as "pane".
+        if "pane" in state:
+            state["_pane"] = state.pop("pane")
+        self.__dict__.update(state)
+
     @property
     def bench_results(self) -> tuple[BenchResult, ...]:
         """The results registered via :meth:`append_result`, in registration order.
