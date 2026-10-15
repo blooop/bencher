@@ -25,7 +25,8 @@ dependencies = [
     "matplotlib>=3.7,<=3.11.2",
     # The scorecard templates.
     "jinja2>=3.0,<=3.1.6",
-    # YamlSweep. The full stack always brought it in (bokeh, panel, optuna).
+    # `import bencher` needs it (bencher/variables/inputs.py, for YamlSweep). The full stack
+    # brought it in through bokeh and optuna; test_core_install checks it is declared here.
     "pyyaml>=6.0,<=6.0.3",
 ]
 
