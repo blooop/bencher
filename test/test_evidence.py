@@ -7,6 +7,7 @@ import json
 import math
 import re
 
+import numpy as np
 import pytest
 from matplotlib.figure import Figure
 from matplotlib.image import imread
@@ -84,8 +85,10 @@ def test_the_y_range_holds_the_claim_threshold():
     chart = _chart(
         bn.evidence_markdown(_collect(0.1, input_vars=()), _collect(0.09, input_vars=()))
     )
-    hi = float(re.search(r"--> (\S+)", chart)[1])
+    lo, hi = map(float, re.search(r"y-axis \"[^\"]*\" (\S+) --> (\S+)", chart).groups())
     assert hi >= 0.7
+    # A change of 0.01 on an axis from 0 would be under 5% of it: the axis starts above 0.
+    assert 0 < lo <= 0.09
 
 
 def test_two_swept_inputs_link_an_image_instead():
@@ -109,8 +112,12 @@ def test_a_spread_as_large_as_the_change_links_an_image():
 def test_a_long_sweep_is_binned_to_at_most_thirty_points():
     chart = _chart(bn.evidence_markdown(_collect(0.3, samples=70), _collect(0.2, samples=70)))
     labels = re.search(r"x-axis \"speed\" \[(.*)\]", chart)[1].split(", ")
-    assert 2 <= len(labels) <= 30
+    # 70 points in bins of ceil(70 / 30) = 3 make 24 bars.
+    assert len(labels) == 24
     assert len(re.search(r"line \[(.*)\]", chart)[1].split(", ")) == len(labels)
+    first_bar = float(re.search(r"bar \[(.*?),", chart)[1])
+    speeds = np.linspace(1.0, 3.0, 70)
+    assert first_bar == pytest.approx(0.3 * speeds[:3].mean(), rel=1e-3)
 
 
 def test_quotes_in_units_do_not_break_the_title():
@@ -310,3 +317,45 @@ def test_an_image_link_through_a_path_with_spaces_stays_a_link(tmp_path):
     destination = re.search(r"!\[[^\]]*\]\(([^)]*)\)", md.read_text(encoding="utf-8"))[1]
     assert " " not in destination
     assert destination.endswith("/stop_distance.png")
+
+
+def test_a_baseline_that_swept_nothing_against_a_swept_candidate_links_an_image():
+    md = bn.evidence_markdown(_collect(0.3, input_vars=()), _collect(0.2))
+    assert "```mermaid" not in md
+    assert "](stop_distance.png)" in md
+
+
+def test_a_point_with_no_recorded_sample_links_an_image():
+    md = bn.evidence_markdown(_collect_margin(1.0), _collect_margin(math.nan))
+    assert "```mermaid" not in md
+    assert "](margin.png)" in md
+
+
+class Fleet(bn.ParametrizedSweep):
+    robot = bn.StringSweep([f"r{i:02d}" for i in range(31)])
+    gain = bn.FloatSweep(default=0.2)
+
+    load = bn.ResultFloat(units="kg")
+
+    def benchmark(self):
+        self.load = self.gain * int(self.robot[1:])
+
+
+def _collect_fleet(gain):
+    bench = bn.Bench(f"fleet_{gain}", Fleet())
+    res = bench.collect(input_vars=["robot"], result_vars=["load"], const_vars=[("gain", gain)])
+    bench.close()
+    return res
+
+
+def test_more_than_thirty_categories_link_an_image():
+    md = bn.evidence_markdown(_collect_fleet(0.3), _collect_fleet(0.2))
+    assert "```mermaid" not in md
+    assert "](load.png)" in md
+
+
+def test_markdown_alone_with_only_charted_metrics_writes_no_png(tmp_path):
+    files = bn.write_evidence(_collect(0.3), _collect(0.2), markdown_path=tmp_path / "e.md")
+    assert "```mermaid" in (tmp_path / "e.md").read_text(encoding="utf-8")
+    assert files.pngs == {}
+    assert list(tmp_path.rglob("*.png")) == []
