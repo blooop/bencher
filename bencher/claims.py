@@ -43,6 +43,10 @@ class Threshold:
     op: Comparison
     bound: float
 
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.bound):
+            raise ValueError(f"claim bound {self.bound!r} is not a finite number")
+
     def __str__(self) -> str:
         return f"{self.op.value} {self.bound:g}"
 

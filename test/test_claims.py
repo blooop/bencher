@@ -144,3 +144,11 @@ def test_a_range_includes_its_high_edge_and_fails_past_it(samples, holds, worst)
     outcome = evaluate_claim(bn.Within(0.1, 0.4), da)
     assert isinstance(outcome, Holds) is holds
     assert outcome.worst.value == worst
+
+
+@pytest.mark.parametrize("bound", [math.nan, math.inf, -math.inf])
+def test_a_threshold_built_directly_rejects_a_bound_that_is_not_finite(bound):
+    # A NaN bound gives every sample a NaN margin, so the first sample was named
+    # the worst and the claim failed on any data.
+    with pytest.raises(ValueError, match="finite"):
+        bn.Threshold(bn.Comparison.LT, bound)
