@@ -28,7 +28,7 @@ def test_a_missing_heavy_package_says_to_install_holobench():
 
 
 def test_a_missing_light_package_is_left_alone():
-    """A package holobench-core should have is a broken install, not a missing extra."""
+    """A package a light install should have is a broken install, not a missing extra."""
     with pytest.raises(ModuleNotFoundError) as info, full_install_required():
         raise _missing("xarray")
     assert not isinstance(info.value, FullInstallRequiredError)

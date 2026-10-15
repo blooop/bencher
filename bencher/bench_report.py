@@ -150,7 +150,7 @@ class BenchReport(BenchPlotServer):
         bench_name: str | None = None,
     ) -> None:
         self.bench_name = bench_name
-        # A core install (holobench-core) has no panel, and a sweep there only collects
+        # A light install has no panel, and a sweep there only collects
         # results, so the tabs are built on first use -- which raises the error that
         # says to install holobench. A full install builds them here, as it always has.
         self._pane: pn.Tabs | None = self._new_pane() if PLOTTING_INSTALLED else None

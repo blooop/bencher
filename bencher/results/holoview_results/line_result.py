@@ -201,7 +201,7 @@ class LineResult(HoloviewResult):
             pn.Row: A panel row containing the interactive line plot and tap info.
         """
         # Resolved here rather than as the default, which would read panel when the
-        # module is imported -- and a core install (holobench-core) has no panel.
+        # module is imported -- and a light install has no panel.
         if isinstance(container, _Unset):
             container = pn.pane.panel
         da_plot = dataset[result_var.name]

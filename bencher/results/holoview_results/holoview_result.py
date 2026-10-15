@@ -43,7 +43,7 @@ if PLOTTING_INSTALLED:
 # has to handle, and `pn.Column`/`pn.Tabs` are the ones that surprise -- a caller doing
 # `.opts(...)` on the result works until someone enables over_time.
 #
-# A core install (holobench-core) has neither package, so there the alias is ``Any``:
+# A light install has neither package, so there the alias is ``Any``:
 # nothing can produce a plot to annotate.
 if TYPE_CHECKING or PLOTTING_INSTALLED:
     PlotResult = hv.Overlay | hv.HoloMap | pn.Column | pn.Tabs
@@ -72,7 +72,7 @@ class HoloviewResult(PaneResult):
     # Element types that carry the shared default figure size. Centralized here (rather
     # than inline in set_default_opts) so tests can assert coverage stays in sync as new
     # element types are added. HeatMap/GridSpace are excluded because they take extra opts.
-    # Empty on a core install, which has no holoviews and draws no plots.
+    # Empty on a light install, which has no holoviews and draws no plots.
     DEFAULT_SIZED_ELEMENTS = (
         (
             hv.Curve,

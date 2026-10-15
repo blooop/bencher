@@ -36,7 +36,7 @@ def _cors_static_handler() -> type[StaticFileHandler]:
     """The CORS static file handler, built on first use.
 
     Built here rather than at module scope because tornado comes with panel, and a
-    core install (holobench-core) has neither.
+    light install has neither.
     """
     with full_install_required():
         from tornado.web import StaticFileHandler

@@ -1,7 +1,8 @@
-"""The evidence tools work on a ``holobench-core`` install, without the plotting stack.
+"""The evidence tools work on a light install, without the plotting stack.
 
-``holobench-core`` ships the ``bencher`` package with only the light dependencies (see
-``pyproject.toml``; ``holobench`` adds the rest). A repo that only wants to *gate* a
+A light install is ``pip install --no-deps holobench`` plus only the light dependencies
+(see ``pyproject.toml`` and ``docs/how_to_use_bencher.md``); ``pip install holobench``
+adds the rest. A repo that only wants to *gate* a
 change -- run a sweep, check its claims, compare two runs, ``bencher ab`` -- gets that
 without Panel, Bokeh, HoloViews, hvplot, Optuna, moviepy, scikit-learn or plotly.
 
@@ -9,7 +10,7 @@ The pixi environment has all of them installed, so each test runs its probe in a
 subprocess whose ``sitecustomize`` puts a ``sys.meta_path`` finder in front of the real
 ones: importing a package in ``HEAVY_PACKAGES`` there fails the way it does when the
 package is absent. ``sitecustomize`` rather than a ``-c`` prelude because ``bencher ab``
-starts the bench in processes of its own, and those must be core-only too.
+starts the bench in processes of its own, and those must be light-only too.
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ from bencher.optional_deps import HEAVY_PACKAGES
 HEAVY = tuple(sorted(HEAVY_PACKAGES))
 REPO = Path(__file__).resolve().parents[1]
 PACKAGE_DISTS = metadata.packages_distributions()
-# Extras a core install may add without pulling in the plotting stack.
+# Extras a light install may add without pulling in the plotting stack.
 CORE_EXTRAS = ("rerun",)
 
 SITECUSTOMIZE = f"""
@@ -108,7 +109,7 @@ def _git(repo: Path, *args: str) -> None:
 
 
 def test_the_blocker_works(tmp_path, core_env):
-    """The probe environment really is core-only; otherwise every test below is vacuous."""
+    """The probe environment really is light-only; otherwise every test below is vacuous."""
     proc = _run([sys.executable, "-c", "import holoviews"], tmp_path, core_env)
     assert proc.returncode != 0
     assert "No module named 'holoviews'" in proc.stderr
@@ -280,9 +281,9 @@ def test_a_sweep_that_asks_for_plots_warns_once_and_still_collects(tmp_path, cor
 
 
 def _core_closure() -> set[str]:
-    """Distributions a holobench-core install gets: its light dependencies, extras, and theirs.
+    """Distributions a light install gets: its light dependencies, extras, and theirs.
 
-    The heavy packages are left out, because a core install does not have them; in the
+    The heavy packages are left out, because a light install does not have them; in the
     pixi environment they are installed and would hide a light dependency that only
     arrives through one of them (PyYAML through bokeh).
     """
@@ -320,10 +321,10 @@ def _directly_imported_by_bencher() -> set[str]:
 
 
 def test_every_package_a_core_import_needs_is_declared(tmp_path, core_env):
-    """``import bencher`` on a core install must not lean on a heavy package's dependencies.
+    """``import bencher`` on a light install must not lean on a heavy package's dependencies.
 
     ``bencher/variables/inputs.py`` imports ``yaml``; PyYAML reached a full install only
-    through bokeh, so a core install without it could not import bencher at all.
+    through bokeh, so a light install without it could not import bencher at all.
     """
     probe = "import bencher, json, sys; print(json.dumps(sorted(sys.modules)))"
     proc = _run([sys.executable, "-c", probe], tmp_path, core_env)

@@ -1,16 +1,17 @@
 """The heavy packages bencher plots, serves and optimises with, and what to do without them.
 
-Two distributions ship the ``bencher`` package. ``holobench`` installs everything.
-``holobench-core`` installs only what a sweep, its claims, ``bencher compare`` and
-``bencher ab`` need, and leaves out the plotting stack (HoloViews, Panel, Bokeh,
-hvplot, plotly), Optuna, moviepy and scikit-learn.
+``pip install holobench`` installs everything. A light install
+(``pip install --no-deps holobench`` plus the light dependencies by hand) has only what
+a sweep, its claims, ``bencher compare`` and ``bencher ab`` need, and leaves out the
+plotting stack (HoloViews, Panel, Bokeh, hvplot, plotly), Optuna, moviepy and
+scikit-learn.
 
 So the modules that use one of those import it from here, not directly::
 
     from bencher.optional_deps import hv, pn
 
 On a full install each name *is* the real module, imported here at the point
-``import bencher`` always imported it -- nothing changes. On a core install it is a
+``import bencher`` always imported it -- nothing changes. On a light install it is a
 stand-in, and the first use of it raises :class:`FullInstallRequiredError`, which
 says to ``pip install holobench``, instead of failing ``import bencher`` with a
 ``ModuleNotFoundError`` from deep inside a plotting module.
@@ -30,7 +31,7 @@ from typing import TYPE_CHECKING, NoReturn
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-# Top-level names of every package holobench installs and holobench-core does not.
+# Top-level names of every package a full install has and a light install does not.
 # scipy and tornado are not declared by holobench, but come with what it declares
 # (scikit-learn, panel), and bencher uses them only on paths that need the full install.
 HEAVY_PACKAGES = frozenset(
@@ -53,14 +54,14 @@ class FullInstallRequiredError(ModuleNotFoundError):
     """A feature needs a package that only the full ``holobench`` install has.
 
     A ``ModuleNotFoundError`` (so an ``ImportError``), so code that already guards an
-    optional feature with ``except ImportError`` keeps working on a core install.
+    optional feature with ``except ImportError`` keeps working on a light install.
     """
 
 
 def _message(package: str) -> str:
     return (
         f"this bencher feature needs '{package}', which is not installed. "
-        "holobench-core leaves out the plotting, report-server, optimisation and video "
+        "A light install leaves out the plotting, report-server, optimisation and video "
         "packages; install the full package with `pip install holobench`."
     )
 
@@ -83,7 +84,7 @@ def full_install_required() -> Iterator[None]:
 
 
 class _MissingModule(ModuleType):
-    """Stands in for a heavy package a core install does not have.
+    """Stands in for a heavy package a light install does not have.
 
     Any public attribute read raises, because reading one (``hv.Curve``,
     ``pn.Column``) is how a module uses the package. Dunder reads raise

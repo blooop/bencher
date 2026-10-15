@@ -86,7 +86,7 @@ def _warn_collected_without_plots() -> None:
     # Cached, not left to the warnings registry: any warnings.catch_warnings() block
     # that runs between two sweeps resets the registry, and the warning repeats.
     warnings.warn(
-        "bencher: the plotting packages are not installed (holobench-core), so "
+        "bencher: the plotting packages are not installed (a light install), so "
         "the sweep was collected without plots. `pip install holobench` adds them.",
         stacklevel=4,
     )
@@ -1051,7 +1051,7 @@ class Bench(BenchPlotServer):
         timings.post_setup_ms = elapsed()
 
         if bench_cfg.auto_plot and not PLOTTING_INSTALLED:
-            # A core install (holobench-core) collects, checks claims and compares, but
+            # A light install collects, checks claims and compares, but
             # draws nothing. Say so once rather than fail a sweep that asked for plots
             # by default; showing or saving the report still raises and says what to
             # install.
