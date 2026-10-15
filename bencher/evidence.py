@@ -534,7 +534,11 @@ def write_evidence_pngs(
 
 @dataclass(frozen=True)
 class EvidenceFiles:
-    """What :func:`write_evidence` wrote; a field is None (or empty) when not asked for."""
+    """What :func:`write_evidence` wrote; a path is None when its file was not asked for.
+
+    ``pngs`` maps each metric to the PNG written for it: every metric with *png_dir*,
+    else only the metrics whose Markdown links an image.
+    """
 
     comparison: dict
     json_path: Path | None
