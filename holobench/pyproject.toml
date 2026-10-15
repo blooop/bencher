@@ -4,7 +4,7 @@
 # Bump the version and both pins with the root pyproject.toml (test/test_packaging.py).
 [project]
 name = "holobench"
-version = "1.138.0"
+version = "1.139.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -13,10 +13,10 @@ license = "MIT"
 
 requires-python = ">=3.11,<3.14"
 
-dependencies = ["holobench-core[full]==1.138.0"]
+dependencies = ["holobench-core[full]==1.139.0"]
 
 [project.optional-dependencies]
-rerun = ["holobench-core[rerun]==1.138.0"]
+rerun = ["holobench-core[rerun]==1.139.0"]
 
 [project.urls]
 Repository = "https://github.com/blooop/bencher"

@@ -5,7 +5,7 @@
 # together (test/test_packaging.py checks they match).
 [project]
 name = "holobench-core"
-version = "1.138.0"
+version = "1.139.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "Benchmark arbitrary functions: sweeps, claims and A/B evidence without the plotting stack"
