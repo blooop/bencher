@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **A result variable can declare a claim.** `bn.ResultFloat(units="m", claim="< 0.7")`
+  says what a change is meant to make true; `<`, `<=`, `>`, `>=` and the range `low..high`
+  are accepted, and an unreadable claim raises where the class is defined. The claim is
+  judged on every sample, repeats included, so it holds only if the worst sample satisfies
+  it. `result_to_dict` reports the outcome, the worst value and the inputs it came from;
+  `compare_results` reports it for the baseline as well as the candidate. `schema_version`
+  stays 1: the `claim` key is additive, and only a breaking change to the shape bumps it.
+- **`bencher compare` writes evidence for a pull request.** `--markdown PATH` writes a block
+  to paste as a PR's Evidence section: per metric, a Mermaid `xychart-beta` chart with the
+  baseline as bars and the candidate as a line, and a caption with the verdict, the values,
+  the claim outcome on each side and each side's revision. A metric that a Mermaid chart
+  cannot show honestly (two swept inputs, a spread as large as the change) links a PNG
+  instead. `--png DIR` writes one PNG per metric with a ±1 std band and the claim drawn in,
+  and `--png-url-base URL` points the Markdown's image links at where the PNGs were pushed.
+  `--json` is now optional when either is given. `bn.write_evidence` is the Python form.
+- **`bencher ab -- <command>` measures a change before and after.** It runs the bench
+  command on the base revision (the merge-base with `origin/HEAD` unless `--base` names
+  one) in a temporary `git worktree`, then on the working tree as it is, and writes
+  `base.pkl`, `candidate.pkl`, `comparison.json`, `evidence.md` and the PNGs into `--out`.
+  Each side runs with the caches off, because the caches are keyed by inputs and would
+  otherwise answer the candidate with the base's samples. A failed side exits 1, names
+  itself and keeps its log.
+- **`BENCHER_RESULT_PATH`, `BENCHER_NO_CACHE` and `BENCHER_NO_SHOW`.** A launcher can ask
+  any bench process to save its collected result to a path, to run every sweep with the
+  result and sample caches off, and to show no report, without editing the bench. The last
+  matters because `bn.run`'s default live report server keeps a non-interactive process
+  alive after the bench finishes.
+
+### Fixed
+- **`bn.load_result` loads a result saved by a script.** A sweep class defined in the
+  script that ran it was pickled as `__main__.<Name>`, which no other process has, so
+  `bencher compare` and `bencher <result.pkl>` failed on such results. A placeholder now
+  stands in for the missing class; the data, result variables and claims load intact.
+
 ## [1.139.0] - 2026-10-13
 
 ### Added

@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     import numpy as np
     from moviepy import VideoClip
 
+from bencher.optional_deps import full_install_required
+
 from .utils import gen_image_path, gen_video_path
 
 
@@ -24,7 +26,8 @@ class VideoWriter:
 
     def write(self) -> str:
         if len(self.images) > 0:
-            import moviepy.video.io.ImageSequenceClip
+            with full_install_required():
+                import moviepy.video.io.ImageSequenceClip
 
             clip = moviepy.video.io.ImageSequenceClip.ImageSequenceClip(
                 self.images, fps=30, with_mask=False, load_images=True
@@ -61,7 +64,8 @@ class VideoWriter:
 
     @staticmethod
     def convert_to_compatible_format(video_path: str) -> str:
-        import moviepy.video.io.VideoFileClip
+        with full_install_required():
+            import moviepy.video.io.VideoFileClip
 
         new_path = Path(video_path)
         new_path = new_path.with_name(f"{new_path.stem}_fixed{new_path.suffix}").as_posix()
@@ -98,7 +102,8 @@ class VideoWriter:
         Returns:
             str: Path to the saved PNG image
         """
-        import moviepy.video.io.VideoFileClip
+        with full_install_required():
+            import moviepy.video.io.VideoFileClip
 
         if output_path is None:
             output_path = (

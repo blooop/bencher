@@ -16,9 +16,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import holoviews as hv
 import pandas as pd
 import xarray as xr
+
+from bencher.optional_deps import hv
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Mapping, Sequence

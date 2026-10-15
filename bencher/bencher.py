@@ -8,13 +8,10 @@ from collections.abc import Mapping
 from concurrent.futures import as_completed
 from contextlib import suppress
 from copy import deepcopy
-from functools import partial
+from functools import cache, partial
 from itertools import combinations, product
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-import optuna
-import panel as pn
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, DimsCfg
 from bencher.bench_plot_server import BenchPlotServer
@@ -32,6 +29,12 @@ from bencher.job import (
     normalize_catch,
     normalize_executor,
 )
+from bencher.launch_env import (
+    caches_disabled_by_env,
+    check_no_forbidden_code,
+    result_path_from_env,
+)
+from bencher.optional_deps import PLOTTING_INSTALLED, full_install_required, optuna, pn
 from bencher.optuna_conversions import sweep_var_to_optuna_dist, sweep_var_to_suggest
 from bencher.regression import RegressionError, detect_regressions
 from bencher.result_collector import ResultCollector
@@ -80,6 +83,17 @@ PARETO_RANK = "pareto_rank"
 # A warm seed is one recorded sample, so its value is not the reduction an
 # aggregating study ranks on -- see `_warm_start_from_cache`.
 WARM_STARTED = "bencher_warm_started"
+
+
+@cache
+def _warn_collected_without_plots() -> None:
+    # Cached, not left to the warnings registry: any warnings.catch_warnings() block
+    # that runs between two sweeps resets the registry, and the warning repeats.
+    warnings.warn(
+        "bencher: the plotting packages are not installed (a light install), so "
+        "the sweep was collected without plots. `pip install holobench` adds them.",
+        stacklevel=4,
+    )
 
 
 def _pareto_design(trial: optuna.trial.FrozenTrial, searched: list) -> dict:
@@ -880,6 +894,13 @@ class Bench(BenchPlotServer):
         """
         timings = SweepTimings()
 
+        if caches_disabled_by_env():
+            # A launcher comparing two revisions (bencher ab) needs samples from this
+            # code: the caches are keyed by inputs, so they would answer for the other.
+            run_cfg = deepcopy(run_cfg)
+            run_cfg.cache_results = False
+            run_cfg.cache_samples = False
+
         if run_cfg.cache_size is not None:
             cache_size_bytes = run_cfg.cache_size * 1_000_000
             self.cache_size = cache_size_bytes
@@ -1033,7 +1054,13 @@ class Bench(BenchPlotServer):
             bench_res.post_setup()
         timings.post_setup_ms = elapsed()
 
-        if bench_cfg.auto_plot:
+        if bench_cfg.auto_plot and not PLOTTING_INSTALLED:
+            # A light install collects, checks claims and compares, but
+            # draws nothing. Say so once rather than fail a sweep that asked for plots
+            # by default; showing or saving the report still raises and says what to
+            # install.
+            _warn_collected_without_plots()
+        if bench_cfg.auto_plot and PLOTTING_INSTALLED:
             with phase_timer() as elapsed:
                 self._append_to_report(bench_res)
             timings.render_ms = elapsed()
@@ -1053,6 +1080,12 @@ class Bench(BenchPlotServer):
         # bench_res.n_failed, which is a different question.
         if calculate_results:
             _enforce_sample_error_policy(bench_res, run_cfg.fail_on_sample_error)
+        if (result_path := result_path_from_env()) is not None:
+            # Local import, as in _append_result_via_split: render pulls in panel.
+            from bencher.render import save_result
+
+            check_no_forbidden_code()
+            save_result(bench_res, result_path)
         return bench_res
 
     def _append_result_via_split(self, bench_res: BenchResult) -> None:
@@ -1863,7 +1896,8 @@ class Bench(BenchPlotServer):
         """Optuna's Pareto-front scatter of *result* as a panel pane."""
         # Function-scoped: optuna.visualization imports plotly, which is a slow
         # import nothing else on the path needs.
-        from optuna.visualization import plot_pareto_front
+        with full_install_required():
+            from optuna.visualization import plot_pareto_front
 
         figure = plot_pareto_front(result.study, target_names=list(result.target_names))
         return pn.pane.Plotly(figure)

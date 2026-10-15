@@ -6,10 +6,9 @@ from itertools import product as iter_product
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import optuna
 import pandas as pd
-import panel as pn
 
+from bencher.optional_deps import full_install_required, optuna, pn
 from bencher.optuna_conversions import (
     _append_safe,
     _append_safe_sized,
@@ -293,11 +292,12 @@ class OptunaResult(BenchResultBase):
         Returns:
             pn.pane.panel: A panel with optuna visualisations.
         """
-        from optuna.visualization import (
-            plot_optimization_history,
-            plot_param_importances,
-            plot_pareto_front,
-        )
+        with full_install_required():
+            from optuna.visualization import (
+                plot_optimization_history,
+                plot_param_importances,
+                plot_pareto_front,
+            )
 
         try:
             self.studies = [self.bench_result_to_study(True)]

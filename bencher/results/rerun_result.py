@@ -6,9 +6,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import panel as pn
 from param import Number, Parameter
 
+from bencher.optional_deps import pn
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
 from bencher.results.rerun_summary import RerunSummaryResult
 from bencher.variables.results import (

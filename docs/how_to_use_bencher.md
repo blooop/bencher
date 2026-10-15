@@ -700,9 +700,125 @@ python -m bencher.render result.pkl out_dir --json result.json
 python -m bencher.render compare baseline.pkl candidate.pkl --json comparison.json
 ```
 
+### Evidence for a pull request
+
+`bencher compare` also writes what a reviewer reads. `--markdown PATH` writes a block to
+paste as a PR's `## Evidence` section: per metric, a Mermaid `xychart-beta` chart with the
+baseline as bars and the candidate as a line on the same axes, then a caption with the
+verdict, the mean before → after with the change in percent, the claim outcome on each side
+(see below) and each side's revision and sample count. `--png DIR` writes one PNG per metric
+with the claim threshold drawn in and a ±1 std band. The PNG plots against the first swept
+input; the mean and std pool the repeats and every other swept input, so with two or more
+swept inputs the band also holds the spread across the other inputs. Any of `--json`,
+`--markdown` and `--png` may be given; at least one is required.
+
+```bash
+bencher compare base.pkl candidate.pkl --markdown evidence.md --png evidence/ \
+    --png-url-base https://raw.githubusercontent.com/<org>/<repo>/<sha>/evidence
+```
+
+A metric gets a Mermaid chart only when the chart is honest: no swept input (one bar per
+side) or one swept input with the same values on both sides, binned to at most 30 points.
+Two or more swept inputs, a sweep that differs between the sides, or a repeat-to-repeat
+spread as large as the change get an image link instead, `![<metric>: before vs
+after](<url>)`. The URL is `--png-url-base` plus the file name, so an agent pushes the PNGs
+first and renders the Markdown against the pinned URL; without it, the link is relative to
+the Markdown file, and the PNGs it links are written beside it when `--png` is not given.
+
+In Python: `bn.evidence_markdown(base, cand)`, `bn.write_evidence_pngs(base, cand, out_dir)`
+and `bn.write_evidence(base, cand, json_path=..., markdown_path=..., png_dir=...)`. See
+[`example_evidence.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_evidence.py).
+
+### Before and after a change: `bencher ab`
+
+`bencher ab` runs one bench command on the base revision and on the working tree, then
+writes the comparison and the evidence:
+
+```bash
+bencher ab -- python my_bench.py
+bencher ab --base origin/main --out evidence/ --png-url-base <url> -- pixi run python my_bench.py
+```
+
+- The base is `--base REF` when given, else the merge-base of `HEAD` with `origin/HEAD`
+  (then `origin/main`, then `main`). It runs in a temporary detached `git worktree`,
+  removed afterwards even on failure. The candidate runs in the working tree as it is, so
+  uncommitted changes count.
+- The base run puts the worktree's `src` directory (when it has one) and its root first
+  on `PYTHONPATH`. That shadows an editable install or an absolute `PYTHONPATH` entry
+  that points into the working tree, so the base imports its own package. If the base
+  run still loads a module from the working tree (a package outside `src` or the root,
+  for example), it saves no result and fails, and `base.log` names each such module.
+- A relative path in the command that the base worktree cannot have, because it is outside
+  the repository or ignored by git (a `.venv/bin/python`, a data directory), is made
+  absolute for the base run. A tracked path such as the bench file stays relative, so each
+  side runs its own copy.
+- Each side runs with `BENCHER_NO_CACHE=1` (see [Caching](caching.md)): the caches are
+  keyed by inputs, not code, so without it the candidate could read the base's samples.
+- Each side is told where to save its result with `BENCHER_RESULT_PATH`. Any process that
+  sets it gets every collected sweep saved there with `bn.save_result`; a command that runs
+  several sweeps leaves the last one. `BENCHER_SOURCE_REVISION` is the side's commit (with
+  `+dirty` for a modified working tree) and `BENCHER_DISPLAY_LABEL` is `base <rev>` or
+  `candidate <rev>`.
+- `--out` (default `./bencher-ab/`) receives `base.pkl`, `candidate.pkl`,
+  `comparison.json`, `evidence.md`, one PNG per metric, and `base.log`/`candidate.log`
+  with each side's output. The paths are printed on stdout.
+- The exit status is 0 when both sides ran, whatever the verdict; 1 when a side failed or
+  saved no result (stderr names the side and the tail of its log, which is kept); 2 for a
+  usage or git problem.
+
+Each side also runs with `BENCHER_NO_SHOW=1`, which makes `bn.run` and `BenchRunner` show
+nothing: the default `show=True` starts a live report server, and that server keeps a
+non-interactive process alive after the bench finishes. The bench file must
+exist on the base revision: for a bench added by the change itself, commit it on its own
+first and pass that commit as `--base`.
+
 `BenchReport.save(..., emit_json=True)` writes `result.json` next to the HTML for every
 contained result (opt-in; default off). All JSON output is strict — non-finite values (e.g. a
 zero-baseline percent change) are emitted as `null`.
+
+### Declaring a claim
+
+A result variable can declare what a change is meant to make true:
+
+```python
+class Braking(bn.ParametrizedSweep):
+    speed = bn.FloatSweep(bounds=(0.5, 3.0))
+    stop_distance = bn.ResultFloat(units="m", claim="< 0.7")
+```
+
+The forms are `< x`, `<= x`, `> x`, `>= x` and the inclusive range `low..high`. The string
+is parsed when the class is defined, so a typo fails there and not after the sweep. A claim
+is judged against every sample, repeats included: it holds only if the *worst* sample
+satisfies it (the largest for `<`/`<=`, the smallest for `>`/`>=`, the one nearest or
+furthest past an edge for a range). A mean inside the bound with one point outside it fails.
+
+`result_to_dict` adds a `claim` entry to that metric — `holds` (`null` when nothing was
+recorded), `worst_value`, `worst_inputs` (sweep inputs and `repeat`) and `samples`.
+`compare_results` judges the candidate's claim on both sides, so "the baseline fails the
+claim and the candidate holds it" reads straight off the comparison. The claim is not part
+of the variable's cache identity: changing it keeps cached samples and over-time history.
+
+### A light install for the evidence tools
+
+A CI job that only gates a change does not need the plotting stack. Install the package
+without its dependencies, then the light ones by hand:
+
+```bash
+pip install --no-deps holobench
+pip install numpy param diskcache xarray pandas strenum matplotlib jinja2 pyyaml
+```
+
+The second list is holobench's own dependencies without the heavy ones, plus pyyaml, which
+bencher imports and a full install gets through panel. pip then warns that holobench's other requirements (holoviews, panel, hvplot, optuna,
+plotly, scikit-learn, moviepy) are missing; that is expected. It can also warn that a light
+package is newer than holobench's upper pin; add the pin to the second command (for example
+`"numpy<=2.5.1"`) if you want to stay inside it.
+
+What works: `import bencher`, sweeps, claims, `bn.compare_results`, `bencher compare` (JSON,
+Markdown and PNG evidence) and `bencher ab`. A sweep that would plot warns once and collects
+without plots. Plots, HTML reports, the report server, `bencher <result.pkl> <dir>`,
+optimisation and video raise an `ImportError` that says to run `pip install holobench`, which
+adds them.
 
 ## Complete execution reports
 
