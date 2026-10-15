@@ -23,9 +23,16 @@ def test_a_missing_heavy_package_says_to_install_holobench():
         pytest.raises(FullInstallRequiredError, match="pip install holobench") as info,
         full_install_required(),
     ):
-        raise _missing("holoviews.plotting")
+        raise _missing("holoviews")
     assert isinstance(info.value, ImportError)
-    assert info.value.name == "holoviews.plotting"
+    assert info.value.name == "holoviews"
+
+
+def test_a_missing_submodule_of_an_installed_heavy_package_is_left_alone():
+    """bokeh is installed, so a missing bokeh submodule is a version skew, not a light install."""
+    with pytest.raises(ModuleNotFoundError) as info, full_install_required():
+        raise _missing("bokeh.no_such_mod")
+    assert not isinstance(info.value, FullInstallRequiredError)
 
 
 def test_a_missing_light_package_is_left_alone():

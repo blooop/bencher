@@ -67,7 +67,7 @@ def _message(package: str) -> str:
 
 
 def _is_heavy(exc: ModuleNotFoundError) -> bool:
-    return (exc.name or "").partition(".")[0] in HEAVY_PACKAGES
+    return exc.name in HEAVY_PACKAGES
 
 
 @contextmanager
