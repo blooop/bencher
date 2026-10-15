@@ -582,7 +582,7 @@ def write_evidence(
             name = m.entry["variable"]
             if isinstance(m.plan, ImageOnly) and name not in pngs:
                 pngs[name] = _render_png(m, image_dir / png_name(name))
-        base = png_url_base
+        base = png_url_base or None
         if base is None:
             rel = os.path.relpath(image_dir.resolve(), written_md.parent.resolve())
             base = "" if rel == "." else rel.replace(os.sep, "/")

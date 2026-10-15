@@ -284,3 +284,16 @@ def test_a_minus_inf_worst_sample_is_not_captioned_as_inf():
     claim = re.search(r"claim `> 0`: .*", md)[0]
     assert "candidate fails" in claim
     assert "worst inf" not in claim
+
+
+def test_an_empty_png_url_base_links_relative_to_the_markdown(tmp_path):
+    md, png_dir = tmp_path / "out" / "e.md", tmp_path / "out" / "png"
+    bn.write_evidence(
+        _collect(0.3, input_vars=("speed", "load")),
+        _collect(0.2, input_vars=("speed", "load")),
+        markdown_path=md,
+        png_dir=png_dir,
+        png_url_base="",
+    )
+    assert "](png/stop_distance.png)" in md.read_text(encoding="utf-8")
+    assert (png_dir / "stop_distance.png").exists()
