@@ -11,6 +11,7 @@ from contextlib import AbstractContextManager, suppress
 from typing import TYPE_CHECKING, Any
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, ShowMode, normalize_show
+from bencher.launch_env import show_disabled_by_env
 from bencher.results.render_failure import report_render_failure
 from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
@@ -169,6 +170,8 @@ def run(
         stacklevel=2,
     )
 
+    if show_disabled_by_env():
+        show = False
     show_mode = normalize_show(show)
     if show_mode is ShowMode.PUBLISHED and not publish:
         raise ValueError("show='published' requires publish=True")
@@ -200,7 +203,7 @@ def run(
         _original_target = target
 
         def _with_optimise(run_cfg: BenchRunCfg | None = None) -> Bench:
-            import panel as pn
+            from bencher.optional_deps import pn
 
             bench = _original_target(run_cfg)
             result = bench.optimize(n_trials=optimise, plot=False)

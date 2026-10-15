@@ -10,10 +10,9 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pandas as pd
-import panel as pn
-import plotly.graph_objs as go
 
 from bencher.bench_report import BenchReport
+from bencher.optional_deps import go, pn
 
 
 def parse_junit_xml(path: str | Path) -> pd.DataFrame:

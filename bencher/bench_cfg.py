@@ -8,7 +8,6 @@ from datetime import datetime
 from enum import auto
 from typing import TYPE_CHECKING, Any, Self, TypeVar
 
-import panel as pn
 import param
 from strenum import LowercaseStrEnum
 
@@ -16,6 +15,7 @@ from bencher.cache_management import CACHE_VERSION
 from bencher.execution import Execution
 from bencher.history import OnHistoryReset
 from bencher.job import Executors
+from bencher.optional_deps import pn
 from bencher.results.composable_container.composable_container_base import PaneLayout
 from bencher.results.laxtex_result import to_latex
 from bencher.utils import AggFn

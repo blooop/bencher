@@ -3,8 +3,7 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
-import holoviews as hv
-
+from bencher.optional_deps import hv
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import (

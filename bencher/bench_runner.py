@@ -17,6 +17,7 @@ from bencher.bench_cfg import BenchCfg, BenchRunCfg, ShowMode, normalize_show
 from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
 from bencher.bencher import Bench
 from bencher.execution import execution_scope
+from bencher.launch_env import show_disabled_by_env
 from bencher.publication_target import PublicationTarget, commit_frozen_report
 from bencher.utils import UNSET
 
@@ -583,7 +584,7 @@ class BenchRunner:
             save (bool): Whether to save the report to disk
             debug (bool): Whether to enable debug mode for publishing
         """
-        show_mode = normalize_show(show)
+        show_mode = ShowMode.NONE if show_disabled_by_env() else normalize_show(show)
 
         if show_mode == "published" and not publish:
             raise ValueError("show='published' requires publish=True")
