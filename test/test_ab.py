@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -144,6 +145,28 @@ def test_ab_explicit_base_and_image_url(repo):
     assert _metric(repo / "bencher-ab")["verdict"] == "unchanged"
 
 
+def test_ab_on_a_clean_tree_names_the_head_even_when_its_output_is_not_ignored(repo):
+    (repo / ".gitignore").write_text("cachedir/\n__pycache__/\n", encoding="utf-8")
+    _git(repo, "commit", "-q", "-am", "track the evidence directory")
+
+    assert _ab(repo, "--base", "main").returncode == 0
+    proc = _ab(repo, "--base", "main")
+
+    assert proc.returncode == 0, proc.stderr
+    head = _git(repo, "rev-parse", "--short", "HEAD")
+    cmp = json.loads((repo / "bencher-ab" / "comparison.json").read_text(encoding="utf-8"))
+    assert cmp["candidate"]["provenance"]["source_revision"] == head
+
+
+def test_ab_with_an_unknown_base_exits_2_before_it_runs_anything(repo):
+    proc = _ab(repo, "--base", "nosuchref")
+
+    assert proc.returncode == 2
+    assert "--base 'nosuchref' does not name a commit" in proc.stderr
+    assert not (repo / "bencher-ab").exists()
+    assert _git(repo, "worktree", "list").count("\n") == 0
+
+
 AB_MAIN = (sys.executable, "-m", "bencher.render", "ab", "--base", "main")
 
 
@@ -246,6 +269,7 @@ def test_a_result_whose_script_defines_an_enum_loads_in_another_process(tmp_path
     )
     res = bn.load_result(path)
     assert res.ds["t"].values.ravel().tolist() == [1.0, 2.0]
+    assert [str(mode) for mode in res.ds["mode"].values] == ["fast", "slow"]
 
 
 class Counted(bn.ParametrizedSweep):
@@ -306,6 +330,24 @@ def test_no_show_env_keeps_bn_run_from_serving_the_report(tmp_path, monkeypatch)
         return bench
 
     bn.run(example_counted)
+
+
+def test_no_show_env_keeps_bench_runner_from_serving_the_report(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(NO_SHOW_ENV, "1")
+    shown = []
+
+    def record(*args, **_kwargs):
+        shown.append(args)
+        return SimpleNamespace(stop=lambda: None)
+
+    monkeypatch.setattr(bn.BenchReport, "show", record)
+
+    runner = bn.BenchRunner("runner_no_show", bench_class=Counted(), run_cfg=bn.BenchRunCfg())
+    runner.run(show=True)
+
+    assert runner.results
+    assert shown == []
 
 
 PKG_BENCH = """
