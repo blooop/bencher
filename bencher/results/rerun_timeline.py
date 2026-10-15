@@ -52,10 +52,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, assert_never
 
 import numpy as np
-import panel as pn
 from param import Number, Parameter
 from strenum import StrEnum
 
+from bencher.optional_deps import pn
 from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
 from bencher.results.composable_container.composable_container_rerun import (

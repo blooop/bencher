@@ -35,10 +35,11 @@ import pickle
 import sys
 from contextlib import ExitStack
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, BinaryIO
 
 from bencher.bench_report import BenchReport
 from bencher.complete_report import execution_for_results
+from bencher.optional_deps import FullInstallRequiredError, full_install_required
 from bencher.results.bench_result import BenchResult
 
 if TYPE_CHECKING:
@@ -75,10 +76,53 @@ def save_result(bench_res: BenchResult, path: str | Path) -> Path:
     return path
 
 
+class _MainPlaceholder:
+    """Stands in for a class that a result's script defined in its ``__main__``."""
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Any:
+        # An enum member pickles as a call of its class with its value; the value
+        # is what a coordinate or a label needs.
+        if len(args) == 1 and not kwargs:
+            return args[0]
+        return super().__new__(cls)
+
+
+class _ResultUnpickler(pickle.Unpickler):
+    """Load a result whose sweep class was defined in another process's ``__main__``.
+
+    A bench script that defines its sweep class and runs it directly pickles that
+    class as ``__main__.<Name>``, which no other process has: ``bencher compare``
+    and ``bencher ab`` would fail before reading a number. The class is only the
+    owner of the result's parameters, so a placeholder of the same name stands in
+    for it and the dataset, result vars and claims load intact. Only a missing
+    ``__main__`` attribute is replaced; any other unknown name still raises.
+    """
+
+    def __init__(self, file: BinaryIO) -> None:
+        super().__init__(file)
+        self._placeholders: dict[str, type] = {}
+
+    def find_class(self, module: str, name: str) -> Any:
+        try:
+            with full_install_required():
+                return super().find_class(module, name)
+        except AttributeError:
+            if module != "__main__":
+                raise
+        if name not in self._placeholders:
+            logger.debug("result references __main__.%s; loading it as a placeholder", name)
+            self._placeholders[name] = type(name, (_MainPlaceholder,), {"__module__": "__main__"})
+        return self._placeholders[name]
+
+
 def load_result(path: str | Path) -> BenchResult:
-    """Load a :class:`BenchResult` previously written by :func:`save_result`."""
+    """Load a :class:`BenchResult` previously written by :func:`save_result`.
+
+    A result saved by a script whose sweep class lives in its ``__main__`` loads
+    in any process, with a placeholder standing in for that class.
+    """
     with Path(path).open("rb") as fh:
-        return pickle.load(fh)  # noqa: S301 - loads a result file the user saved with save_result
+        return _ResultUnpickler(fh).load()
 
 
 def save_results(results: Sequence[BenchResult], path: str | Path) -> Path:
@@ -268,6 +312,12 @@ def _compare_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _needs_full_install(exc: FullInstallRequiredError) -> int:
+    # The message says what to install; a traceback would only bury it.
+    print(f"{_prog()}: {exc}", file=sys.stderr)  # noqa: T201 - CLI error output
+    return 1
+
+
 def _load_or_fail(path: str, label: str) -> tuple[BenchResult | None, int]:
     """Load a saved result, returning ``(result, 0)`` or ``(None, exit_code)``.
 
@@ -280,6 +330,8 @@ def _load_or_fail(path: str, label: str) -> tuple[BenchResult | None, int]:
         return None, 2
     try:
         return load_result(path), 0
+    except FullInstallRequiredError as exc:
+        return None, _needs_full_install(exc)
     except Exception:
         logger.exception("Failed to load %s from %s", label, path)
         return None, 1
@@ -322,6 +374,18 @@ def _run_compare(argv: list[str]) -> int:
     return 0
 
 
+def _run_subcommand(name: str, argv: list[str]) -> int:
+    if name == "compare":
+        return _run_compare(argv)
+    if name == "ab":
+        from bencher.ab import main as ab_main
+
+        return ab_main(argv)
+    from bencher.publishing_cli import main as publish_main
+
+    return publish_main(argv)
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint.
 
@@ -331,15 +395,12 @@ def main(argv: list[str] | None = None) -> int:
     Render: ``bencher <result.pkl> <output_dir> [--json PATH] [--cachedir DIR]``
     Compare: ``bencher compare <a.pkl> <b.pkl> [--json PATH] [--markdown PATH]
     [--png DIR] [--png-url-base URL]``
+    A/B: ``bencher ab [--base REF] [--out DIR] [--png-url-base URL] -- <command...>``
     """
     argv = sys.argv[1:] if argv is None else argv
 
-    if argv and argv[0] == "compare":
-        return _run_compare(argv[1:])
-    if argv and argv[0] == "publish":
-        from bencher.publishing_cli import main as publish_main
-
-        return publish_main(argv[1:])
+    if argv and argv[0] in ("compare", "ab", "publish"):
+        return _run_subcommand(argv[0], argv[1:])
 
     args = _render_parser().parse_args(argv)
 
@@ -356,13 +417,21 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("--report includes summaries; --json is only for legacy rendering")
         return 1
     try:
-        out = render_report(
-            bench_res, args.output_dir, cache_dir=args.cache_dir, complete=args.report
-        )
-        if args.json_path:
-            from bencher.report_export import result_to_json
+        from bencher.report_export import result_to_json
 
+        try:
+            out = render_report(
+                bench_res, args.output_dir, cache_dir=args.cache_dir, complete=args.report
+            )
+        except FullInstallRequiredError:
+            # The JSON needs no plotting package, so a light install still gets it.
+            if args.json_path:
+                result_to_json(bench_res, args.json_path)
+            raise
+        if args.json_path:
             result_to_json(bench_res, args.json_path)
+    except FullInstallRequiredError as exc:
+        return _needs_full_install(exc)
     except Exception:
         # Top-level CLI guard: convert any render failure into a clean exit code.
         logger.exception("Failed to render report from %s", args.result_path)

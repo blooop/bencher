@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from bencher.optional_deps import full_install_required
+
 
 def hvplot_of(obj: Any) -> Any:
     """Return *obj*'s ``.hvplot`` accessor, importing hvplot on first use.
@@ -28,7 +30,8 @@ def hvplot_of(obj: Any) -> Any:
     Typed loosely because the accessor differs by argument: pandas objects get
     ``hvPlotTabular``, xarray objects ``hvPlot``, and neither is re-exported.
     """
-    import hvplot.pandas
-    import hvplot.xarray  # noqa: F401
+    with full_install_required():
+        import hvplot.pandas
+        import hvplot.xarray  # noqa: F401
 
     return obj.hvplot

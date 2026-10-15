@@ -4,12 +4,11 @@ import warnings
 from copy import deepcopy
 from typing import Any
 
-import holoviews as hv
 import numpy as np
-import panel as pn
 import param
 from param import Parameterized
 
+from bencher.optional_deps import hv, pn
 from bencher.utils import hash_sha1
 
 # slots that are shared across all Sweep classes

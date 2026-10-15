@@ -3,8 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, assert_never, cast
 
-import panel as pn
-
+from bencher.optional_deps import pn
 from bencher.results.composable_container.composable_container_base import (
     ComposableContainerBase,
     ComposeType,

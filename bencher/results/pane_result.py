@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import panel as pn
-
+from bencher.optional_deps import pn
 from bencher.results.bench_result_base import BenchResultBase
 from bencher.results.video_controls import VideoControls
 from bencher.variables.results import (

@@ -10,6 +10,8 @@ See ``utils_rerun.py`` for functions that require the rerun Python SDK
 (live capture, recording management, etc.).
 """
 
+from __future__ import annotations
+
 import base64
 import logging
 import os
@@ -19,7 +21,7 @@ from importlib.metadata import PackageNotFoundError, version as get_package_vers
 from pathlib import Path
 from urllib.parse import quote
 
-import panel as pn
+from bencher.optional_deps import pn
 
 from .utils import publish_file
 

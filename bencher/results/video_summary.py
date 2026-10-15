@@ -3,8 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
-import panel as pn
-
+from bencher.optional_deps import pn
 from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
 from bencher.results.composable_container.composable_container_base import (

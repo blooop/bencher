@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-import optuna
-import panel as pn
+from bencher.optional_deps import full_install_required, optuna, pn
 
 # NOTE: `optuna.visualization` pulls in sklearn's fANOVA evaluator (~3s at
 # import). It is only needed by param_importance(), so import it lazily there.
@@ -56,7 +55,8 @@ def optuna_grid_search(bench_cfg: BenchCfg, trial_vars: list | None = None) -> o
 def param_importance(
     bench_cfg: BenchCfg, study: optuna.Study, plot_width: int | None = None
 ) -> pn.Column:
-    from optuna.visualization import plot_param_importances
+    with full_install_required():
+        from optuna.visualization import plot_param_importances
 
     col_importance = pn.Column()
     for idx, tgt in enumerate(bench_cfg.optuna_targets()):
