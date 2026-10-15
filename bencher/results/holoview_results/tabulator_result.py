@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-import panel as pn
 import xarray as xr
 
+from bencher.optional_deps import pn
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 if TYPE_CHECKING:

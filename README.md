@@ -26,6 +26,8 @@ measurement — no sweep loops, no plotting code, no report scaffolding.
 pip install holobench
 ```
 
+Only gating changes in CI (sweeps, claims, `bencher compare`, `bencher ab`)? See [a light install](docs/how_to_use_bencher.md#a-light-install-for-the-evidence-tools) without the plotting stack.
+
 ```python
 import math
 

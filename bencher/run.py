@@ -203,7 +203,7 @@ def run(
         _original_target = target
 
         def _with_optimise(run_cfg: BenchRunCfg | None = None) -> Bench:
-            import panel as pn
+            from bencher.optional_deps import pn
 
             bench = _original_target(run_cfg)
             result = bench.optimize(n_trials=optimise, plot=False)

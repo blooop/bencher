@@ -20,14 +20,18 @@ Displaying rerun data inside a Panel/Bokeh report requires two pieces:
    the same HTTP origin (no CORS, no extra ports).
 """
 
-from pathlib import Path
-from typing import Any
+from __future__ import annotations
 
-import panel as pn
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
 import rerun as rr
 
 from .utils import gen_rerun_data_path
 from .utils_rrd import rrd_file_to_pane
+
+if TYPE_CHECKING:
+    import panel as pn
 
 
 def _ensure_rerun_init() -> None:  # pragma: no cover

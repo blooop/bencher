@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, assert_never
 
-import panel as pn
+from bencher.optional_deps import pn
 
 if TYPE_CHECKING:
     from bencher.plotting.plt_cnt_cfg import PltCntCfg

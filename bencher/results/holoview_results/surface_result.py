@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import panel as pn
-import plotly.graph_objs as go
-
+from bencher.optional_deps import go, pn
 from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import (

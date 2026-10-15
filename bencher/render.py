@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING, Any, BinaryIO
 
 from bencher.bench_report import BenchReport
 from bencher.complete_report import execution_for_results
+from bencher.optional_deps import FullInstallRequiredError, full_install_required
 from bencher.results.bench_result import BenchResult
 
 if TYPE_CHECKING:
@@ -103,7 +104,8 @@ class _ResultUnpickler(pickle.Unpickler):
 
     def find_class(self, module: str, name: str) -> Any:
         try:
-            return super().find_class(module, name)
+            with full_install_required():
+                return super().find_class(module, name)
         except AttributeError:
             if module != "__main__":
                 raise
@@ -310,6 +312,12 @@ def _compare_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _needs_full_install(exc: FullInstallRequiredError) -> int:
+    # The message says what to install; a traceback would only bury it.
+    print(f"{_prog()}: {exc}", file=sys.stderr)  # noqa: T201 - CLI error output
+    return 1
+
+
 def _load_or_fail(path: str, label: str) -> tuple[BenchResult | None, int]:
     """Load a saved result, returning ``(result, 0)`` or ``(None, exit_code)``.
 
@@ -322,6 +330,8 @@ def _load_or_fail(path: str, label: str) -> tuple[BenchResult | None, int]:
         return None, 2
     try:
         return load_result(path), 0
+    except FullInstallRequiredError as exc:
+        return None, _needs_full_install(exc)
     except Exception:
         logger.exception("Failed to load %s from %s", label, path)
         return None, 1
@@ -407,13 +417,21 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("--report includes summaries; --json is only for legacy rendering")
         return 1
     try:
-        out = render_report(
-            bench_res, args.output_dir, cache_dir=args.cache_dir, complete=args.report
-        )
-        if args.json_path:
-            from bencher.report_export import result_to_json
+        from bencher.report_export import result_to_json
 
+        try:
+            out = render_report(
+                bench_res, args.output_dir, cache_dir=args.cache_dir, complete=args.report
+            )
+        except FullInstallRequiredError:
+            # The JSON needs no plotting package, so a light install still gets it.
+            if args.json_path:
+                result_to_json(bench_res, args.json_path)
+            raise
+        if args.json_path:
             result_to_json(bench_res, args.json_path)
+    except FullInstallRequiredError as exc:
+        return _needs_full_install(exc)
     except Exception:
         # Top-level CLI guard: convert any render failure into a clean exit code.
         logger.exception("Failed to render report from %s", args.result_path)

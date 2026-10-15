@@ -36,13 +36,12 @@ from enum import auto
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
-import holoviews as hv
-import panel as pn
 import param
 from param import Number
 from strenum import StrEnum
 
 from bencher.claims import Claim, as_claim
+from bencher.optional_deps import hv, pn
 from bencher.utils import hash_sha1
 
 if TYPE_CHECKING:

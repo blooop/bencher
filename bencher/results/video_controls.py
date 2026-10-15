@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import panel as pn
+from bencher.optional_deps import pn
 
 if TYPE_CHECKING:
     from collections.abc import Callable

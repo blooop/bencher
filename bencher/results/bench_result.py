@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-import panel as pn
-
+from bencher.optional_deps import pn
 from bencher.results.bench_result_base import EmptyContainer, ReduceType
 from bencher.results.composable_container.composable_container_base import (
     ComposeType,
@@ -344,7 +343,7 @@ class BenchResult(
         self,
         plot_list: list[callable | str] | None = None,
         remove_plots: list[callable | str] | None = None,
-        default_container: Callable[[], pn.layout.ListPanel] = pn.Column,
+        default_container: Callable[[], pn.layout.ListPanel] | None = None,
         override: bool = False,  # false so that plots that are not supported are not shown
         numeric_only: bool = False,
         backend: str | None = None,
@@ -390,6 +389,8 @@ class BenchResult(
         kwargs = self.set_plot_size(**kwargs)
         data = self.to_bench_data(render_kwargs=dict(override=override, **kwargs))
 
+        if default_container is None:
+            default_container = pn.Column
         row = EmptyContainer(default_container())
         for plugin in get_registry().select(
             data, include=include_names, exclude=exclude_names or None, backend=backend
