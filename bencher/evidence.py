@@ -300,7 +300,7 @@ def _claim_side(side: dict) -> str:
         return "not measured"
     verdict = "holds" if side["holds"] else "fails"
     worst = side["worst_value"]
-    worst_text = "inf" if worst is None else _num(worst)
+    worst_text = "non-finite" if worst is None else _num(worst)
     return f"{verdict} (worst {worst_text} at {_where(side['worst_inputs'])})"
 
 

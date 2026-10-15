@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import math
 import re
 
 import pytest
@@ -257,3 +258,29 @@ def test_a_png_draws_sides_that_swept_different_inputs_each_against_its_own(
     )
     (fig,) = figures
     assert {ax.get_xlabel() for ax in fig.axes} == {"speed", "load"}
+
+
+class Margin(bn.ParametrizedSweep):
+    speed = bn.FloatSweep(default=1.0, bounds=(1.0, 3.0), samples=3)
+    floor = bn.FloatSweep(default=0.0)
+
+    margin = bn.ResultFloat(units="m", claim="> 0")
+
+    def benchmark(self):
+        self.margin = self.floor if self.speed == 3.0 else self.speed
+
+
+def _collect_margin(floor):
+    bench = bn.Bench(f"margin_{floor}", Margin())
+    res = bench.collect(
+        input_vars=["speed"], result_vars=["margin"], const_vars=[("floor", floor)]
+    )
+    bench.close()
+    return res
+
+
+def test_a_minus_inf_worst_sample_is_not_captioned_as_inf():
+    md = bn.evidence_markdown(_collect_margin(1.0), _collect_margin(-math.inf))
+    claim = re.search(r"claim `> 0`: .*", md)[0]
+    assert "candidate fails" in claim
+    assert "worst inf" not in claim
