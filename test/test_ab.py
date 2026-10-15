@@ -371,3 +371,19 @@ def test_ab_base_imports_its_own_package_over_an_absolute_path_to_the_candidate(
     assert _metric(repo / "bencher-ab")["baseline_value"] == pytest.approx(0.6)
     assert _metric(repo / "bencher-ab")["current_value"] == pytest.approx(0.4)
     assert _git(repo, "worktree", "list").count("\n") == 0
+
+
+def test_ab_fails_when_the_base_still_imports_the_candidates_code(tmp_path):
+    # lib/ is not a directory the base run puts first on PYTHONPATH, so the
+    # absolute entry still reaches the candidate's package from the base side.
+    repo = _package_repo(tmp_path, "lib")
+
+    proc = _ab_with_pythonpath(repo, repo / "lib")
+
+    assert proc.returncode == 1
+    assert "base run exited with status 1" in proc.stderr
+    log = (repo / "bencher-ab" / "base.log").read_text(encoding="utf-8")
+    assert "mypkg.gain" in log
+    assert str(repo / "lib" / "mypkg" / "gain.py") in log
+    assert not (repo / "bencher-ab" / "base.pkl").exists()
+    assert _git(repo, "worktree", "list").count("\n") == 0
