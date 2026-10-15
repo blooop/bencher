@@ -9,7 +9,7 @@ import pytest
 import xarray as xr
 
 import bencher as bn
-from bencher.claims import Holds, WorstSample, evaluate_claim
+from bencher.claims import Holds, Unmeasured, WorstSample, evaluate_claim, outcome_to_dict
 
 
 class Braking(bn.ParametrizedSweep):
@@ -120,8 +120,62 @@ def test_compare_reports_the_claim_on_both_sides():
 
 @pytest.mark.parametrize(("claim", "infinite"), [("> 0", math.inf), ("< 0.7", -math.inf)])
 def test_an_unrecorded_sample_is_never_named_the_worst(claim, infinite):
-    # An infinite sample deep inside the claim has an infinite margin, the same
-    # margin the unrecorded (NaN) sample before it is masked to.
+    # The infinite sample has an infinite margin; the NaN before it has none.
     da = xr.DataArray([math.nan, infinite], dims=["speed"], coords={"speed": [1.0, 2.0]})
     outcome = evaluate_claim(bn.parse_claim(claim), da)
     assert outcome == Holds(WorstSample(infinite, {"speed": 2.0}), samples=1)
+
+
+@pytest.mark.parametrize(
+    ("claim", "holds"),
+    [("< 0.5", False), ("<= 0.5", True), ("> 0.5", False), (">= 0.5", True)],
+)
+def test_a_sample_on_the_bound_satisfies_only_the_inclusive_operator(claim, holds):
+    da = xr.DataArray([0.5], dims=["speed"], coords={"speed": [1.0]})
+    outcome = evaluate_claim(bn.parse_claim(claim), da)
+    assert isinstance(outcome, Holds) is holds
+    assert outcome.worst.value == 0.5
+
+
+@pytest.mark.parametrize(
+    ("samples", "holds", "worst"), [([0.2, 0.4], True, 0.4), ([0.2, 0.5], False, 0.5)]
+)
+def test_a_range_includes_its_high_edge_and_fails_past_it(samples, holds, worst):
+    da = xr.DataArray(samples, dims=["speed"], coords={"speed": [1.0, 2.0]})
+    outcome = evaluate_claim(bn.Within(0.1, 0.4), da)
+    assert isinstance(outcome, Holds) is holds
+    assert outcome.worst.value == worst
+
+
+@pytest.mark.parametrize("bound", [math.nan, math.inf, -math.inf])
+def test_a_threshold_built_directly_rejects_a_bound_that_is_not_finite(bound):
+    # A NaN bound gives every sample a NaN margin, so the first sample was named
+    # the worst and the claim failed on any data.
+    with pytest.raises(ValueError, match="finite"):
+        bn.Threshold(bn.Comparison.LT, bound)
+
+
+def test_a_claim_that_is_not_a_string_raises_a_type_error():
+    with pytest.raises(TypeError, match="claim"):
+        bn.ResultFloat(claim=0.7)
+
+
+def test_no_recorded_sample_leaves_the_claim_unmeasured():
+    da = xr.DataArray([math.nan, math.nan], dims=["speed"], coords={"speed": [1.0, 2.0]})
+    outcome = evaluate_claim(bn.parse_claim("< 0.7"), da)
+    assert outcome == Unmeasured()
+    assert outcome_to_dict(outcome) == {
+        "holds": None,
+        "worst_value": None,
+        "worst_inputs": {},
+        "samples": 0,
+    }
+
+
+def test_an_infinite_worst_sample_exports_as_null_beside_a_failed_claim():
+    da = xr.DataArray([0.1, math.inf], dims=["speed"], coords={"speed": [1.0, 2.0]})
+    data = outcome_to_dict(evaluate_claim(bn.parse_claim("< 0.7"), da))
+    assert data["holds"] is False
+    assert data["worst_value"] is None
+    assert data["worst_inputs"] == {"speed": 2.0}
+    json.dumps(data, allow_nan=False)
