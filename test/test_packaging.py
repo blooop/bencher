@@ -65,3 +65,14 @@ def test_the_full_extra_is_what_a_core_install_lacks() -> None:
     core = {_import_name(r) for r in CORE["dependencies"]}
     assert full <= HEAVY_PACKAGES
     assert not core & HEAVY_PACKAGES
+
+
+def test_the_docs_build_installs_the_full_stack() -> None:
+    """Read the Docs installs the repo from docs/conda-environment.yml, then runs every example.
+
+    The repo root is holobench-core, so a bare ``-e ../`` gets no Panel or HoloViews and the
+    gallery fails to render.
+    """
+    env = (ROOT / "docs" / "conda-environment.yml").read_text(encoding="utf-8")
+    editable = [line.strip() for line in env.splitlines() if line.strip().startswith("- -e ")]
+    assert editable == ["- -e ../[full]"], editable
