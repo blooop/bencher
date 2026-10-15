@@ -306,3 +306,68 @@ def test_no_show_env_keeps_bn_run_from_serving_the_report(tmp_path, monkeypatch)
         return bench
 
     bn.run(example_counted)
+
+
+PKG_BENCH = """
+import bencher as bn
+from mypkg.gain import GAIN
+
+
+class Braking(bn.ParametrizedSweep):
+    speed = bn.FloatSweep(default=1.0, bounds=(1.0, 3.0), samples=3)
+    stop_distance = bn.ResultFloat(units="m")
+
+    def benchmark(self):
+        self.stop_distance = GAIN * self.speed
+
+
+bn.Bench("ab_pkg", Braking()).collect(
+    input_vars=["speed"], result_vars=["stop_distance"], run_cfg=bn.BenchRunCfg(repeats=1)
+)
+"""
+
+
+def _package_repo(tmp_path: Path, pkg_dir: str) -> Path:
+    """GAIN is 0.3 at HEAD~1 and 0.2 at HEAD, in a package under *pkg_dir*."""
+    repo = tmp_path / "pkgrepo"
+    (repo / pkg_dir / "mypkg").mkdir(parents=True)
+    (repo / "benchmarks").mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "ab@example.test")
+    _git(repo, "config", "user.name", "ab")
+    (repo / pkg_dir / "mypkg" / "__init__.py").write_text("", encoding="utf-8")
+    (repo / pkg_dir / "mypkg" / "gain.py").write_text("GAIN = 0.3\n", encoding="utf-8")
+    (repo / "benchmarks" / "bench.py").write_text(PKG_BENCH, encoding="utf-8")
+    (repo / ".gitignore").write_text("cachedir/\nbencher-ab/\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "base")
+    (repo / pkg_dir / "mypkg" / "gain.py").write_text("GAIN = 0.2\n", encoding="utf-8")
+    _git(repo, "commit", "-q", "-am", "lower gain")
+    return repo
+
+
+def _ab_with_pythonpath(repo: Path, pythonpath: Path) -> subprocess.CompletedProcess:
+    # An absolute PYTHONPATH entry stands in for an editable install, whose .pth
+    # file adds the candidate tree's absolute path in the same way.
+    return subprocess.run(
+        [
+            *(sys.executable, "-m", "bencher.render", "ab", "--base", "HEAD~1"),
+            *("--", sys.executable, "benchmarks/bench.py"),
+        ],
+        cwd=repo,
+        env={**os.environ, "PYTHONPATH": str(pythonpath)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_ab_base_imports_its_own_package_over_an_absolute_path_to_the_candidate(tmp_path):
+    repo = _package_repo(tmp_path, "src")
+
+    proc = _ab_with_pythonpath(repo, repo / "src")
+
+    assert proc.returncode == 0, proc.stderr
+    assert _metric(repo / "bencher-ab")["baseline_value"] == pytest.approx(0.6)
+    assert _metric(repo / "bencher-ab")["current_value"] == pytest.approx(0.4)
+    assert _git(repo, "worktree", "list").count("\n") == 0
