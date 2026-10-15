@@ -182,7 +182,7 @@ def _absent_from_worktree(path: Path, top: Path) -> bool:
 
 
 def _pin_paths(command: Sequence[str], here: Path, top: Path) -> list[str]:
-    """Make absolute each relative argument naming a path the base worktree lacks.
+    """Make absolute each relative argument naming a path outside the repository or ignored by git.
 
     A ``.venv/bin/python`` or a ``../data`` directory exists only where ``ab`` runs;
     a tracked file such as the bench itself stays relative, so the base runs its own.
