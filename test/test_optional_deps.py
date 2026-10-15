@@ -8,8 +8,8 @@ import pytest
 
 from bencher.optional_deps import (
     FullInstallRequiredError,
-    _MissingModule,
     _import_or_stand_in,
+    _MissingModule,
     full_install_required,
 )
 
