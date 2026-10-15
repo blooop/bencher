@@ -26,9 +26,11 @@ class TestBenchReport(unittest.TestCase):
     def test_report_pickled_before_pane_became_a_property_loads(self):
         """A report pickled when ``pane`` was a plain attribute still has its tabs."""
         old = BenchReport("old")
+        old.append_markdown("kept", name="tab")
         old.__dict__["pane"] = old.__dict__.pop("_pane")
         restored = pickle.loads(pickle.dumps(old))
         assert restored.pane.name == "old"
+        assert [tab.name for tab in restored.pane] == ["tab"]
 
     def test_publish_without_a_name_says_what_is_missing(self):
         """An unnamed report has no branch to publish to, on either debug setting.
