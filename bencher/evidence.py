@@ -27,6 +27,7 @@ import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, assert_never
+from urllib.parse import quote
 
 import numpy as np
 
@@ -160,9 +161,15 @@ def plan_chart(base: _Profile, cand: _Profile) -> ChartPlan:
         if not all(isinstance(v, (int, float)) for v in x):
             return ImageOnly(f"{len(x)} categories of {base.swept[0]}")
         x, before, after = _bin(x, before, after)
+    if any(isinstance(v, float) for v in x) and all(isinstance(v, (int, float)) for v in x):
+        labels = tuple(_chart_nums([float(v) for v in x]))
+    else:
+        labels = tuple(_label(v) for v in x)
+    if len(set(labels)) < len(labels):
+        return ImageOnly(f"the values of {base.swept[0]} do not print as distinct labels")
     return SweepChart(
         base.swept[0],
-        tuple(_label(v) for v in x),
+        labels,
         tuple(float(v) for v in before),
         tuple(float(v) for v in after),
     )
@@ -192,8 +199,11 @@ def _y_range(
     before: Sequence[float] | np.ndarray,
     after: Sequence[float] | np.ndarray,
     claim: Claim | None,
-) -> tuple[float, float]:
-    """A y range holding both series and the claim, from 0 unless 0 hides the change."""
+) -> tuple[float, float, float]:
+    """A y range holding both series and the claim, from 0 unless 0 hides the change.
+
+    Returns ``(lo, hi, step)``: both ends are whole multiples of ``step``.
+    """
     before, after = np.asarray(before, dtype=float), np.asarray(after, dtype=float)
     values = np.concatenate([before, after, _claim_bounds(claim)])
     lo, hi = float(values.min()), float(values.max())
@@ -211,17 +221,36 @@ def _y_range(
         hi = span
     # Round outward to two significant figures of the span, so the axis reads 0 --> 0.81.
     step = 10.0 ** (math.floor(math.log10(hi - lo)) - 1)
-    return math.floor(lo / step) * step, math.ceil(hi / step) * step
+    return math.floor(lo / step) * step, math.ceil(hi / step) * step, step
 
 
 def _num(value: float) -> str:
     return f"{value:.4g}"
 
 
-def _chart_num(value: float, digits: int = 4) -> str:
-    """A number xychart parses: positional, since its grammar has no exponent (1e+05)."""
+def _chart_nums(values: Sequence[float]) -> list[str]:
+    """Numbers xychart parses, with as few digits as keep distinct values distinct.
+
+    Positional, since xychart's grammar has no exponent (1e+05). Values equal to
+    12 significant digits count as one, so float noise (0.6 vs 0.6000000000000001)
+    does not lengthen every number.
+    """
+    distinct = len({f"{v:.12g}" for v in values})
+    for digits in range(4, 13):
+        text = [
+            np.format_float_positional(v, precision=digits, unique=False, fractional=False, trim="-")
+            for v in values
+        ]
+        if len(set(text)) == distinct:
+            break
+    return text
+
+
+def _axis_end(value: float, step: float) -> str:
+    """An axis end, exact to the ``step`` it is a multiple of, without an exponent."""
+    decimals = max(0, -math.floor(math.log10(step)))
     return np.format_float_positional(
-        value, precision=digits, unique=False, fractional=False, trim="-"
+        value, precision=decimals, unique=False, fractional=True, trim="-"
     )
 
 
@@ -234,16 +263,17 @@ def mermaid_chart(
         case BeforeAfterBars(before=before, after=after):
             title = f"{metric}: before vs after"
             x_axis = 'x-axis ["before", "after"]'
-            lo, hi = _y_range([before], [after], claim)
-            series = [f"bar [{_chart_num(before)}, {_chart_num(after)}]"]
+            lo, hi, step = _y_range([before], [after], claim)
+            series = [f"bar [{', '.join(_chart_nums([before, after]))}]"]
         case SweepChart(input_name=input_name, labels=labels, before=before, after=after):
             title = f"{metric}: bars = before, line = after"
             quoted = ", ".join(f'"{_mermaid_text(label)}"' for label in labels)
             x_axis = f'x-axis "{_mermaid_text(input_name)}" [{quoted}]'
-            lo, hi = _y_range(before, after, claim)
+            lo, hi, step = _y_range(before, after, claim)
+            text = _chart_nums([*before, *after])
             series = [
-                f"bar [{', '.join(_chart_num(v) for v in before)}]",
-                f"line [{', '.join(_chart_num(v) for v in after)}]",
+                f"bar [{', '.join(text[: len(before)])}]",
+                f"line [{', '.join(text[len(before) :])}]",
             ]
         case _ as unreachable:
             assert_never(unreachable)
@@ -252,7 +282,7 @@ def mermaid_chart(
         "xychart-beta",
         f'    title "{title}"',
         f"    {x_axis}",
-        f'    y-axis "{metric}" {_chart_num(lo, 6)} --> {_chart_num(hi, 6)}',
+        f'    y-axis "{metric}" {_axis_end(lo, step)} --> {_axis_end(hi, step)}',
         *(f"    {s}" for s in series),
         "```",
     ]
@@ -271,7 +301,7 @@ def _claim_side(side: dict) -> str:
         return "not measured"
     verdict = "holds" if side["holds"] else "fails"
     worst = side["worst_value"]
-    worst_text = "inf" if worst is None else _num(worst)
+    worst_text = "non-finite" if worst is None else _num(worst)
     return f"{verdict} (worst {worst_text} at {_where(side['worst_inputs'])})"
 
 
@@ -401,24 +431,25 @@ def evidence_markdown(
 # --- PNG -------------------------------------------------------------------------
 
 
-def _draw(ax: Axes, m: _Metric) -> None:
-    base, cand = m.base, m.cand
-    if not base.swept and not cand.swept:
+_Side = tuple[_Profile, str, str, str]  # profile, legend label, color, line style
+
+
+def _draw(ax: Axes, sides: Sequence[_Side]) -> None:
+    profiles = [profile for profile, *_ in sides]
+    if not any(p.swept for p in profiles):
         ax.bar(
-            [0, 1],
-            [base.mean[0], cand.mean[0]],
-            yerr=[base.std[0], cand.std[0]],
-            color=[_BEFORE_COLOR, _AFTER_COLOR],
+            range(len(sides)),
+            [p.mean[0] for p in profiles],
+            yerr=[p.std[0] for p in profiles],
+            color=[color for _, _, color, _ in sides],
             capsize=6,
             width=0.5,
         )
-        ax.set_xticks([0, 1], ["before", "after"])
+        ax.set_xticks(range(len(sides)), [label for _, label, _, _ in sides])
         return
-    numeric = all(isinstance(v, (int, float)) for v in base.x + cand.x)
-    for profile, label, color, style in (
-        (base, "before", _BEFORE_COLOR, "--"),
-        (cand, "after", _AFTER_COLOR, "-"),
-    ):
+    xs = tuple(v for p in profiles for v in p.x)
+    numeric = all(isinstance(v, (int, float)) for v in xs)
+    for profile, label, color, style in sides:
         if not profile.swept:
             # One value across the other side's sweep: a level line with its band.
             mean, std = profile.mean[0], profile.std[0]
@@ -428,14 +459,14 @@ def _draw(ax: Axes, m: _Metric) -> None:
         if numeric:
             x = np.asarray(profile.x, dtype=float)
         else:
-            categories = list(dict.fromkeys(base.x + cand.x))
+            categories = list(dict.fromkeys(xs))
             x = np.array([categories.index(v) for v in profile.x], dtype=float)
             ax.set_xticks(range(len(categories)), [_label(c) for c in categories])
         ax.plot(x, profile.mean, style, marker="o", color=color, label=label, linewidth=2)
         ax.fill_between(
             x, profile.mean - profile.std, profile.mean + profile.std, color=color, alpha=0.18
         )
-    ax.set_xlabel(base.swept[0] if base.swept else cand.swept[0])
+    ax.set_xlabel(next(p.swept[0] for p in profiles if p.swept))
 
 
 def _draw_claim(ax: Axes, claim: Claim | None) -> None:
@@ -451,17 +482,32 @@ def _render_png(m: _Metric, path: Path) -> Path:
 
     name = m.entry["variable"]
     fig = Figure(figsize=(8.8, 4.4), dpi=100, facecolor="white")
-    ax = fig.add_subplot()
-    _draw(ax, m)
-    _draw_claim(ax, m.claim)
+    sides: list[_Side] = [
+        (m.base, "before", _BEFORE_COLOR, "--"),
+        (m.cand, "after", _AFTER_COLOR, "-"),
+    ]
+    split = bool(m.base.swept) and bool(m.cand.swept) and m.base.swept[0] != m.cand.swept[0]
+    if split:
+        # Each side swept its own input: one panel per input, sharing the metric axis.
+        axes = list(fig.subplots(1, 2, sharey=True))
+        groups = [sides[:1], sides[1:]]
+    else:
+        axes, groups = [fig.add_subplot()], [sides]
+    for ax, group in zip(axes, groups, strict=True):
+        _draw(ax, group)
+        _draw_claim(ax, m.claim)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="best", frameon=False)
     swept = m.base.swept if len(m.base.swept) >= len(m.cand.swept) else m.cand.swept
     rest = f", mean over {', '.join(swept[1:])}" if len(swept) > 1 else ""
     metric = f"{name} ({m.units})" if m.units else name
     spread = "band" if swept else "error bar"
-    ax.set_title(f"{metric}: before (grey) vs after (blue), {spread} = ±1 std{rest}", fontsize=12)
-    ax.set_ylabel(metric)
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc="best", frameon=False)
+    title = f"{metric}: before (grey) vs after (blue), {spread} = ±1 std{rest}"
+    if split:
+        fig.suptitle(title, fontsize=12)
+    else:
+        axes[0].set_title(title, fontsize=12)
+    axes[0].set_ylabel(metric)
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, facecolor="white")
@@ -488,7 +534,11 @@ def write_evidence_pngs(
 
 @dataclass(frozen=True)
 class EvidenceFiles:
-    """What :func:`write_evidence` wrote; a field is None (or empty) when not asked for."""
+    """What :func:`write_evidence` wrote; a path is None when its file was not asked for.
+
+    ``pngs`` maps each metric to the PNG written for it: every metric with *png_dir*,
+    else only the metrics whose Markdown links an image.
+    """
 
     comparison: dict
     json_path: Path | None
@@ -537,10 +587,10 @@ def write_evidence(
             name = m.entry["variable"]
             if isinstance(m.plan, ImageOnly) and name not in pngs:
                 pngs[name] = _render_png(m, image_dir / png_name(name))
-        base = png_url_base
+        base = png_url_base or None
         if base is None:
             rel = os.path.relpath(image_dir.resolve(), written_md.parent.resolve())
-            base = "" if rel == "." else rel.replace(os.sep, "/")
+            base = "" if rel == "." else quote(rel.replace(os.sep, "/"))
         written_md.write_text(_markdown(metrics, comparison, base), encoding="utf-8")
 
     return EvidenceFiles(comparison, written_json, written_md, pngs)
