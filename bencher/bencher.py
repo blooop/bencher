@@ -29,7 +29,11 @@ from bencher.job import (
     normalize_catch,
     normalize_executor,
 )
-from bencher.launch_env import caches_disabled_by_env, result_path_from_env
+from bencher.launch_env import (
+    caches_disabled_by_env,
+    check_no_forbidden_code,
+    result_path_from_env,
+)
 from bencher.optional_deps import PLOTTING_INSTALLED, full_install_required, optuna, pn
 from bencher.optuna_conversions import sweep_var_to_optuna_dist, sweep_var_to_suggest
 from bencher.regression import RegressionError, detect_regressions
@@ -1080,6 +1084,7 @@ class Bench(BenchPlotServer):
             # Local import, as in _append_result_via_split: render pulls in panel.
             from bencher.render import save_result
 
+            check_no_forbidden_code()
             save_result(bench_res, result_path)
         return bench_res
 

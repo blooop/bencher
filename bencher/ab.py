@@ -6,7 +6,12 @@
 
 The *base* side runs the command in a temporary, detached ``git worktree`` of the
 base revision; the *candidate* side runs it in the current working tree as it is,
-so uncommitted changes count. Each run is told where to save its result
+so uncommitted changes count. The base run puts the worktree's ``src`` directory
+(when it has one) and its root first on ``PYTHONPATH``, so it imports the base's
+package even where an editable install or an absolute ``PYTHONPATH`` entry points
+into the candidate tree. If the base run still loads a module from the candidate's
+repository (:data:`~bencher.launch_env.FORBIDDEN_ROOT_ENV`), it saves no result and
+fails. Each run is told where to save its result
 (:data:`~bencher.launch_env.RESULT_PATH_ENV`) and runs with the sample and result
 caches off (:data:`~bencher.launch_env.NO_CACHE_ENV`): the caches are keyed by
 inputs, not code, so a cache filled by one revision would otherwise answer for the
@@ -34,10 +39,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from bencher.execution import PROVENANCE_ENV
-from bencher.launch_env import NO_CACHE_ENV, NO_SHOW_ENV, RESULT_PATH_ENV
+from bencher.launch_env import (
+    BASE_TREE_ENV,
+    FORBIDDEN_ROOT_ENV,
+    NO_CACHE_ENV,
+    NO_SHOW_ENV,
+    RESULT_PATH_ENV,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
 _DEFAULT_UPSTREAMS = ("origin/HEAD", "origin/main", "main")
 _LOG_TAIL_LINES = 20
@@ -107,13 +118,26 @@ def _tail(log: Path) -> str:
     return "\n".join(lines[-_LOG_TAIL_LINES:])
 
 
-def run_side(side: str, command: Sequence[str], cwd: Path, revision: str, out: Path) -> Path:
+def run_side(
+    side: str,
+    command: Sequence[str],
+    cwd: Path,
+    revision: str,
+    out: Path,
+    extra_env: Mapping[str, str] | None = None,
+) -> Path:
     """Run *command* for one side; return its saved result path or raise SideFailedError."""
     result = out / f"{side}.pkl"
     log = out / f"{side}.log"
     result.unlink(missing_ok=True)
+    inherited = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in (FORBIDDEN_ROOT_ENV, BASE_TREE_ENV)
+    }
     env = {
-        **os.environ,
+        **inherited,
+        **(extra_env or {}),
         RESULT_PATH_ENV: str(result),
         NO_CACHE_ENV: "1",
         NO_SHOW_ENV: "1",
@@ -158,7 +182,7 @@ def _absent_from_worktree(path: Path, top: Path) -> bool:
 
 
 def _pin_paths(command: Sequence[str], here: Path, top: Path) -> list[str]:
-    """Make absolute each relative argument naming a path the base worktree lacks.
+    """Make absolute each relative argument naming a path outside the repository or ignored by git.
 
     A ``.venv/bin/python`` or a ``../data`` directory exists only where ``ab`` runs;
     a tracked file such as the bench itself stays relative, so the base runs its own.
@@ -174,6 +198,18 @@ def _pin_paths(command: Sequence[str], here: Path, top: Path) -> list[str]:
     ]
 
 
+def _base_pythonpath(tree: Path) -> str:
+    """PYTHONPATH with the worktree's ``src`` and root ahead of the inherited entries.
+
+    PYTHONPATH comes before site-packages, so these shadow an editable install or an
+    absolute PYTHONPATH entry that points into the candidate tree.
+    """
+    entries = [str(path) for path in (tree / "src", tree) if path.is_dir()]
+    if inherited := os.environ.get("PYTHONPATH"):
+        entries.append(inherited)
+    return os.pathsep.join(entries)
+
+
 def _run_base(command: Sequence[str], base: str, top: Path, rel: Path, out: Path) -> Path:
     revision = _git(["rev-parse", "--short", base], top)
     with tempfile.TemporaryDirectory(prefix="bencher-ab-") as tmp:
@@ -185,7 +221,12 @@ def _run_base(command: Sequence[str], base: str, top: Path, rel: Path, out: Path
                 log = out / "base.log"
                 log.write_text(f"{rel} does not exist at {revision}\n", encoding="utf-8")
                 raise SideFailedError("base", f"has no directory {rel}", log)
-            return run_side("base", command, cwd, revision, out)
+            base_env = {
+                "PYTHONPATH": _base_pythonpath(tree),
+                FORBIDDEN_ROOT_ENV: str(top),
+                BASE_TREE_ENV: str(tree),
+            }
+            return run_side("base", command, cwd, revision, out, base_env)
         finally:
             subprocess.run(
                 ["git", "worktree", "remove", "--force", str(tree)],  # noqa: S607 - git from PATH

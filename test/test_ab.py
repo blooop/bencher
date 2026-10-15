@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -144,6 +145,28 @@ def test_ab_explicit_base_and_image_url(repo):
     assert _metric(repo / "bencher-ab")["verdict"] == "unchanged"
 
 
+def test_ab_on_a_clean_tree_names_the_head_even_when_its_output_is_not_ignored(repo):
+    (repo / ".gitignore").write_text("cachedir/\n__pycache__/\n", encoding="utf-8")
+    _git(repo, "commit", "-q", "-am", "track the evidence directory")
+
+    assert _ab(repo, "--base", "main").returncode == 0
+    proc = _ab(repo, "--base", "main")
+
+    assert proc.returncode == 0, proc.stderr
+    head = _git(repo, "rev-parse", "--short", "HEAD")
+    cmp = json.loads((repo / "bencher-ab" / "comparison.json").read_text(encoding="utf-8"))
+    assert cmp["candidate"]["provenance"]["source_revision"] == head
+
+
+def test_ab_with_an_unknown_base_exits_2_before_it_runs_anything(repo):
+    proc = _ab(repo, "--base", "nosuchref")
+
+    assert proc.returncode == 2
+    assert "--base 'nosuchref' does not name a commit" in proc.stderr
+    assert not (repo / "bencher-ab").exists()
+    assert _git(repo, "worktree", "list").count("\n") == 0
+
+
 AB_MAIN = (sys.executable, "-m", "bencher.render", "ab", "--base", "main")
 
 
@@ -246,6 +269,7 @@ def test_a_result_whose_script_defines_an_enum_loads_in_another_process(tmp_path
     )
     res = bn.load_result(path)
     assert res.ds["t"].values.ravel().tolist() == [1.0, 2.0]
+    assert [str(mode) for mode in res.ds["mode"].values] == ["fast", "slow"]
 
 
 class Counted(bn.ParametrizedSweep):
@@ -306,3 +330,102 @@ def test_no_show_env_keeps_bn_run_from_serving_the_report(tmp_path, monkeypatch)
         return bench
 
     bn.run(example_counted)
+
+
+def test_no_show_env_keeps_bench_runner_from_serving_the_report(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(NO_SHOW_ENV, "1")
+    shown = []
+
+    def record(*args, **_kwargs):
+        shown.append(args)
+        return SimpleNamespace(stop=lambda: None)
+
+    monkeypatch.setattr(bn.BenchReport, "show", record)
+
+    runner = bn.BenchRunner("runner_no_show", bench_class=Counted(), run_cfg=bn.BenchRunCfg())
+    runner.run(show=True)
+
+    assert runner.results
+    assert shown == []
+
+
+PKG_BENCH = """
+import bencher as bn
+from mypkg.gain import GAIN
+
+
+class Braking(bn.ParametrizedSweep):
+    speed = bn.FloatSweep(default=1.0, bounds=(1.0, 3.0), samples=3)
+    stop_distance = bn.ResultFloat(units="m")
+
+    def benchmark(self):
+        self.stop_distance = GAIN * self.speed
+
+
+bn.Bench("ab_pkg", Braking()).collect(
+    input_vars=["speed"], result_vars=["stop_distance"], run_cfg=bn.BenchRunCfg(repeats=1)
+)
+"""
+
+
+def _package_repo(tmp_path: Path, pkg_dir: str) -> Path:
+    """GAIN is 0.3 at HEAD~1 and 0.2 at HEAD, in a package under *pkg_dir*."""
+    repo = tmp_path / "pkgrepo"
+    (repo / pkg_dir / "mypkg").mkdir(parents=True)
+    (repo / "benchmarks").mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "ab@example.test")
+    _git(repo, "config", "user.name", "ab")
+    (repo / pkg_dir / "mypkg" / "__init__.py").write_text("", encoding="utf-8")
+    (repo / pkg_dir / "mypkg" / "gain.py").write_text("GAIN = 0.3\n", encoding="utf-8")
+    (repo / "benchmarks" / "bench.py").write_text(PKG_BENCH, encoding="utf-8")
+    (repo / ".gitignore").write_text("cachedir/\nbencher-ab/\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "base")
+    (repo / pkg_dir / "mypkg" / "gain.py").write_text("GAIN = 0.2\n", encoding="utf-8")
+    _git(repo, "commit", "-q", "-am", "lower gain")
+    return repo
+
+
+def _ab_with_pythonpath(repo: Path, pythonpath: Path) -> subprocess.CompletedProcess:
+    # An absolute PYTHONPATH entry stands in for an editable install, whose .pth
+    # file adds the candidate tree's absolute path in the same way.
+    return subprocess.run(
+        [
+            *(sys.executable, "-m", "bencher.render", "ab", "--base", "HEAD~1"),
+            *("--", sys.executable, "benchmarks/bench.py"),
+        ],
+        cwd=repo,
+        env={**os.environ, "PYTHONPATH": str(pythonpath)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_ab_base_imports_its_own_package_over_an_absolute_path_to_the_candidate(tmp_path):
+    repo = _package_repo(tmp_path, "src")
+
+    proc = _ab_with_pythonpath(repo, repo / "src")
+
+    assert proc.returncode == 0, proc.stderr
+    assert _metric(repo / "bencher-ab")["baseline_value"] == pytest.approx(0.6)
+    assert _metric(repo / "bencher-ab")["current_value"] == pytest.approx(0.4)
+    assert _git(repo, "worktree", "list").count("\n") == 0
+
+
+def test_ab_fails_when_the_base_still_imports_the_candidates_code(tmp_path):
+    # lib/ is not a directory the base run puts first on PYTHONPATH, so the
+    # absolute entry still reaches the candidate's package from the base side.
+    repo = _package_repo(tmp_path, "lib")
+
+    proc = _ab_with_pythonpath(repo, repo / "lib")
+
+    assert proc.returncode == 1
+    assert "base run exited with status 1" in proc.stderr
+    log = (repo / "bencher-ab" / "base.log").read_text(encoding="utf-8")
+    assert "mypkg.gain" in log
+    assert str(repo / "lib" / "mypkg" / "gain.py") in log
+    assert not (repo / "bencher-ab" / "base.pkl").exists()
+    assert _git(repo, "worktree", "list").count("\n") == 0
