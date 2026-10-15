@@ -12,11 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bencher/`.** From this release the `bencher` package ships in a new distribution,
   `holobench-core`, and `holobench` only depends on it. pip installs `holobench-core` first,
   then removes the old `holobench`, and that removal deletes the files the old `holobench`
-  owned — the same files `holobench-core` just installed. `import bencher` then fails or
-  finds a package with most of its modules gone. To repair the environment, run
-  `pip install --force-reinstall holobench-core`, or install into a fresh environment. uv
-  upgrades and fresh installs are not affected, and neither are upgrades from this release
-  onwards.
+  owned — the same files `holobench-core` just installed — and the `bencher` command.
+  `import bencher` then finds a package with most of its modules gone. To repair the
+  environment, run `pip install --force-reinstall --no-deps holobench-core`, or install into
+  a fresh environment. Leave out `--no-deps` and pip also reinstalls every dependency at its
+  newest allowed version, which can break other installed packages (moviepy's pillow pin, for
+  one). uv upgrades and fresh installs are not affected, and neither are upgrades from this
+  release onwards.
 
 ### Changed
 - **`holobench-core` is the light install; `holobench` is still everything.** The repository
