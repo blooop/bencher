@@ -125,3 +125,22 @@ def test_an_unrecorded_sample_is_never_named_the_worst(claim, infinite):
     da = xr.DataArray([math.nan, infinite], dims=["speed"], coords={"speed": [1.0, 2.0]})
     outcome = evaluate_claim(bn.parse_claim(claim), da)
     assert outcome == Holds(WorstSample(infinite, {"speed": 2.0}), samples=1)
+
+
+@pytest.mark.parametrize(
+    ("claim", "holds"),
+    [("< 0.5", False), ("<= 0.5", True), ("> 0.5", False), (">= 0.5", True)],
+)
+def test_a_sample_on_the_bound_satisfies_only_the_inclusive_operator(claim, holds):
+    da = xr.DataArray([0.5], dims=["speed"], coords={"speed": [1.0]})
+    outcome = evaluate_claim(bn.parse_claim(claim), da)
+    assert isinstance(outcome, Holds) is holds
+    assert outcome.worst.value == 0.5
+
+
+@pytest.mark.parametrize(("samples", "holds", "worst"), [([0.2, 0.4], True, 0.4), ([0.2, 0.5], False, 0.5)])
+def test_a_range_includes_its_high_edge_and_fails_past_it(samples, holds, worst):
+    da = xr.DataArray(samples, dims=["speed"], coords={"speed": [1.0, 2.0]})
+    outcome = evaluate_claim(bn.Within(0.1, 0.4), da)
+    assert isinstance(outcome, Holds) is holds
+    assert outcome.worst.value == worst
