@@ -270,6 +270,23 @@ def test_the_cli_names_the_missing_install_without_a_traceback(tmp_path, core_en
         assert "Traceback" not in proc.stderr, proc.stderr
 
 
+def test_the_cli_still_writes_json_without_the_plotting_stack(tmp_path, core_env):
+    """--json needs no plotting package, so a light install writes it before the render stops."""
+    saved = tmp_path / "core.pkl"
+    probe = HEAVY_FEATURE_PROBE.format(call=f"bn.save_result(res, {str(saved)!r})")
+    assert _run([sys.executable, "-c", probe], tmp_path, core_env).returncode == 0
+    json_path = tmp_path / "r.json"
+
+    proc = _run(
+        [*BENCHER_CLI, str(saved), str(tmp_path / "html"), "--json", str(json_path)],
+        tmp_path,
+        core_env,
+    )
+    assert proc.returncode == 1, proc.stderr
+    assert "pip install holobench" in proc.stderr, proc.stderr
+    assert "schema_version" in json.loads(json_path.read_text(encoding="utf-8"))
+
+
 def test_a_sweep_that_asks_for_plots_warns_once_and_still_collects(tmp_path, core_env):
     probe = HEAVY_FEATURE_PROBE.replace("res = bench.collect(", "res = bench.plot_sweep(").format(
         call="bench.plot_sweep(input_vars=['x'], result_vars=['y']); print(res.to_dataset()['y'].size)"

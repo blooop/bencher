@@ -417,12 +417,18 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("--report includes summaries; --json is only for legacy rendering")
         return 1
     try:
-        out = render_report(
-            bench_res, args.output_dir, cache_dir=args.cache_dir, complete=args.report
-        )
-        if args.json_path:
-            from bencher.report_export import result_to_json
+        from bencher.report_export import result_to_json
 
+        try:
+            out = render_report(
+                bench_res, args.output_dir, cache_dir=args.cache_dir, complete=args.report
+            )
+        except FullInstallRequiredError:
+            # The JSON needs no plotting package, so a light install still gets it.
+            if args.json_path:
+                result_to_json(bench_res, args.json_path)
+            raise
+        if args.json_path:
             result_to_json(bench_res, args.json_path)
     except FullInstallRequiredError as exc:
         return _needs_full_install(exc)
