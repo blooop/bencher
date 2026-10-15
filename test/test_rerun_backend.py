@@ -15,14 +15,13 @@ from pathlib import Path
 import panel as pn
 import pytest
 import rerun as rr
+import rerun.blueprint as rrb
+from rerun.chunk import RrdReader
 
 import bencher as bn
 from bencher.plugins.registry import get_registry
 from bencher.results.bench_result_base import ReduceType
-from bencher.results.rerun_result import RerunResult
-from bencher.utils_rerun import rerun_chunk_api
-
-RrdReader = rerun_chunk_api().RrdReader
+from bencher.results.rerun_result import RerunResult, _build_blueprint
 
 LOGGER = "bencher.results.rerun_result"
 
@@ -200,6 +199,194 @@ class TestNothingRecorded:
         assert panes == []
         assert "No rerun recordings to merge" in caplog.text
         assert "recording" in caplog.text
+
+
+class RepeatedLineSweep(bn.ParametrizedSweep):
+    """A 1-float line whose repeats spread by a known amount at each point."""
+
+    x = bn.FloatSweep(default=0.0, bounds=[0.0, 2.0], samples=3)
+
+    out = bn.ResultFloat()
+    timed = bn.ResultFloat(units="s")
+    label = bn.ResultString()
+
+    calls = 0
+
+    def benchmark(self):
+        # Successive calls alternate x - 1 and x + 1. With three points and two
+        # repeats, each point gets one of each whichever order the sweep runs in,
+        # so its mean is x and its std (xarray's, ddof=0) is 1. That needs an odd
+        # sample count: with an even one, every point's calls share one parity.
+        assert self.param.x.samples % 2 == 1, "samples must stay odd"
+        RepeatedLineSweep.calls += 1
+        self.out = self.x + (1.0 if RepeatedLineSweep.calls % 2 else -1.0)
+        self.timed = self.out
+        self.label = f"x={self.x}"
+        return super().benchmark()
+
+
+class FlatSecondDimSweep(RepeatedLineSweep):
+    """A line over ``x`` with a second float dim of one sample."""
+
+    y = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=1)
+
+
+class UserStdSweep(RepeatedLineSweep):
+    """A user result var whose name happens to end in ``_std``."""
+
+    out_std = bn.ResultFloat()
+
+    def benchmark(self):
+        self.out_std = 5.0
+        return super().benchmark()
+
+
+def _record(monkeypatch, sweep, input_vars, result_vars, repeats=2) -> str:
+    """Run *sweep* on the rerun backend and return the path of the .rrd it wrote."""
+    captured = {}
+
+    def capture(path, **_kwargs):
+        captured["path"] = path
+        return pn.pane.Markdown("viewer")
+
+    monkeypatch.setattr("bencher.utils_rrd.rrd_file_to_pane", capture)
+    RepeatedLineSweep.calls = 0
+    run_cfg = bn.BenchRunCfg(
+        repeats=repeats, backend="rerun", cache_results=False, cache_samples=False
+    )
+    res = (
+        sweep()
+        .to_bench(run_cfg)
+        .plot_sweep(input_vars=input_vars, result_vars=result_vars, plot_callbacks=False)
+    )
+    res.to_rerun()
+    return str(captured["path"])
+
+
+def _entity_batches(path: str, entity: str) -> list:
+    reader = RrdReader(path)
+    return [
+        chunk.to_record_batch()
+        for chunk in reader.stream(store=reader.recordings()[0])
+        if str(chunk.entity_path) == entity
+    ]
+
+
+class TestRepeatsDrawABand:
+    def test_line_graph_with_repeats_logs_measurements_with_variance(self, monkeypatch):
+        """``repeats > 1`` used to log nothing: a squeezed dataset keeps ``repeat``,
+        and one-value-per-cell reads failed with "can only convert an array of size
+        1". The mean must now reach the recording with its variance for the band."""
+        captured = {}
+
+        def capture(path, **_kwargs):
+            captured["path"] = path
+            return pn.pane.Markdown("viewer")
+
+        monkeypatch.setattr("bencher.utils_rrd.rrd_file_to_pane", capture)
+        RepeatedLineSweep.calls = 0
+        run_cfg = bn.BenchRunCfg(
+            repeats=2, backend="rerun", cache_results=False, cache_samples=False
+        )
+        res = (
+            RepeatedLineSweep()
+            .to_bench(run_cfg)
+            .plot_sweep(input_vars=["x"], result_vars=["out", "label"], plot_callbacks=False)
+        )
+        res.to_rerun(result_var="out")
+
+        reader = RrdReader(str(captured["path"]))
+        values, variances = [], []
+        for chunk in reader.stream(store=reader.recordings()[0]):
+            if str(chunk.entity_path) != "/out":
+                continue
+            batch = chunk.to_record_batch()
+            values += [v[0] for v in batch.column("Measurements:values").to_pylist()]
+            variances += [v[0] for v in batch.column("Measurements:variances").to_pylist()]
+            assert "Measurements:units" not in batch.schema.names
+        assert values == pytest.approx([0.0, 1.0, 2.0])
+        assert variances == pytest.approx([1.0, 1.0, 1.0])
+
+    def test_units_reach_the_recording(self, monkeypatch):
+        """The unitless default ``ul`` logs no units; any other unit reaches the legend."""
+        path = _record(monkeypatch, RepeatedLineSweep, ["x"], ["out", "timed"])
+        out_columns = {c for b in _entity_batches(path, "/out") for c in b.schema.names}
+        assert "Measurements:values" in out_columns
+        assert "Measurements:units" not in out_columns
+        units = [
+            u
+            for b in _entity_batches(path, "/timed")
+            for u in b.column("Measurements:units").to_pylist()
+        ]
+        assert units == [["s"]] * 3
+
+    def test_one_sample_dim_keeps_the_line_graph(self, monkeypatch):
+        """A float dim of one sample is squeezed out with ``repeats=1``, so the sweep
+        is a line graph. ``repeats=2`` kept it in the reduced vars, and ``/out`` came
+        back as one 3x1 tensor instead of three points with a band."""
+        path = _record(monkeypatch, FlatSecondDimSweep, ["x", "y"], ["out"])
+        batches = _entity_batches(path, "/out")
+        values = [v[0] for b in batches for v in b.column("Measurements:values").to_pylist()]
+        assert values == pytest.approx([0.0, 1.0, 2.0])
+        assert all("log_tick" in b.schema.names for b in batches)
+
+    def test_a_user_var_named_std_draws_no_band(self, monkeypatch):
+        """With ``repeats=1`` nothing is reduced, so ``/out`` has no spread. A user
+        var named ``out_std`` used to be read as one and drew a fabricated band."""
+        path = _record(monkeypatch, UserStdSweep, ["x"], ["out", "out_std"], repeats=1)
+        columns = {c for b in _entity_batches(path, "/out") for c in b.schema.names}
+        assert "Scalars:scalars" in columns
+        assert not any(c.startswith("Measurements:") for c in columns)
+
+    def test_gallery_example_draws_the_band(self, monkeypatch):
+        """The Rerun Repeats Band gallery example logs a band with units on every tick."""
+        from bencher.example.generated.rerun.example_rerun_repeats_band import (
+            example_rerun_repeats_band,
+        )
+
+        paths = []
+        monkeypatch.setattr(
+            "bencher.utils_rrd.rrd_file_to_pane",
+            lambda path, **_kwargs: paths.append(path) or pn.pane.Markdown("viewer"),
+        )
+        example_rerun_repeats_band(bn.BenchRunCfg(cache_results=False, cache_samples=False))
+
+        batches = [b for path in paths for b in _entity_batches(path, "/out")]
+        variances = [v[0] for b in batches for v in b.column("Measurements:variances").to_pylist()]
+        units = [u for b in batches for u in b.column("Measurements:units").to_pylist()]
+        assert len(variances) == 20
+        assert all(v > 0 for v in variances)
+        assert units == [["V"]] * 20
+
+
+class TestBlueprintTimeline:
+    """The blueprint pins ``log_tick`` only when the recording logs on it."""
+
+    @staticmethod
+    def _pinned_timeline(float_dims, cat_dims, time_dim=None):
+        dims = [*float_dims, *cat_dims]
+        blueprint = _build_blueprint(
+            rrb=rrb,
+            result_vars=[RepeatedLineSweep.param.out],
+            float_dims=float_dims,
+            cat_dims=cat_dims,
+            time_dim=time_dim,
+            dim_values={d: ["0", "1"] for d in dims},
+        )
+        return getattr(getattr(blueprint, "time_panel", None), "timeline", None)
+
+    @pytest.mark.parametrize(
+        ("float_dims", "time_dim"), [(["x"], None), ([], "over_time"), (["x", "y"], "over_time")]
+    )
+    def test_pinned_when_logged_on_log_tick(self, float_dims, time_dim):
+        assert self._pinned_timeline(float_dims, [], time_dim) == "log_tick"
+
+    @pytest.mark.parametrize(
+        ("float_dims", "cat_dims"), [([], []), ([], ["c"]), (["x", "y"], []), (["x", "y"], ["c"])]
+    )
+    def test_not_pinned_when_nothing_is_on_log_tick(self, float_dims, cat_dims):
+        """A recording with no ``log_tick`` rows pinned to it showed an empty view."""
+        assert self._pinned_timeline(float_dims, cat_dims) is None
 
 
 if __name__ == "__main__":
