@@ -210,3 +210,31 @@ def test_a_small_change_on_a_large_value_stays_visible_in_the_chart_text(before,
     assert float(lo) < float(hi)
     assert float(lo) <= min(before, after)
     assert float(hi) >= max(before, after)
+
+
+class Tuning(bn.ParametrizedSweep):
+    fine = bn.FloatSweep(default=1000.0, bounds=(1000.0, 1001.0), samples=10)
+    count = bn.IntSweep(default=10000, bounds=(10000, 10039))
+    gain = bn.FloatSweep(default=0.2)
+
+    cost = bn.ResultFloat(units="s")
+
+    def benchmark(self):
+        self.cost = self.gain * (1.0 + self.fine + self.count)
+
+
+def _collect_tuning(gain, input_var):
+    bench = bn.Bench(f"tuning_{gain}_{input_var}", Tuning())
+    res = bench.collect(
+        input_vars=[input_var], result_vars=["cost"], const_vars=[("gain", gain)]
+    )
+    bench.close()
+    return res
+
+
+@pytest.mark.parametrize("input_var", ["fine", "count"])
+def test_sweep_labels_are_unique_and_written_without_an_exponent(input_var):
+    md = bn.evidence_markdown(_collect_tuning(0.3, input_var), _collect_tuning(0.2, input_var))
+    labels = re.search(rf"x-axis \"{input_var}\" \[(.*)\]", _chart(md))[1].split(", ")
+    assert len(set(labels)) == len(labels)
+    assert all(re.fullmatch(rf'"{_NUMBER}"', label) for label in labels)

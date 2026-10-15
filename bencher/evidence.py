@@ -160,9 +160,15 @@ def plan_chart(base: _Profile, cand: _Profile) -> ChartPlan:
         if not all(isinstance(v, (int, float)) for v in x):
             return ImageOnly(f"{len(x)} categories of {base.swept[0]}")
         x, before, after = _bin(x, before, after)
+    if any(isinstance(v, float) for v in x) and all(isinstance(v, (int, float)) for v in x):
+        labels = tuple(_chart_nums([float(v) for v in x]))
+    else:
+        labels = tuple(_label(v) for v in x)
+    if len(set(labels)) < len(labels):
+        return ImageOnly(f"the values of {base.swept[0]} do not print as distinct labels")
     return SweepChart(
         base.swept[0],
-        tuple(_label(v) for v in x),
+        labels,
         tuple(float(v) for v in before),
         tuple(float(v) for v in after),
     )
