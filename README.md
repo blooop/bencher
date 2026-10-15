@@ -30,7 +30,9 @@ To gate a change in CI without the plotting stack — run a sweep, check its cla
 `bencher compare`, `bencher ab` — install `holobench-core` instead. It is the same
 `bencher` package without Panel, Bokeh, HoloViews, hvplot, Optuna, moviepy, scikit-learn
 or plotly. A sweep there collects without plots, and a feature that needs one of those
-packages says to `pip install holobench`.
+packages says to `pip install holobench`. See
+[a light install](docs/how_to_use_bencher.md#a-light-install-for-the-evidence-tools) for
+what works on each.
 
 ```python
 import math
