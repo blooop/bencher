@@ -1,8 +1,8 @@
 | Metric | Value |
 |--------|-------|
-| Total tests | 3353 |
-| Total time | 209.77s |
-| Mean | 0.0626s |
+| Total tests | 3449 |
+| Total time | 326.82s |
+| Mean | 0.0948s |
 | Median | 0.0030s |
 
 <details>
@@ -10,15 +10,15 @@
 
 | Test | Time (s) |
 |------|----------|
-| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 19.044 |
-| `test.test_complete_report::test_complete_bundle_cli_and_legacy_compare` | 5.820 |
-| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 5.033 |
-| `test.test_generated_examples::test_generated_example[regression/example_regression_tuning_drift.py]` | 4.535 |
-| `test.test_bencher.TestBencher::test_bench_cfg_hash_isolated` | 4.010 |
-| `test.test_object_store::test_local_create_is_atomic_across_processes` | 3.862 |
-| `test.test_axis_units.TestLineAxisUnits::test_line_axis_labels_show_units` | 3.445 |
-| `test.test_generated_examples::test_generated_example[regression/example_regression_tuning_step.py]` | 3.040 |
-| `test.test_generated_examples::test_generated_example[cartesian_animation/example_cartesian_animation.py]` | 2.957 |
-| `test.test_generated_examples::test_generated_example[result_types/result_image/example_result_image_to_video.py]` | 2.734 |
+| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 18.536 |
+| `test.test_ab::test_ab_on_a_clean_tree_names_the_head_even_when_its_output_is_not_ignored` | 18.211 |
+| `test.test_ab::test_ab_explicit_base_and_image_url` | 10.199 |
+| `test.test_ab::test_ab_runs_an_ignored_interpreter_on_the_base_side_too` | 9.963 |
+| `test.test_ab::test_ab_measures_each_side_with_its_own_code` | 9.888 |
+| `test.test_ab::test_ab_reports_which_side_failed_and_keeps_its_output` | 9.551 |
+| `test.test_ab::test_ab_base_imports_its_own_package_over_an_absolute_path_to_the_candidate` | 7.686 |
+| `test.test_core_install::test_run_compare_and_ab_work_without_the_plotting_stack` | 6.789 |
+| `test.test_complete_report::test_complete_bundle_cli_and_legacy_compare` | 6.100 |
+| `test.test_ab::test_ab_fails_when_the_base_still_imports_the_candidates_code` | 4.942 |
 
 </details>
