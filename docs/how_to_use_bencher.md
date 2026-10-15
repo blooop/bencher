@@ -413,6 +413,10 @@ on; only the wall-clock `log_time` is dropped). Each result variable gets its ow
 view, so an image swept beside a metric reads as a picture and a time series *of the
 sweep*, moving together under one cursor.
 
+With `repeats > 1`, a number becomes `rr.Measurements` instead: the mean across the
+repeats with its variance, which rerun draws as a line in a ±1σ band. See
+[Rerun Repeats Band](reference/meta/rerun/example_rerun_repeats_band).
+
 The axis is a tick counter, not a clock. Rerun labels a sequence index `#3` with
 no unit, which is the honest reading for a sweep — a polygon with three sides is
 `#3`, where `+3s` would claim a unit the parameter does not have. Where the

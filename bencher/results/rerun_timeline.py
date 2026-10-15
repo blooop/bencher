@@ -436,10 +436,7 @@ def _rewrite_chunk(
     still be scrubbed within the sweep tick it sits on.
     """
     import pyarrow as pa
-
-    from bencher.utils_rerun import rerun_chunk_api
-
-    chunk_cls = rerun_chunk_api().Chunk
+    from rerun.chunk import Chunk
 
     batch = chunk.to_record_batch()
     keep = [
@@ -469,7 +466,7 @@ def _rewrite_chunk(
         return [chunk]
 
     schema = pa.schema(fields, metadata=batch.schema.metadata)
-    return chunk_cls.from_record_batch(pa.RecordBatch.from_arrays(columns, schema=schema))
+    return Chunk.from_record_batch(pa.RecordBatch.from_arrays(columns, schema=schema))
 
 
 def _forward_stage(recording: RecordingStream, staged_path: str, timeline: str) -> None:
@@ -480,9 +477,9 @@ def _forward_stage(recording: RecordingStream, staged_path: str, timeline: str) 
     own and forwarding them through one rewrite pass costs a single extra file for the
     whole composition, rather than a rewrite per sample.
     """
-    from bencher.utils_rerun import rerun_chunk_api
+    from rerun.chunk import RrdReader
 
-    reader = rerun_chunk_api().RrdReader(staged_path)
+    reader = RrdReader(staged_path)
     for store in reader.recordings():
         for chunk in reader.stream(store=store):
             if str(chunk.entity_path).lstrip("/").startswith("__properties"):
@@ -497,9 +494,9 @@ def _sample_chunks(path: str) -> Iterator[tuple[str, Chunk]]:
     carries one; forwarding them would add a ``__properties`` entity to each branch
     that displays nothing, so they are not data and are not yielded.
     """
-    from bencher.utils_rerun import rerun_chunk_api
+    from rerun.chunk import RrdReader
 
-    reader = rerun_chunk_api().RrdReader(path)
+    reader = RrdReader(path)
     for store in reader.recordings():
         for chunk in reader.stream(store=store):
             entity = str(chunk.entity_path).lstrip("/")
@@ -1328,7 +1325,7 @@ class RerunTimelineResult(BenchResultBase):
         from bencher.utils import gen_rerun_data_path
 
         # Underscore, not the "bencher/timeline" slash style ComposableContainerRerun
-        # uses: rerun 0.37 migrates a slashed application id to a generated entry name
+        # uses: rerun (since 0.37) migrates a slashed application id to a generated entry name
         # and logs a warning on every render saying so.
         recording = rr.RecordingStream(
             "bencher_timeline", make_default=False, make_thread_default=False

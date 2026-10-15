@@ -16,6 +16,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `compare_results` reports it for the baseline as well as the candidate. `schema_version`
   stays 1: the `claim` key is additive, and only a breaking change to the shape bumps it.
 
+## [1.139.0] - 2026-10-13
+
+### Added
+- **The rerun backend draws a ±1σ band around a mean.** With `repeats > 1`, a numeric
+  result var is logged as rerun's `Measurements` archetype: the mean across repeats
+  with its variance, which a time series view draws as a line in a translucent band one
+  standard deviation wide each side. This is the rerun counterpart of the `hv.Spread`
+  band on a holoviews curve. A point with one valid repeat has no std, so it gets the
+  line and no band. The result var's units go to the legend and tooltips.
+- `example_rerun_repeats_band` in the Rerun Integration gallery: a noisy sine swept with
+  `repeats=8` on the rerun backend, drawn as the mean line in its ±1σ band.
+- **The rerun mapped viewer opens on the `log_tick` timeline.** rerun still records
+  `log_time` on every row, and the viewer opened on it, so a line graph's points were
+  spaced by logging time instead of by sweep index. The blueprint now pins `log_tick`.
+
+### Fixed
+- **The rerun backend logged nothing for a numeric result var when `repeats > 1`.** The
+  squeezed dataset it mapped kept the `repeat` dim, so every one-value-per-cell read
+  failed with "can only convert an array of size 1 to a Python scalar" and the line
+  graph, scalar and bar chart came out empty. Numeric vars are now reduced to their mean
+  and std across repeats first.
+
+### Changed
+- **The rerun window moves up a minor at each end, to 0.38 and 0.39: `rerun-sdk` and
+  `rerun-notebook` are `>=0.38.0,<0.40`.** `Measurements` first shipped in 0.38. The
+  default environment resolves 0.39.0 and `rerun-floor` pins 0.38 (0.38.1).
+- **`bencher.utils_rerun.rerun_chunk_api()` is removed.** It chose between
+  `rerun.chunk` and `rerun.experimental` for `Chunk` and `RrdReader`, because 0.37 had
+  no `rerun.chunk`. Every rerun in the new window has it, so callers import from
+  `rerun.chunk` directly.
 ## [1.138.0] - 2026-10-12
 
 ### Changed

@@ -279,7 +279,7 @@ entity-path tree and *is* the Blueprint layout.
 | `Time` | HoloMap slider | **a named timeline per Time dim** — removes today's "over_time and a float sweep compete for `log_tick`" conflict | native |
 | heatmap/volume marks | hvplot / plotly | `rr.Tensor` views | native/approx |
 | image/video kinds | panes | `EncodedImage` / `AssetVideo` | native |
-| `Spread(mean_std)` | `hv.Spread` band | no native band view: three series (mean, mean±std), or `Spread→Overlay` fallback | **declared gap** |
+| `Spread(mean_std)` | `hv.Spread` band | `rr.Measurements` with variance: a ±1σ band in a TimeSeriesView | native |
 | box/violin marks | hv box/violin | fallback: jittered points or facet | **declared gap** |
 
 Gaps are declared fallbacks visible in `explain()`, upgraded by a one-cell change when
