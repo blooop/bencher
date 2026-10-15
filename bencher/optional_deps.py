@@ -108,7 +108,9 @@ def _import_or_stand_in(name: str) -> ModuleType:
     try:
         return importlib.import_module(name)
     except ModuleNotFoundError as exc:
-        if not _is_heavy(exc):
+        # Only the package itself being absent is a light install; an installed package
+        # missing one of its own dependencies is a broken install, and says which one.
+        if exc.name != name.partition(".")[0]:
             raise
         return _MissingModule(name, exc)
 

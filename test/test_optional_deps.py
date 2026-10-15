@@ -9,6 +9,7 @@ import pytest
 from bencher.optional_deps import (
     FullInstallRequiredError,
     _MissingModule,
+    _import_or_stand_in,
     full_install_required,
 )
 
@@ -47,3 +48,24 @@ def test_the_stand_in_answers_dunder_probes_like_a_module():
     assert getattr(pn, "__version__", None) is None
     with pytest.raises(TypeError):  # a module never pickles; the point is it is not the hint
         pickle.dumps(pn)
+
+
+def test_an_installed_package_with_a_missing_dependency_still_fails_import(monkeypatch):
+    """panel installed without bokeh is a broken install: say bokeh, not 'panel is not installed'."""
+
+    def import_panel(name):
+        raise _missing("bokeh")
+
+    monkeypatch.setattr("bencher.optional_deps.importlib.import_module", import_panel)
+    with pytest.raises(ModuleNotFoundError) as info:
+        _import_or_stand_in("panel")
+    assert not isinstance(info.value, FullInstallRequiredError)
+    assert info.value.name == "bokeh"
+
+
+def test_an_absent_package_gets_a_stand_in(monkeypatch):
+    def import_plotly(name):
+        raise _missing("plotly")
+
+    monkeypatch.setattr("bencher.optional_deps.importlib.import_module", import_plotly)
+    assert isinstance(_import_or_stand_in("plotly.graph_objs"), _MissingModule)
