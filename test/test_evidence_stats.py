@@ -26,7 +26,16 @@ from bencher.change_stats import (
     paired_change,
     unpaired_change,
 )
-from bencher.evidence import BeforeAfterBars, change_line, mermaid_chart, radar_chart
+from bencher.evidence import (
+    BeforeAfterBars,
+    CategoryRow,
+    CategoryTable,
+    _Profile,
+    category_table,
+    change_line,
+    mermaid_chart,
+    radar_chart,
+)
 
 # --- the statistics on known data ------------------------------------------------
 
@@ -422,3 +431,15 @@ def test_one_scalable_metric_is_named_in_the_singular():
     md = radar_chart([_POSITIVE[0], *zeros])
     assert md is not None
     assert md.startswith("No radar: only 1 metric can be scaled to its baseline.")
+
+
+def test_a_profile_must_carry_its_points():
+    with pytest.raises(TypeError):
+        _Profile(swept=("x",), x=(1, 2), mean=np.zeros(2), std=np.zeros(2), samples=2)
+
+
+def test_a_category_table_renders_one_line_per_row():
+    change = unpaired_change(np.array([1.0, 1.1]), np.array([0.5, 0.6]), "minimize", 10.0)
+    plan = CategoryTable("mode", (CategoryRow("eco", 1.05, 0.55, change),))
+    table = category_table("m", None, plan)
+    assert table.splitlines()[-1].startswith("| eco | 1.05 | 0.55 | -0.5 | [")

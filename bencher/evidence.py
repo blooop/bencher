@@ -82,7 +82,7 @@ class _Profile:
     mean: np.ndarray  # one per x (a single value with none swept)
     std: np.ndarray
     samples: int
-    points: tuple[np.ndarray, ...] = ()  # the finite samples at each x
+    points: tuple[np.ndarray, ...]  # the finite samples at each x
 
 
 def _finite_samples(da: xr.DataArray) -> np.ndarray:
@@ -140,18 +140,25 @@ class SweepChart:
 
 
 @dataclass(frozen=True)
-class CategoryTable:
-    """One categorical swept input shared by both sides: a table row per category.
+class CategoryRow:
+    """One category: its mean on each side and the change between them.
 
-    ``changes`` holds a :func:`~bencher.change_stats.unpaired_change` record per
-    category, from the repeats at that category.
+    ``change`` is a :func:`~bencher.change_stats.unpaired_change` record from the
+    repeats at that category.
     """
 
+    label: str
+    before: float
+    after: float
+    change: dict
+
+
+@dataclass(frozen=True)
+class CategoryTable:
+    """One categorical swept input shared by both sides: a table row per category."""
+
     input_name: str
-    labels: tuple[str, ...]
-    before: tuple[float, ...]
-    after: tuple[float, ...]
-    changes: tuple[dict, ...]
+    rows: tuple[CategoryRow, ...]
 
 
 @dataclass(frozen=True)
@@ -225,12 +232,13 @@ def plan_chart(
             return ImageOnly(f"the values of {base.swept[0]} do not print as distinct labels")
         return CategoryTable(
             base.swept[0],
-            labels,
-            tuple(float(v) for v in before),
-            tuple(float(v) for v in after),
             tuple(
-                unpaired_change(b, c, direction, margin_percent)
-                for b, c in zip(base.points, cand.points, strict=True)
+                CategoryRow(
+                    label, float(b), float(c), unpaired_change(bp, cp, direction, margin_percent)
+                )
+                for label, b, c, bp, cp in zip(
+                    labels, before, after, base.points, cand.points, strict=True
+                )
             ),
         )
     if any(isinstance(v, float) for v in x):
@@ -393,13 +401,11 @@ def category_table(name: str, units: str | None, plan: CategoryTable) -> str:
         f"| {_cell(plan.input_name)} | before | after | change | 95% CI |",
         "| --- | ---: | ---: | ---: | --- |",
     ]
-    for label, before, after, change in zip(
-        plan.labels, plan.before, plan.after, plan.changes, strict=True
-    ):
-        lines.append(
-            f"| {_cell(label)} | {_num(before)} | {_num(after)} | {after - before:+.4g} "
-            f"| {_ci_cell(change)} |"
-        )
+    lines.extend(
+        f"| {_cell(row.label)} | {_num(row.before)} | {_num(row.after)} "
+        f"| {row.after - row.before:+.4g} | {_ci_cell(row.change)} |"
+        for row in plan.rows
+    )
     return "\n".join(lines)
 
 
