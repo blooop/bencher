@@ -24,7 +24,7 @@ from bencher.change_stats import (
     paired_change,
     unpaired_change,
 )
-from bencher.evidence import BeforeAfterBars, mermaid_chart
+from bencher.evidence import BeforeAfterBars, mermaid_chart, radar_chart
 
 # --- the statistics on known data ------------------------------------------------
 
@@ -309,3 +309,24 @@ def test_a_metric_with_a_zero_baseline_is_left_off_the_radar_and_named():
     assert "radar-beta" in radar
     assert '"zero"' not in radar
     assert "Not on the radar: `zero` (baseline mean is 0)" in md
+
+
+def _radar_entry(variable, base, cand, direction="maximize"):
+    return {
+        "variable": variable,
+        "baseline_value": base,
+        "current_value": cand,
+        "direction": direction,
+    }
+
+
+_POSITIVE = [_radar_entry(name, 1.0, 1.2) for name in ("a", "b", "c")]
+
+
+@pytest.mark.parametrize(("base", "cand"), [(-10.0, -20.0), (-5.0, 0.0)])
+def test_a_metric_with_a_negative_baseline_is_left_off_the_radar(base, cand):
+    md = radar_chart([*_POSITIVE, _radar_entry("score", base, cand)])
+    assert md is not None
+    assert '"score"' not in md
+    assert "-0" not in md
+    assert "Not on the radar: `score` (baseline mean is negative)." in md

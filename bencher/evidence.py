@@ -407,8 +407,8 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
     """A ``radar-beta`` block of every metric scaled so its baseline mean is 1, with notes.
 
     Returns None below :data:`MIN_RADAR_METRICS` compared metrics. A metric whose
-    baseline mean is 0 or non-finite, or whose mean changes sign, cannot be scaled
-    that way: it is left off and named under the chart.
+    baseline mean is 0, negative or non-finite, or whose mean changes sign, cannot be
+    scaled that way: it is left off and named under the chart.
     """
     if len(metrics) < MIN_RADAR_METRICS:
         return None
@@ -421,6 +421,8 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
             skipped.append(f"{name} (baseline mean is not finite)")
         elif base == 0:
             skipped.append(f"{name} (baseline mean is 0)")
+        elif base < 0:
+            skipped.append(f"{name} (baseline mean is negative)")
         elif cand is None or not math.isfinite(cand):
             skipped.append(f"{name} (candidate mean is not finite)")
         elif (cand < 0) != (base < 0) and cand != 0:

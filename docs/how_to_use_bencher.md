@@ -742,7 +742,7 @@ the Markdown file, and the PNGs it links are written beside it when `--png` is n
 With three or more compared metrics, a Mermaid `radar-beta` chart above the per-metric
 charts shows them all at once: each axis is one metric's mean divided by its baseline mean,
 so the "before" curve is 1 on every axis and "after" shows the relative change. A metric
-whose baseline mean is 0 or not finite, or whose mean changes sign, cannot be scaled that
+whose baseline mean is 0, negative or not finite, or whose mean changes sign, cannot be scaled that
 way; it is left off and named under the chart.
 
 **The change and its CI.** Each metric in `comparison.json` carries a `change` record:
