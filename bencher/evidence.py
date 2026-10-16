@@ -392,9 +392,14 @@ def unpaired_warnings(comparison: dict) -> list[str]:
     """One message per metric that only one side measured, so none drops out unseen."""
     unpaired = comparison.get("unpaired", {})
     return [
-        f"`{name}` is only in the {side}, so it has no before/after chart or verdict"
-        for side, key in (("candidate", "candidate_only"), ("baseline", "baseline_only"))
-        for name in unpaired.get(key, [])
+        *(
+            f"`{name}` is only in the candidate, so it has no baseline to compare against"
+            for name in unpaired.get("candidate_only", [])
+        ),
+        *(
+            f"`{name}` is only in the baseline, so the candidate does not measure it"
+            for name in unpaired.get("baseline_only", [])
+        ),
     ]
 
 

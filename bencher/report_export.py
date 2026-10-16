@@ -337,9 +337,8 @@ def compare_results(
             omitted, a percentage comparison (``regression_method='percentage'``)
             is used — the natural choice for a two-point A/B.
 
-    Only a scalar metric that both results measured gets a ``metrics`` entry. A
-    metric only one side has is listed in ``unpaired`` instead, so it is never
-    dropped without a trace, and a claim on a metric the baseline does not have is
+    A scalar metric that only one side has is listed in ``unpaired``: it has no
+    baseline to compare against. A claim on a metric the baseline does not have is
     still judged in ``claims``.
 
     Returns:
@@ -357,8 +356,7 @@ def compare_results(
         ``metrics`` the entry repeats that metric's ``claim``.
 
         ``unpaired`` is ``{"candidate_only": [...], "baseline_only": [...]}``: the
-        names of the scalar metrics that only one side measured, which have no
-        ``metrics`` entry.
+        names of the scalar metrics that only one side declares.
 
     Raises:
         ValueError: when the two results share no comparable scalar metric.
@@ -406,7 +404,7 @@ def compare_results(
         for rv in cand_scalar
         if getattr(rv, "claim", None) is not None
     ]
-    claim_of = {c["variable"]: c for c in claims if c["baseline"] is not None}
+    claim_of = {c["variable"]: c for c in claims}
     metrics = []
     counts = {"improved": 0, "regressed": 0, "unchanged": 0}
     for r in report.results:
