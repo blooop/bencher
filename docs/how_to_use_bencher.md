@@ -745,22 +745,19 @@ so the "before" curve is 1 on every axis and "after" shows the relative change. 
 whose baseline mean is 0, negative or not finite, or whose mean changes sign, cannot be scaled that
 way; it is left off and named under the chart.
 
-**The change and its CI.** Each metric in `comparison.json` carries a `change` record:
-`mean_diff` (candidate − baseline), the 95% CI `ci_low`/`ci_high`, `method`, the counts
-`n`/`n_baseline`/`n_candidate`, `equivalence_percent` and `stat_verdict`. When both sides
-swept the same inputs, each input point is reduced to its mean over repeats and the
-per-point differences are bootstrapped (`paired_bootstrap`); with no swept input, the
-repeats on each side are resampled on their own and the difference of means is
-bootstrapped (`bootstrap`). The CI is the 2.5th–97.5th percentile of 10,000 resamples
-drawn with a fixed seed, so the same results give the same evidence byte for byte.
-`stat_verdict` is "equivalent within ±X%" when the whole CI lies inside ±X% of the
-baseline mean, where X is `regression_percentage` (10 by default, or the metric's own
-percentage override); else "improved" or "regressed" when the CI excludes 0 (in the
-metric's `direction`; "increased" or "decreased" without one), else "no significant
-change". Fewer than 2 finite points (paired) or samples on a side (unpaired) give "too few
-samples" and no CI; sides that swept different inputs give "not comparable". The threshold
-`verdict` is computed as before and is independent of `stat_verdict`; when they disagree,
-the caption shows both.
+**The change and its CI.** Each metric in `comparison.json` carries a `change` record
+with `mean_diff` (candidate − baseline), its 95% CI `ci_low`/`ci_high`, `method`, the
+counts and `stat_verdict`: over the input points both sides swept, the per-point
+differences of the repeat means are bootstrapped (`paired_bootstrap`), and with no swept
+input or one shared point the two sides' repeats are resampled on their own (`bootstrap`).
+The CI is the 2.5th–97.5th percentile of 10,000 resamples with a fixed seed, so the same
+results give the same evidence byte for byte. `stat_verdict` is "equivalent within ±X%"
+when the whole CI lies inside ±X% of the baseline mean (X is `regression_percentage`, 10
+by default, or the metric's own percentage override), else "improved"/"regressed" (or
+"increased"/"decreased" with no `direction`) when the CI excludes 0, else "no significant
+change"; too few samples give "too few samples" and no CI, and sides with no shared input
+point give "not comparable". The threshold `verdict` does not change, and the caption
+shows both when they disagree.
 
 In Python: `bn.evidence_markdown(base, cand)`, `bn.write_evidence_pngs(base, cand, out_dir)`
 and `bn.write_evidence(base, cand, json_path=..., markdown_path=..., png_dir=...)`. See
