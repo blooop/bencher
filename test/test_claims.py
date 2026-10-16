@@ -145,17 +145,22 @@ def test_compare_judges_a_claim_the_baseline_does_not_measure():
     json.dumps(cmp, allow_nan=False)
 
 
-def test_an_absolute_compare_attaches_the_claim_to_a_candidate_only_metric():
-    # The absolute method needs no baseline, so `margin` gets a metrics entry.
+def test_an_absolute_compare_keeps_a_claim_with_no_baseline_out_of_metrics():
+    # The absolute method needs no baseline, so `margin` gets a metrics entry. A
+    # metrics claim always had an outcome on both sides; `claims` holds the rest.
+    from bencher.evidence import caption
+
     base = _collect(gain=0.3, result_vars=("stop_distance", "plain"))
     cand = _collect(gain=0.2, result_vars=("stop_distance", "margin"))
     cfg = bn.BenchRunCfg(regression_method="absolute", regression_absolute=10.0)
     cmp = bn.compare_results(base, cand, run_cfg=cfg)
     claims = {c["variable"]: c for c in cmp["claims"]}
     assert cmp["unpaired"]["candidate_only"] == ["margin"]
+    assert claims["margin"]["baseline"] is None
+    assert claims["margin"]["candidate"]["holds"] is not None
     margin = _metric(cmp, "margin")
-    assert margin["claim"] == {k: claims["margin"][k] for k in ("claim", "baseline", "candidate")}
-    assert margin["claim"]["baseline"] is None
+    assert "claim" not in margin
+    caption(margin, None, cmp, (0, 4))
     json.dumps(cmp, allow_nan=False)
 
 

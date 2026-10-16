@@ -353,7 +353,8 @@ def compare_results(
         that metric: ``{"variable", "claim", "candidate", "baseline"}``. Each side
         is an outcome shaped as in :func:`result_to_dict`; ``baseline`` is
         ``None`` when the baseline does not measure the metric. For a metric in
-        ``metrics`` the entry repeats that metric's ``claim``.
+        ``metrics`` that the baseline measures, the entry repeats that metric's
+        ``claim``.
 
         ``unpaired`` is ``{"candidate_only": [...], "baseline_only": [...]}``: the
         names of the scalar metrics that only one side declares.
@@ -410,7 +411,7 @@ def compare_results(
         for rv in cand_scalar
         if getattr(rv, "claim", None) is not None
     ]
-    claim_of = {c["variable"]: c for c in claims}
+    claim_of = {c["variable"]: c for c in claims if c["baseline"] is not None}
     metrics = []
     counts = {"improved": 0, "regressed": 0, "unchanged": 0}
     for r in report.results:
