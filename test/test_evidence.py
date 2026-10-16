@@ -397,6 +397,7 @@ def test_the_claims_block_judges_a_metric_the_baseline_does_not_have():
         "- `stop_distance` `< 0.7`: candidate holds (worst 0.6 at speed=3, repeat=1)"
         " · baseline holds (worst 0.6 at speed=3, repeat=1)" in block
     )
+    assert "**Not compared**" in block
     assert "`peak_decel` is only in the candidate" in block
     assert "`reaction` is only in the baseline" in block
 
@@ -405,6 +406,22 @@ def test_a_comparison_with_every_metric_paired_lists_none_as_unpaired():
     md = bn.evidence_markdown(_collect(0.3), _collect(0.2))
     assert "is only in the" not in md
     assert "**Claims**" in md
+
+
+def test_a_paired_claim_line_shows_each_side_its_own_outcome():
+    md = bn.evidence_markdown(_collect(0.3), _collect(0.2))
+    assert (
+        "- `stop_distance` `< 0.7`: candidate holds (worst 0.6 at speed=3, repeat=1)"
+        " · baseline fails (worst 0.9 at speed=3, repeat=1)" in md
+    )
+
+
+def test_a_comparison_without_claims_has_no_claims_block(monkeypatch):
+    base, cand = _collect(0.3), _collect(0.2)
+    for res in (base, cand):
+        monkeypatch.setattr(res.bench_cfg.result_vars[0], "claim", None)
+    assert "**Claims**" not in bn.evidence_markdown(base, cand)
+    assert bn.compare_results(base, cand)["claims"] == []
 
 
 def test_compare_warns_about_each_unpaired_metric_and_exits_as_before(unpaired, tmp_path, capsys):

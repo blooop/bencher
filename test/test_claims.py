@@ -159,6 +159,14 @@ def test_an_absolute_compare_attaches_the_claim_to_a_candidate_only_metric():
     json.dumps(cmp, allow_nan=False)
 
 
+def test_a_claim_on_a_baseline_only_metric_is_not_judged():
+    base = _collect(gain=0.3, result_vars=("stop_distance", "margin"))
+    cand = _collect(gain=0.2, result_vars=("stop_distance",))
+    cmp = bn.compare_results(base, cand)
+    assert [c["variable"] for c in cmp["claims"]] == ["stop_distance"]
+    assert cmp["unpaired"]["baseline_only"] == ["margin"]
+
+
 def test_unpaired_metrics_do_not_change_the_metrics_list():
     base = _collect(gain=0.3, result_vars=("stop_distance", "plain"))
     cand = _collect(gain=0.2, result_vars=("stop_distance", "margin"))
