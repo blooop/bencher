@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "baseline": {
+    "bench_name": "braking",
+    "provenance": {
+      "uuid": "298f9831-f3ca-4d4c-ae9e-b22d9c8fae2e",
+      "executed_at": "2026-10-16T16:42:25.822244+00:00",
+      "display_label": "base 5cd8804",
+      "source_revision": "5cd8804",
+      "workflow": null,
+      "workflow_run": null,
+      "lane": null,
+      "attempt": null
+    }
+  },
+  "candidate": {
+    "bench_name": "braking",
+    "provenance": {
+      "uuid": "cc793b37-eca4-44fa-b2ad-1c0a2db924b5",
+      "executed_at": "2026-10-16T16:42:28.071345+00:00",
+      "display_label": "candidate 5cd8804+dirty",
+      "source_revision": "5cd8804+dirty",
+      "workflow": null,
+      "workflow_run": null,
+      "lane": null,
+      "attempt": null
+    }
+  },
+  "metrics": [
+    {
+      "variable": "stop_distance",
+      "baseline_value": 0.36487248451781845,
+      "current_value": 0.2748724845178184,
+      "change_percent": -24.666151551256505,
+      "direction": "minimize",
+      "method": "percentage",
+      "regressed": false,
+      "verdict": "improved",
+      "change": {
+        "mean_diff": -0.09000000000000002,
+        "ci_low": -0.11500000000000006,
+        "ci_high": -0.065,
+        "ci_level": 0.95,
+        "method": "paired_bootstrap",
+        "n": 9,
+        "n_baseline": 9,
+        "n_candidate": 9,
+        "resamples": 10000,
+        "equivalence_percent": 10.0,
+        "stat_verdict": "improved"
+      },
+      "claim": {
+        "claim": "< 0.7",
+        "baseline": {
+          "holds": false,
+          "worst_value": 0.7563797822545024,
+          "worst_inputs": {
+            "speed": 2.5,
+            "repeat": 2
+          },
+          "samples": 36
+        },
+        "candidate": {
+          "holds": true,
+          "worst_value": 0.6063797822545024,
+          "worst_inputs": {
+            "speed": 2.5,
+            "repeat": 2
+          },
+          "samples": 36
+        }
+      }
+    },
+    {
+      "variable": "peak_decel",
+      "baseline_value": 3.2226805823705913,
+      "current_value": 4.476305589583327,
+      "change_percent": 38.90007014876337,
+      "direction": "minimize",
+      "method": "percentage",
+      "regressed": true,
+      "verdict": "regressed",
+      "change": {
+        "mean_diff": 1.2536250072127362,
+        "ci_low": 1.166745056116303,
+        "ci_high": 1.3363037704946934,
+        "ci_level": 0.95,
+        "method": "paired_bootstrap",
+        "n": 9,
+        "n_baseline": 9,
+        "n_candidate": 9,
+        "resamples": 10000,
+        "equivalence_percent": 10.0,
+        "stat_verdict": "regressed"
+      }
+    },
+    {
+      "variable": "cpu_time",
+      "baseline_value": 0.48500000000000004,
+      "current_value": 0.48500000000000004,
+      "change_percent": 0.0,
+      "direction": "minimize",
+      "method": "percentage",
+      "regressed": false,
+      "verdict": "unchanged",
+      "change": {
+        "mean_diff": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "ci_level": 0.95,
+        "method": "paired_bootstrap",
+        "n": 9,
+        "n_baseline": 9,
+        "n_candidate": 9,
+        "resamples": 10000,
+        "equivalence_percent": 10.0,
+        "stat_verdict": "equivalent within \u00b110%"
+      }
+    }
+  ],
+  "summary": {
+    "improved": 1,
+    "regressed": 1,
+    "unchanged": 1
+  },
+  "claims": [
+    {
+      "variable": "stop_distance",
+      "claim": "< 0.7",
+      "candidate": {
+        "holds": true,
+        "worst_value": 0.6063797822545024,
+        "worst_inputs": {
+          "speed": 2.5,
+          "repeat": 2
+        },
+        "samples": 36
+      },
+      "baseline": {
+        "holds": false,
+        "worst_value": 0.7563797822545024,
+        "worst_inputs": {
+          "speed": 2.5,
+          "repeat": 2
+        },
+        "samples": 36
+      }
+    }
+  ],
+  "unpaired": {
+    "candidate_only": [],
+    "baseline_only": []
+  }
+}

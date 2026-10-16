@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "baseline": {
+    "bench_name": "braking",
+    "provenance": {
+      "uuid": "62d6ebf3-1c9d-4631-b68d-647920d34221",
+      "executed_at": "2026-10-16T16:42:12.361746+00:00",
+      "display_label": "base 769acae",
+      "source_revision": "769acae",
+      "workflow": null,
+      "workflow_run": null,
+      "lane": null,
+      "attempt": null
+    }
+  },
+  "candidate": {
+    "bench_name": "braking",
+    "provenance": {
+      "uuid": "4966880d-fd57-4bfa-b764-3d24a1062bc6",
+      "executed_at": "2026-10-16T16:42:14.583228+00:00",
+      "display_label": "candidate 769acae+dirty",
+      "source_revision": "769acae+dirty",
+      "workflow": null,
+      "workflow_run": null,
+      "lane": null,
+      "attempt": null
+    }
+  },
+  "metrics": [
+    {
+      "variable": "stop_distance",
+      "baseline_value": 0.36487248451781845,
+      "current_value": 0.2748724845178184,
+      "change_percent": -24.666151551256505,
+      "direction": "minimize",
+      "method": "percentage",
+      "regressed": false,
+      "verdict": "improved",
+      "change": {
+        "mean_diff": -0.09000000000000002,
+        "ci_low": -0.11500000000000006,
+        "ci_high": -0.065,
+        "ci_level": 0.95,
+        "method": "paired_bootstrap",
+        "n": 9,
+        "n_baseline": 9,
+        "n_candidate": 9,
+        "resamples": 10000,
+        "equivalence_percent": 10.0,
+        "stat_verdict": "improved"
+      },
+      "claim": {
+        "claim": "< 0.7",
+        "baseline": {
+          "holds": false,
+          "worst_value": 0.7563797822545024,
+          "worst_inputs": {
+            "speed": 2.5,
+            "repeat": 2
+          },
+          "samples": 36
+        },
+        "candidate": {
+          "holds": true,
+          "worst_value": 0.6063797822545024,
+          "worst_inputs": {
+            "speed": 2.5,
+            "repeat": 2
+          },
+          "samples": 36
+        }
+      }
+    }
+  ],
+  "summary": {
+    "improved": 1,
+    "regressed": 0,
+    "unchanged": 0
+  },
+  "claims": [
+    {
+      "variable": "stop_distance",
+      "claim": "< 0.7",
+      "candidate": {
+        "holds": true,
+        "worst_value": 0.6063797822545024,
+        "worst_inputs": {
+          "speed": 2.5,
+          "repeat": 2
+        },
+        "samples": 36
+      },
+      "baseline": {
+        "holds": false,
+        "worst_value": 0.7563797822545024,
+        "worst_inputs": {
+          "speed": 2.5,
+          "repeat": 2
+        },
+        "samples": 36
+      }
+    }
+  ],
+  "unpaired": {
+    "candidate_only": [],
+    "baseline_only": []
+  }
+}

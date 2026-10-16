@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "baseline": {
+    "bench_name": "braking",
+    "provenance": {
+      "uuid": "f6b45292-dfd9-498c-9a59-f143b81d25b6",
+      "executed_at": "2026-10-16T16:42:19.072011+00:00",
+      "display_label": "base 769acae",
+      "source_revision": "769acae",
+      "workflow": null,
+      "workflow_run": null,
+      "lane": null,
+      "attempt": null
+    }
+  },
+  "candidate": {
+    "bench_name": "braking",
+    "provenance": {
+      "uuid": "047349b4-d39d-41ec-aed1-e1e023217516",
+      "executed_at": "2026-10-16T16:42:21.330607+00:00",
+      "display_label": "candidate 769acae",
+      "source_revision": "769acae",
+      "workflow": null,
+      "workflow_run": null,
+      "lane": null,
+      "attempt": null
+    }
+  },
+  "metrics": [
+    {
+      "variable": "stop_distance",
+      "baseline_value": 0.36487248451781845,
+      "current_value": 0.36487248451781845,
+      "change_percent": 0.0,
+      "direction": "minimize",
+      "method": "percentage",
+      "regressed": false,
+      "verdict": "unchanged",
+      "change": {
+        "mean_diff": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "ci_level": 0.95,
+        "method": "paired_bootstrap",
+        "n": 9,
+        "n_baseline": 9,
+        "n_candidate": 9,
+        "resamples": 10000,
+        "equivalence_percent": 10.0,
+        "stat_verdict": "equivalent within \u00b110%"
+      },
+      "claim": {
+        "claim": "< 0.7",
+        "baseline": {
+          "holds": false,
+          "worst_value": 0.7563797822545024,
+          "worst_inputs": {
+            "speed": 2.5,
+            "repeat": 2
+          },
+          "samples": 36
+        },
+        "candidate": {
+          "holds": false,
+          "worst_value": 0.7563797822545024,
+          "worst_inputs": {
+            "speed": 2.5,
+            "repeat": 2
+          },
+          "samples": 36
+        }
+      }
+    }
+  ],
+  "summary": {
+    "improved": 0,
+    "regressed": 0,
+    "unchanged": 1
+  },
+  "claims": [
+    {
+      "variable": "stop_distance",
+      "claim": "< 0.7",
+      "candidate": {
+        "holds": false,
+        "worst_value": 0.7563797822545024,
+        "worst_inputs": {
+          "speed": 2.5,
+          "repeat": 2
+        },
+        "samples": 36
+      },
+      "baseline": {
+        "holds": false,
+        "worst_value": 0.7563797822545024,
+        "worst_inputs": {
+          "speed": 2.5,
+          "repeat": 2
+        },
+        "samples": 36
+      }
+    }
+  ],
+  "unpaired": {
+    "candidate_only": [],
+    "baseline_only": []
+  }
+}
