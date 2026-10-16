@@ -690,7 +690,7 @@ comparison by default), so each metric's `verdict` is one of `improved` / `regre
 `unchanged` using identical direction/threshold semantics. Pass `run_cfg=` to choose a
 different `regression_method`.
 
-A metric that only one side declares has no baseline to compare against. It is named in
+A metric that only one side declares has nothing to compare against. It is named in
 `unpaired` (`{"candidate_only": [...], "baseline_only": [...]}`), and `bencher compare` and
 `bencher ab` print a warning on stderr for each one.
 The top-level `claims` list judges every claim the candidate declares, also on a metric

@@ -337,9 +337,9 @@ def compare_results(
             omitted, a percentage comparison (``regression_method='percentage'``)
             is used — the natural choice for a two-point A/B.
 
-    A scalar metric that only one side has is listed in ``unpaired``: it has no
-    baseline to compare against. A claim on a metric the baseline does not have is
-    still judged in ``claims``.
+    A scalar metric that only one side has is listed in ``unpaired``: it has
+    nothing on the other side to compare against. A claim on a metric the
+    baseline does not have is still judged in ``claims``.
 
     Returns:
         A dict with ``schema_version``, ``baseline``/``candidate`` provenance,
