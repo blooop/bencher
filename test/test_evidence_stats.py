@@ -26,7 +26,7 @@ from bencher.change_stats import (
     paired_change,
     unpaired_change,
 )
-from bencher.evidence import BeforeAfterBars, mermaid_chart, radar_chart
+from bencher.evidence import BeforeAfterBars, change_line, mermaid_chart, radar_chart
 
 # --- the statistics on known data ------------------------------------------------
 
@@ -384,3 +384,26 @@ def test_a_percentage_override_sets_the_margin():
     change = cmp["metrics"][0]["change"]
     assert change["equivalence_percent"] == 15.0
     assert change["stat_verdict"] == f"{EQUIVALENT} ±15%"
+
+
+def _with_change(threshold_verdict, change):
+    return {"variable": "m", "verdict": threshold_verdict, "change": change}
+
+
+def test_the_caption_notes_a_threshold_verdict_the_ci_does_not_support():
+    change = paired_change(
+        np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.3, 0.7, 1.4, 0.6]), "minimize", 10.0
+    )
+    assert change["stat_verdict"] == NO_SIGNIFICANT_CHANGE
+    line = change_line(_with_change("improved", change), None)
+    assert line is not None
+    assert line.endswith("→ no significant change; the threshold verdict says improved")
+
+
+def test_the_caption_has_no_note_when_the_verdicts_agree():
+    before = np.array([1.0, 2.0, 3.0])
+    change = paired_change(before, before - 0.5, "minimize", 10.0)
+    line = change_line(_with_change("improved", change), None)
+    assert line is not None
+    assert line.endswith("→ improved")
+    assert "threshold verdict" not in line
