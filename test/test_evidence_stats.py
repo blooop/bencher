@@ -434,8 +434,9 @@ def test_one_scalable_metric_is_named_in_the_singular():
 
 
 def test_a_profile_must_carry_its_points():
+    fields = {"swept": ("x",), "x": (1, 2), "mean": np.zeros(2), "std": np.zeros(2), "samples": 2}
     with pytest.raises(TypeError):
-        _Profile(swept=("x",), x=(1, 2), mean=np.zeros(2), std=np.zeros(2), samples=2)
+        _Profile(**fields)
 
 
 def test_a_category_table_renders_one_line_per_row():
