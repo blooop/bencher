@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Each compared metric carries the change with a 95% CI.** `compare_results` adds a
+  `change` record to every entry in `metrics`: the mean difference (candidate − baseline),
+  a bootstrap 95% CI, the method (`paired_bootstrap` over the per-point means when both
+  sides swept the same inputs, `bootstrap` of the difference of means over repeats with no
+  swept input), the sample counts and a `stat_verdict`: "improved" / "regressed" when the
+  CI excludes 0, "equivalent within ±X%" when the whole CI lies inside
+  `regression_percentage` of the baseline mean, "no significant change", "too few samples"
+  (no CI) or "not comparable". The bootstrap uses a fixed seed, so the output is
+  deterministic, and only numpy, so it works on a light install. `evidence.md` shows the
+  change and its CI in each caption. The existing keys, `verdict` among them, and the exit
+  status do not change; `schema_version` stays 1.
+- **A radar chart for three or more metrics.** `evidence.md` draws one Mermaid
+  `radar-beta` chart above the per-metric charts, each metric scaled so its baseline mean
+  is 1. A metric with a zero or non-finite baseline mean, or whose mean changes sign, is
+  left off and named under the chart.
+
+### Changed
+- **A numeric sweep is drawn as two lines.** The `evidence.md` chart for one numeric swept
+  input draws the baseline as a grey line and the candidate as a blue line, with the colors
+  fixed in the chart's front matter so both read on GitHub's light and dark themes. Before,
+  the baseline was bars and the candidate a line in the default palette, which made the
+  first series hard to see.
+- **A categorical sweep is a table.** One string, enum or bool swept input gets a Markdown
+  table, one row per category with before, after, the change and its 95% CI, instead of a
+  chart that joined the categories with a line.
+- **No negative bars.** With no swept input, a negative mean links the PNG instead of an
+  `xychart-beta` bar, which grows from the bottom of the axis, not from 0.
+
 ## [1.141.0] - 2026-10-16
 
 ### Fixed

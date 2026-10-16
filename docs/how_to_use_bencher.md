@@ -710,9 +710,10 @@ python -m bencher.render compare baseline.pkl candidate.pkl --json comparison.js
 
 `bencher compare` also writes what a reviewer reads. `--markdown PATH` writes a block to
 paste as a PR's `## Evidence` section: per metric, a Mermaid `xychart-beta` chart with the
-baseline as bars and the candidate as a line on the same axes, then a caption with the
-verdict, the mean before → after with the change in percent, the claim outcome on each side
-(see below) and each side's revision and sample count. Above the charts, a **Claims** list
+baseline as a grey line and the candidate as a blue line on the same axes, then a caption
+with the verdict, the mean before → after with the change in percent, the claim outcome on
+each side (see below), the change with its 95% CI and statistical verdict, and each side's
+revision and sample count. Above the charts, a **Claims** list
 gives each claim the candidate declares with its outcome on the candidate and on the
 baseline, or "no baseline" for a metric the baseline does not measure, and a **Not
 compared** list names each metric that only one side declares. `--png DIR` writes one PNG per metric
@@ -727,12 +728,39 @@ bencher compare base.pkl candidate.pkl --markdown evidence.md --png evidence/ \
 ```
 
 A metric gets a Mermaid chart only when the chart is honest: no swept input (one bar per
-side) or one swept input with the same values on both sides, binned to at most 30 points.
-Two or more swept inputs, a sweep that differs between the sides, or a repeat-to-repeat
-spread as large as the change get an image link instead, `![<metric>: before vs
+side, when neither value is negative) or one numeric swept input with the same values on
+both sides, binned to at most 30 points. One categorical swept input (string, enum or
+bool) gets a table instead, one row per category with before, after, the change and its
+95% CI from that category's repeats; a line between categories would mean nothing. Two or
+more swept inputs, a sweep that differs between the sides, a negative value with no swept
+input (an `xychart-beta` bar grows from the bottom of the axis, not from 0), more than 30
+categories, or a repeat-to-repeat spread as large as the change get an image link instead, `![<metric>: before vs
 after](<url>)`. The URL is `--png-url-base` plus the file name, so an agent pushes the PNGs
 first and renders the Markdown against the pinned URL; without it, the link is relative to
 the Markdown file, and the PNGs it links are written beside it when `--png` is not given.
+
+With three or more compared metrics, a Mermaid `radar-beta` chart above the per-metric
+charts shows them all at once: each axis is one metric's mean divided by its baseline mean,
+so the "before" curve is 1 on every axis and "after" shows the relative change. A metric
+whose baseline mean is 0 or not finite, or whose mean changes sign, cannot be scaled that
+way; it is left off and named under the chart.
+
+**The change and its CI.** Each metric in `comparison.json` carries a `change` record:
+`mean_diff` (candidate − baseline), the 95% CI `ci_low`/`ci_high`, `method`, the counts
+`n`/`n_baseline`/`n_candidate`, `equivalence_percent` and `stat_verdict`. When both sides
+swept the same inputs, each input point is reduced to its mean over repeats and the
+per-point differences are bootstrapped (`paired_bootstrap`); with no swept input, the
+repeats on each side are resampled on their own and the difference of means is
+bootstrapped (`bootstrap`). The CI is the 2.5th–97.5th percentile of 10,000 resamples
+drawn with a fixed seed, so the same results give the same evidence byte for byte.
+`stat_verdict` is "equivalent within ±X%" when the whole CI lies inside ±X% of the
+baseline mean, where X is `regression_percentage` (10 by default, or the metric's own
+percentage override); else "improved" or "regressed" when the CI excludes 0 (in the
+metric's `direction`; "increased" or "decreased" without one), else "no significant
+change". Fewer than 2 finite points (paired) or samples on a side (unpaired) give "too few
+samples" and no CI; sides that swept different inputs give "not comparable". The threshold
+`verdict` is computed as before and is independent of `stat_verdict`; when they disagree,
+the caption shows both.
 
 In Python: `bn.evidence_markdown(base, cand)`, `bn.write_evidence_pngs(base, cand, out_dir)`
 and `bn.write_evidence(base, cand, json_path=..., markdown_path=..., png_dir=...)`. See
