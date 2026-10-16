@@ -24,11 +24,11 @@ The base revision is ``--base`` when given, else the merge-base of ``HEAD`` with
 
 ``--out`` (default ``./bencher-ab``) receives ``base.pkl``, ``candidate.pkl``,
 ``comparison.json``, ``evidence.md``, one PNG per metric, and each side's log.
-A metric that only one side measured is named in a warning on stderr and in
+A metric that only one side declares is named in a warning on stderr and in
 ``evidence.md``; a claim on it is still judged.
 Exit status is 0 when both sides ran and were compared, whatever the verdict and
-whatever the claims say; 1
-when a side failed (its log is kept and named); 2 for a usage or git problem.
+whatever the claims say; 1 when a side failed (its log is kept and named); 2 for
+a usage or git problem.
 """
 
 from __future__ import annotations

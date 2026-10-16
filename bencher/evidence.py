@@ -7,11 +7,12 @@ draws one chart per metric. :func:`write_evidence` writes any of the comparison
 JSON, the Markdown and the PNGs in one call; ``bencher compare`` and ``bencher ab``
 are its command-line front ends.
 
-Each metric gets a chart and a caption. The chart is a Mermaid ``xychart-beta``
-when the metric fits one honestly -- no swept input (one bar per side) or one swept
-input with the same values on both sides -- and an image link otherwise: two or more
-swept inputs, inputs that differ between the sides, or a repeat-to-repeat spread as
-large as the change, which only the PNG's ±std band can show.
+Each compared metric (both sides measured it) gets a chart and a caption. The
+chart is a Mermaid ``xychart-beta`` when the metric fits one honestly -- no swept
+input (one bar per side) or one swept input with the same values on both sides --
+and an image link otherwise: two or more swept inputs, inputs that differ between
+the sides, or a repeat-to-repeat spread as large as the change, which only the
+PNG's ±std band can show.
 
 ``xychart-beta`` has no legend, so the title names the series: bars are the
 baseline, the line is the candidate.
@@ -389,7 +390,7 @@ def _summary(comparison: dict) -> str:
 
 
 def unpaired_warnings(comparison: dict) -> list[str]:
-    """One message per metric that only one side measured, so none drops out unseen."""
+    """One message per metric that only one side declares."""
     unpaired = comparison.get("unpaired", {})
     return [
         *(
@@ -457,7 +458,7 @@ def evidence_markdown(
 
     Above the charts, a **Claims** list judges every claim the candidate declares,
     with "no baseline" for a metric the baseline does not measure, and a **Not
-    compared** list names each metric only one side has.
+    compared** list names each metric only one side declares.
 
     Args:
         baseline: The result before the change.

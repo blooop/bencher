@@ -690,9 +690,9 @@ comparison by default), so each metric's `verdict` is one of `improved` / `regre
 `unchanged` using identical direction/threshold semantics. Pass `run_cfg=` to choose a
 different `regression_method`.
 
-Only a metric that both results measured gets a `metrics` entry and a verdict. A metric
-that only one side has is named in `unpaired` (`{"candidate_only": [...], "baseline_only":
-[...]}`), and `bencher compare` and `bencher ab` print a warning on stderr for each one.
+A metric that only one side declares has no baseline to compare against. It is named in
+`unpaired` (`{"candidate_only": [...], "baseline_only": [...]}`), and `bencher compare` and
+`bencher ab` print a warning on stderr for each one.
 The top-level `claims` list judges every claim the candidate declares, also on a metric
 that the change adds (see [Declaring a claim](#declaring-a-claim)).
 
@@ -715,7 +715,7 @@ verdict, the mean before → after with the change in percent, the claim outcome
 (see below) and each side's revision and sample count. Above the charts, a **Claims** list
 gives each claim the candidate declares with its outcome on the candidate and on the
 baseline, or "no baseline" for a metric the baseline does not measure, and a **Not
-compared** list names each metric that only one side has. `--png DIR` writes one PNG per metric
+compared** list names each metric that only one side declares. `--png DIR` writes one PNG per metric
 with the claim threshold drawn in and a ±1 std band. The PNG plots against the first swept
 input; the mean and std pool the repeats and every other swept input, so with two or more
 swept inputs the band also holds the spread across the other inputs. Any of `--json`,
