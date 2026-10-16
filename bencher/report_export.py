@@ -331,9 +331,9 @@ def _change(
     metric's own when its method is ``percentage`` (an override can set it),
     else ``run_cfg.regression_percentage``.
     """
-    margin = (_finite_value(reg.threshold) if reg.method == "percentage" else None) or float(
-        run_cfg.regression_percentage
-    )
+    margin = _finite_value(reg.threshold) if reg.method == "percentage" else None
+    if margin is None:
+        margin = float(run_cfg.regression_percentage)
     if reg.variable not in base_ds or reg.variable not in cand_ds:
         return not_comparable("only one side measures it", margin)
     return change_between(base_ds[reg.variable], cand_ds[reg.variable], reg.direction, margin)

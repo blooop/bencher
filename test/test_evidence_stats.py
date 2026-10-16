@@ -363,3 +363,24 @@ def test_a_partial_overlap_pairs_the_shared_points():
     assert change["method"] == "paired_bootstrap"
     assert change["n"] == 2
     assert change["mean_diff"] == pytest.approx(0.5)
+
+
+def test_a_zero_percentage_override_is_a_zero_margin():
+    cfg = bn.BenchRunCfg(regression_overrides={"stop_distance": {"percentage": 0.0}})
+    cmp = bn.compare_results(_shift(0.0), _shift(0.0), run_cfg=cfg)
+    assert cmp["metrics"][0]["change"]["equivalence_percent"] == 0.0
+
+
+def test_a_zero_regression_percentage_is_a_zero_margin():
+    cmp = bn.compare_results(
+        _shift(0.0), _shift(0.0), run_cfg=bn.BenchRunCfg(regression_percentage=0.0)
+    )
+    assert cmp["metrics"][0]["change"]["equivalence_percent"] == 0.0
+
+
+def test_a_percentage_override_sets_the_margin():
+    cfg = bn.BenchRunCfg(regression_overrides={"stop_distance": {"percentage": 15.0}})
+    cmp = bn.compare_results(_shift(0.0), _shift(0.0), run_cfg=cfg)
+    change = cmp["metrics"][0]["change"]
+    assert change["equivalence_percent"] == 15.0
+    assert change["stat_verdict"] == f"{EQUIVALENT} ±15%"
