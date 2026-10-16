@@ -14,6 +14,7 @@ import re
 
 import numpy as np
 import pytest
+import xarray as xr
 
 import bencher as bn
 from bencher.change_stats import (
@@ -21,6 +22,7 @@ from bencher.change_stats import (
     NO_SIGNIFICANT_CHANGE,
     NOT_COMPARABLE,
     TOO_FEW_SAMPLES,
+    change_between,
     paired_change,
     unpaired_change,
 )
@@ -330,3 +332,34 @@ def test_a_metric_with_a_negative_baseline_is_left_off_the_radar(base, cand):
     assert '"score"' not in md
     assert "-0" not in md
     assert "Not on the radar: `score` (baseline mean is negative)." in md
+
+
+def _swept(name, values, offset=0.0, repeats=3):
+    data = np.array([[v + offset + 0.01 * r for r in range(repeats)] for v in values])
+    return xr.DataArray(
+        data, dims=(name, "repeat"), coords={name: list(values), "repeat": range(repeats)}
+    )
+
+
+def test_one_point_at_different_values_is_not_comparable():
+    change = change_between(_swept("x", [1.0]), _swept("x", [2.0]), "minimize", 10.0)
+    assert change["stat_verdict"] == NOT_COMPARABLE
+    assert change["reason"] == "the sides share no swept input point"
+
+
+def test_one_shared_point_compares_the_repeats_at_that_point():
+    change = change_between(_swept("x", [1]), _swept("x", [1, 2], offset=-0.5), "minimize", 10.0)
+    assert change["method"] == "bootstrap"
+    assert change["n_baseline"] == 3
+    assert change["n_candidate"] == 3
+    assert change["mean_diff"] == pytest.approx(-0.5)
+    assert change["stat_verdict"] == "improved"
+
+
+def test_a_partial_overlap_pairs_the_shared_points():
+    change = change_between(
+        _swept("speed", [1, 2, 3]), _swept("speed", [2, 3, 4], offset=0.5), "minimize", 10.0
+    )
+    assert change["method"] == "paired_bootstrap"
+    assert change["n"] == 2
+    assert change["mean_diff"] == pytest.approx(0.5)

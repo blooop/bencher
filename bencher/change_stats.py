@@ -5,12 +5,13 @@ record to each compared metric, under the ``change`` key. The record is separate
 from the metric's threshold ``verdict``; it says whether the data support a
 change at all.
 
-* **Paired** (``"paired_bootstrap"``): when both sides swept the same inputs, each
-  input point is reduced to its mean over repeats and the per-point difference
+* **Paired** (``"paired_bootstrap"``): over the input points both sides swept, each
+  point is reduced to its mean over repeats and the per-point difference
   (candidate - baseline) is bootstrapped. Pairing removes the spread that comes
   from the sweep itself.
-* **Unpaired** (``"bootstrap"``): with no swept input the samples are repeats, and
-  the difference of the two means is bootstrapped, each side resampled on its own.
+* **Unpaired** (``"bootstrap"``): with no swept input, or one shared input point,
+  the samples are repeats, and the difference of the two means is bootstrapped,
+  each side resampled on its own.
 
 The CI is the 2.5th to 97.5th percentile of :data:`RESAMPLES` bootstrap means drawn
 with a fixed seed, so the same data give the same record every time.
@@ -208,13 +209,12 @@ def unpaired_change(
 
 
 def _points(da: xr.DataArray) -> xr.DataArray:
-    """One value per input point: the mean over repeats, unit dims dropped."""
-    da = da.astype(float)
+    """One value per input point: the mean over repeats."""
     if "repeat" in da.dims:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             da = da.mean(dim="repeat", skipna=True)
-    return da.squeeze(drop=True)
+    return da
 
 
 def not_comparable(reason: str, margin_percent: float) -> dict:
@@ -235,16 +235,25 @@ def not_comparable(reason: str, margin_percent: float) -> dict:
 def change_between(
     base: xr.DataArray, cand: xr.DataArray, direction: str, margin_percent: float
 ) -> dict:
-    """The ``change`` record for one metric: paired when the sweeps match, else unpaired."""
+    """The ``change`` record for one metric: paired over the shared input points.
+
+    A swept input on both sides is aligned on its values; one on a single side must
+    hold one value, and is dropped. One shared point compares the repeats there.
+    """
     import xarray as xr
 
-    base_points, cand_points = _points(base), _points(cand)
-    if not base_points.dims and not cand_points.dims:
-        return unpaired_change(base.values, cand.values, direction, margin_percent)
-    if set(base_points.dims) != set(cand_points.dims):
+    base, cand = base.astype(float), cand.astype(float)
+    base_dims, cand_dims = set(base.dims) - {"repeat"}, set(cand.dims) - {"repeat"}
+    base_only, cand_only = base_dims - cand_dims, cand_dims - base_dims
+    if any(base.sizes[d] > 1 for d in base_only) or any(cand.sizes[d] > 1 for d in cand_only):
         return not_comparable("the sides swept different inputs", margin_percent)
-    base_points, cand_points = xr.align(base_points, cand_points, join="inner")
+    base = base.isel(dict.fromkeys(base_only, 0), drop=True)
+    cand = cand.isel(dict.fromkeys(cand_only, 0), drop=True)
+    base, cand = xr.align(base, cand, join="inner", exclude=["repeat"])
+    base_points, cand_points = _points(base), _points(cand)
     if base_points.size == 0:
         return not_comparable("the sides share no swept input point", margin_percent)
+    if base_points.size == 1:
+        return unpaired_change(base.values, cand.values, direction, margin_percent)
     cand_points = cand_points.transpose(*base_points.dims)
     return paired_change(base_points.values, cand_points.values, direction, margin_percent)
