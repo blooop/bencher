@@ -241,7 +241,7 @@ def _charts(markdown: str) -> list[str]:
 def test_a_numeric_sweep_draws_two_lines_with_a_fixed_palette():
     (chart,) = _charts(bn.evidence_markdown(_shift(0.0), _shift(-0.09)))
     assert chart.startswith("---\nconfig:\n")
-    assert 'plotColorPalette: "#9e9e9e, #2f81f7"' in chart
+    assert 'plotColorPalette: "#8c8c8c, #2f81f7"' in chart
     assert 'title "stop_distance (m): grey = before, blue = after"' in chart
     assert len(re.findall(r"^    line \[", chart, re.MULTILINE)) == 2
     assert "bar [" not in chart

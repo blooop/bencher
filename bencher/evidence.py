@@ -62,7 +62,7 @@ MAX_CHART_POINTS = 30
 _MIN_CHANGE_SHARE_FROM_ZERO = 0.05
 
 # Mermaid series colors: readable on GitHub's light and dark themes.
-MERMAID_BEFORE_COLOR = "#9e9e9e"
+MERMAID_BEFORE_COLOR = "#8c8c8c"
 MERMAID_AFTER_COLOR = "#2f81f7"
 
 # The radar needs this many metrics with a usable baseline to be worth drawing.
