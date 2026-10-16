@@ -19,7 +19,7 @@ from uuid import uuid4
 from bencher.complete_report import safe_path
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping
+    from collections.abc import Callable, Generator, Mapping
 
 
 @dataclass(frozen=True)
@@ -183,7 +183,7 @@ class LocalStore:
         return sqlite3.connect(self.database, timeout=self.timeout)
 
     @contextmanager
-    def _transaction(self) -> Iterator[sqlite3.Connection]:
+    def _transaction(self) -> Generator[sqlite3.Connection]:
         connection = self._connect()
         try:
             with connection:
