@@ -228,7 +228,7 @@ def test_sides_that_swept_different_inputs_are_not_comparable():
     change = cmp["metrics"][0]["change"]
     assert change["stat_verdict"] == NOT_COMPARABLE
     assert change["ci_low"] is None
-    assert change["reason"]
+    assert change["reason"] == "the sides swept different inputs"
 
 
 # --- the evidence Markdown -------------------------------------------------------
@@ -263,7 +263,7 @@ def test_a_categorical_sweep_is_a_table_not_a_chart():
     rows = re.findall(r"^\| (eco|normal|sport) \|.*\|$", md, re.MULTILINE)
     assert rows == ["eco", "normal", "sport"]
     eco = re.search(r"^\| eco \|.*$", md, re.MULTILINE)[0]
-    assert re.search(r"\[-0\.\d+, -0\.\d+\]", eco)
+    assert re.search(r"\| -0\.\d+ \| \[-0\.\d+, -0\.\d+\] → improved \|$", eco)
 
 
 def test_a_categorical_point_with_one_sample_has_no_ci_in_the_table():
@@ -274,6 +274,7 @@ def test_a_categorical_point_with_one_sample_has_no_ci_in_the_table():
 
 def test_negative_values_are_never_drawn_as_bars():
     md = bn.evidence_markdown(_shift(-2.0, input_vars=()), _shift(-2.5, input_vars=()))
+    assert "![stop_distance: before vs after]" in md
     for chart in _charts(md):
         for series in re.findall(r"bar \[(.*)\]", chart):
             assert all(float(v) >= 0 for v in series.split(", "))
@@ -444,3 +445,89 @@ def test_a_category_table_renders_one_line_per_row():
     plan = CategoryTable("mode", (CategoryRow("eco", 1.05, 0.55, change),))
     table = category_table("m", None, plan)
     assert table.splitlines()[-1].startswith("| eco | 1.05 | 0.55 | -0.5 | [")
+
+
+def test_a_metric_with_no_direction_that_falls_decreased():
+    before = np.array([1.0, 2.0, 3.0])
+    change = paired_change(before, before - 1.0, direction="none", margin_percent=10.0)
+    assert change["stat_verdict"] == "decreased"
+
+
+def test_a_maximized_metric_that_falls_is_regressed():
+    before = np.array([1.0, 2.0, 3.0])
+    change = paired_change(before, before - 1.0, direction="maximize", margin_percent=10.0)
+    assert change["stat_verdict"] == "regressed"
+
+
+def test_the_caption_says_too_few_samples_for_one_repeat_without_a_sweep():
+    md = bn.evidence_markdown(_shift(0.0, input_vars=()), _shift(-0.09, input_vars=()))
+    assert "change: too few samples for a CI (n=1 vs 1)" in md
+
+
+def test_the_caption_says_why_the_sides_are_not_comparable():
+    md = bn.evidence_markdown(_shift(0.0, input_vars=("speed",)), _shift(0.0, input_vars=("mode",)))
+    assert "change: not comparable (the sides swept different inputs)" in md
+
+
+class Piped(bn.ParametrizedSweep):
+    label = bn.StringSweep(["a|b", "c"])
+    offset = bn.FloatSweep(default=0.0)
+
+    value = bn.ResultFloat(units="m")
+
+    def benchmark(self):
+        self.value = 1.0 + self.offset
+
+
+def _piped(offset):
+    bench = bn.Bench(f"piped_{offset}", Piped())
+    res = bench.collect(
+        input_vars=["label"], result_vars=["value"], const_vars=[("offset", offset)]
+    )
+    bench.close()
+    return res
+
+
+def test_a_category_with_a_pipe_stays_in_one_table_cell():
+    md = bn.evidence_markdown(_piped(0.0), _piped(-0.1))
+    rows = re.findall(r"^\| (\S+) \| 1 \| 0\.9 \|", md, re.MULTILINE)
+    assert rows == ["a\\|b", "c"]
+
+
+def test_a_bool_sweep_is_a_table_not_a_chart():
+    md = bn.evidence_markdown(
+        _shift(0.0, input_vars=("noisy",)), _shift(-0.1, input_vars=("noisy",))
+    )
+    assert "xychart-beta" not in md
+    rows = re.findall(r"^\| (False|True) \|", md, re.MULTILINE)
+    assert rows == ["False", "True"]
+
+
+@pytest.mark.parametrize(
+    ("base", "cand", "reason"),
+    [
+        (math.nan, 1.0, "baseline mean is not finite"),
+        (1.0, -1.0, "the mean changed sign"),
+        (-1.0, 0.0, "baseline mean is negative"),
+    ],
+)
+def test_a_metric_that_cannot_be_scaled_is_left_off_the_radar(base, cand, reason):
+    md = radar_chart([*_POSITIVE, _radar_entry("score", base, cand)])
+    assert md is not None
+    assert '"score"' not in md
+    assert f"Not on the radar: `score` ({reason})." in md
+
+
+def test_the_radar_max_leaves_room_above_the_largest_ratio():
+    entries = [_radar_entry("a", 1.0, 1.5), *_POSITIVE[1:], _radar_entry("d", 2.0, 2.0)]
+    md = radar_chart(entries)
+    assert md is not None
+    assert re.search(r"^  max 1\.7$", md, re.MULTILINE)
+
+
+def test_the_radar_says_which_way_is_better():
+    entries = [*_POSITIVE[:2], _radar_entry("cost", 2.0, 1.0, direction="minimize")]
+    md = radar_chart(entries)
+    assert md is not None
+    assert "Lower is better for `cost`." in md
+    assert "Higher is better for `a`, `b`." in md
