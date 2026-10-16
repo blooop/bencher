@@ -407,3 +407,18 @@ def test_the_caption_has_no_note_when_the_verdicts_agree():
     assert line is not None
     assert line.endswith("→ improved")
     assert "threshold verdict" not in line
+
+
+def test_two_scalable_metrics_of_four_get_no_radar():
+    entries = [*_POSITIVE[:2], _radar_entry("z1", 0.0, 1.0), _radar_entry("z2", 0.0, 1.0)]
+    md = radar_chart(entries)
+    assert md is not None
+    assert "radar-beta" not in md
+    assert md.startswith("No radar: only 2 metrics can be scaled to their baseline.")
+
+
+def test_one_scalable_metric_is_named_in_the_singular():
+    zeros = [_radar_entry(f"z{i}", 0.0, 1.0) for i in range(3)]
+    md = radar_chart([_POSITIVE[0], *zeros])
+    assert md is not None
+    assert md.startswith("No radar: only 1 metric can be scaled to its baseline.")

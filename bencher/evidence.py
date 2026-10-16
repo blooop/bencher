@@ -431,9 +431,9 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
             axes.append((entry, cand / base))
     notes = [f"Not on the radar: {', '.join(skipped)}."] if skipped else []
     if len(axes) < MIN_RADAR_METRICS:
-        return "\n".join(
-            [f"No radar: only {len(axes)} metrics can be scaled to their baseline.", *notes]
-        )
+        count = "1 metric" if len(axes) == 1 else f"{len(axes)} metrics"
+        pronoun = "its" if len(axes) == 1 else "their"
+        return "\n".join([f"No radar: only {count} can be scaled to {pronoun} baseline.", *notes])
     ratios = [ratio for _, ratio in axes]
     top = math.ceil(max(1.0, *ratios) * 1.1 * 10) / 10
     text = _chart_nums([1.0, *ratios])
