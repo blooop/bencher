@@ -167,6 +167,17 @@ def test_a_claim_on_a_baseline_only_metric_is_not_judged():
     assert cmp["unpaired"]["baseline_only"] == ["margin"]
 
 
+def test_no_shared_metric_names_the_metrics_on_each_side():
+    base = _collect(gain=0.3, result_vars=("plain",))
+    cand = _collect(gain=0.2, result_vars=("margin",))
+    with pytest.raises(
+        ValueError,
+        match=r"share no comparable scalar result variables "
+        r"\(candidate only: margin; baseline only: plain\)",
+    ):
+        bn.compare_results(base, cand)
+
+
 def test_unpaired_metrics_do_not_change_the_metrics_list():
     base = _collect(gain=0.3, result_vars=("stop_distance", "plain"))
     cand = _collect(gain=0.2, result_vars=("stop_distance", "margin"))

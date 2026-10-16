@@ -359,7 +359,9 @@ def compare_results(
         names of the scalar metrics that only one side declares.
 
     Raises:
-        ValueError: when the two results share no comparable scalar metric.
+        ValueError: when the two results share no comparable scalar metric. The
+            compare then fails (``bencher compare`` and ``bencher ab`` exit 1) and no
+            claim is judged; the message names the metrics on each side.
     """
     base_names = [
         rv.name for rv in baseline.bench_cfg.result_vars if isinstance(rv, SCALAR_RESULT_TYPES)
@@ -369,9 +371,13 @@ def compare_results(
     ]
     cand_names = {rv.name for rv in cand_scalar}
     shared = [rv for rv in cand_scalar if rv.name in base_names]
+    candidate_only = [rv.name for rv in cand_scalar if rv.name not in base_names]
+    baseline_only = [name for name in base_names if name not in cand_names]
     if not shared:
         raise ValueError(
             "compare_results: baseline and candidate share no comparable scalar result variables"
+            f" (candidate only: {', '.join(candidate_only) or 'none'};"
+            f" baseline only: {', '.join(baseline_only) or 'none'})"
         )
 
     if run_cfg is None:
@@ -441,10 +447,7 @@ def compare_results(
         "metrics": metrics,
         "summary": counts,
         "claims": claims,
-        "unpaired": {
-            "candidate_only": [rv.name for rv in cand_scalar if rv.name not in base_names],
-            "baseline_only": [name for name in base_names if name not in cand_names],
-        },
+        "unpaired": {"candidate_only": candidate_only, "baseline_only": baseline_only},
     }
 
 

@@ -16,8 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that metric. `evidence.md` lists the claims above the charts. A metric that only one side
   measured is named in `unpaired`, in a "Not compared" list in `evidence.md` and in a
   warning from `bencher compare` and `bencher ab`. `metrics` and the exit status do not
-  change: a failed claim is reported, not enforced. `schema_version` stays 1, because the
-  new keys are additive.
+  change: a failed claim is reported, not enforced. When the two sides share no metric the
+  compare still fails (exit 1) and no claim is judged; the error now names the metrics on
+  each side. `schema_version` stays 1, because the new keys are additive.
 
 ## [1.140.0] - 2026-10-15
 

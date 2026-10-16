@@ -774,7 +774,8 @@ bencher ab --base origin/main --out evidence/ --png-url-base <url> -- pixi run p
 - The exit status is 0 when both sides ran, whatever the verdict and whatever the claims
   say (a failed claim, on a metric the base has or not, is reported, not enforced); 1 when
   a side failed or saved no result (stderr names the side and the tail of its log, which is
-  kept); 2 for a usage or git problem.
+  kept), or when the two sides share no metric (no claim is judged then, and stderr names
+  the metrics on each side); 2 for a usage or git problem.
 
 Each side also runs with `BENCHER_NO_SHOW=1`, which makes `bn.run` and `BenchRunner` show
 nothing: the default `show=True` starts a live report server, and that server keeps a
