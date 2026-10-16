@@ -9,13 +9,23 @@ are its command-line front ends.
 
 Each compared metric (both sides measured it) gets a chart and a caption. The
 chart is a Mermaid ``xychart-beta`` when the metric fits one honestly -- no swept
-input (one bar per side) or one swept input with the same values on both sides --
-and an image link otherwise: two or more swept inputs, inputs that differ between
-the sides, or a repeat-to-repeat spread as large as the change, which only the
-PNG's ±std band can show.
+input (one bar per side, for values that are not negative) or one numeric swept
+input with the same values on both sides (two lines) -- a Markdown table for one
+categorical swept input (string, enum or bool: a line between categories means
+nothing), and an image link otherwise: two or more swept inputs, inputs that
+differ between the sides, a negative value with no swept input (an xychart bar
+grows from the axis bottom, not from 0), or a repeat-to-repeat spread as large as
+the change, which only the PNG's ±std band can show.
 
-``xychart-beta`` has no legend, so the title names the series: bars are the
-baseline, the line is the candidate.
+``xychart-beta`` has no legend, so the title names the series by color: the grey
+line is the baseline, the blue line is the candidate. Both colors are fixed in the
+chart's front matter and read on GitHub's light and dark themes.
+
+The caption gives the threshold verdict and the mean change, then the ``change``
+record of :mod:`bencher.change_stats`: the mean difference, its bootstrap 95% CI
+and the statistical verdict. With three or more compared metrics, one
+``radar-beta`` chart above the per-metric charts shows every metric scaled so the
+baseline mean is 1.
 """
 
 from __future__ import annotations
@@ -32,6 +42,7 @@ from urllib.parse import quote
 
 import numpy as np
 
+from bencher.change_stats import TOO_FEW_SAMPLES, unpaired_change
 from bencher.claims import Claim, Threshold, Within
 from bencher.report_export import _snapshot_ds, compare_results
 
@@ -50,6 +61,13 @@ MAX_CHART_POINTS = 30
 # A y axis starts at 0 unless that squeezes the change below this share of the axis.
 _MIN_CHANGE_SHARE_FROM_ZERO = 0.05
 
+# Mermaid series colors: readable on GitHub's light and dark themes.
+MERMAID_BEFORE_COLOR = "#9e9e9e"
+MERMAID_AFTER_COLOR = "#2f81f7"
+
+# The radar needs this many metrics with a usable baseline to be worth drawing.
+MIN_RADAR_METRICS = 3
+
 _BEFORE_COLOR = "#8a94a6"
 _AFTER_COLOR = "#1f6feb"
 _CLAIM_COLOR = "#cf222e"
@@ -64,6 +82,12 @@ class _Profile:
     mean: np.ndarray  # one per x (a single value with none swept)
     std: np.ndarray
     samples: int
+    points: tuple[np.ndarray, ...] = ()  # the finite samples at each x
+
+
+def _finite_samples(da: xr.DataArray) -> np.ndarray:
+    values = np.asarray(da.values, dtype=float).ravel()
+    return values[np.isfinite(values)]
 
 
 def _profile(da: xr.DataArray) -> _Profile:
@@ -77,12 +101,16 @@ def _profile(da: xr.DataArray) -> _Profile:
         mean = values.mean(dim=reduce, skipna=True)
         std = values.std(dim=reduce, skipna=True)
     x = tuple(_plain(v) for v in da[keep[0]].values) if keep else ()
+    points = (
+        tuple(_finite_samples(values.isel({keep[0]: i})) for i in range(len(x))) if keep else ()
+    )
     return _Profile(
         swept=swept,
         x=x,
         mean=np.atleast_1d(np.asarray(mean.values, dtype=float)),
         std=np.atleast_1d(np.nan_to_num(np.asarray(std.values, dtype=float))),
         samples=int(values.notnull().sum()),
+        points=points,
     )
 
 
@@ -103,12 +131,27 @@ class BeforeAfterBars:
 
 @dataclass(frozen=True)
 class SweepChart:
-    """One swept input shared by both sides: bars before, line after."""
+    """One numeric swept input shared by both sides: a grey line before, a blue line after."""
 
     input_name: str
     labels: tuple[str, ...]
     before: tuple[float, ...]
     after: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class CategoryTable:
+    """One categorical swept input shared by both sides: a table row per category.
+
+    ``changes`` holds a :func:`~bencher.change_stats.unpaired_change` record per
+    category, from the repeats at that category.
+    """
+
+    input_name: str
+    labels: tuple[str, ...]
+    before: tuple[float, ...]
+    after: tuple[float, ...]
+    changes: tuple[dict, ...]
 
 
 @dataclass(frozen=True)
@@ -118,7 +161,12 @@ class ImageOnly:
     reason: str
 
 
-ChartPlan = BeforeAfterBars | SweepChart | ImageOnly
+ChartPlan = BeforeAfterBars | SweepChart | CategoryTable | ImageOnly
+
+
+def _is_number(value: Any) -> bool:
+    """An int or float, but not a bool: a bool sweep is two categories."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _label(value: Any) -> str:
@@ -141,8 +189,13 @@ def _bin(
     )
 
 
-def plan_chart(base: _Profile, cand: _Profile) -> ChartPlan:
-    """Choose how a metric is shown: an xychart when that is honest, else an image."""
+def plan_chart(
+    base: _Profile, cand: _Profile, *, direction: str = "none", margin_percent: float = 10.0
+) -> ChartPlan:
+    """Choose how a metric is shown: an xychart or table when that is honest, else an image.
+
+    *direction* and *margin_percent* judge each row of a :class:`CategoryTable`.
+    """
     if base.swept != cand.swept:
         return ImageOnly("the sides swept different inputs")
     if len(base.swept) > 1:
@@ -154,15 +207,33 @@ def plan_chart(base: _Profile, cand: _Profile) -> ChartPlan:
     if noise > 0 and noise >= change:
         return ImageOnly("the spread between repeats is as large as the change")
     if not base.swept:
-        return BeforeAfterBars(float(base.mean[0]), float(cand.mean[0]))
+        before, after = float(base.mean[0]), float(cand.mean[0])
+        if min(before, after) < 0:
+            return ImageOnly("an xychart bar for a negative value grows from the axis bottom")
+        return BeforeAfterBars(before, after)
     if base.x != cand.x:
         return ImageOnly(f"the sides swept different values of {base.swept[0]}")
     x, before, after = base.x, base.mean, cand.mean
+    numeric = all(_is_number(v) for v in x)
     if len(x) > MAX_CHART_POINTS:
-        if not all(isinstance(v, (int, float)) for v in x):
+        if not numeric:
             return ImageOnly(f"{len(x)} categories of {base.swept[0]}")
         x, before, after = _bin(x, before, after)
-    if any(isinstance(v, float) for v in x) and all(isinstance(v, (int, float)) for v in x):
+    if not numeric:
+        labels = tuple(_label(v) for v in x)
+        if len(set(labels)) < len(labels):
+            return ImageOnly(f"the values of {base.swept[0]} do not print as distinct labels")
+        return CategoryTable(
+            base.swept[0],
+            labels,
+            tuple(float(v) for v in before),
+            tuple(float(v) for v in after),
+            tuple(
+                unpaired_change(b, c, direction, margin_percent)
+                for b, c in zip(base.points, cand.points, strict=True)
+            ),
+        )
+    if any(isinstance(v, float) for v in x):
         labels = tuple(_chart_nums([float(v) for v in x]))
     else:
         labels = tuple(_label(v) for v in x)
@@ -268,20 +339,30 @@ def mermaid_chart(
             x_axis = 'x-axis ["before", "after"]'
             lo, hi, step = _y_range([before], [after], claim)
             series = [f"bar [{', '.join(_chart_nums([before, after]))}]"]
+            front_matter = []
         case SweepChart(input_name=input_name, labels=labels, before=before, after=after):
-            title = f"{metric}: bars = before, line = after"
+            title = f"{metric}: grey = before, blue = after"
             quoted = ", ".join(f'"{_mermaid_text(label)}"' for label in labels)
             x_axis = f'x-axis "{_mermaid_text(input_name)}" [{quoted}]'
             lo, hi, step = _y_range(before, after, claim)
             text = _chart_nums([*before, *after])
             series = [
-                f"bar [{', '.join(text[: len(before)])}]",
+                f"line [{', '.join(text[: len(before)])}]",
                 f"line [{', '.join(text[len(before) :])}]",
+            ]
+            front_matter = [
+                "---",
+                "config:",
+                "  themeVariables:",
+                "    xyChart:",
+                f'      plotColorPalette: "{MERMAID_BEFORE_COLOR}, {MERMAID_AFTER_COLOR}"',
+                "---",
             ]
         case _ as unreachable:
             assert_never(unreachable)
     lines = [
         "```mermaid",
+        *front_matter,
         "xychart-beta",
         f'    title "{title}"',
         f"    {x_axis}",
@@ -292,7 +373,146 @@ def mermaid_chart(
     return "\n".join(lines)
 
 
+def _cell(text: str) -> str:
+    """Text that stays inside one Markdown table cell."""
+    return re.sub(r"[\n\r]+", " ", text).replace("|", "\\|")
+
+
+def _ci_cell(change: dict) -> str:
+    if change["ci_low"] is None:
+        return change["stat_verdict"]
+    return f"[{_num(change['ci_low'])}, {_num(change['ci_high'])}] → {change['stat_verdict']}"
+
+
+def category_table(name: str, units: str | None, plan: CategoryTable) -> str:
+    """A Markdown table: one row per category, with the change and its 95% CI."""
+    metric = f"{name} ({units})" if units else name
+    lines = [
+        f"**{_cell(metric)}** by {_cell(plan.input_name)}: before vs after",
+        "",
+        f"| {_cell(plan.input_name)} | before | after | change | 95% CI |",
+        "| --- | ---: | ---: | ---: | --- |",
+    ]
+    for label, before, after, change in zip(
+        plan.labels, plan.before, plan.after, plan.changes, strict=True
+    ):
+        lines.append(
+            f"| {_cell(label)} | {_num(before)} | {_num(after)} | {after - before:+.4g} "
+            f"| {_ci_cell(change)} |"
+        )
+    return "\n".join(lines)
+
+
+def radar_chart(metrics: Sequence[dict]) -> str | None:
+    """A ``radar-beta`` block of every metric scaled so its baseline mean is 1, with notes.
+
+    Returns None below :data:`MIN_RADAR_METRICS` compared metrics. A metric whose
+    baseline mean is 0 or non-finite, or whose mean changes sign, cannot be scaled
+    that way: it is left off and named under the chart.
+    """
+    if len(metrics) < MIN_RADAR_METRICS:
+        return None
+    axes: list[tuple[dict, float]] = []
+    skipped: list[str] = []
+    for entry in metrics:
+        base, cand = entry["baseline_value"], entry["current_value"]
+        name = f"`{entry['variable']}`"
+        if base is None or not math.isfinite(base):
+            skipped.append(f"{name} (baseline mean is not finite)")
+        elif base == 0:
+            skipped.append(f"{name} (baseline mean is 0)")
+        elif cand is None or not math.isfinite(cand):
+            skipped.append(f"{name} (candidate mean is not finite)")
+        elif (cand < 0) != (base < 0) and cand != 0:
+            skipped.append(f"{name} (the mean changed sign)")
+        else:
+            axes.append((entry, cand / base))
+    notes = [f"Not on the radar: {', '.join(skipped)}."] if skipped else []
+    if len(axes) < MIN_RADAR_METRICS:
+        return "\n".join(
+            [f"No radar: only {len(axes)} metrics can be scaled to their baseline.", *notes]
+        )
+    ratios = [ratio for _, ratio in axes]
+    top = math.ceil(max(1.0, *ratios) * 1.1 * 10) / 10
+    text = _chart_nums([1.0, *ratios])
+    one, after = text[0], text[1:]
+    labels = ", ".join(
+        f'm{i}["{_mermaid_text(entry["variable"])}"]' for i, (entry, _) in enumerate(axes)
+    )
+    better = {"minimize": [], "maximize": []}
+    for entry, _ in axes:
+        better.get(entry["direction"], []).append(f"`{entry['variable']}`")
+    direction_notes = [
+        f"{word} is better for {', '.join(names)}."
+        for word, names in (("Lower", better["minimize"]), ("Higher", better["maximize"]))
+        if names
+    ]
+    lines = [
+        "```mermaid",
+        "---",
+        "config:",
+        "  themeVariables:",
+        f'    cScale0: "{MERMAID_BEFORE_COLOR}"',
+        f'    cScale1: "{MERMAID_AFTER_COLOR}"',
+        "---",
+        "radar-beta",
+        "  title Metrics relative to before (before = 1)",
+        f"  axis {labels}",
+        f'  curve before["before"]{{{", ".join([one] * len(axes))}}}',
+        f'  curve after["after"]{{{", ".join(after)}}}',
+        f"  max {_num(top)}",
+        "  min 0",
+        "```",
+        "",
+        " ".join(
+            [
+                (
+                    "Each axis is one metric's mean divided by its baseline mean,"
+                    " so before is 1 on every axis."
+                ),
+                *direction_notes,
+            ]
+        ),
+        *notes,
+    ]
+    return "\n".join(lines)
+
+
 # --- captions --------------------------------------------------------------------
+
+
+_CI_METHODS = {"paired_bootstrap": "paired bootstrap", "bootstrap": "bootstrap"}
+_DIRECTED = ("improved", "regressed")
+
+
+def change_line(metric: dict, units: str | None) -> str | None:
+    """The mean change, its 95% CI and the stat verdict, from the metric's ``change``."""
+    change = metric.get("change")
+    if change is None:
+        return None
+    unit = f" {units}" if units else ""
+    verdict = change["stat_verdict"]
+    if change["ci_low"] is None:
+        if verdict == TOO_FEW_SAMPLES:
+            counts = f"n={change['n_baseline']} vs {change['n_candidate']}"
+            if change["method"] == "paired_bootstrap":
+                counts = f"n={change['n']}"
+            return f"change: {verdict} for a CI ({counts})"
+        return f"change: {verdict} ({change.get('reason', 'no estimate')})"
+    if change["method"] == "paired_bootstrap":
+        counts = f"n={change['n']}"
+    else:
+        counts = f"n={change['n_baseline']} vs {change['n_candidate']}"
+    level = f"{change['ci_level'] * 100:g}%"
+    line = (
+        f"change {change['mean_diff']:+.4g}{unit}, {level} CI "
+        f"[{_num(change['ci_low'])}, {_num(change['ci_high'])}]"
+        f" ({_CI_METHODS.get(change['method'], change['method'])}, {counts}) → {verdict}"
+    )
+    threshold = metric["verdict"]
+    if threshold != verdict and (threshold in _DIRECTED or verdict in _DIRECTED):
+        line += f"; the threshold verdict says {threshold}"
+    return line
 
 
 def _where(inputs: dict) -> str:
@@ -328,11 +548,14 @@ def caption(metric: dict, units: str | None, comparison: dict, samples: tuple[in
             f"claim `{claim['claim']}`: baseline {_claim_side(claim['baseline'])}"
             f" → candidate {_claim_side(claim['candidate'])}"
         )
+    lines = [" · ".join(parts)]
+    if (change := change_line(metric, units)) is not None:
+        lines.append(change)
     provenance = (
         f"<sub>baseline {_revision(comparison['baseline'])}, {samples[0]} samples · "
         f"candidate {_revision(comparison['candidate'])}, {samples[1]} samples</sub>"
     )
-    return " · ".join(parts) + "  \n" + provenance
+    return "  \n".join([*lines, provenance])
 
 
 def png_name(variable: str) -> str:
@@ -361,6 +584,8 @@ def _metrics(baseline: BenchResult, candidate: BenchResult, comparison: dict) ->
         name = entry["variable"]
         rv = result_vars.get(name)
         base, cand = _profile(base_ds[name]), _profile(cand_ds[name])
+        margin = (entry.get("change") or {}).get("equivalence_percent", 10.0)
+        plan = plan_chart(base, cand, direction=entry["direction"], margin_percent=margin)
         out.append(
             _Metric(
                 entry=entry,
@@ -368,7 +593,7 @@ def _metrics(baseline: BenchResult, candidate: BenchResult, comparison: dict) ->
                 claim=getattr(rv, "claim", None),
                 base=base,
                 cand=cand,
-                plan=plan_chart(base, cand),
+                plan=plan,
             )
         )
     return out
@@ -430,11 +655,15 @@ def _unpaired_block(comparison: dict) -> str | None:
 def _markdown(metrics: list[_Metric], comparison: dict, png_url_base: str | None) -> str:
     blocks = [_summary(comparison)]
     blocks += [b for b in (_claims_block(comparison), _unpaired_block(comparison)) if b]
+    if (radar := radar_chart([m.entry for m in metrics])) is not None:
+        blocks.append(radar)
     for m in metrics:
         name = m.entry["variable"]
         match m.plan:
             case BeforeAfterBars() | SweepChart():
                 chart = mermaid_chart(name, m.units, m.plan, m.claim)
+            case CategoryTable():
+                chart = category_table(name, m.units, m.plan)
             case ImageOnly():
                 link = _image_link(png_name(name), png_url_base)
                 chart = f"![{name}: before vs after]({link})"

@@ -50,14 +50,13 @@ def _chart(markdown: str) -> str:
     return re.search(r"```mermaid\n(.*?)```", markdown, re.DOTALL)[1]
 
 
-def test_one_swept_input_draws_before_as_bars_and_after_as_a_line():
+def test_one_swept_input_draws_before_and_after_as_two_lines():
     md = bn.evidence_markdown(_collect(0.3), _collect(0.2))
     chart = _chart(md)
-    assert chart.startswith("xychart-beta\n")
-    assert 'title "stop_distance (m): bars = before, line = after"' in chart
+    assert "\nxychart-beta\n" in chart
+    assert 'title "stop_distance (m): grey = before, blue = after"' in chart
     assert 'x-axis "speed" ["1", "2", "3"]' in chart
-    assert "bar [0.3, 0.6, 0.9]" in chart
-    assert "line [0.2, 0.4, 0.6]" in chart
+    assert "line [0.3, 0.6, 0.9]\n    line [0.2, 0.4, 0.6]" in chart
     lo, hi = map(float, re.search(r"y-axis \"[^\"]*\" (\S+) --> (\S+)", chart).groups())
     assert lo == 0
     assert hi >= 0.9
@@ -112,12 +111,12 @@ def test_a_spread_as_large_as_the_change_links_an_image():
 def test_a_long_sweep_is_binned_to_at_most_thirty_points():
     chart = _chart(bn.evidence_markdown(_collect(0.3, samples=70), _collect(0.2, samples=70)))
     labels = re.search(r"x-axis \"speed\" \[(.*)\]", chart)[1].split(", ")
-    # 70 points in bins of ceil(70 / 30) = 3 make 24 bars.
+    # 70 points in bins of ceil(70 / 30) = 3 make 24 points per line.
     assert len(labels) == 24
-    assert len(re.search(r"line \[(.*)\]", chart)[1].split(", ")) == len(labels)
-    first_bar = float(re.search(r"bar \[(.*?),", chart)[1])
+    before, after = re.findall(r"line \[(.*)\]", chart)
+    assert len(before.split(", ")) == len(after.split(", ")) == len(labels)
     speeds = np.linspace(1.0, 3.0, 70)
-    assert first_bar == pytest.approx(0.3 * speeds[:3].mean(), rel=1e-3)
+    assert float(before.split(", ")[0]) == pytest.approx(0.3 * speeds[:3].mean(), rel=1e-3)
 
 
 def test_quotes_in_units_do_not_break_the_title():
@@ -141,8 +140,8 @@ _NUMBER = r"-?\d+(\.\d+)?"
 @pytest.mark.parametrize(
     ("before", "after", "bars"),
     [
-        (1e5, 2e5, "bar [100000, 200000, 300000]"),
-        (2e-6, 1e-6, "bar [0.000002, 0.000004, 0.000006]"),
+        (1e5, 2e5, "line [100000, 200000, 300000]"),
+        (2e-6, 1e-6, "line [0.000002, 0.000004, 0.000006]"),
     ],
 )
 def test_large_and_small_values_are_written_without_an_exponent(before, after, bars):

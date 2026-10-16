@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import xarray as xr
 
+from bencher.change_stats import change_between, not_comparable
 from bencher.claims import evaluate_claim, outcome_to_dict
 from bencher.regression import (
     _finite_or_none,
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
     import param
 
     from bencher.bench_cfg import BenchRunCfg
+    from bencher.regression import RegressionResult
     from bencher.results.bench_result import BenchResult
 
 SCHEMA_VERSION = 1
@@ -320,6 +322,23 @@ def _percent_improved(reg: Mapping[str, object]) -> bool:
     return _beneficial(change_percent, reg.get("direction")) and abs(change_percent) >= threshold
 
 
+def _change(
+    reg: RegressionResult, base_ds: xr.Dataset, cand_ds: xr.Dataset, run_cfg: BenchRunCfg
+) -> dict:
+    """The metric's ``change`` record: mean difference, bootstrap CI and stat verdict.
+
+    The equivalence margin is the percent threshold the verdict uses: the
+    metric's own when its method is ``percentage`` (an override can set it),
+    else ``run_cfg.regression_percentage``.
+    """
+    margin = (_finite_value(reg.threshold) if reg.method == "percentage" else None) or float(
+        run_cfg.regression_percentage
+    )
+    if reg.variable not in base_ds or reg.variable not in cand_ds:
+        return not_comparable("only one side measures it", margin)
+    return change_between(base_ds[reg.variable], cand_ds[reg.variable], reg.direction, margin)
+
+
 def compare_results(
     baseline: BenchResult, candidate: BenchResult, *, run_cfg: BenchRunCfg | None = None
 ) -> dict:
@@ -343,7 +362,7 @@ def compare_results(
 
     Returns:
         A dict with ``schema_version``, ``baseline``/``candidate`` provenance,
-        per-metric ``metrics`` (with a ``verdict``), a ``summary`` count,
+        per-metric ``metrics`` (with a ``verdict`` and a ``change``), a ``summary`` count,
         ``claims`` and ``unpaired``. A metric whose candidate result variable
         declares a claim carries ``claim``: the claim text and its outcome on each
         of ``baseline`` and ``candidate`` (shaped as in :func:`result_to_dict`).
@@ -358,6 +377,14 @@ def compare_results(
 
         ``unpaired`` is ``{"candidate_only": [...], "baseline_only": [...]}``: the
         names of the scalar metrics that only one side declares.
+
+        ``change`` on each metric estimates the move from the data alone (see
+        :mod:`bencher.change_stats`): ``mean_diff`` (candidate - baseline), its
+        bootstrap 95% CI ``ci_low``/``ci_high`` (``None`` when there are too few
+        samples), ``ci_level``, ``method`` (``"paired_bootstrap"`` or
+        ``"bootstrap"``), the counts ``n``/``n_baseline``/``n_candidate``,
+        ``resamples``, ``equivalence_percent`` and ``stat_verdict``. It never
+        changes ``verdict``, which still comes from the regression threshold.
 
     Raises:
         ValueError: when the two results share no comparable scalar metric. The
@@ -426,6 +453,7 @@ def compare_results(
             "method": r.method,
             "regressed": bool(r.regressed),
             "verdict": verdict,
+            "change": _change(r, base_ds, cand_ds, run_cfg),
         }
         if (claim := claim_of.get(r.variable)) is not None:
             metric["claim"] = {

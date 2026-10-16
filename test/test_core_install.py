@@ -188,7 +188,12 @@ def test_run_compare_and_ab_work_without_the_plotting_stack(tmp_path, core_env):
     assert metric["verdict"] == "improved"
     assert metric["claim"]["baseline"]["holds"] is False
     assert metric["claim"]["candidate"]["holds"] is True
-    assert "1 improved" in (ab / "evidence.md").read_text(encoding="utf-8")
+    # The bootstrap CI is numpy only: it is there on a light install too.
+    assert metric["change"]["method"] == "paired_bootstrap"
+    assert metric["change"]["stat_verdict"] == "improved"
+    evidence = (ab / "evidence.md").read_text(encoding="utf-8")
+    assert "1 improved" in evidence
+    assert "95% CI [" in evidence
     assert (ab / "stop_distance.png").exists()
 
 

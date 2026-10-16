@@ -1,0 +1,311 @@
+"""The change estimate behind an A/B verdict, and how the evidence block shows it.
+
+Each compared metric gets a ``change`` record in ``comparison.json``: the mean
+difference (candidate - baseline), a bootstrap 95% CI and a ``stat_verdict``. The
+evidence Markdown draws a numeric sweep as two lines, a categorical sweep as a table,
+and three or more metrics on one radar chart.
+"""
+
+from __future__ import annotations
+
+import itertools
+import math
+import re
+
+import numpy as np
+import pytest
+
+import bencher as bn
+from bencher.change_stats import (
+    EQUIVALENT,
+    NO_SIGNIFICANT_CHANGE,
+    NOT_COMPARABLE,
+    TOO_FEW_SAMPLES,
+    paired_change,
+    unpaired_change,
+)
+from bencher.evidence import BeforeAfterBars, mermaid_chart
+
+# --- the statistics on known data ------------------------------------------------
+
+
+def test_a_constant_shift_gives_a_tight_ci_around_the_shift():
+    before = np.array([0.10, 0.22, 0.36, 0.54, 0.76])
+    change = paired_change(before, before - 0.09, direction="minimize", margin_percent=10.0)
+    assert change["method"] == "paired_bootstrap"
+    assert change["n"] == 5
+    assert change["ci_level"] == 0.95
+    assert change["mean_diff"] == pytest.approx(-0.09)
+    assert change["ci_low"] == pytest.approx(-0.09)
+    assert change["ci_high"] == pytest.approx(-0.09)
+    assert change["stat_verdict"] == "improved"
+
+
+def test_a_noisy_shift_has_a_ci_that_holds_the_true_shift():
+    rng = np.random.default_rng(1)
+    before = rng.uniform(1.0, 2.0, size=40)
+    after = before + 0.3 + rng.normal(0.0, 0.05, size=40)
+    change = paired_change(before, after, direction="minimize", margin_percent=10.0)
+    assert change["ci_low"] < 0.3 < change["ci_high"]
+    assert change["ci_high"] - change["ci_low"] < 0.1
+    assert change["stat_verdict"] == "regressed"
+
+
+def test_a_maximized_metric_that_rises_is_improved():
+    before = np.array([1.0, 2.0, 3.0])
+    change = paired_change(before, before + 1.0, direction="maximize", margin_percent=10.0)
+    assert change["stat_verdict"] == "improved"
+
+
+def test_a_metric_with_no_direction_says_which_way_it_moved():
+    before = np.array([1.0, 2.0, 3.0])
+    change = paired_change(before, before + 1.0, direction="none", margin_percent=10.0)
+    assert change["stat_verdict"] == "increased"
+
+
+def test_a_ci_that_holds_zero_is_no_significant_change():
+    before = np.array([1.0, 1.0, 1.0, 1.0])
+    after = np.array([1.3, 0.7, 1.4, 0.6])
+    change = paired_change(before, after, direction="minimize", margin_percent=10.0)
+    assert change["ci_low"] < 0 < change["ci_high"]
+    assert change["stat_verdict"] == NO_SIGNIFICANT_CHANGE
+
+
+def test_a_ci_inside_the_margin_is_equivalent():
+    before = np.array([1.0, 2.0, 3.0, 4.0])
+    after = before + np.array([0.01, -0.01, 0.02, -0.02])
+    change = paired_change(before, after, direction="minimize", margin_percent=10.0)
+    assert change["stat_verdict"] == f"{EQUIVALENT} ±10%"
+    assert change["equivalence_percent"] == 10.0
+
+
+def test_one_point_is_too_few_samples_and_has_no_ci():
+    change = paired_change(np.array([1.0]), np.array([0.5]), "minimize", 10.0)
+    assert change["stat_verdict"] == TOO_FEW_SAMPLES
+    assert change["ci_low"] is None
+    assert change["ci_high"] is None
+    assert change["n"] == 1
+
+
+def test_non_finite_points_are_dropped_before_the_count():
+    before = np.array([1.0, math.nan, 3.0])
+    after = np.array([0.5, 1.0, math.inf])
+    change = paired_change(before, after, "minimize", 10.0)
+    assert change["n"] == 1
+    assert change["stat_verdict"] == TOO_FEW_SAMPLES
+
+
+def test_repeats_without_a_sweep_bootstrap_the_difference_of_means():
+    change = unpaired_change(
+        np.array([1.0, 1.1, 0.9, 1.0]), np.array([0.5, 0.6, 0.4, 0.5]), "minimize", 10.0
+    )
+    assert change["method"] == "bootstrap"
+    assert change["n_baseline"] == 4
+    assert change["n_candidate"] == 4
+    assert change["mean_diff"] == pytest.approx(-0.5)
+    assert change["ci_low"] <= -0.5 <= change["ci_high"]
+    assert change["stat_verdict"] == "improved"
+
+
+def test_the_bootstrap_is_deterministic():
+    rng = np.random.default_rng(7)
+    before, after = rng.normal(1, 0.2, 30), rng.normal(1.1, 0.2, 30)
+    assert unpaired_change(before, after, "minimize", 10.0) == unpaired_change(
+        before, after, "minimize", 10.0
+    )
+    assert paired_change(before, after, "minimize", 10.0) == paired_change(
+        before, after, "minimize", 10.0
+    )
+
+
+# --- through compare_results -----------------------------------------------------
+
+_NOISE = itertools.cycle([0.02, -0.02, 0.01, -0.01])
+
+
+class Shift(bn.ParametrizedSweep):
+    speed = bn.FloatSweep(default=1.0, bounds=(0.5, 2.5), samples=5)
+    mode = bn.StringSweep(["eco", "normal", "sport"])
+    offset = bn.FloatSweep(default=0.0)
+    noisy = bn.BoolSweep(default=False)
+
+    stop_distance = bn.ResultFloat(units="m")
+    peak_decel = bn.ResultFloat(units="m/s^2", direction=bn.OptDir.minimize)
+    cpu_time = bn.ResultFloat(units="ms", direction=bn.OptDir.minimize)
+    zero = bn.ResultFloat(units="count")
+
+    def benchmark(self):
+        noise = next(_NOISE) if self.noisy else 0.0
+        scale = {"eco": 1.0, "normal": 1.5, "sport": 2.0}[self.mode]
+        self.stop_distance = 0.3 * self.speed * scale + self.offset + noise
+        self.peak_decel = 2.0 * self.speed + self.offset
+        self.cpu_time = 5.0 + self.speed
+        self.zero = 0.0
+
+
+def _shift(offset, input_vars=("speed",), result_vars=("stop_distance",), repeats=1, noisy=False):
+    bench = bn.Bench(f"shift_{offset}_{len(input_vars)}_{len(result_vars)}", Shift())
+    res = bench.collect(
+        input_vars=list(input_vars),
+        result_vars=list(result_vars),
+        const_vars=[("offset", offset), ("noisy", noisy)],
+        run_cfg=bn.BenchRunCfg(repeats=repeats),
+    )
+    bench.close()
+    return res
+
+
+EXISTING_METRIC_KEYS = {
+    "variable",
+    "baseline_value",
+    "current_value",
+    "change_percent",
+    "direction",
+    "method",
+    "regressed",
+    "verdict",
+}
+
+
+def test_compare_adds_a_change_record_and_keeps_every_existing_key():
+    cmp = bn.compare_results(_shift(0.0), _shift(-0.09))
+    assert cmp["schema_version"] == 1
+    (metric,) = cmp["metrics"]
+    assert set(metric) == EXISTING_METRIC_KEYS | {"change"}
+    assert metric["verdict"] == "improved"
+    assert metric["regressed"] is False
+    assert metric["method"] == "percentage"
+    assert metric["baseline_value"] == pytest.approx(0.45)
+    assert metric["current_value"] == pytest.approx(0.36)
+    change = metric["change"]
+    assert change["method"] == "paired_bootstrap"
+    assert change["n"] == 5
+    assert change["mean_diff"] == pytest.approx(-0.09)
+    assert change["ci_low"] == pytest.approx(-0.09)
+    assert change["ci_high"] == pytest.approx(-0.09)
+    assert change["stat_verdict"] == "improved"
+    assert set(cmp["summary"]) == {"improved", "regressed", "unchanged"}
+
+
+def test_the_margin_is_the_regression_percentage():
+    cmp = bn.compare_results(
+        _shift(0.0), _shift(0.0), run_cfg=bn.BenchRunCfg(regression_percentage=5.0)
+    )
+    change = cmp["metrics"][0]["change"]
+    assert change["equivalence_percent"] == 5.0
+    assert change["stat_verdict"] == f"{EQUIVALENT} ±5%"
+
+
+def test_repeats_are_averaged_per_point_before_pairing():
+    cmp = bn.compare_results(_shift(0.0, repeats=4, noisy=True), _shift(0.2, repeats=4, noisy=True))
+    change = cmp["metrics"][0]["change"]
+    assert change["method"] == "paired_bootstrap"
+    assert change["n"] == 5
+    assert change["mean_diff"] == pytest.approx(0.2, abs=0.02)
+
+
+def test_no_sweep_with_one_repeat_is_too_few_samples():
+    cmp = bn.compare_results(_shift(0.0, input_vars=()), _shift(-0.09, input_vars=()))
+    change = cmp["metrics"][0]["change"]
+    assert change["method"] == "bootstrap"
+    assert change["stat_verdict"] == TOO_FEW_SAMPLES
+    assert change["ci_low"] is None
+
+
+def test_sides_that_swept_different_inputs_are_not_comparable():
+    cmp = bn.compare_results(_shift(0.0, input_vars=("speed",)), _shift(0.0, input_vars=("mode",)))
+    change = cmp["metrics"][0]["change"]
+    assert change["stat_verdict"] == NOT_COMPARABLE
+    assert change["ci_low"] is None
+    assert change["reason"]
+
+
+# --- the evidence Markdown -------------------------------------------------------
+
+
+def _charts(markdown: str) -> list[str]:
+    return re.findall(r"```mermaid\n(.*?)```", markdown, re.DOTALL)
+
+
+def test_a_numeric_sweep_draws_two_lines_with_a_fixed_palette():
+    (chart,) = _charts(bn.evidence_markdown(_shift(0.0), _shift(-0.09)))
+    assert chart.startswith("---\nconfig:\n")
+    assert 'plotColorPalette: "#9e9e9e, #2f81f7"' in chart
+    assert 'title "stop_distance (m): grey = before, blue = after"' in chart
+    assert len(re.findall(r"^    line \[", chart, re.MULTILINE)) == 2
+    assert "bar [" not in chart
+
+
+def test_the_caption_gives_the_change_and_its_ci():
+    md = bn.evidence_markdown(_shift(0.0), _shift(-0.09))
+    assert "**stop_distance** improved: mean 0.45 → 0.36 m (-20.0%)" in md
+    assert "change -0.09 m, 95% CI [-0.09, -0.09] (paired bootstrap, n=5) → improved" in md
+
+
+def test_a_categorical_sweep_is_a_table_not_a_chart():
+    md = bn.evidence_markdown(
+        _shift(0.0, input_vars=("mode",), repeats=3, noisy=True),
+        _shift(-0.3, input_vars=("mode",), repeats=3, noisy=True),
+    )
+    assert "```mermaid" not in md
+    assert "| mode | before | after | change | 95% CI |" in md
+    rows = re.findall(r"^\| (eco|normal|sport) \|.*\|$", md, re.MULTILINE)
+    assert rows == ["eco", "normal", "sport"]
+    eco = re.search(r"^\| eco \|.*$", md, re.MULTILINE)[0]
+    assert re.search(r"\[-0\.\d+, -0\.\d+\]", eco)
+
+
+def test_a_categorical_point_with_one_sample_has_no_ci_in_the_table():
+    md = bn.evidence_markdown(_shift(0.0, input_vars=("mode",)), _shift(-0.3, input_vars=("mode",)))
+    eco = re.search(r"^\| eco \|.*$", md, re.MULTILINE)[0]
+    assert "too few samples" in eco
+
+
+def test_negative_values_are_never_drawn_as_bars():
+    md = bn.evidence_markdown(_shift(-2.0, input_vars=()), _shift(-2.5, input_vars=()))
+    for chart in _charts(md):
+        for series in re.findall(r"bar \[(.*)\]", chart):
+            assert all(float(v) >= 0 for v in series.split(", "))
+
+
+def test_a_bar_chart_is_unchanged_for_positive_values():
+    chart = mermaid_chart("m", None, BeforeAfterBars(0.3, 0.2), None)
+    assert "bar [0.3, 0.2]" in chart
+
+
+def test_the_evidence_is_byte_identical_across_runs():
+    base, cand = _shift(0.0, repeats=3, noisy=True), _shift(0.1, repeats=3, noisy=True)
+    first = bn.evidence_markdown(base, cand)
+    assert "95% CI" in first
+    assert first == bn.evidence_markdown(base, cand)
+
+
+_THREE = ("stop_distance", "peak_decel", "cpu_time")
+
+
+def test_three_metrics_get_a_radar_above_the_charts():
+    md = bn.evidence_markdown(_shift(0.0, result_vars=_THREE), _shift(-0.2, result_vars=_THREE))
+    charts = _charts(md)
+    assert "radar-beta" in charts[0]
+    assert md.index("radar-beta") < md.index("xychart-beta")
+    radar = charts[0]
+    assert 'axis m0["stop_distance"], m1["peak_decel"], m2["cpu_time"]' in radar
+    assert 'curve before["before"]{1, 1, 1}' in radar
+    assert re.search(r"^  min 0$", radar, re.MULTILINE)
+    maximum = float(re.search(r"^  max (\S+)$", radar, re.MULTILINE)[1])
+    assert maximum >= 1.0
+
+
+def test_two_metrics_get_no_radar():
+    two = _THREE[:2]
+    md = bn.evidence_markdown(_shift(0.0, result_vars=two), _shift(-0.2, result_vars=two))
+    assert "radar-beta" not in md
+
+
+def test_a_metric_with_a_zero_baseline_is_left_off_the_radar_and_named():
+    four = (*_THREE, "zero")
+    md = bn.evidence_markdown(_shift(0.0, result_vars=four), _shift(-0.2, result_vars=four))
+    radar = _charts(md)[0]
+    assert "radar-beta" in radar
+    assert '"zero"' not in radar
+    assert "Not on the radar: `zero` (baseline mean is 0)" in md
