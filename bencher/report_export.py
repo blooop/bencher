@@ -18,8 +18,8 @@ Two artifacts:
 
 The contracts carry ``schema_version`` so downstream consumers can pin to a
 shape. It counts breaking changes only: an added key (such as ``claim`` on a
-metric whose result variable declares one) leaves it alone, so a reader must
-tolerate keys it does not know.
+metric whose result variable declares one, or ``claims`` and ``unpaired`` on a
+comparison) leaves it alone, so a reader must tolerate keys it does not know.
 """
 
 from __future__ import annotations
@@ -337,26 +337,48 @@ def compare_results(
             omitted, a percentage comparison (``regression_method='percentage'``)
             is used — the natural choice for a two-point A/B.
 
+    A scalar metric that only one side has is listed in ``unpaired``: it has
+    nothing on the other side to compare against. A claim on a metric the
+    baseline does not have is still judged in ``claims``.
+
     Returns:
         A dict with ``schema_version``, ``baseline``/``candidate`` provenance,
-        per-metric ``metrics`` (with a ``verdict``), and a ``summary`` count. A
-        metric whose candidate result variable declares a claim carries
-        ``claim``: the claim text and its outcome on each of ``baseline`` and
-        ``candidate`` (shaped as in :func:`result_to_dict`).
+        per-metric ``metrics`` (with a ``verdict``), a ``summary`` count,
+        ``claims`` and ``unpaired``. A metric whose candidate result variable
+        declares a claim carries ``claim``: the claim text and its outcome on each
+        of ``baseline`` and ``candidate`` (shaped as in :func:`result_to_dict`).
+
+        ``claims`` has one entry for each claim the candidate's scalar result
+        variables declare, in declaration order, whether or not the baseline has
+        that metric: ``{"variable", "claim", "candidate", "baseline"}``. Each side
+        is an outcome shaped as in :func:`result_to_dict`; ``baseline`` is
+        ``None`` when the baseline does not measure the metric. For a metric in
+        ``metrics`` that the baseline measures, the entry repeats that metric's
+        ``claim``.
+
+        ``unpaired`` is ``{"candidate_only": [...], "baseline_only": [...]}``: the
+        names of the scalar metrics that only one side declares.
 
     Raises:
-        ValueError: when the two results share no comparable scalar metric.
+        ValueError: when the two results share no comparable scalar metric. The
+            compare then fails (``bencher compare`` and ``bencher ab`` exit 1) and no
+            claim is judged; the message names the metrics on each side.
     """
-    base_vars = {
+    base_names = [
         rv.name for rv in baseline.bench_cfg.result_vars if isinstance(rv, SCALAR_RESULT_TYPES)
-    }
+    ]
     cand_scalar = [
         rv for rv in candidate.bench_cfg.result_vars if isinstance(rv, SCALAR_RESULT_TYPES)
     ]
-    shared = [rv for rv in cand_scalar if rv.name in base_vars]
+    cand_names = {rv.name for rv in cand_scalar}
+    shared = [rv for rv in cand_scalar if rv.name in base_names]
+    candidate_only = [rv.name for rv in cand_scalar if rv.name not in base_names]
+    baseline_only = [name for name in base_names if name not in cand_names]
     if not shared:
         raise ValueError(
             "compare_results: baseline and candidate share no comparable scalar result variables"
+            f" (candidate only: {', '.join(candidate_only) or 'none'};"
+            f" baseline only: {', '.join(baseline_only) or 'none'})"
         )
 
     if run_cfg is None:
@@ -372,7 +394,24 @@ def compare_results(
     # detect_regressions only inspects bench_cfg.result_vars; reuse candidate's.
     report = detect_regressions(combined, candidate.bench_cfg, run_cfg)
 
-    claims = {rv.name: rv.claim for rv in shared if getattr(rv, "claim", None) is not None}
+    # The candidate declares what the change is meant to make true. Judging the
+    # baseline by the same claim, where it has the metric, shows whether the
+    # change made it true.
+    claims = [
+        {
+            "variable": rv.name,
+            "claim": str(rv.claim),
+            "candidate": outcome_to_dict(evaluate_claim(rv.claim, cand_ds[rv.name])),
+            "baseline": (
+                outcome_to_dict(evaluate_claim(rv.claim, base_ds[rv.name]))
+                if rv.name in base_names
+                else None
+            ),
+        }
+        for rv in cand_scalar
+        if getattr(rv, "claim", None) is not None
+    ]
+    claim_of = {c["variable"]: c for c in claims if c["baseline"] is not None}
     metrics = []
     counts = {"improved": 0, "regressed": 0, "unchanged": 0}
     for r in report.results:
@@ -388,13 +427,11 @@ def compare_results(
             "regressed": bool(r.regressed),
             "verdict": verdict,
         }
-        if (claim := claims.get(r.variable)) is not None:
-            # The candidate declares what the change is meant to make true; judging
-            # the baseline by the same claim shows whether the change made it true.
+        if (claim := claim_of.get(r.variable)) is not None:
             metric["claim"] = {
-                "claim": str(claim),
-                "baseline": outcome_to_dict(evaluate_claim(claim, base_ds[r.variable])),
-                "candidate": outcome_to_dict(evaluate_claim(claim, cand_ds[r.variable])),
+                "claim": claim["claim"],
+                "baseline": claim["baseline"],
+                "candidate": claim["candidate"],
             }
         metrics.append(metric)
 
@@ -410,6 +447,8 @@ def compare_results(
         },
         "metrics": metrics,
         "summary": counts,
+        "claims": claims,
+        "unpaired": {"candidate_only": candidate_only, "baseline_only": baseline_only},
     }
 
 

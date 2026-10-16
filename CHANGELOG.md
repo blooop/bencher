@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **A claim on a metric the base does not have is judged.** `compare_results` kept only the
+  metrics both sides measured, so a metric that a change adds, its chart and its claim
+  vanished from `comparison.json` and `evidence.md` without a warning. The comparison now
+  has a top-level `claims` list with one entry per claim the candidate declares, judged on
+  the candidate, with the baseline's outcome or `null` where the baseline does not measure
+  that metric. `evidence.md` lists the claims above the charts. A metric that only one side
+  declares is named in `unpaired`, in a "Not compared" list in `evidence.md` and in a
+  warning from `bencher compare` and `bencher ab`. `metrics` and the exit status do not
+  change: a failed claim is reported, not enforced. When the two sides share no metric the
+  compare still fails (exit 1) and no claim is judged; the error now names the metrics on
+  each side. `schema_version` stays 1, because the new keys are additive.
+
 ## [1.140.0] - 2026-10-15
 
 ### Added

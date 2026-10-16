@@ -7,11 +7,12 @@ draws one chart per metric. :func:`write_evidence` writes any of the comparison
 JSON, the Markdown and the PNGs in one call; ``bencher compare`` and ``bencher ab``
 are its command-line front ends.
 
-Each metric gets a chart and a caption. The chart is a Mermaid ``xychart-beta``
-when the metric fits one honestly -- no swept input (one bar per side) or one swept
-input with the same values on both sides -- and an image link otherwise: two or more
-swept inputs, inputs that differ between the sides, or a repeat-to-repeat spread as
-large as the change, which only the PNG's ±std band can show.
+Each compared metric (both sides measured it) gets a chart and a caption. The
+chart is a Mermaid ``xychart-beta`` when the metric fits one honestly -- no swept
+input (one bar per side) or one swept input with the same values on both sides --
+and an image link otherwise: two or more swept inputs, inputs that differ between
+the sides, or a repeat-to-repeat spread as large as the change, which only the
+PNG's ±std band can show.
 
 ``xychart-beta`` has no legend, so the title names the series: bars are the
 baseline, the line is the candidate.
@@ -388,8 +389,47 @@ def _summary(comparison: dict) -> str:
     )
 
 
+def unpaired_warnings(comparison: dict) -> list[str]:
+    """One message per metric that only one side declares."""
+    unpaired = comparison.get("unpaired", {})
+    return [
+        *(
+            f"`{name}` is only in the candidate, so it has no baseline to compare against"
+            for name in unpaired.get("candidate_only", [])
+        ),
+        *(
+            f"`{name}` is only in the baseline, so the candidate does not measure it"
+            for name in unpaired.get("baseline_only", [])
+        ),
+    ]
+
+
+def _claims_block(comparison: dict) -> str | None:
+    """Every claim the candidate declares, judged whether or not the baseline has it."""
+    claims = comparison.get("claims", [])
+    if not claims:
+        return None
+    lines = ["**Claims**", ""]
+    for c in claims:
+        base = c["baseline"]
+        base_text = "no baseline" if base is None else f"baseline {_claim_side(base)}"
+        lines.append(
+            f"- `{c['variable']}` `{c['claim']}`: candidate {_claim_side(c['candidate'])}"
+            f" · {base_text}"
+        )
+    return "\n".join(lines)
+
+
+def _unpaired_block(comparison: dict) -> str | None:
+    warnings_ = unpaired_warnings(comparison)
+    if not warnings_:
+        return None
+    return "\n".join(["**Not compared**", "", *(f"- {w}" for w in warnings_)])
+
+
 def _markdown(metrics: list[_Metric], comparison: dict, png_url_base: str | None) -> str:
     blocks = [_summary(comparison)]
+    blocks += [b for b in (_claims_block(comparison), _unpaired_block(comparison)) if b]
     for m in metrics:
         name = m.entry["variable"]
         match m.plan:
@@ -415,6 +455,10 @@ def evidence_markdown(
     run_cfg: BenchRunCfg | None = None,
 ) -> str:
     """Markdown for a PR's ``## Evidence`` section: a chart and caption per metric.
+
+    Above the charts, a **Claims** list judges every claim the candidate declares,
+    with "no baseline" for a metric the baseline does not measure, and a **Not
+    compared** list names each metric only one side declares.
 
     Args:
         baseline: The result before the change.

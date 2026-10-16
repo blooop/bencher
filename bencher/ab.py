@@ -24,8 +24,11 @@ The base revision is ``--base`` when given, else the merge-base of ``HEAD`` with
 
 ``--out`` (default ``./bencher-ab``) receives ``base.pkl``, ``candidate.pkl``,
 ``comparison.json``, ``evidence.md``, one PNG per metric, and each side's log.
-Exit status is 0 when both sides ran and were compared, whatever the verdict; 1
-when a side failed (its log is kept and named); 2 for a usage or git problem.
+A metric that only one side declares is named in a warning on stderr and in
+``evidence.md``; a claim on it is still judged.
+Exit status is 0 when both sides ran and were compared, whatever the verdict and
+whatever the claims say; 1 when a side failed (its log is kept and named); 2 for
+a usage or git problem.
 """
 
 from __future__ import annotations
@@ -294,7 +297,7 @@ def main(argv: list[str]) -> int:
         print(f"bencher ab: {exc}", file=sys.stderr)  # noqa: T201 - CLI output
         return 2
 
-    from bencher.evidence import write_evidence
+    from bencher.evidence import unpaired_warnings, write_evidence
     from bencher.render import load_result
 
     try:
@@ -309,6 +312,8 @@ def main(argv: list[str]) -> int:
     except ValueError as exc:
         print(f"bencher ab: compare failed: {exc}", file=sys.stderr)  # noqa: T201 - CLI output
         return 1
+    for warning in unpaired_warnings(files.comparison):
+        print(f"bencher ab: warning: {warning}", file=sys.stderr)  # noqa: T201 - CLI output
     for path in (
         base_pkl,
         candidate_pkl,

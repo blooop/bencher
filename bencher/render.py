@@ -338,7 +338,7 @@ def _load_or_fail(path: str, label: str) -> tuple[BenchResult | None, int]:
 
 
 def _run_compare(argv: list[str]) -> int:
-    from bencher.evidence import write_evidence
+    from bencher.evidence import unpaired_warnings, write_evidence
 
     parser = _compare_parser()
     args = parser.parse_args(argv)
@@ -368,6 +368,8 @@ def _run_compare(argv: list[str]) -> int:
     except Exception:
         logger.exception("Failed to compare %s vs %s", args.baseline, args.candidate)
         return 1
+    for warning in unpaired_warnings(files.comparison):
+        print(f"compare: warning: {warning}", file=sys.stderr)  # noqa: T201 - CLI warning output
     for path in (files.json_path, files.markdown_path, *files.pngs.values()):
         if path is not None:
             print(path)  # noqa: T201 - CLI prints the output paths

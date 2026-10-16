@@ -30,11 +30,14 @@ class Braking(bn.ParametrizedSweep):
         self.plain = self.speed
 
 
-def _collect(gain: float, repeats: int = 2):
+_ALL_VARS = ("stop_distance", "margin", "jerk", "plain")
+
+
+def _collect(gain: float, repeats: int = 2, result_vars: tuple[str, ...] = _ALL_VARS):
     bench = bn.Bench(f"braking_{gain}", Braking())
     res = bench.collect(
         input_vars=["speed"],
-        result_vars=["stop_distance", "margin", "jerk", "plain"],
+        result_vars=list(result_vars),
         const_vars=[("gain", gain)],
         run_cfg=bn.BenchRunCfg(repeats=repeats),
     )
@@ -116,6 +119,96 @@ def test_compare_reports_the_claim_on_both_sides():
     assert claim["candidate"]["holds"] is True
     assert claim["candidate"]["worst_inputs"] == {"speed": 3.0, "repeat": 1}
     json.dumps(cmp, allow_nan=False)
+
+
+def test_compare_judges_a_claim_the_baseline_does_not_measure():
+    # The candidate adds `margin` (claim >= 0.5; 1/3 at speed=3, so it fails); the base has
+    # `plain`, which the candidate dropped.
+    base = _collect(gain=0.3, result_vars=("stop_distance", "plain"))
+    cand = _collect(gain=0.2, result_vars=("stop_distance", "margin"))
+    cmp = bn.compare_results(base, cand)
+    claims = {c["variable"]: c for c in cmp["claims"]}
+    assert list(claims) == ["stop_distance", "margin"]
+    margin = claims["margin"]
+    assert margin["claim"] == ">= 0.5"
+    assert margin["baseline"] is None
+    assert margin["candidate"]["holds"] is False
+    assert margin["candidate"]["worst_value"] == pytest.approx(1 / 3)
+    assert margin["candidate"]["worst_inputs"] == {"speed": 3.0, "repeat": 1}
+    paired = claims["stop_distance"]
+    assert paired["baseline"]["holds"] is False
+    assert paired["candidate"]["holds"] is True
+    # The paired metric's own claim says the same as the claims list.
+    stop = _metric(cmp, "stop_distance")["claim"]
+    assert stop == {k: paired[k] for k in ("claim", "baseline", "candidate")}
+    assert cmp["unpaired"] == {"candidate_only": ["margin"], "baseline_only": ["plain"]}
+    json.dumps(cmp, allow_nan=False)
+
+
+def test_an_absolute_compare_keeps_a_claim_with_no_baseline_out_of_metrics():
+    # The absolute method needs no baseline, so `margin` gets a metrics entry. A
+    # metrics claim always had an outcome on both sides; `claims` holds the rest.
+    from bencher.evidence import caption
+
+    base = _collect(gain=0.3, result_vars=("stop_distance", "plain"))
+    cand = _collect(gain=0.2, result_vars=("stop_distance", "margin"))
+    cfg = bn.BenchRunCfg(regression_method="absolute", regression_absolute=10.0)
+    cmp = bn.compare_results(base, cand, run_cfg=cfg)
+    claims = {c["variable"]: c for c in cmp["claims"]}
+    assert cmp["unpaired"]["candidate_only"] == ["margin"]
+    assert claims["margin"]["baseline"] is None
+    assert claims["margin"]["candidate"]["holds"] is not None
+    margin = _metric(cmp, "margin")
+    assert "claim" not in margin
+    caption(margin, None, cmp, (0, 4))
+    json.dumps(cmp, allow_nan=False)
+
+
+def test_a_claim_on_a_baseline_only_metric_is_not_judged():
+    base = _collect(gain=0.3, result_vars=("stop_distance", "margin"))
+    cand = _collect(gain=0.2, result_vars=("stop_distance",))
+    cmp = bn.compare_results(base, cand)
+    assert [c["variable"] for c in cmp["claims"]] == ["stop_distance"]
+    assert cmp["unpaired"]["baseline_only"] == ["margin"]
+
+
+def test_no_shared_metric_names_the_metrics_on_each_side():
+    base = _collect(gain=0.3, result_vars=("plain",))
+    cand = _collect(gain=0.2, result_vars=("margin",))
+    with pytest.raises(
+        ValueError,
+        match=r"share no comparable scalar result variables "
+        r"\(candidate only: margin; baseline only: plain\)",
+    ):
+        bn.compare_results(base, cand)
+
+
+def test_unpaired_metrics_do_not_change_the_metrics_list():
+    base = _collect(gain=0.3, result_vars=("stop_distance", "plain"))
+    cand = _collect(gain=0.2, result_vars=("stop_distance", "margin"))
+    cmp = bn.compare_results(base, cand)
+    assert [m["variable"] for m in cmp["metrics"]] == ["stop_distance"]
+    assert set(cmp["metrics"][0]) == {
+        "variable",
+        "baseline_value",
+        "current_value",
+        "change_percent",
+        "direction",
+        "method",
+        "regressed",
+        "verdict",
+        "claim",
+    }
+    assert cmp["metrics"][0]["verdict"] == "improved"
+    assert cmp["summary"] == {"improved": 1, "regressed": 0, "unchanged": 0}
+    # The added keys are additive: the contract version stays 1.
+    assert cmp["schema_version"] == 1
+
+
+def test_a_fully_paired_comparison_reports_nothing_unpaired():
+    cmp = bn.compare_results(_collect(gain=0.3), _collect(gain=0.2))
+    assert cmp["unpaired"] == {"candidate_only": [], "baseline_only": []}
+    assert [c["variable"] for c in cmp["claims"]] == ["stop_distance", "margin", "jerk"]
 
 
 @pytest.mark.parametrize(("claim", "infinite"), [("> 0", math.inf), ("< 0.7", -math.inf)])

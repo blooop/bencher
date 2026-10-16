@@ -145,6 +145,39 @@ def test_ab_explicit_base_and_image_url(repo):
     assert _metric(repo / "bencher-ab")["verdict"] == "unchanged"
 
 
+def test_ab_judges_a_claim_on_a_metric_the_change_adds(repo):
+    # The change adds `peak_decel` with a claim it breaks (0.6 * speed, 1.8 at speed=3).
+    bench = (
+        BENCH.replace(
+            'claim="< 0.7")\n',
+            'claim="< 0.7")\n    peak_decel = bn.ResultFloat(units="m/s^2", claim="< 1.5")\n',
+        )
+        .replace(
+            "GAIN * self.speed\n",
+            "GAIN * self.speed\n        self.peak_decel = 0.6 * self.speed\n",
+        )
+        .replace('["stop_distance"]', '["stop_distance", "peak_decel"]')
+    )
+    assert bench.count("peak_decel") == 3
+    (repo / "bench.py").write_text(bench, encoding="utf-8")
+
+    proc = _ab(repo, "--base", "main")
+
+    # A failed claim leaves the exit status alone, whether or not the base has the metric.
+    assert proc.returncode == 0, proc.stderr
+    assert "warning: `peak_decel` is only in the candidate" in proc.stderr
+    out = repo / "bencher-ab"
+    cmp = json.loads((out / "comparison.json").read_text(encoding="utf-8"))
+    assert [m["variable"] for m in cmp["metrics"]] == ["stop_distance"]
+    peak = next(c for c in cmp["claims"] if c["variable"] == "peak_decel")
+    assert peak["baseline"] is None
+    assert peak["candidate"]["holds"] is False
+    assert peak["candidate"]["worst_inputs"]["speed"] == pytest.approx(3.0)
+    md = (out / "evidence.md").read_text(encoding="utf-8")
+    assert "- `peak_decel` `< 1.5`: candidate fails (worst 1.8 at speed=3" in md
+    assert "no baseline" in md
+
+
 def test_ab_on_a_clean_tree_names_the_head_even_when_its_output_is_not_ignored(repo):
     (repo / ".gitignore").write_text("cachedir/\n__pycache__/\n", encoding="utf-8")
     _git(repo, "commit", "-q", "-am", "track the evidence directory")

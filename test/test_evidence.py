@@ -353,3 +353,86 @@ def test_markdown_alone_with_only_charted_metrics_writes_no_png(tmp_path):
     assert "```mermaid" in (tmp_path / "e.md").read_text(encoding="utf-8")
     assert files.pngs == {}
     assert list(tmp_path.rglob("*.png")) == []
+
+
+class Decel(bn.ParametrizedSweep):
+    speed = bn.FloatSweep(default=1.0, bounds=(1.0, 3.0), samples=3)
+    stop_distance = bn.ResultFloat(units="m", claim="< 0.7")
+    peak_decel = bn.ResultFloat(units="m/s^2", claim="< 3.0")
+    reaction = bn.ResultFloat(units="s")
+
+    def benchmark(self):
+        self.stop_distance = 0.2 * self.speed
+        self.peak_decel = 1.5 * self.speed  # 4.5 at speed=3: the claim fails
+        self.reaction = 0.1
+
+
+def _collect_decel(result_vars):
+    bench = bn.Bench("decel", Decel())
+    res = bench.collect(input_vars=["speed"], result_vars=list(result_vars))
+    bench.close()
+    return res
+
+
+@pytest.fixture(name="unpaired")
+def unpaired_pair(tmp_path):
+    """The candidate adds `peak_decel`; the base has `reaction`, which the candidate dropped."""
+    a = save_result(_collect_decel(["stop_distance", "reaction"]), tmp_path / "a.pkl")
+    b = save_result(_collect_decel(["stop_distance", "peak_decel"]), tmp_path / "b.pkl")
+    return a, b
+
+
+def test_the_claims_block_judges_a_metric_the_baseline_does_not_have():
+    md = bn.evidence_markdown(
+        _collect_decel(["stop_distance", "reaction"]),
+        _collect_decel(["stop_distance", "peak_decel"]),
+    )
+    block = md.split("```mermaid")[0]
+    assert "**Claims**" in block
+    assert (
+        "- `peak_decel` `< 3`: candidate fails (worst 4.5 at speed=3, repeat=1) · no baseline"
+        in block
+    )
+    assert (
+        "- `stop_distance` `< 0.7`: candidate holds (worst 0.6 at speed=3, repeat=1)"
+        " · baseline holds (worst 0.6 at speed=3, repeat=1)" in block
+    )
+    assert "**Not compared**" in block
+    assert "`peak_decel` is only in the candidate" in block
+    assert "`reaction` is only in the baseline" in block
+
+
+def test_a_comparison_with_every_metric_paired_lists_none_as_unpaired():
+    md = bn.evidence_markdown(_collect(0.3), _collect(0.2))
+    assert "is only in the" not in md
+    assert "**Claims**" in md
+
+
+def test_a_paired_claim_line_shows_each_side_its_own_outcome():
+    md = bn.evidence_markdown(_collect(0.3), _collect(0.2))
+    assert (
+        "- `stop_distance` `< 0.7`: candidate holds (worst 0.6 at speed=3, repeat=1)"
+        " · baseline fails (worst 0.9 at speed=3, repeat=1)" in md
+    )
+
+
+def test_a_comparison_without_claims_has_no_claims_block(monkeypatch):
+    base, cand = _collect(0.3), _collect(0.2)
+    for res in (base, cand):
+        monkeypatch.setattr(res.bench_cfg.result_vars[0], "claim", None)
+    assert "**Claims**" not in bn.evidence_markdown(base, cand)
+    assert bn.compare_results(base, cand)["claims"] == []
+
+
+def test_compare_warns_about_each_unpaired_metric_and_exits_as_before(unpaired, tmp_path, capsys):
+    a, b = unpaired
+    out = tmp_path / "cmp.json"
+    # A failed claim does not change the exit status, on a paired metric or not.
+    assert main(["compare", str(a), str(b), "--json", str(out)]) == 0
+    err = capsys.readouterr().err
+    assert "warning: `peak_decel` is only in the candidate" in err
+    assert "warning: `reaction` is only in the baseline" in err
+    claims = json.loads(out.read_text(encoding="utf-8"))["claims"]
+    peak = next(c for c in claims if c["variable"] == "peak_decel")
+    assert peak["candidate"]["holds"] is False
+    assert peak["baseline"] is None

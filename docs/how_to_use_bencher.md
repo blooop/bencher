@@ -690,6 +690,12 @@ comparison by default), so each metric's `verdict` is one of `improved` / `regre
 `unchanged` using identical direction/threshold semantics. Pass `run_cfg=` to choose a
 different `regression_method`.
 
+A metric that only one side declares has nothing to compare against. It is named in
+`unpaired` (`{"candidate_only": [...], "baseline_only": [...]}`), and `bencher compare` and
+`bencher ab` print a warning on stderr for each one.
+The top-level `claims` list judges every claim the candidate declares, also on a metric
+that the change adds (see [Declaring a claim](#declaring-a-claim)).
+
 The same artifacts are available from the CLI on a saved result (see the collect/render split):
 
 ```bash
@@ -706,7 +712,10 @@ python -m bencher.render compare baseline.pkl candidate.pkl --json comparison.js
 paste as a PR's `## Evidence` section: per metric, a Mermaid `xychart-beta` chart with the
 baseline as bars and the candidate as a line on the same axes, then a caption with the
 verdict, the mean before → after with the change in percent, the claim outcome on each side
-(see below) and each side's revision and sample count. `--png DIR` writes one PNG per metric
+(see below) and each side's revision and sample count. Above the charts, a **Claims** list
+gives each claim the candidate declares with its outcome on the candidate and on the
+baseline, or "no baseline" for a metric the baseline does not measure, and a **Not
+compared** list names each metric that only one side declares. `--png DIR` writes one PNG per metric
 with the claim threshold drawn in and a ±1 std band. The PNG plots against the first swept
 input; the mean and std pool the repeats and every other swept input, so with two or more
 swept inputs the band also holds the spread across the other inputs. Any of `--json`,
@@ -762,9 +771,11 @@ bencher ab --base origin/main --out evidence/ --png-url-base <url> -- pixi run p
 - `--out` (default `./bencher-ab/`) receives `base.pkl`, `candidate.pkl`,
   `comparison.json`, `evidence.md`, one PNG per metric, and `base.log`/`candidate.log`
   with each side's output. The paths are printed on stdout.
-- The exit status is 0 when both sides ran, whatever the verdict; 1 when a side failed or
-  saved no result (stderr names the side and the tail of its log, which is kept); 2 for a
-  usage or git problem.
+- The exit status is 0 when both sides ran, whatever the verdict and whatever the claims
+  say (a failed claim, on a metric the base has or not, is reported, not enforced); 1 when
+  a side failed or saved no result (stderr names the side and the tail of its log, which is
+  kept), or when the two sides share no metric (no claim is judged then, and stderr names
+  the metrics on each side); 2 for a usage or git problem.
 
 Each side also runs with `BENCHER_NO_SHOW=1`, which makes `bn.run` and `BenchRunner` show
 nothing: the default `show=True` starts a live report server, and that server keeps a
@@ -795,7 +806,18 @@ furthest past an edge for a range). A mean inside the bound with one point outsi
 `result_to_dict` adds a `claim` entry to that metric — `holds` (`null` when nothing was
 recorded), `worst_value`, `worst_inputs` (sweep inputs and `repeat`) and `samples`.
 `compare_results` judges the candidate's claim on both sides, so "the baseline fails the
-claim and the candidate holds it" reads straight off the comparison. The claim is not part
+claim and the candidate holds it" reads straight off the comparison. Its top-level `claims`
+list has one entry per claim the candidate declares, in declaration order:
+
+```json
+{"variable": "peak_decel", "claim": "< 3",
+ "candidate": {"holds": false, "worst_value": 5.336, "worst_inputs": {"speed": 2.5, "repeat": 4}, "samples": 36},
+ "baseline": null}
+```
+
+`baseline` is `null` when the baseline does not measure the metric, which is the usual case
+for a metric that the change adds; otherwise it is the baseline's outcome, and the entry
+repeats the `claim` on that metric's `metrics` entry. The claim is not part
 of the variable's cache identity: changing it keeps cached samples and over-time history.
 
 ### A light install for the evidence tools
