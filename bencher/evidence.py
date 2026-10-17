@@ -480,7 +480,7 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
         f"  axis {labels}",
         f'  curve before["before"]{{{", ".join([one] * len(axes))}}}',
         f'  curve after["after"]{{{", ".join(after)}}}',
-        f"  max {_num(top)}",
+        f"  max {_chart_nums([top])[0]}",
         "  min 0",
         "  ticks 1",
         "  graticule polygon",

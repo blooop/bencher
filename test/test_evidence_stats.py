@@ -529,6 +529,19 @@ def test_the_radar_max_leaves_room_above_the_largest_ratio():
     assert re.search(r"^  max 1\.7$", md, re.MULTILINE)
 
 
+def test_a_ratio_above_ten_thousand_writes_the_radar_max_without_an_exponent():
+    entries = [
+        _radar_entry("a", 1.0, 10000.0),
+        _radar_entry("b", 1.0, 1.0),
+        _radar_entry("c", 1.0, 0.5),
+    ]
+    md = radar_chart(entries)
+    assert md is not None
+    text = re.search(r"^  max (\S+)$", md, re.MULTILINE)[1]
+    assert "e" not in text.lower()
+    assert float(text) >= 10000.0
+
+
 def test_the_radar_says_which_way_is_better():
     entries = [*_POSITIVE[:2], _radar_entry("cost", 2.0, 1.0, direction="minimize")]
     md = radar_chart(entries)
