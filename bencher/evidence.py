@@ -713,7 +713,7 @@ def mermaid_chart(
             x_axis = 'x-axis ["before", "after"]'
             lo, hi, step = _y_range([before], [after], claim)
             series = [f"bar [{', '.join(_chart_nums([before, after]))}]"]
-            front_matter = []
+            front_matter = _xy_front_matter(MERMAID_AFTER_COLOR)
         case SweepChart(input_name=input_name, labels=labels, before=before, after=after):
             title = f"{metric}: before vs after"
             quoted = ", ".join(f'"{_mermaid_text(label)}"' for label in labels)

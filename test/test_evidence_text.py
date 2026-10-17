@@ -22,6 +22,8 @@ import xarray as xr
 
 import bencher as bn
 from bencher.evidence import (
+    MERMAID_AFTER_COLOR,
+    BeforeAfterBars,
     DiffBars,
     Heatmap,
     OverlapTable,
@@ -29,6 +31,7 @@ from bencher.evidence import (
     _profile,
     diff_bars,
     heatmap_table,
+    mermaid_chart,
     overlap_table,
     plan_chart,
 )
@@ -207,6 +210,11 @@ def test_a_spread_as_large_as_the_change_draws_pale_std_lines():
 
 
 # --- diff-fence bars ---------------------------------------------------------------
+
+
+def test_the_bar_chart_sets_its_color():
+    chart = mermaid_chart("m", None, BeforeAfterBars(0.3, 0.2), None)
+    assert f'plotColorPalette: "{MERMAID_AFTER_COLOR}"' in chart
 
 
 def test_a_negative_scalar_draws_diff_bars_from_zero():
