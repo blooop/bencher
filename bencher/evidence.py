@@ -42,7 +42,14 @@ from urllib.parse import quote
 
 import numpy as np
 
-from bencher.change_stats import IMPROVED, REGRESSED, TOO_FEW_SAMPLES, unpaired_change
+from bencher.change_stats import (
+    DECREASED,
+    IMPROVED,
+    INCREASED,
+    REGRESSED,
+    TOO_FEW_SAMPLES,
+    unpaired_change,
+)
 from bencher.claims import Claim, Threshold, Within
 from bencher.report_export import _snapshot_ds, compare_results
 
@@ -504,7 +511,12 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
 
 
 _CI_METHODS = {"paired_bootstrap": "paired bootstrap", "bootstrap": "bootstrap"}
-_DIRECTED = (IMPROVED, REGRESSED)
+_MOVED = (IMPROVED, REGRESSED, INCREASED, DECREASED)
+
+
+def _verdicts_agree(threshold: str, verdict: str) -> bool:
+    """An undirected metric's threshold verdict calls any move ``regressed``."""
+    return threshold == verdict or (threshold == REGRESSED and verdict in (INCREASED, DECREASED))
 
 
 def change_line(metric: dict, units: str | None) -> str | None:
@@ -532,7 +544,7 @@ def change_line(metric: dict, units: str | None) -> str | None:
         f" ({_CI_METHODS.get(change['method'], change['method'])}, {counts}) → {verdict}"
     )
     threshold = metric["verdict"]
-    if threshold != verdict and (threshold in _DIRECTED or verdict in _DIRECTED):
+    if not _verdicts_agree(threshold, verdict) and (threshold in _MOVED or verdict in _MOVED):
         line += f"; the threshold verdict says {threshold}"
     return line
 

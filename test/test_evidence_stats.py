@@ -444,6 +444,25 @@ def test_the_caption_has_no_note_when_the_verdicts_agree():
     assert "threshold verdict" not in line
 
 
+def _undirected_rise():
+    before = 10.0 + np.random.default_rng(0).normal(0.0, 0.1, 40)
+    change = paired_change(before, before * 1.2, "none", 10.0)
+    assert change["stat_verdict"] == "increased"
+    return change
+
+
+def test_an_undirected_metric_notes_a_threshold_verdict_that_missed_the_move():
+    line = change_line(_with_change("unchanged", _undirected_rise()), None)
+    assert line is not None
+    assert line.endswith("→ increased; the threshold verdict says unchanged")
+
+
+def test_an_undirected_metric_has_no_note_when_both_verdicts_saw_the_move():
+    line = change_line(_with_change("regressed", _undirected_rise()), None)
+    assert line is not None
+    assert line.endswith("→ increased")
+
+
 def test_two_scalable_metrics_of_four_get_no_radar():
     entries = [*_POSITIVE[:2], _radar_entry("z1", 0.0, 1.0), _radar_entry("z2", 0.0, 1.0)]
     md = radar_chart(entries)
