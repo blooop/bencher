@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Evidence is text only.** `evidence.md` never links an image: every chart is text that
+  GitHub draws in the PR body, with no external resource. Each case that linked a PNG has a
+  text form now. Two or more swept inputs get an emoji heatmap of the percent change,
+  colored better or worse by the metric's direction, with one table per value of a third
+  input (up to 6) or the mean over the rest. A repeat-to-repeat spread as large as the
+  change gets the two lines with pale ±1 std lines (or ± std on text bars with no swept
+  input). A negative value with no swept input, and swept values that do not print as
+  distinct labels, get text bars in a `diff` fence. Any number of categories gets the
+  category table. Points or inputs that only one side has get a table over the shared
+  points and a "Left out:" line. Every metric ends with a `<details>` block holding a CSV
+  of the points its chart shows.
+- **Each compared metric carries the change with a 95% CI.** `compare_results` adds a
+  `change` record to every entry in `metrics`: the mean difference (candidate − baseline),
+  a bootstrap 95% CI, the method (`paired_bootstrap` over the per-point means when both
+  sides swept the same inputs, `bootstrap` of the difference of means over repeats with no
+  swept input), the sample counts and a `stat_verdict`: "improved" / "regressed" when the
+  CI excludes 0, "equivalent within ±X%" when the whole CI lies inside
+  `regression_percentage` of the baseline mean, "no significant change", "too few samples"
+  (no CI) or "not comparable". The bootstrap uses a fixed seed, so the output is
+  deterministic, and only numpy, so it works on a light install. `evidence.md` shows the
+  change and its CI in each caption. The existing keys, `verdict` among them, and the exit
+  status do not change; `schema_version` stays 1.
+- **A radar chart for three or more metrics.** `evidence.md` draws one Mermaid
+  `radar-beta` chart above the per-metric charts, each metric scaled so its baseline mean
+  is 1. A metric with a zero, negative or non-finite baseline mean, or whose mean changes sign, is
+  left off and named under the chart. The chart draws straight edges, no rings and thick
+  strokes, so both curves read on GitHub's dark theme too.
+
+### Changed
+- **PNGs are opt-in.** `bencher ab` writes no PNG unless `--png-dir DIR` is given, and
+  `write_evidence` and `bencher compare --markdown` write none without `png_dir` / `--png`
+  (`--png-dir` is an alias of `--png`). `write_evidence_pngs`, `png_name`, the JSON schema
+  (`schema_version` 1) and the exit codes do not change.
+- **A numeric sweep is drawn as two lines.** The `evidence.md` chart for one numeric swept
+  input draws the baseline as a grey "before" line and the candidate as a blue "after" line.
+  The lines are named, so GitHub draws a legend, and the colors are fixed in the chart's
+  front matter so both read on GitHub's light and dark themes. Before,
+  the baseline was bars and the candidate a line in the default palette, which made the
+  first series hard to see.
+- **A categorical sweep is a table.** One string, enum or bool swept input gets a Markdown
+  table, one row per category with before, after, the change and its 95% CI, instead of a
+  chart that joined the categories with a line.
+- **No negative bars.** With no swept input, a negative mean is drawn as text bars grown
+  from 0 instead of an `xychart-beta` bar, which grows from the bottom of the axis.
+
+### Deprecated
+- **`--png-url-base` and `png_url_base`.** Still accepted, ignored, and warned about: the
+  CLIs print a warning on stderr and the Python functions raise a `DeprecationWarning`,
+  because there is no image to link.
+- **`bencher.evidence.ImageOnly`.** The chart plan for "draw a PNG instead" still
+  imports and builds, with a `DeprecationWarning`, but `plan_chart` never returns it.
+
 ## [1.141.0] - 2026-10-16
 
 ### Fixed

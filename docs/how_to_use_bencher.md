@@ -709,33 +709,76 @@ python -m bencher.render compare baseline.pkl candidate.pkl --json comparison.js
 ### Evidence for a pull request
 
 `bencher compare` also writes what a reviewer reads. `--markdown PATH` writes a block to
-paste as a PR's `## Evidence` section: per metric, a Mermaid `xychart-beta` chart with the
-baseline as bars and the candidate as a line on the same axes, then a caption with the
-verdict, the mean before → after with the change in percent, the claim outcome on each side
-(see below) and each side's revision and sample count. Above the charts, a **Claims** list
-gives each claim the candidate declares with its outcome on the candidate and on the
-baseline, or "no baseline" for a metric the baseline does not measure, and a **Not
-compared** list names each metric that only one side declares. `--png DIR` writes one PNG per metric
-with the claim threshold drawn in and a ±1 std band. The PNG plots against the first swept
-input; the mean and std pool the repeats and every other swept input, so with two or more
-swept inputs the band also holds the spread across the other inputs. Any of `--json`,
-`--markdown` and `--png` may be given; at least one is required.
+paste as a PR's `## Evidence` section. It is text only: every chart is text that GitHub
+draws in the PR body, with no image and no external resource, so it works without pushing
+any file. Per metric it has a chart, then a caption with the verdict, the mean before →
+after with the change in percent, the claim outcome on each side (see below), the change
+with its 95% CI and statistical verdict, and each side's revision and sample count, then a
+collapsed `<details>` block with a CSV of the points the chart shows. Above the charts, a
+**Claims** list gives each claim the candidate declares with its outcome on the candidate
+and on the baseline, or "no baseline" for a metric the baseline does not measure, and a
+**Not compared** list names each metric that only one side declares. `--png DIR` (or
+`--png-dir DIR`) also writes one PNG per metric, for local viewing, with the claim
+threshold drawn in and a ±1 std band; the Markdown does not link it. The PNG plots against
+the first swept input; the mean and std pool the repeats and every other swept input, so
+with two or more swept inputs the band also holds the spread across the other inputs. Any
+of `--json`, `--markdown` and `--png` may be given; at least one is required.
 
 ```bash
-bencher compare base.pkl candidate.pkl --markdown evidence.md --png evidence/ \
-    --png-url-base https://raw.githubusercontent.com/<org>/<repo>/<sha>/evidence
+bencher compare base.pkl candidate.pkl --markdown evidence.md --png evidence/
 ```
 
-A metric gets a Mermaid chart only when the chart is honest: no swept input (one bar per
-side) or one swept input with the same values on both sides, binned to at most 30 points.
-Two or more swept inputs, a sweep that differs between the sides, or a repeat-to-repeat
-spread as large as the change get an image link instead, `![<metric>: before vs
-after](<url>)`. The URL is `--png-url-base` plus the file name, so an agent pushes the PNGs
-first and renders the Markdown against the pinned URL; without it, the link is relative to
-the Markdown file, and the PNGs it links are written beside it when `--png` is not given.
+The chart is the form that shows the metric honestly:
+
+| What was swept | Chart |
+| --- | --- |
+| No input | Mermaid `xychart-beta`, one bar per side |
+| No input, a negative value | `diff` fence of text bars grown from a zero column (an xychart bar grows from the bottom of the axis, not from 0) |
+| No input, a repeat-to-repeat spread as large as the change | `diff` fence of text bars, each with its ± std |
+| One numeric input, same values on both sides | Mermaid `xychart-beta`, a grey "before" line and a blue "after" line with a legend; binned to at most 30 points |
+| ... with a spread as large as the change | The same two lines and a pale line at ±1 std of each (the series colors at 40% opacity) |
+| ... with values that do not print as distinct labels | `diff` fence of text bars, with `#2`, `#3` added to repeated labels |
+| One categorical input (string, enum or bool) | A table: before, after, the change and its 95% CI from that category's repeats, one row per category, however many |
+| Two or more inputs | An emoji heatmap: the percent change at each point of the first two inputs |
+| Points or inputs that only one side has | A table over the shared points, and a "Left out:" line naming the rest |
+
+In the heatmap, the color says better or worse for the metric's `direction`, not the sign
+of the change: 🟦 better by at least twice the margin, 🟩 better by at least the margin,
+⬜ within the margin, 🟧 and 🟥 the same for worse (the margin is the metric's
+`regression_percentage`, 10 by default). With no direction, 🟪 is down and 🟨 is up. A line
+under the table gives the legend. A third swept input with at most 6 values gets one table
+per value; past that, or with four or more inputs, each cell is the mean over the inputs
+after the first two, and a line says so. A numeric axis past 30 rows or 12 columns is
+binned. When the two sides swept different inputs, the table uses the first input both
+swept and averages over the others; with no shared input it compares the overall means.
+
+`--png-url-base` is still accepted but deprecated and ignored: there is no image to link,
+and `bencher compare` and `bencher ab` print a warning saying so.
+
+With three or more compared metrics, a Mermaid `radar-beta` chart above the per-metric
+charts shows them all at once: each axis is one metric's mean divided by its baseline mean,
+so the "before" curve is 1 on every axis and "after" shows the relative change. A metric
+whose baseline mean is 0, negative or not finite, or whose mean changes sign, cannot be scaled that
+way; it is left off and named under the chart.
+
+**The change and its CI.** Each metric in `comparison.json` carries a `change` record
+with `mean_diff` (candidate − baseline), its 95% CI `ci_low`/`ci_high`, `method`, the
+counts and `stat_verdict`: over the input points both sides swept, the per-point
+differences of the repeat means are bootstrapped (`paired_bootstrap`), and with no swept
+input or one shared point the two sides' repeats are resampled on their own (`bootstrap`).
+The CI is the 2.5th–97.5th percentile of 10,000 resamples with a fixed seed, so the same
+results give the same evidence byte for byte. `stat_verdict` is "equivalent within ±X%"
+when the whole CI lies inside ±X% of the baseline mean (X is `regression_percentage`, 10
+by default, or the metric's own percentage override), else "improved"/"regressed" (or
+"increased"/"decreased" with no `direction`) when the CI excludes 0, else "no significant
+change"; too few samples give "too few samples" and no CI, and sides with no shared input
+point give "not comparable" (with `method` null, `mean_diff` and the CI null, and a
+`reason` key that says why; only this record has `reason`). The threshold `verdict` does
+not change, and the caption shows both when they disagree.
 
 In Python: `bn.evidence_markdown(base, cand)`, `bn.write_evidence_pngs(base, cand, out_dir)`
-and `bn.write_evidence(base, cand, json_path=..., markdown_path=..., png_dir=...)`. See
+and `bn.write_evidence(base, cand, json_path=..., markdown_path=..., png_dir=...)`. Their
+`png_url_base` argument is deprecated and ignored, with a `DeprecationWarning`. See
 [`example_evidence.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_evidence.py).
 
 ### Before and after a change: `bencher ab`
@@ -745,7 +788,7 @@ writes the comparison and the evidence:
 
 ```bash
 bencher ab -- python my_bench.py
-bencher ab --base origin/main --out evidence/ --png-url-base <url> -- pixi run python my_bench.py
+bencher ab --base origin/main --out evidence/ -- pixi run python my_bench.py
 ```
 
 - The base is `--base REF` when given, else the merge-base of `HEAD` with `origin/HEAD`
@@ -769,8 +812,9 @@ bencher ab --base origin/main --out evidence/ --png-url-base <url> -- pixi run p
   `+dirty` for a modified working tree) and `BENCHER_DISPLAY_LABEL` is `base <rev>` or
   `candidate <rev>`.
 - `--out` (default `./bencher-ab/`) receives `base.pkl`, `candidate.pkl`,
-  `comparison.json`, `evidence.md`, one PNG per metric, and `base.log`/`candidate.log`
-  with each side's output. The paths are printed on stdout.
+  `comparison.json`, the text-only `evidence.md`, and `base.log`/`candidate.log` with each
+  side's output. `--png-dir DIR` also writes one PNG per metric there, for local viewing.
+  The paths are printed on stdout.
 - The exit status is 0 when both sides ran, whatever the verdict and whatever the claims
   say (a failed claim, on a metric the base has or not, is reported, not enforced); 1 when
   a side failed or saved no result (stderr names the side and the tail of its log, which is

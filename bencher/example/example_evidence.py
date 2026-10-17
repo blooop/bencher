@@ -3,8 +3,9 @@
 A change is meant to bring stop distance under 0.7 m at every speed. The example
 collects the metric twice -- once with the old controller gain, once with the new
 one -- and writes what ``bencher compare --markdown --png`` writes: a Markdown block
-to paste as a PR's ``## Evidence`` section (a Mermaid chart and a caption per
-metric) and a PNG per metric with the claim drawn on it.
+to paste as a PR's ``## Evidence`` section (a text chart, a caption and a
+``<details>`` CSV of the charted points per metric) and a PNG per metric with the
+claim drawn on it.
 
 In a real PR the two results come from two revisions of the code, and
 ``bencher ab -- python my_bench.py`` collects both for you::

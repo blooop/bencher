@@ -178,7 +178,17 @@ def test_run_compare_and_ab_work_without_the_plotting_stack(tmp_path, core_env):
     assert (out / "png" / "stop_distance.png").exists()
 
     proc = _run(
-        [*BENCHER_CLI, "ab", "--base", "HEAD~1", "--", sys.executable, "bench.py"],
+        [
+            *BENCHER_CLI,
+            "ab",
+            "--base",
+            "HEAD~1",
+            "--png-dir",
+            "pngs",
+            "--",
+            sys.executable,
+            "bench.py",
+        ],
         repo,
         core_env,
     )
@@ -188,8 +198,15 @@ def test_run_compare_and_ab_work_without_the_plotting_stack(tmp_path, core_env):
     assert metric["verdict"] == "improved"
     assert metric["claim"]["baseline"]["holds"] is False
     assert metric["claim"]["candidate"]["holds"] is True
-    assert "1 improved" in (ab / "evidence.md").read_text(encoding="utf-8")
-    assert (ab / "stop_distance.png").exists()
+    # The bootstrap CI is numpy only: it is there on a light install too.
+    assert metric["change"]["method"] == "paired_bootstrap"
+    assert metric["change"]["stat_verdict"] == "improved"
+    evidence = (ab / "evidence.md").read_text(encoding="utf-8")
+    assert "1 improved" in evidence
+    assert "95% CI [" in evidence
+    # Evidence is text only; the PNG is opt-in and still draws on a light install.
+    assert "![" not in evidence
+    assert (repo / "pngs" / "stop_distance.png").exists()
 
 
 HEAVY_FEATURE_PROBE = textwrap.dedent(

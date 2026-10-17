@@ -198,6 +198,7 @@ def test_unpaired_metrics_do_not_change_the_metrics_list():
         "regressed",
         "verdict",
         "claim",
+        "change",
     }
     assert cmp["metrics"][0]["verdict"] == "improved"
     assert cmp["summary"] == {"improved": 1, "regressed": 0, "unchanged": 0}

@@ -283,7 +283,7 @@ def _compare_parser() -> argparse.ArgumentParser:
         prog=f"{_prog()} compare",
         description=(
             "Diff two saved results into a comparison JSON and/or PR-ready evidence: "
-            "a Markdown block with a chart per metric, and PNG charts."
+            "a Markdown block with a text chart per metric, and optional PNG charts."
         ),
     )
     parser.add_argument("baseline", help="Path to the baseline .pkl result")
@@ -296,18 +296,22 @@ def _compare_parser() -> argparse.ArgumentParser:
         dest="markdown_path",
         metavar="PATH",
         help=(
-            "Write a Markdown block for a PR's Evidence section here. PNGs it links "
-            "are written beside it unless --png names a directory"
+            "Write a Markdown block for a PR's Evidence section here. It is text only: "
+            "every chart is drawn by GitHub, and no image is linked"
         ),
     )
     parser.add_argument(
-        "--png", dest="png_dir", metavar="DIR", help="Write one before/after PNG per metric here"
+        "--png",
+        "--png-dir",
+        dest="png_dir",
+        metavar="DIR",
+        help="Write one before/after PNG per metric here, for local viewing",
     )
     parser.add_argument(
         "--png-url-base",
         dest="png_url_base",
         metavar="URL",
-        help="Prefix for image links in --markdown (e.g. where the PNGs were pushed)",
+        help="Deprecated and ignored: evidence is text only and links no image",
     )
     return parser
 
@@ -338,12 +342,14 @@ def _load_or_fail(path: str, label: str) -> tuple[BenchResult | None, int]:
 
 
 def _run_compare(argv: list[str]) -> int:
-    from bencher.evidence import unpaired_warnings, write_evidence
+    from bencher.evidence import PNG_URL_BASE_FLAG_DEPRECATED, unpaired_warnings, write_evidence
 
     parser = _compare_parser()
     args = parser.parse_args(argv)
     if not (args.json_path or args.markdown_path or args.png_dir):
         parser.error("give at least one of --json, --markdown or --png")
+    if args.png_url_base is not None:
+        print(f"{_prog()} compare: warning: {PNG_URL_BASE_FLAG_DEPRECATED}", file=sys.stderr)  # noqa: T201 - CLI output
     baseline, code = _load_or_fail(args.baseline, "baseline result")
     if baseline is None:
         return code
@@ -357,7 +363,6 @@ def _run_compare(argv: list[str]) -> int:
             json_path=args.json_path,
             markdown_path=args.markdown_path,
             png_dir=args.png_dir,
-            png_url_base=args.png_url_base,
         )
     except ValueError as exc:
         # Surface the specific, actionable message (e.g. no shared metrics) to
@@ -396,8 +401,8 @@ def main(argv: list[str] | None = None) -> int:
 
     Render: ``bencher <result.pkl> <output_dir> [--json PATH] [--cachedir DIR]``
     Compare: ``bencher compare <a.pkl> <b.pkl> [--json PATH] [--markdown PATH]
-    [--png DIR] [--png-url-base URL]``
-    A/B: ``bencher ab [--base REF] [--out DIR] [--png-url-base URL] -- <command...>``
+    [--png DIR]``
+    A/B: ``bencher ab [--base REF] [--out DIR] [--png-dir DIR] -- <command...>``
     """
     argv = sys.argv[1:] if argv is None else argv
 
