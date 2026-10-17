@@ -348,6 +348,27 @@ def test_a_metric_with_a_negative_baseline_is_left_off_the_radar(base, cand):
     assert "Not on the radar: `score` (baseline mean is negative)." in md
 
 
+def test_the_after_curve_is_each_mean_divided_by_its_baseline():
+    md = radar_chart([*_POSITIVE, _radar_entry("d", 2.0, 1.0)])
+    assert md is not None
+    assert '  curve after["after"]{1.2, 1.2, 1.2, 0.5}' in md.splitlines()
+
+
+def test_a_metric_with_a_non_finite_candidate_is_left_off_the_radar():
+    md = radar_chart([*_POSITIVE, _radar_entry("d", 1.0, math.nan)])
+    assert md is not None
+    assert '"d"' not in md
+    assert "Not on the radar: `d` (candidate mean is not finite)." in md
+
+
+def test_a_candidate_mean_of_zero_stays_on_the_radar_at_zero():
+    md = radar_chart([*_POSITIVE, _radar_entry("d", 2.0, 0.0)])
+    assert md is not None
+    assert '  curve after["after"]{1.2, 1.2, 1.2, 0}' in md.splitlines()
+    assert "changed sign" not in md
+    assert "Not on the radar" not in md
+
+
 def _swept(name, values, offset=0.0, repeats=3):
     data = np.array([[v + offset + 0.01 * r for r in range(repeats)] for v in values])
     return xr.DataArray(
