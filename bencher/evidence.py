@@ -66,7 +66,6 @@ MERMAID_BEFORE_COLOR = "#8c8c8c"
 MERMAID_AFTER_COLOR = "#2f81f7"
 
 # The radar needs this many metrics with a usable baseline to be worth drawing.
-MAX_RADAR_RINGS = 6
 MIN_RADAR_METRICS = 3
 
 _BEFORE_COLOR = "#8a94a6"
@@ -442,14 +441,7 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
         pronoun = "its" if len(axes) == 1 else "their"
         return "\n".join([f"No radar: only {count} can be scaled to {pronoun} baseline.", *notes])
     ratios = [ratio for _, ratio in axes]
-    # Rings every 0.5 (or 1) put one ring on 1, so the "before" curve is that ring.
-    reach = max(1.0, *ratios) * 1.1
-    ring = next(
-        (step for step in (0.5, 1.0) if math.ceil(reach / step - 1e-9) <= MAX_RADAR_RINGS),
-        float(math.ceil(reach / MAX_RADAR_RINGS)),
-    )
-    ticks = math.ceil(reach / ring - 1e-9)
-    top = ticks * ring
+    top = math.ceil(max(1.0, *ratios) * 1.1 * 10) / 10
     text = _chart_nums([1.0, *ratios])
     one, after = text[0], text[1:]
     labels = ", ".join(
@@ -473,12 +465,13 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
         "  themeVariables:",
         f'    cScale0: "{MERMAID_BEFORE_COLOR}"',
         f'    cScale1: "{MERMAID_AFTER_COLOR}"',
-        # Filled rings stack into dark bands that hide the grey "before" curve:
-        # unfilled rings, pale curve fills and thick strokes keep both curves readable.
+        # Rings get in the way of the curves, and the "before" curve already marks 1:
+        # no rings, pale curve fills and thick strokes keep both curves readable.
         "    radar:",
         "      curveOpacity: 0.12",
         "      curveStrokeWidth: 3",
         "      graticuleOpacity: 0",
+        "      graticuleStrokeWidth: 0",
         f'      graticuleColor: "{MERMAID_BEFORE_COLOR}"',
         f'      axisColor: "{MERMAID_BEFORE_COLOR}"',
         "---",
@@ -489,7 +482,7 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
         f'  curve after["after"]{{{", ".join(after)}}}',
         f"  max {_num(top)}",
         "  min 0",
-        f"  ticks {ticks}",
+        "  ticks 1",
         "  graticule polygon",
         "```",
         "",
