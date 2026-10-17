@@ -533,10 +533,8 @@ def _heatmap(base: _Profile, cand: _Profile, direction: str, margin_percent: flo
     layer = None
     if len(rest) == 1 and bc.sizes[rest[0]] <= MAX_HEATMAP_TABLES:
         layer = rest[0]
-        layers = [
-            (_label(_plain(v)), bc.isel({layer: i}), cc.isel({layer: i}))
-            for i, v in enumerate(bc[layer].values)
-        ]
+        names = _distinct(_sweep_labels([_plain(v) for v in bc[layer].values]))
+        layers = [(name, bc.isel({layer: i}), cc.isel({layer: i})) for i, name in enumerate(names)]
     else:
         if rest:
             sizes = ", ".join(f"{d} ({bc.sizes[d]} values)" for d in rest)

@@ -27,6 +27,7 @@ from bencher.evidence import (
     _Profile,
     _profile,
     diff_bars,
+    heatmap_table,
     overlap_table,
     plan_chart,
 )
@@ -139,6 +140,14 @@ def test_a_third_input_with_many_values_is_averaged_and_says_so():
     md = bn.evidence_markdown(_rig(0.3, inputs), _rig(0.2, inputs))
     assert md.count("| speed ↓ load → |") == 1
     assert "mean over robot" in md
+
+
+def test_layer_values_that_round_alike_get_distinct_titles():
+    coords = {"a": [1, 2], "b": [1, 2], "z": [1.00001, 1.00002]}
+    side = _profile(xr.DataArray(np.arange(1.0, 9.0).reshape(2, 2, 2), coords=coords))
+    md = heatmap_table("m", None, plan_chart(side, side))
+    titles = re.findall(r"^z = (.*):$", md, re.MULTILINE)
+    assert len(titles) == len(set(titles)) == 2
 
 
 def test_the_heatmap_data_block_has_one_row_per_cell():
