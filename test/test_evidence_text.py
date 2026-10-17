@@ -316,6 +316,20 @@ def test_a_zero_change_at_a_zero_margin_is_the_no_change_mark(direction):
     assert "⬜ no change" in _heat_legend(direction, 0.0)
 
 
+def test_the_heatmap_uses_the_comparison_margin_not_ten_percent():
+    run_cfg = bn.BenchRunCfg(regression_method="percentage", regression_percentage=3.0)
+    md = bn.evidence_markdown(
+        _rig(0.2, ("speed", "load")), _rig(0.21, ("speed", "load")), run_cfg=run_cfg
+    )
+    rows = re.findall(r"^\| (1|2|3) \| (.*) \|$", md, re.MULTILINE)
+    assert len(rows) == 3
+    for _, cells in rows:
+        # cost is minimized and rose by 5%: worse by more than the 3% margin.
+        assert cells.split(" | ") == ["🟧 +5.0%", "🟧 +5.0%"]
+    assert "⬜ within ±3%" in md
+    assert "🟧 worse by ≥ 3%" in md
+
+
 def test_a_zero_margin_legend_says_no_change():
     assert "⬜ no change" in _heat_legend("minimize", 0.0)
     assert "⬜ no change" in _heat_legend("none", 0.0)
