@@ -534,3 +534,16 @@ def test_the_radar_says_which_way_is_better():
     assert md is not None
     assert "Lower is better for `cost`." in md
     assert "Higher is better for `a`, `b`." in md
+
+
+def test_the_radar_front_matter_keeps_the_curves_readable_in_dark_mode():
+    # GitHub's dark theme fills the graticule rings in light grey, which hides a grey
+    # "before" curve; faint rings, thick strokes and pale fills keep both curves visible.
+    md = bn.evidence_markdown(_shift(0.0, result_vars=_THREE), _shift(-0.2, result_vars=_THREE))
+    radar = _charts(md)[0]
+    front, body = radar.split("---\nradar-beta\n")
+    assert "  radar:\n    curveTension: 0\n" in front
+    assert "      curveStrokeWidth: 3\n" in front
+    assert "      curveOpacity: 0.12\n" in front
+    assert "      graticuleOpacity: 0.08\n" in front
+    assert re.search(r"^  graticule polygon$", body, re.MULTILINE)

@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A radar chart for three or more metrics.** `evidence.md` draws one Mermaid
   `radar-beta` chart above the per-metric charts, each metric scaled so its baseline mean
   is 1. A metric with a zero, negative or non-finite baseline mean, or whose mean changes sign, is
-  left off and named under the chart.
+  left off and named under the chart. The chart draws straight edges, faint rings and thick
+  strokes, so both curves read on GitHub's dark theme too.
 
 ### Changed
 - **A numeric sweep is drawn as two lines.** The `evidence.md` chart for one numeric swept

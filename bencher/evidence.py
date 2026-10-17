@@ -459,9 +459,20 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
         "```mermaid",
         "---",
         "config:",
+        # Straight edges: a smoothed curve between axes would draw values no metric has.
+        "  radar:",
+        "    curveTension: 0",
         "  themeVariables:",
         f'    cScale0: "{MERMAID_BEFORE_COLOR}"',
         f'    cScale1: "{MERMAID_AFTER_COLOR}"',
+        # GitHub's dark theme fills the rings light grey, which hides the grey "before"
+        # curve: faint rings, pale fills and thick strokes keep both curves readable.
+        "    radar:",
+        "      curveOpacity: 0.12",
+        "      curveStrokeWidth: 3",
+        "      graticuleOpacity: 0.08",
+        f'      graticuleColor: "{MERMAID_BEFORE_COLOR}"',
+        f'      axisColor: "{MERMAID_BEFORE_COLOR}"',
         "---",
         "radar-beta",
         "  title Metrics relative to before (before = 1)",
@@ -470,6 +481,7 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
         f'  curve after["after"]{{{", ".join(after)}}}',
         f"  max {_num(top)}",
         "  min 0",
+        "  graticule polygon",
         "```",
         "",
         " ".join(
