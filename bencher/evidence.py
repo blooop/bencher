@@ -441,7 +441,11 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
         pronoun = "its" if len(axes) == 1 else "their"
         return "\n".join([f"No radar: only {count} can be scaled to {pronoun} baseline.", *notes])
     ratios = [ratio for _, ratio in axes]
-    top = math.ceil(max(1.0, *ratios) * 1.1 * 10) / 10
+    # Rings every 0.5 (or 1) put one ring on 1, so the "before" curve is that ring.
+    reach = max(1.0, *ratios) * 1.1
+    ring = 0.5 if reach <= 2.5 else 1.0 if reach <= 6 else float(math.ceil(reach / 5))
+    ticks = math.ceil(reach / ring - 1e-9)
+    top = ticks * ring
     text = _chart_nums([1.0, *ratios])
     one, after = text[0], text[1:]
     labels = ", ".join(
@@ -465,12 +469,12 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
         "  themeVariables:",
         f'    cScale0: "{MERMAID_BEFORE_COLOR}"',
         f'    cScale1: "{MERMAID_AFTER_COLOR}"',
-        # GitHub's dark theme fills the rings light grey, which hides the grey "before"
-        # curve: faint rings, pale fills and thick strokes keep both curves readable.
+        # Filled rings stack into dark bands that hide the grey "before" curve:
+        # unfilled rings, pale curve fills and thick strokes keep both curves readable.
         "    radar:",
         "      curveOpacity: 0.12",
         "      curveStrokeWidth: 3",
-        "      graticuleOpacity: 0.08",
+        "      graticuleOpacity: 0",
         f'      graticuleColor: "{MERMAID_BEFORE_COLOR}"',
         f'      axisColor: "{MERMAID_BEFORE_COLOR}"',
         "---",
@@ -481,6 +485,7 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
         f'  curve after["after"]{{{", ".join(after)}}}',
         f"  max {_num(top)}",
         "  min 0",
+        f"  ticks {ticks}",
         "  graticule polygon",
         "```",
         "",
