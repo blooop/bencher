@@ -29,6 +29,7 @@ from bencher.evidence import (
     OverlapTable,
     _Profile,
     _profile,
+    data_block,
     diff_bars,
     heatmap_table,
     mermaid_chart,
@@ -179,6 +180,45 @@ def test_the_heatmap_data_block_has_one_row_per_cell():
     assert rows[0] == ["speed", "load", "before", "after", "change_percent"]
     assert len(rows) == 1 + 3 * 2
     assert float(rows[1][4]) == pytest.approx(-100 / 3)
+
+
+def test_each_heatmap_cell_shows_the_change_at_its_own_row_and_column():
+    # A square grid where every cell differs: a row/column swap prints other numbers.
+    coords = {"a": [1, 2, 3, 4], "b": [10, 20, 30, 40]}
+    before = np.full((4, 4), 100.0)
+    after = 100.0 + np.arange(1.0, 17.0).reshape(4, 4)  # (row=3, col=1) is 114
+    plan = plan_chart(
+        _profile(xr.DataArray(before, coords=coords, dims=("a", "b"))),
+        _profile(xr.DataArray(after, coords=coords, dims=("a", "b"))),
+        margin_percent=0.0,
+    )
+    assert isinstance(plan, Heatmap)
+    md = heatmap_table("m", None, plan)
+    assert "| 4 | 🟨 +13.0% | 🟨 +14.0% | 🟨 +15.0% | 🟨 +16.0% |" in md
+    assert "| 1 | 🟨 +1.0% | 🟨 +2.0% | 🟨 +3.0% | 🟨 +4.0% |" in md
+    rows = _csv(data_block("m", plan), "m")
+    assert ["4", "20", "100", "114", "14"] in rows
+    assert ["2", "40", "100", "108", "8"] in rows
+
+
+def test_each_layer_table_shows_the_change_of_its_own_layer():
+    coords = {"a": [1, 2], "b": [10, 20], "mode": ["eco", "normal", "sport"]}
+    dims = ("a", "b", "mode")
+    before = np.full((2, 2, 3), 100.0)
+    after = np.broadcast_to(np.array([110.0, 120.0, 130.0]), (2, 2, 3))
+    plan = plan_chart(
+        _profile(xr.DataArray(before, coords=coords, dims=dims)),
+        _profile(xr.DataArray(after.copy(), coords=coords, dims=dims)),
+    )
+    assert isinstance(plan, Heatmap)
+    md = heatmap_table("m", None, plan)
+    for mode, cell in (("eco", "+10.0%"), ("normal", "+20.0%"), ("sport", "+30.0%")):
+        table = re.search(rf"^mode = {mode}:\n\n(.*?)(?:\n\n|\Z)", md, re.MULTILINE | re.DOTALL)
+        assert table, f"no table for mode = {mode}"
+        assert table[1].count(cell) == 4, table[1]
+    rows = _csv(data_block("m", plan), "m")
+    assert rows[0] == ["a", "b", "mode", "before", "after", "change_percent"]
+    assert ["2", "20", "sport", "100", "130", "30"] in rows
 
 
 # --- spread as large as the change: pale ±1 std lines ------------------------------
