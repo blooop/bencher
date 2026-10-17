@@ -553,6 +553,29 @@ def test_diff_bars_with_a_spread_print_the_std_and_a_std_csv():
     assert rows[1][1:] == ["1", "5", "1.5", "5"]
 
 
+def _bar_lines(plan: DiffBars) -> tuple[str, str]:
+    fence = diff_bars("m", None, plan)
+    before, after = (line for line in fence.splitlines() if line[:2] in ("- ", "+ "))
+    return before, after
+
+
+def test_positive_text_bars_are_as_long_as_their_value_over_the_axis():
+    before, after = _bar_lines(DiffBars(None, (DiffRow("", 1.0, 0.5),)))
+    assert before.endswith("  " + "█" * 30)
+    assert after.endswith("  " + "█" * 15)
+    assert "│" not in before + after
+
+
+def test_mixed_sign_text_bars_share_the_zero_column():
+    before, after = _bar_lines(DiffBars(None, (DiffRow("", -0.2, 0.3),)))
+    axis = before.index("│")
+    assert after.index("│") == axis
+    assert before[axis - 13 : axis] == " " + "█" * 12
+    assert after[axis - 1] == " "
+    assert after[axis + 1 :] == "█" * 18
+    assert before[axis + 1 :] == ""
+
+
 def test_a_label_with_a_fence_cannot_close_the_diff_or_csv_fence():
     plan = DiffBars("in```put", (DiffRow("a```b", 1.0, 2.0), DiffRow("c", 3.0, 4.0)))
     fence = diff_bars("m", None, plan)
