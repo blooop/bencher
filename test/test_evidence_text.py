@@ -288,6 +288,34 @@ def test_heat_mark_colors(change, direction, mark):
     assert _heat_mark(change, direction, 10.0) == mark
 
 
+@pytest.mark.parametrize(
+    ("change", "direction", "mark"),
+    [
+        (9.999, "minimize", "⬜"),
+        (10.0, "minimize", "🟧"),
+        (-10.0, "minimize", "🟩"),
+        (19.999, "minimize", "🟧"),
+        (20.0, "minimize", "🟥"),
+        (-20.0, "minimize", "🟦"),
+        (-9.999, "maximize", "⬜"),
+        (10.0, "maximize", "🟩"),
+        (-10.0, "maximize", "🟧"),
+        (20.0, "maximize", "🟦"),
+        (-20.0, "maximize", "🟥"),
+        (10.0, "none", "🟨"),
+        (-10.0, "none", "🟪"),
+    ],
+)
+def test_a_change_of_exactly_the_margin_is_outside_it(change, direction, mark):
+    assert _heat_mark(change, direction, 10.0) == mark
+
+
+@pytest.mark.parametrize("direction", ["minimize", "maximize", "none"])
+def test_a_zero_change_at_a_zero_margin_is_the_no_change_mark(direction):
+    assert _heat_mark(0.0, direction, 0.0) == "⬜"
+    assert "⬜ no change" in _heat_legend(direction, 0.0)
+
+
 def test_a_zero_margin_legend_says_no_change():
     assert "⬜ no change" in _heat_legend("minimize", 0.0)
     assert "⬜ no change" in _heat_legend("none", 0.0)
