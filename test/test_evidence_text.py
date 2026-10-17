@@ -701,6 +701,18 @@ def test_png_url_base_is_deprecated_and_adds_no_link(tmp_path):
     _no_image(md)
 
 
+def test_write_evidence_png_url_base_is_deprecated_and_adds_no_link(tmp_path):
+    with pytest.warns(DeprecationWarning, match="text only"):
+        files = bn.write_evidence(
+            _rig(0.3, ("speed", "load")),
+            _rig(0.2, ("speed", "load")),
+            markdown_path=tmp_path / "e.md",
+            png_url_base="https://raw.example/x",
+        )
+    _no_image((tmp_path / "e.md").read_text(encoding="utf-8"))
+    assert files.pngs == {}
+
+
 def test_compare_png_url_base_warns_on_stderr_and_still_succeeds(tmp_path, capsys):
     a = save_result(_rig(0.3, ("speed", "load")), tmp_path / "a.pkl")
     b = save_result(_rig(0.2, ("speed", "load")), tmp_path / "b.pkl")
