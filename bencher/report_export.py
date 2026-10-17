@@ -385,6 +385,11 @@ def compare_results(
         ``"bootstrap"``), the counts ``n``/``n_baseline``/``n_candidate``,
         ``resamples``, ``equivalence_percent`` and ``stat_verdict``. It never
         changes ``verdict``, which still comes from the regression threshold.
+        When only one side measures the metric, or the sides swept different
+        inputs or share no swept input point, the record is "not comparable":
+        ``method`` is ``None``, ``mean_diff`` and the CI are ``None``, the counts
+        and ``resamples`` are 0, and a ``reason`` key (only this record has it)
+        says why.
 
     Raises:
         ValueError: when the two results share no comparable scalar metric. The

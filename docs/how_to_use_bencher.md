@@ -757,8 +757,9 @@ when the whole CI lies inside ±X% of the baseline mean (X is `regression_percen
 by default, or the metric's own percentage override), else "improved"/"regressed" (or
 "increased"/"decreased" with no `direction`) when the CI excludes 0, else "no significant
 change"; too few samples give "too few samples" and no CI, and sides with no shared input
-point give "not comparable". The threshold `verdict` does not change, and the caption
-shows both when they disagree.
+point give "not comparable" (with `method` null, `mean_diff` and the CI null, and a
+`reason` key that says why; only this record has `reason`). The threshold `verdict` does
+not change, and the caption shows both when they disagree.
 
 In Python: `bn.evidence_markdown(base, cand)`, `bn.write_evidence_pngs(base, cand, out_dir)`
 and `bn.write_evidence(base, cand, json_path=..., markdown_path=..., png_dir=...)`. See
