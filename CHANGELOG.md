@@ -41,15 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `write_evidence` and `bencher compare --markdown` write none without `png_dir` / `--png`
   (`--png-dir` is an alias of `--png`). `write_evidence_pngs`, `png_name`, the JSON schema
   (`schema_version` 1) and the exit codes do not change.
-
-### Deprecated
-- **`--png-url-base` and `png_url_base`.** Still accepted, ignored, and warned about: the
-  CLIs print a warning on stderr and the Python functions raise a `DeprecationWarning`,
-  because there is no image to link.
-
-### Removed
-- **`bencher.evidence.ImageOnly`.** The chart plan for "draw a PNG instead" has no use
-  now; it was never exported from `bencher`.
 - **A numeric sweep is drawn as two lines.** The `evidence.md` chart for one numeric swept
   input draws the baseline as a grey "before" line and the candidate as a blue "after" line.
   The lines are named, so GitHub draws a legend, and the colors are fixed in the chart's
@@ -61,6 +52,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chart that joined the categories with a line.
 - **No negative bars.** With no swept input, a negative mean is drawn as text bars grown
   from 0 instead of an `xychart-beta` bar, which grows from the bottom of the axis.
+
+### Deprecated
+- **`--png-url-base` and `png_url_base`.** Still accepted, ignored, and warned about: the
+  CLIs print a warning on stderr and the Python functions raise a `DeprecationWarning`,
+  because there is no image to link.
+
+### Removed
+- **`bencher.evidence.ImageOnly`.** The chart plan for "draw a PNG instead" has no use
+  now; it was never exported from `bencher`.
 
 ## [1.141.0] - 2026-10-16
 
