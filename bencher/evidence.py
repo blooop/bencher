@@ -66,6 +66,7 @@ MERMAID_BEFORE_COLOR = "#8c8c8c"
 MERMAID_AFTER_COLOR = "#2f81f7"
 
 # The radar needs this many metrics with a usable baseline to be worth drawing.
+MAX_RADAR_RINGS = 6
 MIN_RADAR_METRICS = 3
 
 _BEFORE_COLOR = "#8a94a6"
@@ -443,7 +444,10 @@ def radar_chart(metrics: Sequence[dict]) -> str | None:
     ratios = [ratio for _, ratio in axes]
     # Rings every 0.5 (or 1) put one ring on 1, so the "before" curve is that ring.
     reach = max(1.0, *ratios) * 1.1
-    ring = 0.5 if reach <= 2.5 else 1.0 if reach <= 6 else float(math.ceil(reach / 5))
+    ring = next(
+        (step for step in (0.5, 1.0) if math.ceil(reach / step - 1e-9) <= MAX_RADAR_RINGS),
+        float(math.ceil(reach / MAX_RADAR_RINGS)),
+    )
     ticks = math.ceil(reach / ring - 1e-9)
     top = ticks * ring
     text = _chart_nums([1.0, *ratios])
