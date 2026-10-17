@@ -710,7 +710,8 @@ python -m bencher.render compare baseline.pkl candidate.pkl --json comparison.js
 
 `bencher compare` also writes what a reviewer reads. `--markdown PATH` writes a block to
 paste as a PR's `## Evidence` section: per metric, a Mermaid `xychart-beta` chart with the
-baseline as a grey line and the candidate as a blue line on the same axes, then a caption
+baseline as a grey "before" line and the candidate as a blue "after" line on the same axes
+(GitHub draws a legend for the named lines), then a caption
 with the verdict, the mean before → after with the change in percent, the claim outcome on
 each side (see below), the change with its 95% CI and statistical verdict, and each side's
 revision and sample count. Above the charts, a **Claims** list

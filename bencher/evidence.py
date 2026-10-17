@@ -17,9 +17,9 @@ differ between the sides, a negative value with no swept input (an xychart bar
 grows from the axis bottom, not from 0), or a repeat-to-repeat spread as large as
 the change, which only the PNG's ±std band can show.
 
-``xychart-beta`` has no legend, so the title names the series by color: the grey
-line is the baseline, the blue line is the candidate. Both colors are fixed in the
-chart's front matter and read on GitHub's light and dark themes.
+The two ``xychart-beta`` lines are named "before" and "after", so GitHub draws a
+legend for them. Both colors are fixed in the chart's front matter and read on
+GitHub's light and dark themes.
 
 The caption gives the threshold verdict and the mean change, then the ``change``
 record of :mod:`bencher.change_stats`: the mean difference, its bootstrap 95% CI
@@ -131,7 +131,7 @@ class BeforeAfterBars:
 
 @dataclass(frozen=True)
 class SweepChart:
-    """One numeric swept input shared by both sides: a grey line before, a blue line after."""
+    """One numeric swept input shared by both sides: a "before" line and an "after" line."""
 
     input_name: str
     labels: tuple[str, ...]
@@ -349,14 +349,14 @@ def mermaid_chart(
             series = [f"bar [{', '.join(_chart_nums([before, after]))}]"]
             front_matter = []
         case SweepChart(input_name=input_name, labels=labels, before=before, after=after):
-            title = f"{metric}: grey = before, blue = after"
+            title = f"{metric}: before vs after"
             quoted = ", ".join(f'"{_mermaid_text(label)}"' for label in labels)
             x_axis = f'x-axis "{_mermaid_text(input_name)}" [{quoted}]'
             lo, hi, step = _y_range(before, after, claim)
             text = _chart_nums([*before, *after])
             series = [
-                f"line [{', '.join(text[: len(before)])}]",
-                f"line [{', '.join(text[len(before) :])}]",
+                f'line "before" [{", ".join(text[: len(before)])}]',
+                f'line "after" [{", ".join(text[len(before) :])}]',
             ]
             front_matter = [
                 "---",

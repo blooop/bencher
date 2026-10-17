@@ -26,8 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **A numeric sweep is drawn as two lines.** The `evidence.md` chart for one numeric swept
-  input draws the baseline as a grey line and the candidate as a blue line, with the colors
-  fixed in the chart's front matter so both read on GitHub's light and dark themes. Before,
+  input draws the baseline as a grey "before" line and the candidate as a blue "after" line.
+  The lines are named, so GitHub draws a legend, and the colors are fixed in the chart's
+  front matter so both read on GitHub's light and dark themes. Before,
   the baseline was bars and the candidate a line in the default palette, which made the
   first series hard to see.
 - **A categorical sweep is a table.** One string, enum or bool swept input gets a Markdown
