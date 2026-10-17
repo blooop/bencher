@@ -513,6 +513,26 @@ def test_a_heatmap_over_a_partial_overlap_keeps_the_shared_columns_and_names_the
     assert "Left out: b=30 (after only)." in plan.notes
 
 
+def test_an_input_swept_before_only_and_a_shared_extra_input_are_both_named():
+    base = _profile(
+        xr.DataArray(
+            np.ones((2, 2, 2)),
+            coords={"speed": [1, 2], "load": [1, 2], "mode": ["a", "b"]},
+            dims=("speed", "load", "mode"),
+        )
+    )
+    cand = _profile(
+        xr.DataArray(
+            np.ones((2, 2)), coords={"speed": [1, 2], "load": [1, 2]}, dims=("speed", "load")
+        )
+    )
+    plan = plan_chart(base, cand)
+    assert isinstance(plan, OverlapTable)
+    assert plan.input_name == "speed"
+    assert "mode (swept before only, averaged over)" in plan.left_out
+    assert "load (averaged over)" in plan.left_out
+
+
 def _hand_profile(x, mean, std):
     return _Profile(
         swept=("speed",),
