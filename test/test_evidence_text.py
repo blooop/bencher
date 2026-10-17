@@ -499,6 +499,20 @@ def test_one_mismatched_point_in_a_long_sweep_bins_the_overlap_table(nan_after):
     assert left in md
 
 
+def test_a_heatmap_over_a_partial_overlap_keeps_the_shared_columns_and_names_the_rest():
+    dims = ("c", "b")
+    base = _profile(xr.DataArray(np.ones((2, 2)), coords={"c": [1, 2], "b": [10, 20]}, dims=dims))
+    cand = _profile(
+        xr.DataArray(np.full((2, 2), 2.0), coords={"c": [1, 2], "b": [20, 30]}, dims=dims)
+    )
+    plan = plan_chart(base, cand)
+    assert isinstance(plan, Heatmap)
+    assert plan.col_labels == ("20",)
+    assert plan.row_labels == ("1", "2")
+    assert "Left out: b=10 (before only)." in plan.notes
+    assert "Left out: b=30 (after only)." in plan.notes
+
+
 def _hand_profile(x, mean, std):
     return _Profile(
         swept=("speed",),
