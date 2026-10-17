@@ -522,28 +522,11 @@ def test_a_metric_that_cannot_be_scaled_is_left_off_the_radar(base, cand, reason
     assert f"Not on the radar: `score` ({reason})." in md
 
 
-def _max_and_ticks(md: str) -> tuple[float, int]:
-    maximum = float(re.search(r"^  max (\S+)$", md, re.MULTILINE)[1])
-    ticks = int(re.search(r"^  ticks (\d+)$", md, re.MULTILINE)[1])
-    return maximum, ticks
-
-
 def test_the_radar_max_leaves_room_above_the_largest_ratio():
     entries = [_radar_entry("a", 1.0, 1.5), *_POSITIVE[1:], _radar_entry("d", 2.0, 2.0)]
     md = radar_chart(entries)
     assert md is not None
-    assert _max_and_ticks(md) == (2.0, 4)
-
-
-@pytest.mark.parametrize("largest", [0.5, 1.0, 1.2, 1.5, 1.9, 2.4, 3.0, 4.7])
-def test_a_radar_ring_lies_on_one_so_the_before_curve_sits_on_it(largest):
-    md = radar_chart([_radar_entry("a", 1.0, largest), *_POSITIVE[1:]])
-    assert md is not None
-    maximum, ticks = _max_and_ticks(md)
-    assert maximum >= 1.1 * max(1.0, largest) - 1e-9
-    rings_to_one = ticks / maximum
-    assert abs(rings_to_one - round(rings_to_one)) < 1e-9
-    assert 2 <= ticks <= 6
+    assert re.search(r"^  max 1\.7$", md, re.MULTILINE)
 
 
 def test_the_radar_says_which_way_is_better():
@@ -555,8 +538,8 @@ def test_the_radar_says_which_way_is_better():
 
 
 def test_the_radar_front_matter_keeps_the_curves_readable_in_dark_mode():
-    # Filled rings stack into dark bands that hide the grey "before" curve; unfilled
-    # rings, thick strokes and a pale curve fill keep both curves visible.
+    # Rings get in the way of the curves, and the "before" curve already marks 1:
+    # no rings, thick strokes and a pale curve fill keep both curves visible.
     md = bn.evidence_markdown(_shift(0.0, result_vars=_THREE), _shift(-0.2, result_vars=_THREE))
     radar = _charts(md)[0]
     front, body = radar.split("---\nradar-beta\n")
@@ -564,4 +547,6 @@ def test_the_radar_front_matter_keeps_the_curves_readable_in_dark_mode():
     assert "      curveStrokeWidth: 3\n" in front
     assert "      curveOpacity: 0.12\n" in front
     assert "      graticuleOpacity: 0\n" in front
+    assert "      graticuleStrokeWidth: 0\n" in front
+    assert re.search(r"^  ticks 1$", body, re.MULTILINE)
     assert re.search(r"^  graticule polygon$", body, re.MULTILINE)
