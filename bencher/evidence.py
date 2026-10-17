@@ -250,7 +250,8 @@ class OverlapRow:
 class OverlapTable:
     """Points that only one side has: a table over the shared points and what was left out.
 
-    ``input_name`` is None when the sides share no swept input: one row of overall means.
+    ``input_name`` is None when the sides share no swept input, when neither swept one,
+    or when two swept inputs share no point: then there is at most one row, of overall means.
     """
 
     input_name: str | None
@@ -478,6 +479,12 @@ def _overlap_inputs(base: _Profile, cand: _Profile) -> OverlapTable:
         notes.append(f"{', '.join(common[1:])} (averaged over)")
     if not common:
         before, after = _overall(base), _overall(cand)
+        missing = [
+            side for side, v in (("before", before), ("after", after)) if not math.isfinite(v)
+        ]
+        if missing:
+            notes.insert(0, f"every sample (no sample {' or '.join(missing)})")
+            return OverlapTable(None, (), f"Left out: {'; '.join(notes)}.")
         rows = (OverlapRow("all points", before, after),)
         return OverlapTable(None, rows, f"Left out: {'; '.join(notes)}.")
     (bx, bm), (cx, cm) = _line(base, common[0]), _line(cand, common[0])

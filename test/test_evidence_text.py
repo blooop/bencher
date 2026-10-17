@@ -290,6 +290,15 @@ def test_a_heatmap_with_no_shared_point_names_what_each_side_swept():
     assert "no point has a sample on both sides" in overlap_table("m", None, plan)
 
 
+def test_sides_with_no_shared_input_and_no_sample_before_give_no_row():
+    base = _profile(xr.DataArray([math.nan, math.nan], coords={"a": [1, 2]}))
+    cand = _profile(xr.DataArray([1.0, 2.0], coords={"b": [1, 2]}))
+    plan = plan_chart(base, cand)
+    assert isinstance(plan, OverlapTable)
+    assert plan.rows == ()
+    assert "no sample before" in plan.left_out
+
+
 # --- every form ---------------------------------------------------------------------
 
 
