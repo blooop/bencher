@@ -18,9 +18,18 @@ import warnings
 
 import numpy as np
 import pytest
+import xarray as xr
 
 import bencher as bn
-from bencher.evidence import DiffBars, _Profile, diff_bars, plan_chart
+from bencher.evidence import (
+    DiffBars,
+    OverlapTable,
+    _Profile,
+    _profile,
+    diff_bars,
+    overlap_table,
+    plan_chart,
+)
 from bencher.render import main, save_result
 
 _JITTER = (0.6, -0.6, 0.3, -0.3)
@@ -268,6 +277,17 @@ def test_sides_with_no_shared_input_compare_the_overall_means():
     _no_image(md)
     assert "| all points |" in md
     assert "speed" in re.search(r"^Left out: .*$", md, re.MULTILINE)[0]
+
+
+def test_a_heatmap_with_no_shared_point_names_what_each_side_swept():
+    base = _profile(xr.DataArray([[1.0, 2.0], [3.0, 4.0]], coords={"a": [1, 2], "b": [10, 20]}))
+    cand = _profile(xr.DataArray([[1.0, 2.0], [3.0, 4.0]], coords={"a": [1, 2], "b": [30, 40]}))
+    plan = plan_chart(base, cand)
+    assert isinstance(plan, OverlapTable)
+    assert plan.rows == ()
+    assert "b=10, 20 (before only)" in plan.left_out
+    assert "b=30, 40 (after only)" in plan.left_out
+    assert "no point has a sample on both sides" in overlap_table("m", None, plan)
 
 
 # --- every form ---------------------------------------------------------------------

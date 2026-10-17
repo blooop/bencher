@@ -513,18 +513,16 @@ def _heatmap(base: _Profile, cand: _Profile, direction: str, margin_percent: flo
     row, col, *rest = base.swept
     order = [row, col, *rest]
     bc, cc = xr.align(base.cube.transpose(*order), cand.cube.transpose(*order), join="inner")
-    notes = []
+    left_out = []
     for dim in order:
         b_only = [v for v in base.cube[dim].values if v not in set(bc[dim].values)]
         c_only = [v for v in cand.cube[dim].values if v not in set(cc[dim].values)]
         for values, side in ((b_only, "before only"), (c_only, "after only")):
             if values:
-                notes.append(f"Left out: {_named(dim, [_plain(v) for v in values])} ({side}).")
+                left_out.append(f"{_named(dim, [_plain(v) for v in values])} ({side})")
     if any(bc.sizes[d] == 0 for d in order):
-        return _overlap_inputs(
-            _Profile((), (), np.array([_overall(base)]), np.zeros(1), base.samples, (), None),
-            _Profile((), (), np.array([_overall(cand)]), np.zeros(1), cand.samples, (), None),
-        )
+        return OverlapTable(None, (), f"Left out: {'; '.join(left_out)}.")
+    notes = [f"Left out: {part}." for part in left_out]
     layer = None
     if len(rest) == 1 and bc.sizes[rest[0]] <= MAX_HEATMAP_TABLES:
         layer = rest[0]
