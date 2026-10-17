@@ -348,6 +348,27 @@ def test_a_metric_with_a_negative_baseline_is_left_off_the_radar(base, cand):
     assert "Not on the radar: `score` (baseline mean is negative)." in md
 
 
+def test_the_after_curve_is_each_mean_divided_by_its_baseline():
+    md = radar_chart([*_POSITIVE, _radar_entry("d", 2.0, 1.0)])
+    assert md is not None
+    assert '  curve after["after"]{1.2, 1.2, 1.2, 0.5}' in md.splitlines()
+
+
+def test_a_metric_with_a_non_finite_candidate_is_left_off_the_radar():
+    md = radar_chart([*_POSITIVE, _radar_entry("d", 1.0, math.nan)])
+    assert md is not None
+    assert '"d"' not in md
+    assert "Not on the radar: `d` (candidate mean is not finite)." in md
+
+
+def test_a_candidate_mean_of_zero_stays_on_the_radar_at_zero():
+    md = radar_chart([*_POSITIVE, _radar_entry("d", 2.0, 0.0)])
+    assert md is not None
+    assert '  curve after["after"]{1.2, 1.2, 1.2, 0}' in md.splitlines()
+    assert "changed sign" not in md
+    assert "Not on the radar" not in md
+
+
 def _swept(name, values, offset=0.0, repeats=3):
     data = np.array([[v + offset + 0.01 * r for r in range(repeats)] for v in values])
     return xr.DataArray(
@@ -421,6 +442,25 @@ def test_the_caption_has_no_note_when_the_verdicts_agree():
     assert line is not None
     assert line.endswith("→ improved")
     assert "threshold verdict" not in line
+
+
+def _undirected_rise():
+    before = 10.0 + np.random.default_rng(0).normal(0.0, 0.1, 40)
+    change = paired_change(before, before * 1.2, "none", 10.0)
+    assert change["stat_verdict"] == "increased"
+    return change
+
+
+def test_an_undirected_metric_notes_a_threshold_verdict_that_missed_the_move():
+    line = change_line(_with_change("unchanged", _undirected_rise()), None)
+    assert line is not None
+    assert line.endswith("→ increased; the threshold verdict says unchanged")
+
+
+def test_an_undirected_metric_has_no_note_when_both_verdicts_saw_the_move():
+    line = change_line(_with_change("regressed", _undirected_rise()), None)
+    assert line is not None
+    assert line.endswith("→ increased")
 
 
 def test_two_scalable_metrics_of_four_get_no_radar():
@@ -527,6 +567,19 @@ def test_the_radar_max_leaves_room_above_the_largest_ratio():
     md = radar_chart(entries)
     assert md is not None
     assert re.search(r"^  max 1\.7$", md, re.MULTILINE)
+
+
+def test_a_ratio_above_ten_thousand_writes_the_radar_max_without_an_exponent():
+    entries = [
+        _radar_entry("a", 1.0, 10000.0),
+        _radar_entry("b", 1.0, 1.0),
+        _radar_entry("c", 1.0, 0.5),
+    ]
+    md = radar_chart(entries)
+    assert md is not None
+    text = re.search(r"^  max (\S+)$", md, re.MULTILINE)[1]
+    assert "e" not in text.lower()
+    assert float(text) >= 10000.0
 
 
 def test_the_radar_says_which_way_is_better():
