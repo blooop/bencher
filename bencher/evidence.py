@@ -878,10 +878,10 @@ def _heat_legend(direction: str, margin: float) -> str:
         better = "lower" if direction == "minimize" else "higher"
         return (
             f"🟦 better by ≥ {m2}% · 🟩 better by ≥ {m}% · {within} · 🟧 worse by ≥ {m}%"
-            f" · 🟥 worse by ≥ {m2}% · n/a no sample ({better} is better)"
+            f" · 🟥 worse by ≥ {m2}% · n/a: no sample, or before is 0 ({better} is better)"
         )
     return (
-        f"🟪 down by ≥ {m}% · {within} · 🟨 up by ≥ {m}% · n/a no sample"
+        f"🟪 down by ≥ {m}% · {within} · 🟨 up by ≥ {m}% · n/a: no sample, or before is 0"
         " (no direction is set, so the color shows only which way it moved)"
     )
 

@@ -150,6 +150,16 @@ def test_layer_values_that_round_alike_get_distinct_titles():
     assert len(titles) == len(set(titles)) == 2
 
 
+@pytest.mark.parametrize("direction", ["minimize", "none"])
+def test_the_legend_says_n_a_also_means_before_is_zero(direction):
+    coords = {"a": [1, 2], "b": [1, 2]}
+    base = _profile(xr.DataArray([[0.0, 1.0], [1.0, 1.0]], coords=coords))
+    cand = _profile(xr.DataArray([[5.0, 1.0], [1.0, 1.0]], coords=coords))
+    md = heatmap_table("m", None, plan_chart(base, cand, direction=direction))
+    assert "| 1 | n/a |" in md
+    assert "n/a: no sample, or before is 0" in md
+
+
 def test_the_heatmap_data_block_has_one_row_per_cell():
     md = bn.evidence_markdown(_rig(0.3, ("speed", "load")), _rig(0.2, ("speed", "load")))
     rows = _csv(md, "cost")
