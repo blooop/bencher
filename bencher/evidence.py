@@ -339,7 +339,7 @@ def plan_chart(
     *direction* and *margin_percent* judge each row of a :class:`CategoryTable` and
     color each cell of a :class:`Heatmap`.
     """
-    if base.swept != cand.swept:
+    if set(base.swept) != set(cand.swept):
         return _overlap_inputs(base, cand)
     if len(base.swept) > 1:
         return _heatmap(base, cand, direction, margin_percent)

@@ -23,6 +23,7 @@ import xarray as xr
 import bencher as bn
 from bencher.evidence import (
     DiffBars,
+    Heatmap,
     OverlapTable,
     _Profile,
     _profile,
@@ -158,6 +159,15 @@ def test_the_legend_says_n_a_also_means_before_is_zero(direction):
     md = heatmap_table("m", None, plan_chart(base, cand, direction=direction))
     assert "| 1 | n/a |" in md
     assert "n/a: no sample, or before is 0" in md
+
+
+def test_sides_that_swept_the_same_inputs_in_another_order_draw_a_heatmap():
+    before = xr.DataArray([[1.0, 2.0], [3.0, 4.0]], coords={"a": [1, 2], "b": [10, 20]})
+    after = (before * 2).transpose("b", "a")
+    plan = plan_chart(_profile(before), _profile(after))
+    assert isinstance(plan, Heatmap)
+    assert (plan.row_input, plan.col_input) == ("a", "b")
+    assert plan.grids[0].after == ((2.0, 4.0), (6.0, 8.0))
 
 
 def test_the_heatmap_data_block_has_one_row_per_cell():
