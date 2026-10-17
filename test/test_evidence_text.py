@@ -582,3 +582,13 @@ def test_compare_png_dir_is_an_alias_of_png(tmp_path):
     b = save_result(_rig(0.2), tmp_path / "b.pkl")
     assert main(["compare", str(a), str(b), "--png-dir", str(tmp_path / "png")]) == 0
     assert (tmp_path / "png" / "cost.png").exists()
+
+
+def test_image_only_still_imports_and_warns_when_built():
+    from bencher.evidence import ImageOnly
+
+    with pytest.warns(DeprecationWarning, match="ImageOnly"):
+        plan = ImageOnly("two swept inputs")
+    assert plan.reason == "two swept inputs"
+    with pytest.warns(DeprecationWarning, match="ImageOnly"):
+        assert ImageOnly(reason="x").reason == "x"

@@ -57,10 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--png-url-base` and `png_url_base`.** Still accepted, ignored, and warned about: the
   CLIs print a warning on stderr and the Python functions raise a `DeprecationWarning`,
   because there is no image to link.
-
-### Removed
-- **`bencher.evidence.ImageOnly`.** The chart plan for "draw a PNG instead" has no use
-  now; it was never exported from `bencher`.
+- **`bencher.evidence.ImageOnly`.** The chart plan for "draw a PNG instead" still
+  imports and builds, with a `DeprecationWarning`, but `plan_chart` never returns it.
 
 ## [1.141.0] - 2026-10-16
 

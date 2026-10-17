@@ -266,6 +266,24 @@ class OverlapTable:
     left_out: str
 
 
+@dataclass(frozen=True)
+class ImageOnly:
+    """Deprecated: evidence is text only, so :func:`plan_chart` never returns this.
+
+    Kept so code that imports or builds it from 1.141.0 and earlier still runs.
+    """
+
+    reason: str
+
+    def __post_init__(self) -> None:
+        warnings.warn(
+            "bencher.evidence.ImageOnly is deprecated: evidence is text only and "
+            "plan_chart never returns it.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+
+
 ChartPlan = (
     BeforeAfterBars | SweepChart | BandChart | DiffBars | CategoryTable | Heatmap | OverlapTable
 )
