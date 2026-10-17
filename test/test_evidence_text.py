@@ -24,12 +24,15 @@ import bencher as bn
 from bencher.evidence import (
     MAX_HEATMAP_TABLES,
     MERMAID_AFTER_COLOR,
+    BandChart,
     BeforeAfterBars,
     DiffBars,
+    DiffRow,
     Heatmap,
     OverlapTable,
     _heat_legend,
     _heat_mark,
+    _named,
     _Profile,
     _profile,
     data_block,
@@ -444,6 +447,84 @@ def test_sides_with_no_shared_input_and_no_sample_before_give_no_row():
     assert isinstance(plan, OverlapTable)
     assert plan.rows == ()
     assert "no sample before" in plan.left_out
+
+
+def test_a_scalar_with_no_sample_after_prints_no_row():
+    base = _profile(xr.DataArray([1.0, 1.2], dims=("repeat",)))
+    cand = _profile(xr.DataArray([math.nan, math.nan], dims=("repeat",)))
+    plan = plan_chart(base, cand)
+    assert isinstance(plan, OverlapTable)
+    assert plan.rows == ()
+    md = overlap_table("m", None, plan)
+    assert "no sample after" in md
+    assert not re.search(r"^\|", md, re.MULTILINE)
+
+
+def test_a_long_left_out_list_names_eight_and_counts_the_rest():
+    assert _named("x", list(range(11))) == "x=0, 1, 2, 3, 4, 5, 6, 7 and 3 more"
+    assert _named("x", list(range(8))) == "x=0, 1, 2, 3, 4, 5, 6, 7"
+
+
+def test_the_overlap_names_each_reason_a_point_was_left_out():
+    base = _profile(xr.DataArray([1.0, math.nan, math.nan, 4.0], coords={"x": [1, 2, 3, 4]}))
+    cand = _profile(xr.DataArray([2.0, math.nan, 5.0, 6.0], coords={"x": [2, 3, 4, 5]}))
+    plan = plan_chart(base, cand)
+    assert isinstance(plan, OverlapTable)
+    assert [r.label for r in plan.rows] == ["4"]
+    assert "x=1 (before only)" in plan.left_out
+    assert "x=2 (no sample before)" in plan.left_out
+    assert "x=3 (no sample on either side)" in plan.left_out
+    assert "x=5 (after only)" in plan.left_out
+
+
+def _hand_profile(x, mean, std):
+    return _Profile(
+        swept=("speed",),
+        x=tuple(x),
+        mean=np.asarray(mean, dtype=float),
+        std=np.asarray(std, dtype=float),
+        samples=len(x),
+        points=tuple(np.array([m]) for m in mean),
+    )
+
+
+def test_a_long_noisy_sweep_is_binned_to_a_band_chart_of_30_points():
+    x = [float(i) for i in range(60)]
+    base = _hand_profile(x, np.linspace(1.0, 2.0, 60), np.full(60, 0.5))
+    cand = _hand_profile(x, np.linspace(1.0, 2.0, 60) + 0.1, np.full(60, 0.5))
+    plan = plan_chart(base, cand)
+    assert isinstance(plan, BandChart)
+    assert len(plan.labels) == len(set(plan.labels)) == 30
+    assert plan.labels[0] == "0.5"
+    chart = mermaid_chart("m", None, plan, None)
+    (axis,) = re.findall(r'x-axis "speed" \[(.*)\]', chart)
+    assert axis.count('"') == 60
+
+
+def test_diff_bars_with_a_spread_print_the_std_and_a_std_csv():
+    x = (1.0, 1.0 + 1e-15)  # labels that collide
+    base = _hand_profile(x, [1.0, 2.0], [5.0, 5.0])
+    cand = _hand_profile(x, [1.5, 2.5], [5.0, 5.0])
+    plan = plan_chart(base, cand)
+    assert isinstance(plan, DiffBars)
+    assert all(r.before_std == r.after_std == 5.0 for r in plan.rows)
+    fence = diff_bars("m", None, plan)
+    assert fence.count(" ± 5 ") == 4
+    rows = _csv(data_block("m", plan), "m")
+    assert rows[0] == ["speed", "before", "before_std", "after", "after_std"]
+    assert rows[1][1:] == ["1", "5", "1.5", "5"]
+
+
+def test_a_label_with_a_fence_cannot_close_the_diff_or_csv_fence():
+    plan = DiffBars("in```put", (DiffRow("a```b", 1.0, 2.0), DiffRow("c", 3.0, 4.0)))
+    fence = diff_bars("m", None, plan)
+    assert "a'''b" in fence
+    body = fence[fence.index("```diff") :]
+    assert body.count("```") == 2  # the opening and closing fence only
+    block = data_block("m", plan)
+    assert "a'''b" in block
+    assert "in'''put" in block
+    assert block.count("```") == 2
 
 
 # --- every form ---------------------------------------------------------------------
