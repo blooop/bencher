@@ -523,6 +523,22 @@ def test_a_long_noisy_sweep_is_binned_to_a_band_chart_of_30_points():
     assert axis.count('"') == 60
 
 
+def test_band_lines_sit_one_std_either_side_of_each_mean():
+    x = [1.0, 2.0, 3.0]
+    base = _hand_profile(x, [1.0, 2.0, 3.0], [0.5, 0.5, 0.5])
+    cand = _hand_profile(x, [1.1, 2.1, 3.1], [0.5, 0.5, 0.5])
+    plan = plan_chart(base, cand)
+    assert isinstance(plan, BandChart)
+    chart = mermaid_chart("m", None, plan, None)
+    assert '    line "before -1 std" [0.5, 1.5, 2.5]' in chart
+    assert '    line "before +1 std" [1.5, 2.5, 3.5]' in chart
+    assert '    line "after -1 std" [0.6, 1.6, 2.6]' in chart
+    assert '    line "after +1 std" [1.6, 2.6, 3.6]' in chart
+    rows = _csv(data_block("m", plan), "m")
+    assert rows[0] == ["speed", "before", "before_std", "after", "after_std"]
+    assert rows[1] == ["1", "1", "0.5", "1.1", "0.5"]
+
+
 def test_diff_bars_with_a_spread_print_the_std_and_a_std_csv():
     x = (1.0, 1.0 + 1e-15)  # labels that collide
     base = _hand_profile(x, [1.0, 2.0], [5.0, 5.0])
