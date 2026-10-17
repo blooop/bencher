@@ -444,7 +444,7 @@ def _overlap(
     """A table over the points both sides measured, and a note naming the rest."""
     before = dict(zip(base_x, (float(v) for v in base_mean), strict=True))
     after = dict(zip(cand_x, (float(v) for v in cand_mean), strict=True))
-    rows: list[OverlapRow] = []
+    shared: list[tuple[Any, float, float]] = []
     reasons: dict[str, list[Any]] = {}
     for v in _ordered([*base_x, *cand_x]):
         b, c = before.get(v), after.get(v)
@@ -459,15 +459,23 @@ def _overlap(
         elif not math.isfinite(c):
             reason = "no sample after"
         else:
-            rows.append(OverlapRow(_label(v), b, c))
+            shared.append((v, b, c))
             continue
         reasons.setdefault(reason, []).append(v)
     parts = [f"{_named(name, values)} ({reason})" for reason, values in reasons.items()]
-    labels = _distinct([row.label for row in rows])
-    rows = [
-        OverlapRow(label, row.before, row.after) for label, row in zip(labels, rows, strict=True)
-    ]
-    return OverlapTable(name, tuple(rows), f"Left out: {'; '.join([*parts, *notes])}.")
+    left_out = f"Left out: {'; '.join([*parts, *notes])}."
+    x = tuple(v for v, _, _ in shared)
+    before_v = np.array([b for _, b, _ in shared])
+    after_v = np.array([c for _, _, c in shared])
+    if len(x) > MAX_CHART_POINTS and all(_is_number(v) for v in x):
+        x, before_v, after_v = _bin(x, before_v, after_v)
+        left_out += f" {name} is binned to {len(x)} groups of consecutive values."
+    labels = _distinct([_label(v) for v in x])
+    rows = tuple(
+        OverlapRow(label, float(b), float(c))
+        for label, b, c in zip(labels, before_v, after_v, strict=True)
+    )
+    return OverlapTable(name, rows, left_out)
 
 
 def _line(profile: _Profile, dim: str) -> tuple[tuple, np.ndarray]:

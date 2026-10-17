@@ -477,6 +477,28 @@ def test_the_overlap_names_each_reason_a_point_was_left_out():
     assert "x=5 (after only)" in plan.left_out
 
 
+@pytest.mark.parametrize("nan_after", [False, True])
+def test_one_mismatched_point_in_a_long_sweep_bins_the_overlap_table(nan_after):
+    x = np.arange(5000.0)
+    cand_x = x.copy()
+    after = np.linspace(2.0, 3.0, 5000)
+    if nan_after:
+        after[3] = math.nan
+    else:
+        cand_x[-1] = 99999.0
+    base = _profile(xr.DataArray(np.linspace(1.0, 2.0, 5000), coords={"s": x}, dims=("s",)))
+    cand = _profile(xr.DataArray(after, coords={"s": cand_x}, dims=("s",)))
+    plan = plan_chart(base, cand)
+    assert isinstance(plan, OverlapTable)
+    md = overlap_table("cost", None, plan) + "\n\n" + data_block("cost", plan)
+    rows = re.findall(r"^\| ([\d.e+]+) \|", md, re.MULTILINE)
+    assert 0 < len(rows) <= 30
+    assert f"s is binned to {len(rows)} groups of consecutive values." in md
+    assert len(_csv(md, "cost")) == len(rows) + 1
+    left = "s=3 (no sample after)" if nan_after else "s=4999 (before only)"
+    assert left in md
+
+
 def _hand_profile(x, mean, std):
     return _Profile(
         swept=("speed",),
