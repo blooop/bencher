@@ -244,7 +244,8 @@ def test_a_numeric_sweep_draws_two_named_lines_with_a_fixed_palette():
     assert 'plotColorPalette: "#8c8c8c, #2f81f7"' in chart
     # Named series make GitHub draw a legend, so the title does not name the colors.
     assert 'title "stop_distance (m): before vs after"' in chart
-    assert "grey" not in chart and "blue" not in chart
+    assert "grey" not in chart
+    assert "blue" not in chart
     assert len(re.findall(r'^    line "before" \[', chart, re.MULTILINE)) == 1
     assert len(re.findall(r'^    line "after" \[', chart, re.MULTILINE)) == 1
     assert "bar [" not in chart
