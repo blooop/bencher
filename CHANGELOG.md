@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Evidence is text only.** `evidence.md` never links an image: every chart is text that
+  GitHub draws in the PR body, with no external resource. Each case that linked a PNG has a
+  text form now. Two or more swept inputs get an emoji heatmap of the percent change,
+  colored better or worse by the metric's direction, with one table per value of a third
+  input (up to 6) or the mean over the rest. A repeat-to-repeat spread as large as the
+  change gets the two lines with pale ±1 std lines (or ± std on text bars with no swept
+  input). A negative value with no swept input, and swept values that do not print as
+  distinct labels, get text bars in a `diff` fence. Any number of categories gets the
+  category table. Points or inputs that only one side has get a table over the shared
+  points and a "Left out:" line. Every metric ends with a `<details>` block holding a CSV
+  of the points its chart shows.
 - **Each compared metric carries the change with a 95% CI.** `compare_results` adds a
   `change` record to every entry in `metrics`: the mean difference (candidate − baseline),
   a bootstrap 95% CI, the method (`paired_bootstrap` over the per-point means when both
@@ -26,6 +37,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   strokes, so both curves read on GitHub's dark theme too.
 
 ### Changed
+- **PNGs are opt-in.** `bencher ab` writes no PNG unless `--png-dir DIR` is given, and
+  `write_evidence` and `bencher compare --markdown` write none without `png_dir` / `--png`
+  (`--png-dir` is an alias of `--png`). `write_evidence_pngs`, `png_name`, the JSON schema
+  (`schema_version` 1) and the exit codes do not change.
+
+### Deprecated
+- **`--png-url-base` and `png_url_base`.** Still accepted, ignored, and warned about: the
+  CLIs print a warning on stderr and the Python functions raise a `DeprecationWarning`,
+  because there is no image to link.
+
+### Removed
+- **`bencher.evidence.ImageOnly`.** The chart plan for "draw a PNG instead" has no use
+  now; it was never exported from `bencher`.
 - **A numeric sweep is drawn as two lines.** The `evidence.md` chart for one numeric swept
   input draws the baseline as a grey "before" line and the candidate as a blue "after" line.
   The lines are named, so GitHub draws a legend, and the colors are fixed in the chart's
@@ -35,8 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A categorical sweep is a table.** One string, enum or bool swept input gets a Markdown
   table, one row per category with before, after, the change and its 95% CI, instead of a
   chart that joined the categories with a line.
-- **No negative bars.** With no swept input, a negative mean links the PNG instead of an
-  `xychart-beta` bar, which grows from the bottom of the axis, not from 0.
+- **No negative bars.** With no swept input, a negative mean is drawn as text bars grown
+  from 0 instead of an `xychart-beta` bar, which grows from the bottom of the axis.
 
 ## [1.141.0] - 2026-10-16
 
