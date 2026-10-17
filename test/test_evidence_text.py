@@ -22,11 +22,14 @@ import xarray as xr
 
 import bencher as bn
 from bencher.evidence import (
+    MAX_HEATMAP_TABLES,
     MERMAID_AFTER_COLOR,
     BeforeAfterBars,
     DiffBars,
     Heatmap,
     OverlapTable,
+    _heat_legend,
+    _heat_mark,
     _Profile,
     _profile,
     data_block,
@@ -219,6 +222,73 @@ def test_each_layer_table_shows_the_change_of_its_own_layer():
     rows = _csv(data_block("m", plan), "m")
     assert rows[0] == ["a", "b", "mode", "before", "after", "change_percent"]
     assert ["2", "20", "sport", "100", "130", "30"] in rows
+
+
+def test_a_long_numeric_heatmap_axis_is_binned_and_says_so():
+    coords = {"a": list(range(31)), "b": list(range(13))}
+    before = np.ones((31, 13))
+    after = 1.0 + np.arange(31 * 13, dtype=float).reshape(31, 13)
+    plan = plan_chart(
+        _profile(xr.DataArray(before, coords=coords, dims=("a", "b"))),
+        _profile(xr.DataArray(after, coords=coords, dims=("a", "b"))),
+    )
+    assert isinstance(plan, Heatmap)
+    assert len(plan.row_labels) <= 30
+    assert len(plan.col_labels) <= 12
+    (grid,) = plan.grids
+    assert len(grid.after) == len(plan.row_labels)
+    assert all(len(r) == len(plan.col_labels) for r in grid.after)
+    # The first bin averages rows 0-1 and columns 0-1.
+    assert plan.row_labels[0] == plan.col_labels[0] == "0.5"
+    assert grid.after[0][0] == pytest.approx(float(after[:2, :2].mean()))
+    md = heatmap_table("m", None, plan)
+    assert f"a is binned to {len(plan.row_labels)} groups of consecutive values." in md
+    assert f"b is binned to {len(plan.col_labels)} groups of consecutive values." in md
+
+
+def test_a_heatmap_of_four_inputs_averages_over_both_extra_inputs():
+    coords = {"a": [1, 2], "b": [1, 2], "c": [1, 2], "d": [1, 2, 3]}
+    side = _profile(xr.DataArray(np.ones((2, 2, 2, 3)), coords=coords, dims=tuple(coords)))
+    plan = plan_chart(side, side)
+    assert isinstance(plan, Heatmap)
+    assert len(plan.grids) == 1
+    assert plan.layer_input is None
+    assert "Each cell is the mean over c (2 values), d (3 values)." in heatmap_table(
+        "m", None, plan
+    )
+
+
+def test_a_third_input_past_max_heatmap_tables_is_averaged():
+    coords = {"a": [1, 2], "b": [1, 2], "c": list(range(MAX_HEATMAP_TABLES + 1))}
+    shape = (2, 2, MAX_HEATMAP_TABLES + 1)
+    side = _profile(xr.DataArray(np.ones(shape), coords=coords, dims=tuple(coords)))
+    md = heatmap_table("m", None, plan_chart(side, side))
+    assert md.count("| a ↓ b → |") == 1
+    assert "c = " not in md
+    assert f"Each cell is the mean over c ({MAX_HEATMAP_TABLES + 1} values)." in md
+
+
+@pytest.mark.parametrize(
+    ("change", "direction", "mark"),
+    [
+        (-25.0, "minimize", "🟦"),  # better by at least 2x the margin
+        (-15.0, "minimize", "🟩"),  # better, between the margin and 2x the margin
+        (15.0, "minimize", "🟧"),  # worse, between the margin and 2x the margin
+        (25.0, "minimize", "🟥"),
+        (5.0, "minimize", "⬜"),  # inside the margin
+        (-5.0, "maximize", "⬜"),
+        (-15.0, "none", "🟪"),  # a fall with no direction
+        (15.0, "none", "🟨"),
+    ],
+)
+def test_heat_mark_colors(change, direction, mark):
+    assert _heat_mark(change, direction, 10.0) == mark
+
+
+def test_a_zero_margin_legend_says_no_change():
+    assert "⬜ no change" in _heat_legend("minimize", 0.0)
+    assert "⬜ no change" in _heat_legend("none", 0.0)
+    assert "within" not in _heat_legend("minimize", 0.0)
 
 
 # --- spread as large as the change: pale ±1 std lines ------------------------------
