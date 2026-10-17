@@ -278,7 +278,7 @@ def test_a_categorical_point_with_one_sample_has_no_ci_in_the_table():
 
 def test_negative_values_are_never_drawn_as_bars():
     md = bn.evidence_markdown(_shift(-2.0, input_vars=()), _shift(-2.5, input_vars=()))
-    assert "![stop_distance: before vs after]" in md
+    assert "```diff" in md
     for chart in _charts(md):
         for series in re.findall(r"bar \[(.*)\]", chart):
             assert all(float(v) >= 0 for v in series.split(", "))

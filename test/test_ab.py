@@ -115,9 +115,11 @@ def test_ab_measures_each_side_with_its_own_code(repo):
     assert cmp["candidate"]["provenance"]["source_revision"] == f"{head}+dirty"
     assert cmp["candidate"]["provenance"]["display_label"] == f"candidate {head}+dirty"
 
-    for name in ("base.pkl", "candidate.pkl", "evidence.md", "stop_distance.png"):
+    for name in ("base.pkl", "candidate.pkl", "evidence.md"):
         assert (out / name).exists(), name
         assert str(out / name) in proc.stdout
+    # Evidence is text only: PNGs are opt-in with --png-dir.
+    assert list(out.glob("*.png")) == []
     assert "xychart-beta" in (out / "evidence.md").read_text(encoding="utf-8")
     # The base worktree is gone.
     assert _git(repo, "worktree", "list").count("\n") == 0
@@ -141,6 +143,8 @@ def test_ab_explicit_base_and_image_url(repo):
     _git(repo, "commit", "-q", "-am", "lower gain")
     proc = _ab(repo, "--base", "HEAD", "--png-url-base", "https://example.test/x")
     assert proc.returncode == 0, proc.stderr
+    assert "text only" in proc.stderr
+    assert "example.test" not in (repo / "bencher-ab" / "evidence.md").read_text(encoding="utf-8")
     # Base and candidate are the same commit with a clean tree: nothing moved.
     assert _metric(repo / "bencher-ab")["verdict"] == "unchanged"
 
@@ -462,3 +466,11 @@ def test_ab_fails_when_the_base_still_imports_the_candidates_code(tmp_path):
     assert str(repo / "lib" / "mypkg" / "gain.py") in log
     assert not (repo / "bencher-ab" / "base.pkl").exists()
     assert _git(repo, "worktree", "list").count("\n") == 0
+
+
+def test_ab_png_dir_writes_one_png_per_metric(repo, tmp_path):
+    pngs = tmp_path / "pngs"
+    proc = _ab(repo, "--base", "HEAD", "--png-dir", str(pngs))
+    assert proc.returncode == 0, proc.stderr
+    assert (pngs / "stop_distance.png").exists()
+    assert str(pngs / "stop_distance.png") in proc.stdout

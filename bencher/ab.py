@@ -2,7 +2,7 @@
 
 ::
 
-    bencher ab [--base REF] [--out DIR] [--png-url-base URL] -- <command...>
+    bencher ab [--base REF] [--out DIR] [--png-dir DIR] -- <command...>
 
 The *base* side runs the command in a temporary, detached ``git worktree`` of the
 base revision; the *candidate* side runs it in the current working tree as it is,
@@ -23,7 +23,8 @@ The base revision is ``--base`` when given, else the merge-base of ``HEAD`` with
 ``origin/HEAD``, falling back to ``origin/main`` and then ``main``.
 
 ``--out`` (default ``./bencher-ab``) receives ``base.pkl``, ``candidate.pkl``,
-``comparison.json``, ``evidence.md``, one PNG per metric, and each side's log.
+``comparison.json``, the text-only ``evidence.md`` and each side's log.
+``--png-dir DIR`` also writes one PNG per metric there, for local viewing.
 A metric that only one side declares is named in a warning on stderr and in
 ``evidence.md``; a claim on it is still judged.
 Exit status is 0 when both sides ran and were compared, whatever the verdict and
@@ -260,7 +261,12 @@ def _parser() -> argparse.ArgumentParser:
         "--out", metavar="DIR", default="bencher-ab", help="Output directory (./bencher-ab)"
     )
     parser.add_argument(
-        "--png-url-base", metavar="URL", help="URL prefix for image links in evidence.md"
+        "--png-dir", metavar="DIR", help="Also write one PNG per metric here, for local viewing"
+    )
+    parser.add_argument(
+        "--png-url-base",
+        metavar="URL",
+        help="Deprecated and ignored: evidence.md is text only and links no image",
     )
     parser.add_argument("command", nargs=argparse.REMAINDER, help="-- <command...>")
     return parser
@@ -297,8 +303,11 @@ def main(argv: list[str]) -> int:
         print(f"bencher ab: {exc}", file=sys.stderr)  # noqa: T201 - CLI output
         return 2
 
-    from bencher.evidence import unpaired_warnings, write_evidence
+    from bencher.evidence import PNG_URL_BASE_FLAG_DEPRECATED, unpaired_warnings, write_evidence
     from bencher.render import load_result
+
+    if args.png_url_base is not None:
+        print(f"bencher ab: warning: {PNG_URL_BASE_FLAG_DEPRECATED}", file=sys.stderr)  # noqa: T201 - CLI output
 
     try:
         files = write_evidence(
@@ -306,8 +315,7 @@ def main(argv: list[str]) -> int:
             load_result(candidate_pkl),
             json_path=out / "comparison.json",
             markdown_path=out / "evidence.md",
-            png_dir=out,
-            png_url_base=args.png_url_base,
+            png_dir=args.png_dir,
         )
     except ValueError as exc:
         print(f"bencher ab: compare failed: {exc}", file=sys.stderr)  # noqa: T201 - CLI output

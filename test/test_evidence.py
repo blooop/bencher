@@ -90,22 +90,22 @@ def test_the_y_range_holds_the_claim_threshold():
     assert 0 < lo <= 0.09
 
 
-def test_two_swept_inputs_link_an_image_instead():
+def test_two_swept_inputs_draw_a_heatmap_not_an_image():
     md = bn.evidence_markdown(
         _collect(0.3, input_vars=("speed", "load")),
         _collect(0.2, input_vars=("speed", "load")),
-        png_url_base="https://raw.example/pr/abc/",
     )
     assert "```mermaid" not in md
-    assert "![stop_distance: before vs after](https://raw.example/pr/abc/stop_distance.png)" in md
+    assert "![" not in md
+    assert "| speed ↓ load → |" in md
 
 
-def test_a_spread_as_large_as_the_change_links_an_image():
+def test_a_spread_as_large_as_the_change_draws_std_lines_not_an_image():
     md = bn.evidence_markdown(
         _collect(0.3, repeats=2, noisy=True), _collect(0.29, repeats=2, noisy=True)
     )
-    assert "```mermaid" not in md
-    assert "](stop_distance.png)" in md
+    assert "![" not in md
+    assert 'line "before +1 std"' in _chart(md)
 
 
 def test_a_long_sweep_is_binned_to_at_most_thirty_points():
@@ -171,26 +171,27 @@ def test_compare_writes_markdown_and_one_png_per_metric(saved, tmp_path):
     a, b = saved
     md, png_dir = tmp_path / "out" / "evidence.md", tmp_path / "out" / "png"
     assert main(["compare", str(a), str(b), "--markdown", str(md), "--png", str(png_dir)]) == 0
-    assert "](png/stop_distance.png)" in md.read_text(encoding="utf-8")
+    assert ".png" not in md.read_text(encoding="utf-8")
     image = imread(png_dir / "stop_distance.png")
     assert image.shape[:2] == (440, 880)
 
 
-def test_compare_markdown_alone_writes_the_pngs_it_links_beside_it(saved, tmp_path):
+def test_compare_markdown_alone_writes_no_png(saved, tmp_path):
     a, b = saved
     md = tmp_path / "evidence.md"
     assert main(["compare", str(a), str(b), "--markdown", str(md)]) == 0
-    assert "](stop_distance.png)" in md.read_text(encoding="utf-8")
-    assert (tmp_path / "stop_distance.png").exists()
+    assert ".png" not in md.read_text(encoding="utf-8")
+    assert list(tmp_path.rglob("*.png")) == []
 
 
-def test_compare_png_url_base_pins_the_image_links(saved, tmp_path):
+def test_compare_png_url_base_is_accepted_but_adds_no_link(saved, tmp_path, capsys):
     a, b = saved
     md = tmp_path / "evidence.md"
     base = "https://raw.githubusercontent.com/o/r/sha/evidence"
     args = ["compare", str(a), str(b), "--markdown", str(md), "--png-url-base", base]
     assert main(args) == 0
-    assert f"]({base}/stop_distance.png)" in md.read_text(encoding="utf-8")
+    assert "--png-url-base is deprecated" in capsys.readouterr().err
+    assert base not in md.read_text(encoding="utf-8")
 
 
 def test_compare_json_still_works_and_carries_the_claim(saved, tmp_path):
@@ -286,42 +287,30 @@ def test_a_minus_inf_worst_sample_is_not_captioned_as_inf():
     assert "worst inf" not in claim
 
 
-def test_an_empty_png_url_base_links_relative_to_the_markdown(tmp_path):
+def test_png_dir_writes_pngs_the_markdown_does_not_link(tmp_path):
     md, png_dir = tmp_path / "out" / "e.md", tmp_path / "out" / "png"
     bn.write_evidence(
         _collect(0.3, input_vars=("speed", "load")),
         _collect(0.2, input_vars=("speed", "load")),
         markdown_path=md,
         png_dir=png_dir,
-        png_url_base="",
     )
-    assert "](png/stop_distance.png)" in md.read_text(encoding="utf-8")
+    assert ".png" not in md.read_text(encoding="utf-8")
     assert (png_dir / "stop_distance.png").exists()
 
 
-def test_an_image_link_through_a_path_with_spaces_stays_a_link(tmp_path):
-    md = tmp_path / "md dir" / "evidence.md"
-    bn.write_evidence(
-        _collect(0.3, input_vars=("speed", "load")),
-        _collect(0.2, input_vars=("speed", "load")),
-        markdown_path=md,
-        png_dir=tmp_path / "my pngs",
-    )
-    destination = re.search(r"!\[[^\]]*\]\(([^)]*)\)", md.read_text(encoding="utf-8"))[1]
-    assert " " not in destination
-    assert destination.endswith("/stop_distance.png")
-
-
-def test_a_baseline_that_swept_nothing_against_a_swept_candidate_links_an_image():
+def test_a_baseline_that_swept_nothing_against_a_swept_candidate_compares_the_means():
     md = bn.evidence_markdown(_collect(0.3, input_vars=()), _collect(0.2))
     assert "```mermaid" not in md
-    assert "](stop_distance.png)" in md
+    assert "![" not in md
+    assert "| all points |" in md
 
 
-def test_a_point_with_no_recorded_sample_links_an_image():
+def test_a_point_with_no_recorded_sample_is_left_out_of_a_table():
     md = bn.evidence_markdown(_collect_margin(1.0), _collect_margin(math.nan))
     assert "```mermaid" not in md
-    assert "](margin.png)" in md
+    assert "![" not in md
+    assert "Left out:" in md
 
 
 class Fleet(bn.ParametrizedSweep):
@@ -341,10 +330,11 @@ def _collect_fleet(gain):
     return res
 
 
-def test_more_than_thirty_categories_link_an_image():
+def test_more_than_thirty_categories_get_a_table():
     md = bn.evidence_markdown(_collect_fleet(0.3), _collect_fleet(0.2))
     assert "```mermaid" not in md
-    assert "](load.png)" in md
+    assert "![" not in md
+    assert len(re.findall(r"^\| r\d\d \|", md, re.MULTILINE)) == 31
 
 
 def test_markdown_alone_with_only_charted_metrics_writes_no_png(tmp_path):
