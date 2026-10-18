@@ -324,3 +324,45 @@ def test_a_heatmap_cell_is_colored_by_whether_its_change_is_better(direction, fe
     assert to_hex(fell_rgba) == fell
     assert to_hex(rose_rgba) == rose
     assert meaning in fig.axes[-1].get_ylabel()
+
+
+class Faulty(Braking):
+    """Braking whose fifth call gives ``bad`` instead of a distance."""
+
+    def __init__(self, bad, **params):
+        super().__init__(**params)
+        self._bad = bad
+        self._calls = 0
+
+    def benchmark(self):
+        super().benchmark()
+        self._calls += 1
+        if self._calls == 5:
+            self.stop_distance = self._bad
+
+
+def _collect_faulty(gain, bad):
+    bench = bn.Bench(f"braking_faulty_{gain}", Faulty(bad))
+    res = bench.collect(
+        input_vars=["speed"],
+        result_vars=["stop_distance"],
+        const_vars=[("gain", gain)],
+        run_cfg=bn.BenchRunCfg(repeats=3),
+    )
+    bench.close()
+    return res
+
+
+def test_a_csv_leaves_out_a_repeat_that_is_not_finite(tmp_path):
+    bn.write_evidence(
+        _collect(0.3),
+        _collect_faulty(0.2, float("nan")),
+        images=bn.ImageOutput(tmp_path),
+    )
+
+    text = (tmp_path / "stop_distance.csv").read_text(encoding="utf-8")
+    assert "nan" not in text.lower()
+    rows = list(csv.DictReader(text.splitlines()))
+    # 3 speeds x 3 repeats per side, less the one nan repeat after.
+    assert sum(r["side"] == "before" for r in rows) == 9
+    assert sum(r["side"] == "after" for r in rows) == 8
