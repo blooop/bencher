@@ -204,6 +204,26 @@ def test_ab_with_an_unknown_base_exits_2_before_it_runs_anything(repo):
     assert _git(repo, "worktree", "list").count("\n") == 0
 
 
+def test_ab_with_the_png_dir_as_the_image_dir_exits_before_it_runs_anything(repo, tmp_path):
+    marker = tmp_path / "ran"
+    proc = subprocess.run(
+        [
+            *(sys.executable, "-m", "bencher.render", "ab", "--base", "main"),
+            *("--out", "o", "--png-dir", "o/x/../images", "--images", "--"),
+            *(sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"),
+        ],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert proc.returncode == 2
+    assert "--png-dir" in proc.stderr
+    assert not marker.exists()
+    assert not (repo / "o").exists()
+
+
 AB_MAIN = (sys.executable, "-m", "bencher.render", "ab", "--base", "main")
 
 

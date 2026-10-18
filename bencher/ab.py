@@ -325,6 +325,11 @@ def main(argv: list[str]) -> int:
 
     here = Path.cwd().resolve()
     out = Path(args.out).resolve()
+    if args.images and args.png_dir is not None and Path(args.png_dir).resolve() == out / "images":
+        parser.error(
+            f"--png-dir {args.png_dir} is where --images writes its PNGs under the same names; "
+            "give another --png-dir"
+        )
     try:
         top = Path(_git(["rev-parse", "--show-toplevel"], here)).resolve()
         base = resolve_base(args.base, top)
