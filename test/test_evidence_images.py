@@ -51,8 +51,7 @@ def test_images_link_a_png_above_each_text_chart_and_keep_the_data(tmp_path):
         _collect(0.3),
         _collect(0.2),
         markdown_path=tmp_path / "evidence.md",
-        image_dir=tmp_path / "images",
-        publish_images=_fake_publish(calls),
+        images=bn.ImageOutput(tmp_path / "images", publish=_fake_publish(calls)),
     )
     md = files.markdown_path.read_text(encoding="utf-8")
 
@@ -69,7 +68,7 @@ def test_images_link_a_png_above_each_text_chart_and_keep_the_data(tmp_path):
 
 
 def test_an_image_is_a_real_png_and_its_csv_holds_every_repeat(tmp_path):
-    bn.write_evidence(_collect(0.3), _collect(0.2), image_dir=tmp_path)
+    bn.write_evidence(_collect(0.3), _collect(0.2), images=bn.ImageOutput(tmp_path))
 
     height, width, _ = imread(tmp_path / "stop_distance.png").shape
     assert width > height > 200
@@ -87,8 +86,7 @@ def test_without_a_link_the_markdown_is_the_text_only_one(tmp_path):
         base,
         cand,
         markdown_path=tmp_path / "evidence.md",
-        image_dir=tmp_path / "images",
-        publish_images=lambda _files: {},
+        images=bn.ImageOutput(tmp_path / "images", publish=lambda _files: {}),
     )
 
     assert (tmp_path / "images" / "stop_distance.png").exists()
@@ -104,8 +102,7 @@ def test_one_sample_per_point_draws_no_image_the_text_chart_already_shows(tmp_pa
         _collect(0.3, repeats=1),
         _collect(0.2, repeats=1),
         markdown_path=tmp_path / "evidence.md",
-        image_dir=tmp_path / "images",
-        publish_images=_fake_publish(calls),
+        images=bn.ImageOutput(tmp_path / "images", publish=_fake_publish(calls)),
     )
 
     assert files.images == {}
@@ -117,7 +114,7 @@ def test_two_swept_inputs_get_a_heatmap_image_even_with_one_sample(tmp_path):
     files = bn.write_evidence(
         _collect(0.3, input_vars=("speed", "load"), repeats=1),
         _collect(0.2, input_vars=("speed", "load"), repeats=1),
-        image_dir=tmp_path,
+        images=bn.ImageOutput(tmp_path),
     )
 
     assert files.images == {"stop_distance": tmp_path / "stop_distance.png"}
@@ -128,7 +125,7 @@ def test_two_swept_inputs_get_a_heatmap_image_even_with_one_sample(tmp_path):
 
 def test_no_swept_input_with_repeats_gets_an_image(tmp_path):
     files = bn.write_evidence(
-        _collect(0.3, input_vars=()), _collect(0.2, input_vars=()), image_dir=tmp_path
+        _collect(0.3, input_vars=()), _collect(0.2, input_vars=()), images=bn.ImageOutput(tmp_path)
     )
 
     assert set(files.images) == {"stop_distance"}
@@ -138,7 +135,9 @@ def test_no_swept_input_with_repeats_gets_an_image(tmp_path):
 def test_images_do_not_change_the_png_dir_pngs(tmp_path, input_vars):
     base, cand = _collect(0.3, input_vars=input_vars), _collect(0.2, input_vars=input_vars)
     alone = bn.write_evidence(base, cand, png_dir=tmp_path / "a")
-    both = bn.write_evidence(base, cand, png_dir=tmp_path / "b", image_dir=tmp_path / "img")
+    both = bn.write_evidence(
+        base, cand, png_dir=tmp_path / "b", images=bn.ImageOutput(tmp_path / "img")
+    )
 
     assert (tmp_path / "a" / "stop_distance.png").read_bytes() == (
         tmp_path / "b" / "stop_distance.png"
@@ -147,28 +146,15 @@ def test_images_do_not_change_the_png_dir_pngs(tmp_path, input_vars):
 
 
 def test_the_same_dir_for_pngs_and_images_is_an_error(tmp_path):
-    with pytest.raises(ValueError, match=r"png_dir and image_dir"):
+    with pytest.raises(ValueError, match=r"png_dir and images.dir"):
         bn.write_evidence(
             _collect(0.3),
             _collect(0.2),
             png_dir=tmp_path / "x",
-            image_dir=tmp_path / "y" / ".." / "x",
+            images=bn.ImageOutput(tmp_path / "y" / ".." / "x"),
         )
 
     assert not (tmp_path / "x").exists()
-
-
-def test_a_publisher_without_an_image_dir_is_an_error(tmp_path):
-    calls = []
-    with pytest.raises(ValueError, match=r"publish_images.*image_dir"):
-        bn.write_evidence(
-            _collect(0.3),
-            _collect(0.2),
-            markdown_path=tmp_path / "evidence.md",
-            publish_images=_fake_publish(calls),
-        )
-
-    assert calls == []
 
 
 def test_a_png_link_without_a_csv_link_draws_the_image_and_no_csv_link(tmp_path):
@@ -177,8 +163,9 @@ def test_a_png_link_without_a_csv_link_draws_the_image_and_no_csv_link(tmp_path)
         _collect(0.3),
         _collect(0.2),
         markdown_path=tmp_path / "evidence.md",
-        image_dir=tmp_path / "images",
-        publish_images=lambda _files: {"stop_distance.png": url},
+        images=bn.ImageOutput(
+            tmp_path / "images", publish=lambda _files: {"stop_distance.png": url}
+        ),
     )
     md = files.markdown_path.read_text(encoding="utf-8")
 
@@ -235,7 +222,7 @@ def test_each_image_layout_writes_a_png_that_decodes(tmp_path, input_vars, repea
     files = bn.write_evidence(
         _collect_layout(0.3, input_vars, repeats),
         _collect_layout(0.2, input_vars, repeats),
-        image_dir=tmp_path,
+        images=bn.ImageOutput(tmp_path),
     )
 
     png = tmp_path / "stop_distance.png"
@@ -249,7 +236,7 @@ def test_sides_that_sweep_different_inputs_get_no_image(tmp_path):
     files = bn.write_evidence(
         _collect(0.3, input_vars=("speed",)),
         _collect(0.2, input_vars=("load",)),
-        image_dir=tmp_path,
+        images=bn.ImageOutput(tmp_path),
     )
 
     assert files.images == {}
@@ -286,8 +273,7 @@ def test_a_heatmap_with_no_finite_change_gets_no_image(tmp_path):
         _collect_coasting(0.0),
         _collect_coasting(0.2),
         markdown_path=tmp_path / "evidence.md",
-        image_dir=tmp_path / "images",
-        publish_images=_fake_publish(calls),
+        images=bn.ImageOutput(tmp_path / "images", publish=_fake_publish(calls)),
     )
     md = files.markdown_path.read_text(encoding="utf-8")
 

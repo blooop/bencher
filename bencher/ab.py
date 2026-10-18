@@ -296,7 +296,9 @@ def _run_dir(candidate_revision: str) -> str:
     return f"{stamp}-{revision}-{secrets.token_hex(3)}"
 
 
-def _image_publisher(top: Path, run_dir: str, image_dir: Path) -> Callable:
+def _image_publisher(
+    top: Path, run_dir: str, image_dir: Path
+) -> Callable[[dict[str, Path]], dict[str, str]]:
     """Push the images to the evidence ref; on failure, say so on one line and link none."""
     from bencher.evidence_ref import EvidencePublishError, publish_evidence
 
@@ -351,18 +353,23 @@ def main(argv: list[str]) -> int:
         print(f"bencher ab: {exc}", file=sys.stderr)  # noqa: T201 - CLI output
         return 2
 
-    from bencher.evidence import PNG_URL_BASE_FLAG_DEPRECATED, unpaired_warnings, write_evidence
+    from bencher.evidence import (
+        PNG_URL_BASE_FLAG_DEPRECATED,
+        ImageOutput,
+        unpaired_warnings,
+        write_evidence,
+    )
     from bencher.render import load_result
 
     if args.png_url_base is not None:
         print(f"bencher ab: warning: {PNG_URL_BASE_FLAG_DEPRECATED}", file=sys.stderr)  # noqa: T201 - CLI output
 
-    image_dir = out / "images" if args.images else None
-    publish = (
-        _image_publisher(top, _run_dir(candidate_revision), image_dir)
-        if image_dir is not None
-        else None
-    )
+    images = None
+    if args.images:
+        image_dir = out / "images"
+        images = ImageOutput(
+            image_dir, _image_publisher(top, _run_dir(candidate_revision), image_dir)
+        )
     try:
         files = write_evidence(
             load_result(base_pkl),
@@ -370,8 +377,7 @@ def main(argv: list[str]) -> int:
             json_path=out / "comparison.json",
             markdown_path=out / "evidence.md",
             png_dir=args.png_dir,
-            image_dir=image_dir,
-            publish_images=publish,
+            images=images,
         )
     except ValueError as exc:
         print(f"bencher ab: compare failed: {exc}", file=sys.stderr)  # noqa: T201 - CLI output

@@ -8,8 +8,8 @@ the comparison JSON, the Markdown and the PNGs in one call; ``bencher compare`` 
 ``bencher ab`` are its command-line front ends.
 
 The Markdown is text only by default: every chart is text that GitHub draws in the
-PR body, with no image and no external resource. ``write_evidence(image_dir=...,
-publish_images=...)`` (``bencher ab --images``) also draws an image of each metric
+PR body, with no image and no external resource. ``write_evidence(images=ImageOutput(...))``
+(``bencher ab --images``) also draws an image of each metric
 whose image shows more than its text chart and links it above that chart, which
 stays. :func:`plan_chart` picks the text form:
 
@@ -1832,12 +1832,25 @@ def _write_images(metrics: Sequence[_Metric], out_dir: Path) -> dict[str, Path]:
 
 
 @dataclass(frozen=True)
+class ImageOutput:
+    """Where :func:`write_evidence` writes its images, and how it links them.
+
+    *publish* receives ``{file name: path}`` of the files written to *dir* and
+    returns ``{file name: link}``; without it the images are written and linked
+    nowhere.
+    """
+
+    dir: Path
+    publish: Callable[[dict[str, Path]], Mapping[str, str]] | None = None
+
+
+@dataclass(frozen=True)
 class EvidenceFiles:
     """What :func:`write_evidence` wrote; a path is None when its file was not asked for.
 
     ``pngs`` maps each metric to the PNG written for it: every metric with *png_dir*,
     else none; the Markdown links no PNG of ``pngs``. ``images`` maps each metric an
-    image adds to (see *image_dir*) to its image, and ``image_urls`` maps each metric
+    image adds to (see *images*) to its image, and ``image_urls`` maps each metric
     whose image the Markdown links to that link.
     """
 
@@ -1858,8 +1871,7 @@ def write_evidence(
     png_dir: str | Path | None = None,
     png_url_base: str | None = None,
     run_cfg: BenchRunCfg | None = None,
-    image_dir: str | Path | None = None,
-    publish_images: Callable[[dict[str, Path]], Mapping[str, str]] | None = None,
+    images: ImageOutput | None = None,
 ) -> EvidenceFiles:
     """Compare two results once and write the JSON, Markdown and PNGs asked for.
 
@@ -1867,25 +1879,23 @@ def write_evidence(
     *png_dir*, for local viewing. *png_url_base* is deprecated and ignored, with a
     :class:`DeprecationWarning`.
 
-    With *image_dir*, each metric whose image shows more than its text chart (more
+    With *images*, each metric whose image shows more than its text chart (more
     than one sample at a point, or two or more swept inputs) also gets an image
-    there: every repeat with a box per point and the mean ± 1 std, or a heatmap of
+    in ``images.dir``: every repeat with a box per point and the mean ± 1 std, or a heatmap of
     the percent change. A ``<metric>.csv`` of every sample goes beside it.
-    *publish_images* receives ``{file name: path}`` of those files and returns
+    ``images.publish`` receives ``{file name: path}`` of those files and returns
     ``{file name: link}``; the Markdown puts each linked image above the metric's
     text chart, which stays. A file it does not link is left out of the Markdown.
-    The images share the PNGs' file names, so *png_dir* and *image_dir* must differ
+    The images share the PNGs' file names, so *png_dir* and ``images.dir`` must differ
     (:class:`ValueError` otherwise).
     """
-    if publish_images is not None and image_dir is None:
-        raise ValueError("publish_images needs image_dir: the images are written there first")
     if (
         png_dir is not None
-        and image_dir is not None
-        and Path(png_dir).resolve() == Path(image_dir).resolve()
+        and images is not None
+        and Path(png_dir).resolve() == Path(images.dir).resolve()
     ):
         raise ValueError(
-            f"png_dir and image_dir are the same directory ({png_dir}): "
+            f"png_dir and images.dir are the same directory ({png_dir}): "
             "the images use the same file names and would overwrite the PNGs"
         )
     if png_url_base is not None:
@@ -1906,18 +1916,18 @@ def write_evidence(
             for m in metrics
         }
 
-    images: dict[str, Path] = {}
+    written_images: dict[str, Path] = {}
     linked: dict[str, tuple[str, str | None]] = {}
-    if image_dir is not None:
-        images = _write_images(metrics, Path(image_dir))
-        if publish_images is not None and images:
+    if images is not None:
+        written_images = _write_images(metrics, Path(images.dir))
+        if images.publish is not None and written_images:
             files = {
                 path.name: path
-                for png in images.values()
+                for png in written_images.values()
                 for path in (png, png.with_suffix(".csv"))
             }
-            urls = publish_images(files)
-            for name, png in images.items():
+            urls = images.publish(files)
+            for name, png in written_images.items():
                 if png.name in urls:
                     linked[name] = (urls[png.name], urls.get(png.with_suffix(".csv").name))
 
@@ -1928,4 +1938,4 @@ def write_evidence(
         written_md.write_text(_markdown(metrics, comparison, linked), encoding="utf-8")
 
     image_urls = {name: png_url for name, (png_url, _) in linked.items()}
-    return EvidenceFiles(comparison, written_json, written_md, pngs, images, image_urls)
+    return EvidenceFiles(comparison, written_json, written_md, pngs, written_images, image_urls)
