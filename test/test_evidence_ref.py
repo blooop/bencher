@@ -319,3 +319,27 @@ def test_a_run_dir_that_is_not_a_plain_name_pushes_nothing(repo, remote, tmp_pat
         push_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir=run_dir)
 
     assert _git(remote, "for-each-ref", EVIDENCE_REF) == ""
+
+
+def test_without_a_git_identity_the_commit_is_made_as_bencher(repo, remote, tmp_path, monkeypatch):
+    files = tmp_path / "files"
+    files.mkdir()
+    _git(repo, "config", "--unset", "user.name")
+    _git(repo, "config", "--unset", "user.email")
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for var in (
+        "GIT_AUTHOR_NAME",
+        "GIT_AUTHOR_EMAIL",
+        "GIT_COMMITTER_NAME",
+        "GIT_COMMITTER_EMAIL",
+        "EMAIL",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+    commit = push_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir="run-1")
+
+    assert _git(remote, "log", "-1", "--format=%an", commit) == "bencher"
