@@ -1868,6 +1868,8 @@ def write_evidence(
     ``{file name: link}``; the Markdown puts each linked image above the metric's
     text chart, which stays. A file it does not link is left out of the Markdown.
     """
+    if publish_images is not None and image_dir is None:
+        raise ValueError("publish_images needs image_dir: the images are written there first")
     if png_url_base is not None:
         warnings.warn(PNG_URL_BASE_DEPRECATED, DeprecationWarning, stacklevel=2)
     comparison = compare_results(baseline, candidate, run_cfg=run_cfg)
