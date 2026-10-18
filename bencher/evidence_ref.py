@@ -172,7 +172,7 @@ def push_evidence(
             _run(["update-ref", ref, commit], cwd)
             return commit
         reason = pushed.stderr.strip()
-        if "rejected" not in reason:
+        if "[rejected]" not in reason:
             raise EvidencePublishError(f"git push to {remote} failed: {reason}")
     raise EvidencePublishError(
         f"git push to {remote} {ref} was rejected {attempts} times: {reason}"

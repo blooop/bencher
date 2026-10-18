@@ -140,14 +140,12 @@ def test_each_run_adds_a_commit_on_top_of_the_last(repo, remote, tmp_path):
     assert _git(remote, "ls-tree", "--name-only", first) == "run-1"
 
 
-def test_a_concurrent_push_is_reparented_not_overwritten(repo, remote, tmp_path):
-    """Another clone pushes between our fetch and our push; ours lands on top of it."""
-    files = tmp_path / "files"
-    files.mkdir()
-    other = _clone(remote, tmp_path / "other")
-    push_evidence(other, {"o.png": _png(files, "o.png")}, run_dir="other-1")
+def _racing_git(tmp_path: Path, other: Path, files: Path, *, every: bool) -> Path:
+    """A git dir for PATH that lets *other* push to the ref before our push.
 
-    # A git on PATH that, on our first push only, lets the other clone push first.
+    Before the first push only, or before every push when *every*; the file it
+    returns holds the SHA of the other clone's latest commit.
+    """
     real_git = subprocess.run(
         ["sh", "-c", "command -v git"],  # noqa: S607
         check=True,
@@ -160,8 +158,9 @@ def test_a_concurrent_push_is_reparented_not_overwritten(repo, remote, tmp_path)
     racer = files / "racer.png"
     racer.write_bytes(PNG + b"racer")
     blob = _git(other, "hash-object", "-w", "--no-filters", str(racer))
+    once = "" if every else f' && [ ! -e "{marker}" ]'
     script = f"""#!/bin/sh
-if [ "$1" = "push" ] && [ ! -e "{marker}" ]; then
+if [ "$1" = "push" ]{once}; then
   touch "{marker}"
   (
     cd "{other}" || exit 1
@@ -179,12 +178,19 @@ exec "{real_git}" "$@"
     shim = shim_dir / "git"
     shim.write_text(script, encoding="utf-8")
     shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
-    old_path = os.environ["PATH"]
-    os.environ["PATH"] = f"{shim_dir}{os.pathsep}{old_path}"
-    try:
-        ours = push_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir="ours-1")
-    finally:
-        os.environ["PATH"] = old_path
+    return marker
+
+
+def test_a_concurrent_push_is_reparented_not_overwritten(repo, remote, tmp_path, monkeypatch):
+    """Another clone pushes between our fetch and our push; ours lands on top of it."""
+    files = tmp_path / "files"
+    files.mkdir()
+    other = _clone(remote, tmp_path / "other")
+    push_evidence(other, {"o.png": _png(files, "o.png")}, run_dir="other-1")
+    marker = _racing_git(tmp_path, other, files, every=False)
+    monkeypatch.setenv("PATH", f"{tmp_path / 'shim'}{os.pathsep}{os.environ['PATH']}")
+
+    ours = push_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir="ours-1")
 
     racer_commit = marker.read_text(encoding="utf-8").strip()
     assert racer_commit, "the racing push did not run"
@@ -194,17 +200,39 @@ exec "{real_git}" "$@"
     assert len(chain) == 3
 
 
-def test_push_gives_up_after_the_attempts_without_forcing(repo, remote, tmp_path):
+def test_push_gives_up_after_the_attempts_without_forcing(repo, remote, tmp_path, monkeypatch):
+    """Another clone wins every race; ours gives up and never forces the ref."""
     files = tmp_path / "files"
     files.mkdir()
-    # The remote rejects every update of the ref.
-    hook = remote / "hooks" / "pre-receive"
-    hook.write_text("#!/bin/sh\necho no >&2\nexit 1\n", encoding="utf-8")
-    hook.chmod(hook.stat().st_mode | stat.S_IXUSR)
+    other = _clone(remote, tmp_path / "other")
+    push_evidence(other, {"o.png": _png(files, "o.png")}, run_dir="other-1")
+    marker = _racing_git(tmp_path, other, files, every=True)
+    monkeypatch.setenv("PATH", f"{tmp_path / 'shim'}{os.pathsep}{os.environ['PATH']}")
 
-    with pytest.raises(EvidencePublishError):
+    with pytest.raises(EvidencePublishError, match="rejected 2 times"):
         push_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir="run-1", attempts=2)
 
+    racer_commit = marker.read_text(encoding="utf-8").strip()
+    assert racer_commit, "the racing push did not run"
+    assert _git(remote, "rev-parse", EVIDENCE_REF) == racer_commit
+
+
+def test_a_push_the_server_refuses_is_not_retried(repo, remote, tmp_path):
+    files = tmp_path / "files"
+    files.mkdir()
+    runs = tmp_path / "hook-runs"
+    hook = remote / "hooks" / "pre-receive"
+    hook.write_text(
+        f'#!/bin/sh\necho run >> "{runs}"\necho protected ref >&2\nexit 1\n', encoding="utf-8"
+    )
+    hook.chmod(hook.stat().st_mode | stat.S_IXUSR)
+
+    with pytest.raises(EvidencePublishError) as raised:
+        push_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir="run-1", attempts=3)
+
+    assert "times" not in str(raised.value)
+    assert "declined" in str(raised.value)
+    assert runs.read_text(encoding="utf-8").splitlines() == ["run"]
     assert _git(remote, "for-each-ref", EVIDENCE_REF) == ""
 
 
