@@ -163,6 +163,7 @@ def _racing_git(tmp_path: Path, other: Path, files: Path, *, every: bool) -> Pat
 if [ "$1" = "push" ]{once}; then
   touch "{marker}"
   (
+    unset GIT_DIR  # the racer is another clone, not the repo our git call runs in
     cd "{other}" || exit 1
     tree=$(printf '100644 blob {blob}\\tr.png\\n' | "{real_git}" mktree)
     root=$(printf '040000 tree %s\\tracer-1\\n' "$tree" | "{real_git}" mktree)
@@ -416,3 +417,116 @@ def test_without_a_git_identity_the_commit_is_made_as_bencher(repo, remote, tmp_
     commit = push_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir="run-1")
 
     assert _git(remote, "log", "-1", "--format=%an", commit) == "bencher"
+
+
+def test_a_push_leaves_no_local_ref_and_no_unpushed_commit(repo, remote, tmp_path):
+    """No local ref keeps the evidence: devlaunch's unpushed-work query stays empty."""
+    files = tmp_path / "files"
+    files.mkdir()
+    push_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir="run-1")
+    push_evidence(repo, {"b.png": _png(files, "b.png")}, run_dir="run-2")
+
+    assert _git(repo, "for-each-ref", "refs/bencher") == ""
+    # The exact query `dl rm` runs before it deletes a workspace.
+    unpushed = _git(
+        repo,
+        "log",
+        "--all",
+        "--exclude=refs/tags/*",
+        "--exclude=refs/original/*",
+        "--not",
+        "--remotes",
+    )
+    assert unpushed == ""
+
+
+def test_a_fresh_clone_that_never_fetched_the_ref_stacks_on_it(repo, remote, tmp_path):
+    files = tmp_path / "files"
+    files.mkdir()
+    first = push_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir="run-1")
+    fresh = tmp_path / "fresh"
+    # file:// makes git transfer objects as over a network, not copy the object store.
+    _git(tmp_path, "clone", "-q", f"file://{remote}", str(fresh))
+    _identity(fresh)
+
+    second = push_evidence(fresh, {"b.png": _png(files, "b.png")}, run_dir="run-2")
+
+    assert _git(remote, "rev-parse", EVIDENCE_REF) == second
+    assert _git(remote, "rev-parse", f"{second}^") == first
+    assert _git(remote, "ls-tree", "--name-only", first) == "run-1"
+    assert _git(fresh, "for-each-ref", "refs/bencher") == ""
+    # The clone keeps no object of either run and does not turn shallow.
+    for commit in (first, second):
+        kept = subprocess.run(["git", "cat-file", "-e", commit], cwd=fresh, check=False)  # noqa: S607
+        assert kept.returncode != 0
+    assert _git(fresh, "rev-parse", "--is-shallow-repository") == "false"
+
+
+def _env_logging_git(tmp_path: Path, log: Path) -> Path:
+    """A git dir for PATH that logs the ssh settings each network git call sees."""
+    real_git = subprocess.run(
+        ["sh", "-c", "command -v git"],  # noqa: S607
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+    shim = shim_dir / "git"
+    shim.write_text(
+        f"""#!/bin/sh
+case "$1" in
+  push|fetch|ls-remote) echo "$1 cmd=${{GIT_SSH_COMMAND-unset}} ssh=${{GIT_SSH-unset}}" >> "{log}" ;;
+esac
+exec "{real_git}" "$@"
+""",
+        encoding="utf-8",
+    )
+    shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
+    return shim_dir
+
+
+def _network_calls(repo: Path, tmp_path: Path, monkeypatch) -> list[str]:
+    files = tmp_path / "files"
+    files.mkdir()
+    log = tmp_path / "ssh-env"
+    shim_dir = _env_logging_git(tmp_path, log)
+    monkeypatch.setenv("PATH", f"{shim_dir}{os.pathsep}{os.environ['PATH']}")
+    push_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir="run-1")
+    push_evidence(repo, {"b.png": _png(files, "b.png")}, run_dir="run-2")
+    return log.read_text(encoding="utf-8").splitlines()
+
+
+def test_no_network_git_call_can_wait_on_an_ssh_prompt(repo, tmp_path, monkeypatch):
+    """With no ssh setting of the user's, ssh runs in batch mode: no passphrase or host-key prompt."""
+    monkeypatch.delenv("GIT_SSH_COMMAND", raising=False)
+    monkeypatch.delenv("GIT_SSH", raising=False)
+
+    calls = _network_calls(repo, tmp_path, monkeypatch)
+
+    assert {call.split()[0] for call in calls} == {"push", "fetch", "ls-remote"}
+    assert {call.split(" ", 1)[1] for call in calls} == {"cmd=ssh -o BatchMode=yes ssh=unset"}
+
+
+@pytest.mark.parametrize(
+    ("variable", "value", "expected"),
+    [
+        ("GIT_SSH_COMMAND", "ssh -i key", "cmd=ssh -i key ssh=unset"),
+        ("GIT_SSH", "/usr/bin/ssh", "cmd=unset ssh=/usr/bin/ssh"),
+        ("core.sshCommand", "ssh -i key", "cmd=unset ssh=unset"),
+    ],
+)
+def test_the_users_own_ssh_setting_is_left_alone(
+    repo, tmp_path, monkeypatch, variable, value, expected
+):
+    monkeypatch.delenv("GIT_SSH_COMMAND", raising=False)
+    monkeypatch.delenv("GIT_SSH", raising=False)
+    if variable.startswith("GIT_"):
+        monkeypatch.setenv(variable, value)
+    else:
+        _git(repo, "config", variable, value)
+
+    calls = _network_calls(repo, tmp_path, monkeypatch)
+
+    assert {call.split()[0] for call in calls} == {"push", "fetch", "ls-remote"}
+    assert {call.split(" ", 1)[1] for call in calls} == {expected}

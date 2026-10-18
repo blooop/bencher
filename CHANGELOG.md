@@ -15,8 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sample are pushed as one commit to `refs/bencher/evidence` on `origin`, a ref that no
   branch reaches, so `git clone` does not fetch them. Each run's commit sits on top of the
   last (re-made on the new tip when another run pushes first, never forced), so every run
-  stays reachable. Only git plumbing builds the commit, so the work tree, index and `HEAD`
-  do not change, and a `*.png filter=lfs` rule does not turn an image into a pointer.
+  stays reachable. A throwaway repository makes and pushes the commit, so the local
+  repository keeps no ref, no image and no unpushed commit. Only git plumbing builds the
+  commit, so the work tree, index and `HEAD` do not change, and a `*.png filter=lfs` rule does not turn an image into a pointer.
   `evidence.md` links each image by its commit SHA
   (`https://github.com/<owner>/<repo>/blob/<sha>/<path>?raw=true`), which a PR page draws
   in public and private repositories, above the text chart and data block, which stay.

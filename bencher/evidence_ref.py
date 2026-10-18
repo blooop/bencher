@@ -5,7 +5,9 @@
 ref holds a chain of commits: each run's commit has only that run's files, under
 a directory of its own, and its parent is the ref's previous tip, so every older
 run stays reachable and git never collects it. No branch reaches the ref, so a
-plain ``git clone`` or ``git fetch`` does not download the images.
+plain ``git clone`` or ``git fetch`` does not download the images. A throwaway
+repo makes and pushes the commit, so the user's repo keeps no ref and no object of
+it, and ``git log --all --not --remotes`` there stays empty.
 
 Only plumbing builds the commit (``hash-object -w --no-filters``, ``mktree``,
 ``commit-tree``): the work tree, the index and ``HEAD`` do not change, and a
@@ -25,17 +27,19 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Iterator, Mapping, Sequence
 
 EVIDENCE_REF = "refs/bencher/evidence"
 DEFAULT_ATTEMPTS = 5
 
-# A git call that reaches the remote fails, not prompts, when it has no credential.
+# A git call that reaches the remote fails, not prompts, on an https credential.
 _NO_PROMPT = {"GIT_TERMINAL_PROMPT": "0"}
 
 # The fallback identity of an evidence commit when git has none configured.
@@ -118,7 +122,7 @@ def _plain_name(name: str) -> None:
         raise EvidencePublishError(f"not a plain file name: {name!r}")
 
 
-def _tree(files: Mapping[str, Path], run_dir: str, cwd: Path) -> str:
+def _tree(files: Mapping[str, Path], run_dir: str, cwd: Path, env: Mapping[str, str]) -> str:
     """A root tree holding *files* under *run_dir*; the blobs bypass every filter."""
     if not files:
         raise EvidencePublishError("no file to store")
@@ -126,10 +130,10 @@ def _tree(files: Mapping[str, Path], run_dir: str, cwd: Path) -> str:
     entries = []
     for name, path in sorted(files.items()):
         _plain_name(name)
-        blob = _git(["hash-object", "-w", "--no-filters", "--", str(path)], cwd)
+        blob = _git(["hash-object", "-w", "--no-filters", "--", str(path)], cwd, env=env)
         entries.append(f"100644 blob {blob}\t{name}\n")
-    inner = _git(["mktree"], cwd, stdin="".join(entries))
-    return _git(["mktree"], cwd, stdin=f"040000 tree {inner}\t{run_dir}\n")
+    inner = _git(["mktree"], cwd, stdin="".join(entries), env=env)
+    return _git(["mktree"], cwd, stdin=f"040000 tree {inner}\t{run_dir}\n", env=env)
 
 
 def _push_url(remote: str, cwd: Path) -> str:
@@ -141,21 +145,51 @@ def _push_url(remote: str, cwd: Path) -> str:
     return ""
 
 
-def _remote_tip(remote: str, ref: str, cwd: Path) -> str | None:
-    """Fetch *ref* from where *remote* pushes into the same local ref; its SHA, or None."""
-    # A fork setup fetches from upstream and pushes to the fork: read the tip from the fork.
+def _push_source(remote: str, cwd: Path) -> str:
+    """Where a push to *remote* goes: a fork setup fetches from upstream, pushes to the fork."""
     resolved = _run(["remote", "get-url", "--push", remote], cwd)
-    source = resolved.stdout.strip() if resolved.returncode == 0 else remote
-    listed = _run(["ls-remote", "--exit-code", source, ref], cwd, env=_NO_PROMPT)
+    return resolved.stdout.strip() if resolved.returncode == 0 else remote
+
+
+def _remote_tip(source: str, ref: str, cwd: Path, env: Mapping[str, str]) -> str | None:
+    """The SHA of *ref* on *source*, or None when it has no such ref."""
+    listed = _run(["ls-remote", "--exit-code", source, ref], cwd, env=env)
     if listed.returncode == 2:  # noqa: PLR2004 - ls-remote: no matching ref
         return None
     if listed.returncode != 0:
-        raise EvidencePublishError(f"cannot read {remote}: {listed.stderr.strip()}")
-    # The local ref mirrors the remote one; it keeps the fetched objects reachable here too.
-    fetched = _run(["fetch", "--quiet", "--no-tags", source, f"+{ref}:{ref}"], cwd, env=_NO_PROMPT)
-    if fetched.returncode != 0:
-        raise EvidencePublishError(f"cannot fetch {ref} from {remote}: {fetched.stderr.strip()}")
-    return _git(["rev-parse", "--verify", f"{ref}^{{commit}}"], cwd)
+        raise EvidencePublishError(f"cannot read {source}: {listed.stderr.strip()}")
+    return listed.stdout.split()[0]
+
+
+@contextmanager
+def _scratch_git_dir(cwd: Path) -> Iterator[dict[str, str]]:
+    """Env for git calls in a throwaway bare repo that reads the config of the one at *cwd*.
+
+    The evidence commit is made and pushed from it, so the user's repo gets no ref,
+    no object and no ``shallow`` file: ``git log --all --not --remotes`` stays empty
+    there, and no clone keeps the images of older runs.
+    """
+    config = Path(_git(["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd)) / "config"
+    object_format = _git(["rev-parse", "--show-object-format"], cwd)
+    with tempfile.TemporaryDirectory(prefix="bencher-evidence-") as scratch:
+        _git(["init", "--quiet", "--bare", f"--object-format={object_format}", scratch], cwd)
+        # Remotes, insteadOf rewrites, credential helpers and ssh settings come from here.
+        _git(["config", "--file", f"{scratch}/config", "include.path", str(config)], cwd)
+        yield {"GIT_DIR": scratch}
+
+
+def _no_prompt_env(cwd: Path) -> dict[str, str]:
+    """Env that makes a git call fail, not prompt, when it reaches the remote with no credential.
+
+    ``GIT_TERMINAL_PROMPT=0`` stops an https prompt only. ssh runs in batch mode, so a
+    passphrase or host-key question fails too, unless the user set their own ssh
+    command (``GIT_SSH_COMMAND``, ``GIT_SSH`` or ``core.sshCommand``): that is left alone.
+    """
+    env = dict(_NO_PROMPT)
+    own_ssh = "GIT_SSH_COMMAND" in os.environ or "GIT_SSH" in os.environ
+    if not own_ssh and _run(["config", "core.sshCommand"], cwd).returncode != 0:
+        env["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
+    return env
 
 
 def _identity_env(cwd: Path) -> dict[str, str]:
@@ -176,29 +210,41 @@ def push_evidence(
 ) -> str:
     """Push one commit holding *files* under *run_dir* to *ref* on *remote*; return its SHA.
 
-    The commit's parent is the remote ref's tip, so older runs stay reachable.
-    A rejected push (another run pushed first) is made again on the new tip, up to
-    *attempts* times; the push is never forced. Raises :class:`EvidencePublishError`
-    when git fails or every attempt is rejected.
+    The commit's parent is the remote ref's tip, so older runs stay reachable. A
+    throwaway repo makes and pushes the commit; it fetches only the tip
+    (``--depth=1``), which the push needs, and the user's repo keeps no ref and no
+    object of it. A rejected push (another run pushed first) is made again on the new
+    tip, up to *attempts* times; the push is never forced. Raises
+    :class:`EvidencePublishError` when git fails or every attempt is rejected.
     """
     cwd = Path(repo)
-    tree = _tree(files, run_dir, cwd)
-    env = _identity_env(cwd)
+    identity = _identity_env(cwd)
+    source = _push_source(remote, cwd)
     message = f"bencher evidence {run_dir}"
     reason = "no attempt was made"
-    for _ in range(attempts):
-        parent = _remote_tip(remote, ref, cwd)
-        parents = ["-p", parent] if parent else []
-        commit = _git(["commit-tree", "--no-gpg-sign", tree, *parents, "-m", message], cwd, env=env)
-        pushed = _run(
-            ["push", "--quiet", "--no-verify", remote, f"{commit}:{ref}"], cwd, env=_NO_PROMPT
-        )
-        if pushed.returncode == 0:
-            _run(["update-ref", ref, commit], cwd)
-            return commit
-        reason = pushed.stderr.strip()
-        if "[rejected]" not in reason:
-            raise EvidencePublishError(f"git push to {remote} failed: {reason}")
+    with _scratch_git_dir(cwd) as scratch:
+        net = {**scratch, **_no_prompt_env(cwd)}
+        tree = _tree(files, run_dir, cwd, scratch)
+        for _ in range(attempts):
+            parent = _remote_tip(source, ref, cwd, net)
+            parents = []
+            if parent:
+                # The push walks the parent, so it must be here: only the tip, into FETCH_HEAD.
+                _git(["fetch", "--quiet", "--no-tags", "--depth=1", source, ref], cwd, env=net)
+                parents = ["-p", parent]
+            commit = _git(
+                ["commit-tree", "--no-gpg-sign", tree, *parents, "-m", message],
+                cwd,
+                env={**scratch, **identity},
+            )
+            pushed = _run(
+                ["push", "--quiet", "--no-verify", remote, f"{commit}:{ref}"], cwd, env=net
+            )
+            if pushed.returncode == 0:
+                return commit
+            reason = pushed.stderr.strip()
+            if "[rejected]" not in reason:
+                raise EvidencePublishError(f"git push to {remote} failed: {reason}")
     raise EvidencePublishError(
         f"git push to {remote} {ref} was rejected {attempts} times: {reason}"
     )

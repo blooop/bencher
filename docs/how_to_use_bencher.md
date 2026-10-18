@@ -850,7 +850,8 @@ bencher ab --base origin/main --images -- python my_bench.py
   the index and `HEAD` do not change, and `--no-filters` stores the real PNG even when
   `.gitattributes` sends `*.png` to Git LFS. When another run pushes first, the commit is
   made again on the new tip and pushed again, up to 5 times; the push is never forced.
-  The local repository keeps a copy of the ref at the same name.
+  A throwaway repository makes and pushes the commit and fetches only the previous tip,
+  so the local repository keeps no ref, no image and no unpushed commit.
 - **The links.** Each image is linked as
   `https://github.com/<owner>/<repo>/blob/<commit-sha>/<path>?raw=true`, with the owner and
   repository read from `origin` (ssh or https). A PR page draws that link for anyone who
