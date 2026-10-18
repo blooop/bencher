@@ -7,9 +7,19 @@ import itertools
 from enum import Enum, auto
 
 import pytest
+from matplotlib.colors import to_hex
 from matplotlib.image import imread
 
 import bencher as bn
+from bencher.evidence import (
+    _IMAGE_BETTER,
+    _IMAGE_DOWN,
+    _IMAGE_UP,
+    _IMAGE_WORSE,
+    Heatmap,
+    HeatmapGrid,
+    _render_heatmap_image,
+)
 
 _NOISE = itertools.cycle([0.05, -0.05, 0.0])
 
@@ -281,3 +291,36 @@ def test_a_heatmap_with_no_finite_change_gets_no_image(tmp_path):
     assert files.images == {}
     assert calls == []
     assert "![" not in md
+
+
+@pytest.mark.parametrize(
+    ("direction", "fell", "rose", "meaning"),
+    [
+        pytest.param(
+            "minimize", _IMAGE_BETTER, _IMAGE_WORSE, "blue = better (lower)", id="minimize"
+        ),
+        pytest.param(
+            "maximize", _IMAGE_WORSE, _IMAGE_BETTER, "blue = better (higher)", id="maximize"
+        ),
+        pytest.param("none", _IMAGE_DOWN, _IMAGE_UP, "violet = down, yellow = up", id="none"),
+    ],
+)
+def test_a_heatmap_cell_is_colored_by_whether_its_change_is_better(direction, fell, rose, meaning):
+    plan = Heatmap(
+        row_input="speed",
+        col_input="load",
+        row_labels=("1",),
+        col_labels=("1", "2"),
+        grids=(HeatmapGrid(layer=None, before=((10.0, 10.0),), after=((5.0, 15.0),)),),
+        layer_input=None,
+        direction=direction,
+        margin_percent=5.0,
+        notes=(),
+    )
+    fig = _render_heatmap_image(plan, "stop_distance")
+
+    image = fig.axes[0].images[0]
+    fell_rgba, rose_rgba = image.to_rgba(image.get_array())[0]
+    assert to_hex(fell_rgba) == fell
+    assert to_hex(rose_rgba) == rose
+    assert meaning in fig.axes[-1].get_ylabel()
