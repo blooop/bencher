@@ -231,3 +231,14 @@ def test_each_image_layout_writes_a_png_that_decodes(tmp_path, input_vars, repea
     height, width, _ = imread(png).shape
     assert width > 200
     assert height > 200
+
+
+def test_sides_that_sweep_different_inputs_get_no_image(tmp_path):
+    files = bn.write_evidence(
+        _collect(0.3, input_vars=("speed",)),
+        _collect(0.2, input_vars=("load",)),
+        image_dir=tmp_path,
+    )
+
+    assert files.images == {}
+    assert not (tmp_path / "stop_distance.png").exists()
