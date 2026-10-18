@@ -1252,9 +1252,9 @@ class _Metric:
     base: _Profile
     cand: _Profile
     plan: ChartPlan
-    # Every sample of each side, for an image and its CSV (None when built by hand).
-    base_da: xr.DataArray | None = None
-    cand_da: xr.DataArray | None = None
+    # Every sample of each side, for an image and its CSV.
+    base_da: xr.DataArray
+    cand_da: xr.DataArray
 
 
 def _metrics(baseline: BenchResult, candidate: BenchResult, comparison: dict) -> list[_Metric]:
@@ -1570,8 +1570,6 @@ def _most_per_point(profile: _Profile) -> int:
 
 def _samples_csv(m: _Metric) -> str:
     """Every finite sample of both sides as CSV: ``side``, each dimension, the value."""
-    if m.base_da is None or m.cand_da is None:
-        raise ValueError("_samples_csv needs each side's samples")
     name = m.entry["variable"]
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
