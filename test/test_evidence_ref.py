@@ -267,3 +267,16 @@ def test_publish_without_a_github_remote_pushes_nothing(repo, remote, tmp_path):
         publish_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir="run-1")
 
     assert _git(remote, "for-each-ref", EVIDENCE_REF) == ""
+
+
+def test_a_token_in_a_non_github_remote_url_stays_out_of_the_error(repo, tmp_path):
+    files = tmp_path / "files"
+    files.mkdir()
+    _git(repo, "remote", "set-url", "origin", "https://gitlab-ci-token:SECRET@host/o/r.git")
+
+    with pytest.raises(EvidencePublishError) as raised:
+        publish_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir="run-1")
+
+    assert "SECRET" not in str(raised.value)
+    assert "gitlab-ci-token" not in str(raised.value)
+    assert "host/o/r.git" in str(raised.value)

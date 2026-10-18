@@ -53,6 +53,9 @@ _GITHUB_URL = re.compile(
 )
 
 
+_USERINFO = re.compile(r"^(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*://)[^@/]*@")
+
+
 class EvidencePublishError(Exception):
     """The images could not be stored on the ref or linked; nothing was linked."""
 
@@ -63,6 +66,11 @@ def github_repo(url: str) -> tuple[str, str] | None:
     if match is None:
         return None
     return match["owner"], match["repo"]
+
+
+def _without_userinfo(url: str) -> str:
+    """*url* with any ``user:password@`` removed, safe to print."""
+    return _USERINFO.sub(r"\g<scheme>", url)
 
 
 def blob_url(owner: str, repo: str, commit: str, path: str) -> str:
@@ -190,7 +198,7 @@ def publish_evidence(
     named = github_repo(url)
     if named is None:
         raise EvidencePublishError(
-            f"remote {remote!r} is not a GitHub repository ({url or 'no URL'})"
+            f"remote {remote!r} is not a GitHub repository ({_without_userinfo(url) or 'no URL'})"
         )
     commit = push_evidence(cwd, files, run_dir=run_dir, remote=remote, ref=ref, attempts=attempts)
     return {name: blob_url(*named, commit, f"{run_dir}/{name}") for name in files}
