@@ -217,6 +217,41 @@ def test_push_gives_up_after_the_attempts_without_forcing(repo, remote, tmp_path
     assert _git(remote, "rev-parse", EVIDENCE_REF) == racer_commit
 
 
+def test_no_network_git_call_can_wait_on_a_credential_prompt(repo, remote, tmp_path, monkeypatch):
+    """push, fetch and ls-remote all run with GIT_TERMINAL_PROMPT=0, even when the user's is 1."""
+    files = tmp_path / "files"
+    files.mkdir()
+    real_git = subprocess.run(
+        ["sh", "-c", "command -v git"],  # noqa: S607
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    log = tmp_path / "prompts"
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+    shim = shim_dir / "git"
+    shim.write_text(
+        f"""#!/bin/sh
+case "$1" in
+  push|fetch|ls-remote) echo "$1=$GIT_TERMINAL_PROMPT" >> "{log}" ;;
+esac
+exec "{real_git}" "$@"
+""",
+        encoding="utf-8",
+    )
+    shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
+    monkeypatch.setenv("PATH", f"{shim_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("GIT_TERMINAL_PROMPT", "1")
+
+    push_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir="run-1")
+    push_evidence(repo, {"b.png": _png(files, "b.png")}, run_dir="run-2")
+
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert {call.split("=")[0] for call in calls} == {"push", "fetch", "ls-remote"}
+    assert calls == [f"{call.split('=')[0]}=0" for call in calls]
+
+
 def test_a_push_the_server_refuses_is_not_retried(repo, remote, tmp_path):
     files = tmp_path / "files"
     files.mkdir()
