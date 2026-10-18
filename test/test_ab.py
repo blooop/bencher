@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -12,6 +13,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 import bencher as bn
+from bencher.ab import _run_dir
+from bencher.evidence_ref import push_evidence
 from bencher.launch_env import NO_CACHE_ENV, NO_SHOW_ENV, RESULT_PATH_ENV
 
 if TYPE_CHECKING:
@@ -552,3 +555,23 @@ def test_ab_without_images_pushes_nothing(repo, tmp_path):
     assert proc.returncode == 0, proc.stderr
     assert _git(bare, "for-each-ref") == ""
     assert not (repo / "bencher-ab" / "images").exists()
+
+
+@pytest.mark.parametrize("revision", ["feat/x y", "../..", "a b", "main~1 (dirty)"])
+def test_any_candidate_revision_gives_one_plain_run_dir_the_ref_accepts(tmp_path, revision):
+    bare = tmp_path / "remote.git"
+    _git(tmp_path, "init", "-q", "--bare", str(bare))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "ab@example.test")
+    _git(repo, "config", "user.name", "ab")
+    _git(repo, "remote", "add", "origin", str(bare))
+    png = tmp_path / "a.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    run_dir = _run_dir(revision)
+    commit = push_evidence(repo, {"a.png": png}, run_dir=run_dir)
+
+    assert re.fullmatch(r"[A-Za-z0-9._-]+", run_dir)
+    assert _git(bare, "ls-tree", "--name-only", commit).splitlines() == [run_dir]
