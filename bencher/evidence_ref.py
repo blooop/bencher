@@ -112,14 +112,20 @@ def _git(
     return proc.stdout.strip()
 
 
+def _plain_name(name: str) -> None:
+    """Raise unless *name* is one tree entry: no slash, not empty, not a dot name."""
+    if "/" in name or name in ("", ".", ".."):
+        raise EvidencePublishError(f"not a plain file name: {name!r}")
+
+
 def _tree(files: Mapping[str, Path], run_dir: str, cwd: Path) -> str:
     """A root tree holding *files* under *run_dir*; the blobs bypass every filter."""
     if not files:
         raise EvidencePublishError("no file to store")
+    _plain_name(run_dir)
     entries = []
     for name, path in sorted(files.items()):
-        if "/" in name or name in ("", ".", ".."):
-            raise EvidencePublishError(f"not a plain file name: {name!r}")
+        _plain_name(name)
         blob = _git(["hash-object", "-w", "--no-filters", "--", str(path)], cwd)
         entries.append(f"100644 blob {blob}\t{name}\n")
     inner = _git(["mktree"], cwd, stdin="".join(entries))

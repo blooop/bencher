@@ -308,3 +308,14 @@ def test_a_token_in_a_non_github_remote_url_stays_out_of_the_error(repo, tmp_pat
     assert "SECRET" not in str(raised.value)
     assert "gitlab-ci-token" not in str(raised.value)
     assert "host/o/r.git" in str(raised.value)
+
+
+@pytest.mark.parametrize("run_dir", ["..", "a/b", "", "."])
+def test_a_run_dir_that_is_not_a_plain_name_pushes_nothing(repo, remote, tmp_path, run_dir):
+    files = tmp_path / "files"
+    files.mkdir()
+
+    with pytest.raises(EvidencePublishError, match="plain"):
+        push_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir=run_dir)
+
+    assert _git(remote, "for-each-ref", EVIDENCE_REF) == ""
