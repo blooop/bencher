@@ -376,6 +376,17 @@ def test_a_run_dir_that_is_not_a_plain_name_pushes_nothing(repo, remote, tmp_pat
     assert _git(remote, "for-each-ref", EVIDENCE_REF) == ""
 
 
+@pytest.mark.parametrize("name", ["a/b.png", "..", "", "."])
+def test_a_file_name_that_is_not_a_plain_name_pushes_nothing(repo, remote, tmp_path, name):
+    files = tmp_path / "files"
+    files.mkdir()
+
+    with pytest.raises(EvidencePublishError, match="plain"):
+        push_evidence(repo, {name: _png(files, "a.png")}, run_dir="run-1")
+
+    assert _git(remote, "for-each-ref", EVIDENCE_REF) == ""
+
+
 def test_no_files_pushes_nothing(repo, remote):
     with pytest.raises(EvidencePublishError, match="no file"):
         push_evidence(repo, {}, run_dir="run-1")
