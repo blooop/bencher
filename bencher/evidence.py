@@ -1469,10 +1469,60 @@ def _draw_claim(ax: Axes, claim: Claim | None) -> None:
         ax.plot([], [], color=_CLAIM_COLOR, linestyle=":", label=f"claim {claim}")
 
 
-def _render_png(m: _Metric, path: Path) -> Path:
+def _render_png(m: _Metric, path: Path, *, detail: bool = False) -> Path:
+    """Draw one metric's PNG at *path*.
+
+    By default the mean ± 1 std of each side; with *detail*, the PR-body image:
+    a heatmap, or every repeat with its box.
+    """
     # Figure without pyplot: no global backend state, safe in any process.
     from matplotlib.figure import Figure
 
+    if detail:
+        from matplotlib.lines import Line2D
+
+        name = m.entry["variable"]
+        metric = f"{name} ({m.units})" if m.units else name
+        if isinstance(m.plan, Heatmap):
+            fig = _render_heatmap_image(m.plan, metric)
+            fig.savefig(path, facecolor=_IMAGE_SURFACE, bbox_inches="tight")
+            return path
+        fig = Figure(figsize=(8.8, 4.6), dpi=100, facecolor=_IMAGE_SURFACE)
+        ax = fig.add_subplot()
+        _style(ax)
+        xlabel = _draw_repeats(ax, m)
+        _draw_claim(ax, m.claim)
+        handles = [
+            Line2D(
+                [],
+                [],
+                marker="D",
+                linestyle="",
+                color=_IMAGE_BEFORE_COLOR,
+                markerfacecolor=_IMAGE_SURFACE,
+                label="before",
+            ),
+            Line2D([], [], marker="D", linestyle="", color=_IMAGE_AFTER_COLOR, label="after"),
+        ]
+        if m.claim is not None:
+            handles.append(
+                Line2D([], [], color=_CLAIM_COLOR, linestyle=":", label=f"claim {m.claim}")
+            )
+        ax.legend(handles=handles, loc="best", frameon=False, fontsize=9)
+        ax.set_xlabel(xlabel, color=_IMAGE_MUTED_INK)
+        ax.set_ylabel(metric, color=_IMAGE_MUTED_INK)
+        rest = m.base.swept[1:]
+        pooled = f", pooled over {', '.join(rest)}" if rest else ""
+        ax.set_title(
+            f"{metric}: every repeat before vs after\n"
+            f"dots = repeats, box = quartiles, ◆ = mean ± 1 std{pooled}",
+            fontsize=11,
+            color=_IMAGE_INK,
+            loc="left",
+        )
+        fig.tight_layout()
+        fig.savefig(path, facecolor=_IMAGE_SURFACE)
+        return path
     name = m.entry["variable"]
     fig = Figure(figsize=(8.8, 4.4), dpi=100, facecolor="white")
     sides: list[_Side] = [
@@ -1760,53 +1810,6 @@ def _render_heatmap_image(plan: Heatmap, metric: str) -> Figure:
     return fig
 
 
-def _render_image(m: _Metric, path: Path) -> Path:
-    """The PR-body image of one metric: a heatmap, or every repeat with its box."""
-    from matplotlib.figure import Figure
-    from matplotlib.lines import Line2D
-
-    name = m.entry["variable"]
-    metric = f"{name} ({m.units})" if m.units else name
-    if isinstance(m.plan, Heatmap):
-        fig = _render_heatmap_image(m.plan, metric)
-        fig.savefig(path, facecolor=_IMAGE_SURFACE, bbox_inches="tight")
-        return path
-    fig = Figure(figsize=(8.8, 4.6), dpi=100, facecolor=_IMAGE_SURFACE)
-    ax = fig.add_subplot()
-    _style(ax)
-    xlabel = _draw_repeats(ax, m)
-    _draw_claim(ax, m.claim)
-    handles = [
-        Line2D(
-            [],
-            [],
-            marker="D",
-            linestyle="",
-            color=_IMAGE_BEFORE_COLOR,
-            markerfacecolor=_IMAGE_SURFACE,
-            label="before",
-        ),
-        Line2D([], [], marker="D", linestyle="", color=_IMAGE_AFTER_COLOR, label="after"),
-    ]
-    if m.claim is not None:
-        handles.append(Line2D([], [], color=_CLAIM_COLOR, linestyle=":", label=f"claim {m.claim}"))
-    ax.legend(handles=handles, loc="best", frameon=False, fontsize=9)
-    ax.set_xlabel(xlabel, color=_IMAGE_MUTED_INK)
-    ax.set_ylabel(metric, color=_IMAGE_MUTED_INK)
-    rest = m.base.swept[1:]
-    pooled = f", pooled over {', '.join(rest)}" if rest else ""
-    ax.set_title(
-        f"{metric}: every repeat before vs after\n"
-        f"dots = repeats, box = quartiles, ◆ = mean ± 1 std{pooled}",
-        fontsize=11,
-        color=_IMAGE_INK,
-        loc="left",
-    )
-    fig.tight_layout()
-    fig.savefig(path, facecolor=_IMAGE_SURFACE)
-    return path
-
-
 def _write_images(metrics: Sequence[_Metric], out_dir: Path) -> dict[str, Path]:
     """Write a PNG and a samples CSV for each metric an image adds to; ``{variable: png}``."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1816,7 +1819,7 @@ def _write_images(metrics: Sequence[_Metric], out_dir: Path) -> dict[str, Path]:
             continue
         name = m.entry["variable"]
         png = out_dir / png_name(name)
-        _render_image(m, png)
+        _render_png(m, png, detail=True)
         png.with_suffix(".csv").write_text(_samples_csv(m), encoding="utf-8")
         pngs[name] = png
     return pngs
