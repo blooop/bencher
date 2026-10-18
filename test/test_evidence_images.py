@@ -147,7 +147,7 @@ def test_images_do_not_change_the_png_dir_pngs(tmp_path, input_vars):
 
 def test_a_publisher_without_an_image_dir_is_an_error(tmp_path):
     calls = []
-    with pytest.raises(ValueError, match="publish_images.*image_dir"):
+    with pytest.raises(ValueError, match=r"publish_images.*image_dir"):
         bn.write_evidence(
             _collect(0.3),
             _collect(0.2),
