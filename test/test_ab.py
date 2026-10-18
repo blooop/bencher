@@ -474,3 +474,61 @@ def test_ab_png_dir_writes_one_png_per_metric(repo, tmp_path):
     assert proc.returncode == 0, proc.stderr
     assert (pngs / "stop_distance.png").exists()
     assert str(pngs / "stop_distance.png") in proc.stdout
+
+
+def _github_remote(repo: Path, tmp_path: Path) -> Path:
+    """Name origin as a GitHub repo, and route it to a local bare repo."""
+    bare = tmp_path / "remote.git"
+    _git(tmp_path, "init", "-q", "--bare", str(bare))
+    github = "git@github.com:someone/braking.git"
+    _git(repo, "remote", "add", "origin", github)
+    _git(repo, "config", f"url.{bare}.insteadOf", github)
+    return bare
+
+
+def test_ab_images_pushes_them_to_the_evidence_ref_and_links_them(repo, tmp_path):
+    bare = _github_remote(repo, tmp_path)
+    (repo / "gain.py").write_text("GAIN = 0.25\n", encoding="utf-8")
+    head = _git(repo, "rev-parse", "HEAD")
+
+    proc = _ab(repo, "--base", "main", "--images")
+
+    assert proc.returncode == 0, proc.stderr
+    commit = _git(bare, "rev-parse", "refs/bencher/evidence")
+    (run_dir,) = _git(bare, "ls-tree", "--name-only", commit).splitlines()
+    assert _git(bare, "ls-tree", "--name-only", f"{commit}:{run_dir}").splitlines() == [
+        "stop_distance.csv",
+        "stop_distance.png",
+    ]
+    md = (repo / "bencher-ab" / "evidence.md").read_text(encoding="utf-8")
+    url = f"https://github.com/someone/braking/blob/{commit}/{run_dir}/stop_distance.png?raw=true"
+    assert f"]({url})" in md
+    assert "```mermaid" in md  # the text chart stays
+    assert str(repo / "bencher-ab" / "images" / "stop_distance.png") in proc.stdout
+    # Nothing else moved: same HEAD, same branch, only the uncommitted change.
+    assert _git(repo, "rev-parse", "HEAD") == head
+    assert _git(repo, "status", "--porcelain", "--untracked-files=no") == "M gain.py"
+    assert _git(bare, "for-each-ref", "refs/heads") == ""
+
+
+def test_ab_images_without_a_github_remote_keeps_text_and_exits_0(repo):
+    (repo / "gain.py").write_text("GAIN = 0.25\n", encoding="utf-8")
+
+    proc = _ab(repo, "--base", "main", "--images")
+
+    assert proc.returncode == 0, proc.stderr
+    notes = [line for line in proc.stderr.splitlines() if "images not linked" in line]
+    assert len(notes) == 1
+    out = repo / "bencher-ab"
+    assert (out / "images" / "stop_distance.png").exists()
+    assert "![" not in (out / "evidence.md").read_text(encoding="utf-8")
+
+
+def test_ab_without_images_pushes_nothing(repo, tmp_path):
+    bare = _github_remote(repo, tmp_path)
+
+    proc = _ab(repo, "--base", "HEAD")
+
+    assert proc.returncode == 0, proc.stderr
+    assert _git(bare, "for-each-ref") == ""
+    assert not (repo / "bencher-ab" / "images").exists()

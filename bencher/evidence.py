@@ -7,8 +7,11 @@ draws one chart per metric for local viewing. :func:`write_evidence` writes any 
 the comparison JSON, the Markdown and the PNGs in one call; ``bencher compare`` and
 ``bencher ab`` are its command-line front ends.
 
-The Markdown is text only: every chart is text that GitHub draws in the PR body,
-with no image and no external resource. :func:`plan_chart` picks the form:
+The Markdown is text only by default: every chart is text that GitHub draws in the
+PR body, with no image and no external resource. ``write_evidence(image_dir=...,
+publish_images=...)`` (``bencher ab --images``) also draws an image of each metric
+whose image shows more than its text chart and links it above that chart, which
+stays. :func:`plan_chart` picks the text form:
 
 - no swept input: a Mermaid ``xychart-beta`` bar per side, or ``diff``-fence text
   bars for a negative value (an xychart bar grows from the axis bottom, not from 0)
@@ -41,7 +44,7 @@ import json
 import math
 import re
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, assert_never
 
@@ -59,10 +62,11 @@ from bencher.claims import Claim, Threshold, Within
 from bencher.report_export import _snapshot_ds, compare_results
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     import xarray as xr
     from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
 
     from bencher.bench_cfg import BenchRunCfg
     from bencher.results.bench_result import BenchResult
@@ -1248,6 +1252,9 @@ class _Metric:
     base: _Profile
     cand: _Profile
     plan: ChartPlan
+    # Every sample of each side, for an image and its CSV (None when built by hand).
+    base_da: xr.DataArray | None = None
+    cand_da: xr.DataArray | None = None
 
 
 def _metrics(baseline: BenchResult, candidate: BenchResult, comparison: dict) -> list[_Metric]:
@@ -1268,6 +1275,8 @@ def _metrics(baseline: BenchResult, candidate: BenchResult, comparison: dict) ->
                 base=base,
                 cand=cand,
                 plan=plan,
+                base_da=base_ds[name],
+                cand_da=cand_ds[name],
             )
         )
     return out
@@ -1347,19 +1356,35 @@ def _chart(m: _Metric) -> str:
             assert_never(unreachable)
 
 
-def _markdown(metrics: list[_Metric], comparison: dict) -> str:
+def _image_block(name: str, png_url: str, csv_url: str | None) -> str:
+    """The linked image of one metric, and a link to the samples it draws."""
+    alt = re.sub(r"[\[\]\n\r]", "", name)
+    lines = [f"![{alt}: before vs after]({png_url})"]
+    if csv_url:
+        lines.append(f"<sub>[samples (CSV)]({csv_url})</sub>")
+    return "  \n".join(lines)
+
+
+def _markdown(
+    metrics: list[_Metric],
+    comparison: dict,
+    images: Mapping[str, tuple[str, str | None]] | None = None,
+) -> str:
     blocks = [_summary(comparison)]
     blocks += [b for b in (_claims_block(comparison), _unpaired_block(comparison)) if b]
     if (radar := radar_chart([m.entry for m in metrics])) is not None:
         blocks.append(radar)
     for m in metrics:
+        name = m.entry["variable"]
         samples = (m.base.samples, m.cand.samples)
+        image = (images or {}).get(name)
         blocks.append(
             "\n\n".join(
                 [
+                    *([_image_block(name, *image)] if image else []),
                     _chart(m),
                     caption(m.entry, m.units, comparison, samples),
-                    data_block(m.entry["variable"], m.plan),
+                    data_block(name, m.plan),
                 ]
             )
         )
@@ -1500,18 +1525,321 @@ def write_evidence_pngs(
     }
 
 
+# --- images for the PR body ------------------------------------------------------
+
+# Colors of the linked images (validated with the dataviz palette checks): "before" is
+# the muted reference grey with hollow marks, "after" the first categorical blue, filled.
+_IMAGE_BEFORE_COLOR = "#898781"
+_IMAGE_AFTER_COLOR = "#2a78d6"
+_IMAGE_SURFACE = "#fcfcfb"
+_IMAGE_INK = "#0b0b0b"
+_IMAGE_MUTED_INK = "#52514e"
+_IMAGE_GRID = "#e1e0d9"
+# Heatmap poles: better and worse by the metric's direction, with a grey midpoint.
+_IMAGE_BETTER = "#2a78d6"
+_IMAGE_WORSE = "#e34948"
+_IMAGE_DOWN = "#6250d6"  # no direction: down and up
+_IMAGE_UP = "#eda100"
+_IMAGE_MID = "#f0efec"
+# Past this many swept points, an image draws each repeat and the mean, not a box per point.
+_MAX_IMAGE_BOXES = MAX_CHART_POINTS
+# Past this many heatmap cells, a cell carries its color only, not its percent.
+_MAX_ANNOTATED_CELLS = 120
+
+
+def _image_adds_information(m: _Metric) -> bool:
+    """True when an image shows more than the metric's text chart.
+
+    A heatmap image draws the percent change as a continuous color; a box per point
+    shows the spread of the repeats, so it needs more than one sample at a point.
+    """
+    match m.plan:
+        case Heatmap():
+            return True
+        case OverlapTable():
+            return False
+        case _:
+            return max(_most_per_point(m.base), _most_per_point(m.cand)) > 1
+
+
+def _most_per_point(profile: _Profile) -> int:
+    if profile.swept:
+        return max((len(p) for p in profile.points), default=0)
+    return profile.samples
+
+
+def _samples_csv(m: _Metric) -> str:
+    """Every finite sample of both sides as CSV: ``side``, each dimension, the value."""
+    if m.base_da is None or m.cand_da is None:
+        raise ValueError("_samples_csv needs each side's samples")
+    name = m.entry["variable"]
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    dims = list(m.cand_da.dims) + [d for d in m.base_da.dims if d not in m.cand_da.dims]
+    writer.writerow(["side", *dims, name])
+    for side, da in (("before", m.base_da), ("after", m.cand_da)):
+        values = np.asarray(da.astype(float).values)
+        coords = [np.asarray(da[d].values) for d in da.dims]
+        for index in np.ndindex(values.shape):
+            value = float(values[index])
+            if not math.isfinite(value):
+                continue
+            at = {d: _plain(c[i]) for d, c, i in zip(da.dims, coords, index, strict=True)}
+            writer.writerow([side, *(at.get(d, "") for d in dims), f"{value:.10g}"])
+    return buffer.getvalue()
+
+
+def _style(ax: Axes) -> None:
+    ax.set_facecolor(_IMAGE_SURFACE)
+    ax.grid(True, axis="y", color=_IMAGE_GRID, linewidth=0.8)
+    ax.set_axisbelow(True)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    for spine in ("left", "bottom"):
+        ax.spines[spine].set_color("#c3c2b7")
+    ax.tick_params(colors=_IMAGE_MUTED_INK, labelsize=9)
+
+
+def _side_marks(
+    ax: Axes,
+    groups: Sequence[np.ndarray],
+    positions: np.ndarray,
+    color: str,
+    filled: bool,
+    *,
+    boxes: bool,
+    width: float,
+) -> None:
+    """One side: a box per point, every repeat as a dot, and the mean with ±1 std."""
+    rng = np.random.default_rng(0)  # fixed jitter: the same results draw the same image
+    face = color if filled else _IMAGE_SURFACE
+    if boxes:
+        ax.boxplot(
+            [g if len(g) else [np.nan] for g in groups],
+            positions=positions,
+            widths=width,
+            showfliers=False,
+            manage_ticks=False,
+            patch_artist=True,
+            boxprops={"facecolor": color, "alpha": 0.18, "edgecolor": color},
+            medianprops={"color": color, "linewidth": 1.5},
+            whiskerprops={"color": color},
+            capprops={"color": color},
+        )
+    for pos, g in zip(positions, groups, strict=True):
+        if not len(g):
+            continue
+        jitter = rng.uniform(-width / 3, width / 3, len(g)) if boxes else np.zeros(len(g))
+        ax.scatter(
+            pos + jitter,
+            g,
+            s=14,
+            facecolors=face,
+            edgecolors=color,
+            linewidths=1,
+            zorder=3,
+            alpha=0.85,
+        )
+    means = np.array([g.mean() if len(g) else np.nan for g in groups])
+    stds = np.array([g.std() if len(g) else np.nan for g in groups])
+    ax.errorbar(
+        positions,
+        means,
+        yerr=stds,
+        fmt="D" if boxes else "D-",
+        color=color,
+        markerfacecolor=face,
+        markeredgecolor=color,
+        markersize=7,
+        capsize=4,
+        linewidth=2,
+        zorder=4,
+    )
+
+
+def _draw_repeats(ax: Axes, m: _Metric) -> str:
+    """Each side's repeats per swept point (or overall); returns the x label."""
+    if m.base.swept:
+        x = m.base.x
+        groups = (list(m.base.points), list(m.cand.points))
+        xlabel = m.base.swept[0]
+        many = len(x) > _MAX_IMAGE_BOXES
+        if many and all(_is_number(v) for v in x):
+            positions = np.asarray(x, dtype=float)
+            step = float(np.min(np.diff(np.sort(positions)))) if len(x) > 1 else 1.0
+            offsets, width = (-step / 6, step / 6), step / 4
+            ticks = None
+        else:
+            positions = np.arange(len(x), dtype=float)
+            offsets, width = (-0.2, 0.2), 0.35
+            ticks = (positions, list(_distinct([_label(v) for v in x])))
+        boxes = not many
+    else:
+        groups = ([_finite_samples(m.base_da)], [_finite_samples(m.cand_da)])
+        positions = np.array([0.0])
+        offsets, width, boxes, xlabel = (-0.25, 0.25), 0.35, True, ""
+        ticks = ([-0.25, 0.25], ["before", "after"])
+    sides = ((_IMAGE_BEFORE_COLOR, False), (_IMAGE_AFTER_COLOR, True))
+    for side_groups, offset, (color, filled) in zip(groups, offsets, sides, strict=True):
+        _side_marks(ax, side_groups, positions + offset, color, filled, boxes=boxes, width=width)
+    if ticks is not None:
+        ax.set_xticks(*ticks)
+        if len(ticks[1]) > 8:  # noqa: PLR2004 - past this, horizontal labels collide
+            ax.tick_params(axis="x", labelrotation=45)
+    return xlabel
+
+
+def _heat_colors(direction: str) -> tuple[str, str, str]:
+    """(color of a negative change, color of a positive change, what they mean)."""
+    if direction == "minimize":
+        return _IMAGE_BETTER, _IMAGE_WORSE, "blue = better (lower), red = worse"
+    if direction == "maximize":
+        return _IMAGE_WORSE, _IMAGE_BETTER, "blue = better (higher), red = worse"
+    return _IMAGE_DOWN, _IMAGE_UP, "violet = down, yellow = up (no direction is set)"
+
+
+def _render_heatmap_image(plan: Heatmap, metric: str) -> Figure:
+    from matplotlib.colors import LinearSegmentedColormap
+    from matplotlib.figure import Figure
+
+    down, up, meaning = _heat_colors(plan.direction)
+    cmap = LinearSegmentedColormap.from_list("change", [down, _IMAGE_MID, up]).with_extremes(
+        bad=_IMAGE_SURFACE
+    )
+    changes = [
+        np.array(
+            [
+                [
+                    np.nan if (p := _percent_change(b, a)) is None else p
+                    for b, a in zip(br, ar, strict=True)
+                ]
+                for br, ar in zip(g.before, g.after, strict=True)
+            ],
+            dtype=float,
+        )
+        for g in plan.grids
+    ]
+    finite = np.concatenate([c[np.isfinite(c)] for c in changes]) if changes else np.array([])
+    limit = max(float(np.abs(finite).max()) if finite.size else 0.0, 2 * plan.margin_percent, 1.0)
+    n = len(plan.grids)
+    cols = min(n, 3)
+    rows = math.ceil(n / cols)
+    width = min(4.0 + 4.0 * cols, 14.0)
+    fig = Figure(figsize=(width, 1.4 + 3.6 * rows), dpi=100, facecolor=_IMAGE_SURFACE)
+    axes = np.atleast_1d(fig.subplots(rows, cols, squeeze=False)).ravel()
+    image = None
+    for ax, grid, change in zip(axes, plan.grids, changes, strict=False):
+        image = ax.imshow(change, cmap=cmap, vmin=-limit, vmax=limit, aspect="auto")
+        ax.set_xticks(range(len(plan.col_labels)), plan.col_labels)
+        ax.set_yticks(range(len(plan.row_labels)), plan.row_labels)
+        ax.set_xlabel(plan.col_input, color=_IMAGE_MUTED_INK)
+        ax.set_ylabel(plan.row_input, color=_IMAGE_MUTED_INK)
+        ax.tick_params(colors=_IMAGE_MUTED_INK, labelsize=9)
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        if grid.layer is not None:
+            ax.set_title(f"{plan.layer_input} = {grid.layer}", fontsize=10, color=_IMAGE_INK)
+        if change.size <= _MAX_ANNOTATED_CELLS:
+            for (r, c), value in np.ndenumerate(change):
+                text = "n/a" if not math.isfinite(value) else _pct(value)
+                # Light text on a strong color, dark text near the grey midpoint.
+                strong = math.isfinite(value) and abs(value) > limit / 2
+                ink = _IMAGE_SURFACE if strong else _IMAGE_INK
+                ax.text(c, r, text, ha="center", va="center", fontsize=9, color=ink)
+    for ax in axes[n:]:
+        ax.set_visible(False)
+    if image is not None:
+        bar = fig.colorbar(image, ax=list(axes[:n]), shrink=0.85)
+        bar.set_label(f"change % ({meaning})", color=_IMAGE_MUTED_INK)
+        bar.ax.tick_params(colors=_IMAGE_MUTED_INK, labelsize=9)
+    notes = f" · {' '.join(plan.notes)}" if plan.notes else ""
+    fig.suptitle(
+        f"{metric}: percent change before → after at each point{notes}",
+        fontsize=11,
+        color=_IMAGE_INK,
+        wrap=True,
+    )
+    return fig
+
+
+def _render_image(m: _Metric, path: Path) -> Path:
+    """The PR-body image of one metric: a heatmap, or every repeat with its box."""
+    from matplotlib.figure import Figure
+    from matplotlib.lines import Line2D
+
+    name = m.entry["variable"]
+    metric = f"{name} ({m.units})" if m.units else name
+    if isinstance(m.plan, Heatmap):
+        fig = _render_heatmap_image(m.plan, metric)
+        fig.savefig(path, facecolor=_IMAGE_SURFACE, bbox_inches="tight")
+        return path
+    fig = Figure(figsize=(8.8, 4.6), dpi=100, facecolor=_IMAGE_SURFACE)
+    ax = fig.add_subplot()
+    _style(ax)
+    xlabel = _draw_repeats(ax, m)
+    _draw_claim(ax, m.claim)
+    handles = [
+        Line2D(
+            [],
+            [],
+            marker="D",
+            linestyle="",
+            color=_IMAGE_BEFORE_COLOR,
+            markerfacecolor=_IMAGE_SURFACE,
+            label="before",
+        ),
+        Line2D([], [], marker="D", linestyle="", color=_IMAGE_AFTER_COLOR, label="after"),
+    ]
+    if m.claim is not None:
+        handles.append(Line2D([], [], color=_CLAIM_COLOR, linestyle=":", label=f"claim {m.claim}"))
+    ax.legend(handles=handles, loc="best", frameon=False, fontsize=9)
+    ax.set_xlabel(xlabel, color=_IMAGE_MUTED_INK)
+    ax.set_ylabel(metric, color=_IMAGE_MUTED_INK)
+    rest = m.base.swept[1:]
+    pooled = f", pooled over {', '.join(rest)}" if rest else ""
+    ax.set_title(
+        f"{metric}: every repeat before vs after\n"
+        f"dots = repeats, box = quartiles, ◆ = mean ± 1 std{pooled}",
+        fontsize=11,
+        color=_IMAGE_INK,
+        loc="left",
+    )
+    fig.tight_layout()
+    fig.savefig(path, facecolor=_IMAGE_SURFACE)
+    return path
+
+
+def _write_images(metrics: Sequence[_Metric], out_dir: Path) -> dict[str, Path]:
+    """Write a PNG and a samples CSV for each metric an image adds to; ``{variable: png}``."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pngs = {}
+    for m in metrics:
+        if not _image_adds_information(m):
+            continue
+        name = m.entry["variable"]
+        png = out_dir / png_name(name)
+        _render_image(m, png)
+        png.with_suffix(".csv").write_text(_samples_csv(m), encoding="utf-8")
+        pngs[name] = png
+    return pngs
+
+
 @dataclass(frozen=True)
 class EvidenceFiles:
     """What :func:`write_evidence` wrote; a path is None when its file was not asked for.
 
     ``pngs`` maps each metric to the PNG written for it: every metric with *png_dir*,
-    else none. The Markdown links no PNG.
+    else none; the Markdown links no PNG of ``pngs``. ``images`` maps each metric an
+    image adds to (see *image_dir*) to its image, and ``image_urls`` maps each metric
+    whose image the Markdown links to that link.
     """
 
     comparison: dict
     json_path: Path | None
     markdown_path: Path | None
     pngs: dict[str, Path]
+    images: dict[str, Path] = field(default_factory=dict)
+    image_urls: dict[str, str] = field(default_factory=dict)
 
 
 def write_evidence(
@@ -1523,12 +1851,22 @@ def write_evidence(
     png_dir: str | Path | None = None,
     png_url_base: str | None = None,
     run_cfg: BenchRunCfg | None = None,
+    image_dir: str | Path | None = None,
+    publish_images: Callable[[dict[str, Path]], Mapping[str, str]] | None = None,
 ) -> EvidenceFiles:
     """Compare two results once and write the JSON, Markdown and PNGs asked for.
 
     The Markdown is text only and needs no PNG. PNGs are written only with
     *png_dir*, for local viewing. *png_url_base* is deprecated and ignored, with a
     :class:`DeprecationWarning`.
+
+    With *image_dir*, each metric whose image shows more than its text chart (more
+    than one sample at a point, or two or more swept inputs) also gets an image
+    there: every repeat with a box per point and the mean ± 1 std, or a heatmap of
+    the percent change. A ``<metric>.csv`` of every sample goes beside it.
+    *publish_images* receives ``{file name: path}`` of those files and returns
+    ``{file name: link}``; the Markdown puts each linked image above the metric's
+    text chart, which stays. A file it does not link is left out of the Markdown.
     """
     if png_url_base is not None:
         warnings.warn(PNG_URL_BASE_DEPRECATED, DeprecationWarning, stacklevel=2)
@@ -1548,10 +1886,26 @@ def write_evidence(
             for m in metrics
         }
 
+    images: dict[str, Path] = {}
+    linked: dict[str, tuple[str, str | None]] = {}
+    if image_dir is not None:
+        images = _write_images(metrics, Path(image_dir))
+        if publish_images is not None and images:
+            files = {
+                path.name: path
+                for png in images.values()
+                for path in (png, png.with_suffix(".csv"))
+            }
+            urls = publish_images(files)
+            for name, png in images.items():
+                if png.name in urls:
+                    linked[name] = (urls[png.name], urls.get(png.with_suffix(".csv").name))
+
     written_md = None
     if markdown_path is not None:
         written_md = Path(markdown_path)
         written_md.parent.mkdir(parents=True, exist_ok=True)
-        written_md.write_text(_markdown(metrics, comparison), encoding="utf-8")
+        written_md.write_text(_markdown(metrics, comparison, linked), encoding="utf-8")
 
-    return EvidenceFiles(comparison, written_json, written_md, pngs)
+    image_urls = {name: png_url for name, (png_url, _) in linked.items()}
+    return EvidenceFiles(comparison, written_json, written_md, pngs, images, image_urls)
