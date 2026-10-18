@@ -156,3 +156,19 @@ def test_a_publisher_without_an_image_dir_is_an_error(tmp_path):
         )
 
     assert calls == []
+
+
+def test_a_png_link_without_a_csv_link_draws_the_image_and_no_csv_link(tmp_path):
+    url = "https://example.test/stop_distance.png?raw=true"
+    files = bn.write_evidence(
+        _collect(0.3),
+        _collect(0.2),
+        markdown_path=tmp_path / "evidence.md",
+        image_dir=tmp_path / "images",
+        publish_images=lambda _files: {"stop_distance.png": url},
+    )
+    md = files.markdown_path.read_text(encoding="utf-8")
+
+    assert f"![stop_distance: before vs after]({url})" in md
+    assert "samples (CSV)" not in md
+    assert files.image_urls == {"stop_distance": url}
