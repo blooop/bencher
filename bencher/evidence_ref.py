@@ -132,15 +132,29 @@ def _tree(files: Mapping[str, Path], run_dir: str, cwd: Path) -> str:
     return _git(["mktree"], cwd, stdin=f"040000 tree {inner}\t{run_dir}\n")
 
 
+def _push_url(remote: str, cwd: Path) -> str:
+    """The URL a push to *remote* goes to, as configured: its pushurl, else its url."""
+    for key in ("pushurl", "url"):
+        urls = _run(["config", "--get-all", f"remote.{remote}.{key}"], cwd).stdout.splitlines()
+        if urls:
+            return urls[0].strip()
+    return ""
+
+
 def _remote_tip(remote: str, ref: str, cwd: Path) -> str | None:
-    """Fetch *ref* from *remote* into the same local ref; its SHA, or None when absent."""
-    listed = _run(["ls-remote", "--exit-code", remote, ref], cwd, env=_NO_PROMPT)
+    """Fetch *ref* from where *remote* pushes into the same local ref; its SHA, or None."""
+    # A fork setup fetches from upstream and pushes to the fork: read the tip from the fork.
+    resolved = _run(["remote", "get-url", "--push", remote], cwd)
+    source = resolved.stdout.strip() if resolved.returncode == 0 else remote
+    listed = _run(["ls-remote", "--exit-code", source, ref], cwd, env=_NO_PROMPT)
     if listed.returncode == 2:  # noqa: PLR2004 - ls-remote: no matching ref
         return None
     if listed.returncode != 0:
         raise EvidencePublishError(f"cannot read {remote}: {listed.stderr.strip()}")
     # The local ref mirrors the remote one; it keeps the fetched objects reachable here too.
-    _git(["fetch", "--quiet", "--no-tags", remote, f"+{ref}:{ref}"], cwd, env=_NO_PROMPT)
+    fetched = _run(["fetch", "--quiet", "--no-tags", source, f"+{ref}:{ref}"], cwd, env=_NO_PROMPT)
+    if fetched.returncode != 0:
+        raise EvidencePublishError(f"cannot fetch {ref} from {remote}: {fetched.stderr.strip()}")
     return _git(["rev-parse", "--verify", f"{ref}^{{commit}}"], cwd)
 
 
@@ -205,7 +219,7 @@ def publish_evidence(
     is not a GitHub repository.
     """
     cwd = Path(repo)
-    url = _run(["config", "--get", f"remote.{remote}.url"], cwd).stdout.strip()
+    url = _push_url(remote, cwd)
     named = github_repo(url)
     if named is None:
         raise EvidencePublishError(

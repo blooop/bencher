@@ -287,6 +287,26 @@ def test_publish_links_each_file_on_github(repo, remote, tmp_path):
     assert urls == {"a.png": f"https://github.com/someone/proj/blob/{commit}/run-1/a.png?raw=true"}
 
 
+def test_a_fork_push_url_gets_the_links_and_stacks_each_run(repo, remote, tmp_path):
+    files = tmp_path / "files"
+    files.mkdir()
+    fork = tmp_path / "fork.git"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(fork))
+    upstream, mine = "git@github.com:up/proj.git", "git@github.com:me/proj.git"
+    _git(repo, "remote", "set-url", "origin", upstream)
+    _git(repo, "remote", "set-url", "--push", "origin", mine)
+    _git(repo, "config", f"url.{remote}.insteadOf", upstream)
+    _git(repo, "config", f"url.{fork}.insteadOf", mine)
+
+    first = publish_evidence(repo, {"a.png": _png(files, "a.png")}, run_dir="run-1")
+    second = publish_evidence(repo, {"a.png": _png(files, "a.png", PNG + b"2")}, run_dir="run-2")
+
+    one, two = _git(fork, "rev-parse", f"{EVIDENCE_REF}^", EVIDENCE_REF).splitlines()
+    assert first == {"a.png": f"https://github.com/me/proj/blob/{one}/run-1/a.png?raw=true"}
+    assert second == {"a.png": f"https://github.com/me/proj/blob/{two}/run-2/a.png?raw=true"}
+    assert _git(remote, "for-each-ref", EVIDENCE_REF) == ""
+
+
 def test_publish_without_a_github_remote_pushes_nothing(repo, remote, tmp_path):
     files = tmp_path / "files"
     files.mkdir()
