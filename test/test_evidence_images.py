@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import itertools
+from enum import Enum, auto
 
 import pytest
 from matplotlib.image import imread
@@ -172,3 +173,61 @@ def test_a_png_link_without_a_csv_link_draws_the_image_and_no_csv_link(tmp_path)
     assert f"![stop_distance: before vs after]({url})" in md
     assert "samples (CSV)" not in md
     assert files.image_urls == {"stop_distance": url}
+
+
+class Surface(Enum):
+    DRY = auto()
+    WET = auto()
+    ICE = auto()
+
+
+class Layouts(bn.ParametrizedSweep):
+    fine = bn.FloatSweep(default=1.0, bounds=(1.0, 3.0), samples=31)
+    rows = bn.FloatSweep(default=1.0, bounds=(1.0, 2.0), samples=12)
+    cols = bn.FloatSweep(default=1.0, bounds=(1.0, 2.0), samples=11)
+    surface = bn.EnumSweep(Surface)
+    load = bn.FloatSweep(default=1.0, bounds=(1.0, 2.0), samples=2)
+    gain = bn.FloatSweep(default=0.2)
+
+    stop_distance = bn.ResultFloat(units="m", direction=bn.OptDir.minimize)
+
+    def benchmark(self):
+        grip = {Surface.DRY: 1.0, Surface.WET: 1.5, Surface.ICE: 3.0}[self.surface]
+        self.stop_distance = (
+            self.gain * self.fine * self.rows * self.cols * self.load * grip + next(_NOISE)
+        )
+
+
+def _collect_layout(gain, input_vars, repeats):
+    bench = bn.Bench(f"layouts_img_{gain}_{'_'.join(input_vars)}_{repeats}", Layouts())
+    res = bench.collect(
+        input_vars=list(input_vars),
+        result_vars=["stop_distance"],
+        const_vars=[("gain", gain)],
+        run_cfg=bn.BenchRunCfg(repeats=repeats),
+    )
+    bench.close()
+    return res
+
+
+@pytest.mark.parametrize(
+    ("input_vars", "repeats"),
+    [
+        pytest.param(("fine",), 2, id="more-than-30-points"),
+        pytest.param(("surface",), 2, id="categorical-with-repeats"),
+        pytest.param(("load", "cols", "surface"), 1, id="three-inputs-layered-heatmap"),
+        pytest.param(("rows", "cols"), 1, id="heatmap-over-120-cells"),
+    ],
+)
+def test_each_image_layout_writes_a_png_that_decodes(tmp_path, input_vars, repeats):
+    files = bn.write_evidence(
+        _collect_layout(0.3, input_vars, repeats),
+        _collect_layout(0.2, input_vars, repeats),
+        image_dir=tmp_path,
+    )
+
+    png = tmp_path / "stop_distance.png"
+    assert files.images == {"stop_distance": png}
+    height, width, _ = imread(png).shape
+    assert width > 200
+    assert height > 200
