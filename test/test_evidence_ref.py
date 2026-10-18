@@ -376,6 +376,13 @@ def test_a_run_dir_that_is_not_a_plain_name_pushes_nothing(repo, remote, tmp_pat
     assert _git(remote, "for-each-ref", EVIDENCE_REF) == ""
 
 
+def test_no_files_pushes_nothing(repo, remote):
+    with pytest.raises(EvidencePublishError, match="no file"):
+        push_evidence(repo, {}, run_dir="run-1")
+
+    assert _git(remote, "for-each-ref", EVIDENCE_REF) == ""
+
+
 def test_without_a_git_identity_the_commit_is_made_as_bencher(repo, remote, tmp_path, monkeypatch):
     files = tmp_path / "files"
     files.mkdir()
