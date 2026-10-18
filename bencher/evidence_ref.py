@@ -35,6 +35,9 @@ if TYPE_CHECKING:
 EVIDENCE_REF = "refs/bencher/evidence"
 DEFAULT_ATTEMPTS = 5
 
+# A git call that reaches the remote fails, not prompts, when it has no credential.
+_NO_PROMPT = {"GIT_TERMINAL_PROMPT": "0"}
+
 # The fallback identity of an evidence commit when git has none configured.
 _IDENTITY = {
     "GIT_AUTHOR_NAME": "bencher",
@@ -125,13 +128,13 @@ def _tree(files: Mapping[str, Path], run_dir: str, cwd: Path) -> str:
 
 def _remote_tip(remote: str, ref: str, cwd: Path) -> str | None:
     """Fetch *ref* from *remote* into the same local ref; its SHA, or None when absent."""
-    listed = _run(["ls-remote", "--exit-code", remote, ref], cwd)
+    listed = _run(["ls-remote", "--exit-code", remote, ref], cwd, env=_NO_PROMPT)
     if listed.returncode == 2:  # noqa: PLR2004 - ls-remote: no matching ref
         return None
     if listed.returncode != 0:
         raise EvidencePublishError(f"cannot read {remote}: {listed.stderr.strip()}")
     # The local ref mirrors the remote one; it keeps the fetched objects reachable here too.
-    _git(["fetch", "--quiet", "--no-tags", remote, f"+{ref}:{ref}"], cwd)
+    _git(["fetch", "--quiet", "--no-tags", remote, f"+{ref}:{ref}"], cwd, env=_NO_PROMPT)
     return _git(["rev-parse", "--verify", f"{ref}^{{commit}}"], cwd)
 
 
@@ -167,7 +170,9 @@ def push_evidence(
         parent = _remote_tip(remote, ref, cwd)
         parents = ["-p", parent] if parent else []
         commit = _git(["commit-tree", "--no-gpg-sign", tree, *parents, "-m", message], cwd, env=env)
-        pushed = _run(["push", "--quiet", "--no-verify", remote, f"{commit}:{ref}"], cwd)
+        pushed = _run(
+            ["push", "--quiet", "--no-verify", remote, f"{commit}:{ref}"], cwd, env=_NO_PROMPT
+        )
         if pushed.returncode == 0:
             _run(["update-ref", ref, commit], cwd)
             return commit
