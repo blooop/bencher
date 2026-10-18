@@ -1868,9 +1868,20 @@ def write_evidence(
     *publish_images* receives ``{file name: path}`` of those files and returns
     ``{file name: link}``; the Markdown puts each linked image above the metric's
     text chart, which stays. A file it does not link is left out of the Markdown.
+    The images share the PNGs' file names, so *png_dir* and *image_dir* must differ
+    (:class:`ValueError` otherwise).
     """
     if publish_images is not None and image_dir is None:
         raise ValueError("publish_images needs image_dir: the images are written there first")
+    if (
+        png_dir is not None
+        and image_dir is not None
+        and Path(png_dir).resolve() == Path(image_dir).resolve()
+    ):
+        raise ValueError(
+            f"png_dir and image_dir are the same directory ({png_dir}): "
+            "the images use the same file names and would overwrite the PNGs"
+        )
     if png_url_base is not None:
         warnings.warn(PNG_URL_BASE_DEPRECATED, DeprecationWarning, stacklevel=2)
     comparison = compare_results(baseline, candidate, run_cfg=run_cfg)

@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in public and private repositories, above the text chart and data block, which stay.
   With no GitHub `origin` or no push access, the images stay in `<out>/images/`,
   `evidence.md` stays text only, one line on stderr says so, and the exit status does not
-  change. `write_evidence` takes the matching `image_dir` and `publish_images` arguments,
+  change. `write_evidence` takes the matching `image_dir` and `publish_images` arguments
+  (`ValueError` when `image_dir` is `png_dir`: the file names are the same),
   and `bencher.evidence_ref` holds the git side. `schema_version`, the existing keys,
   flags and exit codes do not change.
 

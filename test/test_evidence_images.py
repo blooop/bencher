@@ -146,6 +146,18 @@ def test_images_do_not_change_the_png_dir_pngs(tmp_path, input_vars):
     assert set(alone.pngs) == set(both.pngs)
 
 
+def test_the_same_dir_for_pngs_and_images_is_an_error(tmp_path):
+    with pytest.raises(ValueError, match=r"png_dir and image_dir"):
+        bn.write_evidence(
+            _collect(0.3),
+            _collect(0.2),
+            png_dir=tmp_path / "x",
+            image_dir=tmp_path / "y" / ".." / "x",
+        )
+
+    assert not (tmp_path / "x").exists()
+
+
 def test_a_publisher_without_an_image_dir_is_an_error(tmp_path):
     calls = []
     with pytest.raises(ValueError, match=r"publish_images.*image_dir"):

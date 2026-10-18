@@ -814,7 +814,8 @@ bencher ab --base origin/main --out evidence/ -- pixi run python my_bench.py
 - `--out` (default `./bencher-ab/`) receives `base.pkl`, `candidate.pkl`,
   `comparison.json`, the text-only `evidence.md`, and `base.log`/`candidate.log` with each
   side's output. `--png-dir DIR` also writes one PNG per metric there, for local viewing.
-  `--images` adds images to `evidence.md` (see below). The paths are printed on stdout.
+  `--images` adds images to `evidence.md` (see below); its PNGs share those file names, so
+  `--png-dir` must not be `<out>/images/`. The paths are printed on stdout.
 - The exit status is 0 when both sides ran, whatever the verdict and whatever the claims
   say (a failed claim, on a metric the base has or not, is reported, not enforced); 1 when
   a side failed or saved no result (stderr names the side and the tail of its log, which is
