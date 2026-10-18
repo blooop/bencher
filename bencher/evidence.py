@@ -1602,10 +1602,16 @@ def _image_adds_information(m: _Metric) -> bool:
 
     A heatmap image draws the percent change as a continuous color; a box per point
     shows the spread of the repeats, so it needs more than one sample at a point.
+    A heatmap with no finite percent change at any cell draws nothing.
     """
     match m.plan:
-        case Heatmap():
-            return True
+        case Heatmap(grids=grids):
+            return any(
+                _percent_change(b, a) is not None
+                for g in grids
+                for br, ar in zip(g.before, g.after, strict=True)
+                for b, a in zip(br, ar, strict=True)
+            )
         case OverlapTable():
             return False
         case _:

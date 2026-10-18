@@ -254,3 +254,44 @@ def test_sides_that_sweep_different_inputs_get_no_image(tmp_path):
 
     assert files.images == {}
     assert not (tmp_path / "stop_distance.png").exists()
+
+
+class Coasting(bn.ParametrizedSweep):
+    speed = bn.FloatSweep(default=1.0, bounds=(1.0, 3.0), samples=3)
+    load = bn.FloatSweep(default=1.0, bounds=(1.0, 2.0), samples=2)
+    gain = bn.FloatSweep(default=0.2)
+
+    stop_distance = bn.ResultFloat(units="m", direction=bn.OptDir.minimize)
+
+    def benchmark(self):
+        self.stop_distance = self.gain * self.speed * self.load
+
+
+def _collect_coasting(gain):
+    bench = bn.Bench(f"coasting_img_{gain}", Coasting())
+    res = bench.collect(
+        input_vars=["speed", "load"],
+        result_vars=["stop_distance"],
+        const_vars=[("gain", gain)],
+        run_cfg=bn.BenchRunCfg(repeats=1),
+    )
+    bench.close()
+    return res
+
+
+def test_a_heatmap_with_no_finite_change_gets_no_image(tmp_path):
+    # A baseline of 0 at every point makes every percent change n/a.
+    calls = []
+    files = bn.write_evidence(
+        _collect_coasting(0.0),
+        _collect_coasting(0.2),
+        markdown_path=tmp_path / "evidence.md",
+        image_dir=tmp_path / "images",
+        publish_images=_fake_publish(calls),
+    )
+    md = files.markdown_path.read_text(encoding="utf-8")
+
+    assert "n/a" in md
+    assert files.images == {}
+    assert calls == []
+    assert "![" not in md
