@@ -114,14 +114,15 @@ class ResultFloat(Number):
         "max_time_events",
         "meaning_version",
         "claim",
+        "margin",
     ]
     # ``direction`` is excluded because flipping minimize<->maximize does not
     # change the recorded numeric values, only their interpretation for
     # Pareto/optimizer plots.  Keeping it in the hash would needlessly wipe
     # over_time history when the user merely retargets the optimizer.
-    # ``claim`` is excluded for the same reason: it judges the values, it does
-    # not change them.
-    _hash_exclude = ("direction", "share_axis", "max_time_events", "claim")
+    # ``claim`` and ``margin`` are excluded for the same reason: they judge the
+    # values, they do not change them.
+    _hash_exclude = ("direction", "share_axis", "max_time_events", "claim", "margin")
 
     def __init__(
         self,
@@ -132,6 +133,7 @@ class ResultFloat(Number):
         default: float = float("nan"),
         meaning_version: int = 1,
         claim: str | Claim | None = None,
+        margin: float | None = None,
         **params: Any,
     ) -> None:
         Number.__init__(self, **params)
@@ -141,6 +143,13 @@ class ResultFloat(Number):
         # What the change under test is meant to make true, e.g. "< 0.7" (see
         # bencher.claims). Parsed here so a typo fails at class definition.
         self.claim = as_claim(claim)
+        # The equivalence margin Δ the evidence report reads this metric's change
+        # against (bencher.evidence_stats): relative for a positive metric (0.05 is
+        # ±5 %), absolute otherwise (0.05 is ±5 pp for a ResultBool). None takes the
+        # default of docs/statistical_evidence.md §4.3. Set it before the run.
+        if margin is not None and not (isinstance(margin, (int, float)) and margin > 0):
+            raise ValueError(f"margin must be a number > 0, got {margin!r}")
+        self.margin = None if margin is None else float(margin)
         # The sanctioned way to declare "same name, new semantics": bump
         # meaning_version when the quantity this metric measures changes
         # (e.g. success redefined from reported to physically verified).

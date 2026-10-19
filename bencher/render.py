@@ -313,6 +313,18 @@ def _compare_parser() -> argparse.ArgumentParser:
         metavar="URL",
         help="Deprecated and ignored: evidence is text only and links no image",
     )
+    parser.add_argument(
+        "--report",
+        dest="report_dir",
+        metavar="DIR",
+        help=(
+            "Write the statistical evidence report here: evidence.md with a scorecard, "
+            "forest, estimation and sweep graphics (light and dark PNG + SVG)"
+        ),
+    )
+    from bencher.evidence_report import add_report_options
+
+    add_report_options(parser)
     return parser
 
 
@@ -346,8 +358,8 @@ def _run_compare(argv: list[str]) -> int:
 
     parser = _compare_parser()
     args = parser.parse_args(argv)
-    if not (args.json_path or args.markdown_path or args.png_dir):
-        parser.error("give at least one of --json, --markdown or --png")
+    if not (args.json_path or args.markdown_path or args.png_dir or args.report_dir):
+        parser.error("give at least one of --json, --markdown, --png or --report")
     if args.png_url_base is not None:
         print(f"{_prog()} compare: warning: {PNG_URL_BASE_FLAG_DEPRECATED}", file=sys.stderr)  # noqa: T201 - CLI output
     baseline, code = _load_or_fail(args.baseline, "baseline result")
@@ -356,6 +368,8 @@ def _run_compare(argv: list[str]) -> int:
     candidate, code = _load_or_fail(args.candidate, "candidate result")
     if candidate is None:
         return code
+    if args.report_dir and not (args.json_path or args.markdown_path or args.png_dir):
+        return _run_report(args, baseline, candidate)
     try:
         files = write_evidence(
             baseline,
@@ -378,12 +392,38 @@ def _run_compare(argv: list[str]) -> int:
     for path in (files.json_path, files.markdown_path, *files.pngs.values()):
         if path is not None:
             print(path)  # noqa: T201 - CLI prints the output paths
+    if args.report_dir:
+        return _run_report(args, baseline, candidate)
+    return 0
+
+
+def _run_report(args: argparse.Namespace, baseline: BenchResult, candidate: BenchResult) -> int:
+    from bencher.evidence_report import report_from_results, split_names
+
+    try:
+        report = report_from_results(
+            baseline,
+            candidate,
+            args.report_dir,
+            primary=split_names(args.primary),
+            margin=args.margin,
+            paired=args.paired,
+            url_base=args.url_base,
+        )
+    except ValueError as exc:
+        print(f"compare --report failed: {exc}", file=sys.stderr)  # noqa: T201 - CLI error output
+        return 1
+    print(report.markdown_path)  # noqa: T201 - CLI prints the output path
     return 0
 
 
 def _run_subcommand(name: str, argv: list[str]) -> int:
     if name == "compare":
         return _run_compare(argv)
+    if name == "evidence-rows":
+        from bencher.evidence_report import main_rows
+
+        return main_rows(argv)
     if name == "ab":
         from bencher.ab import main as ab_main
 
@@ -402,11 +442,13 @@ def main(argv: list[str] | None = None) -> int:
     Render: ``bencher <result.pkl> <output_dir> [--json PATH] [--cachedir DIR]``
     Compare: ``bencher compare <a.pkl> <b.pkl> [--json PATH] [--markdown PATH]
     [--png DIR]``
+    Evidence from kbench rows: ``bencher evidence-rows BASE.json CAND.json --report DIR
+    [--primary M1,M2] [--margin 0.05] [--paired]``
     A/B: ``bencher ab [--base REF] [--out DIR] [--png-dir DIR] -- <command...>``
     """
     argv = sys.argv[1:] if argv is None else argv
 
-    if argv and argv[0] in ("compare", "ab", "publish"):
+    if argv and argv[0] in ("compare", "ab", "publish", "evidence-rows"):
         return _run_subcommand(argv[0], argv[1:])
 
     args = _render_parser().parse_args(argv)
