@@ -1,13 +1,18 @@
-"""Write the statistical-evidence demo plates as standalone animated SVG files.
+"""Write the statistical-evidence demo plates as standalone SVG files.
 
 The data are synthetic and seeded, so every run writes the same files. The script uses
 only the standard library:
 
     python docs/evidence_svg_demo/make_svgs.py
 
-Each SVG carries a light and a dark palette (``prefers-color-scheme``) and uses CSS
-``@keyframes`` for its few motions, so ``prefers-reduced-motion`` turns them off. The
-resting frame is complete: a reader who sees only the still image gets every number.
+The plates show, they do not tell: every sample is a dot, the margin is a band on the
+metric's own axis, and the design is drawn (pair lines, run-order squares). Text is a
+short finding, one effect number with its verdict glyph, and axis labels.
+
+Each SVG carries a light and a dark palette (``prefers-color-scheme``). Motion is
+ambient emphasis only: a slow CSS loop on one or two marks that carry the finding, never
+a change of position of a data mark, so every frame is the complete chart.
+``prefers-reduced-motion`` turns it off.
 """
 
 # ruff: noqa: PLR2004, RUF001
@@ -23,15 +28,15 @@ from typing import NamedTuple
 from xml.sax.saxutils import escape
 
 OUT = Path(__file__).resolve().parent
-W = 920
+W = 800
+FS = 15  # smallest text, in px at the 800 px display width
 MASK = 0xFFFFFFFF
-HEAD = 66  # height of the plate header (badge, title, use line)
 
 SANS = '-apple-system,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif'
 MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
 
 # Okabe-Ito marks. The t* tokens are text steps of the same hues, dark enough to read as
-# small text on white; on the dark surface the mark colours already pass.
+# text on white; on the dark surface the mark colours already pass.
 LIGHT = {
     "plate": "#FFFFFF",
     "ink": "#16191D",
@@ -47,8 +52,8 @@ LIGHT = {
     "tbetter": "#007A59",
     "tworse": "#B34A00",
     "tunsure": "#9A6700",
-    "band": "#E9F0F7",
-    "bandEdge": "#B9CCE0",
+    "band": "#E3EDF7",
+    "bandEdge": "#9DB8D3",
     "chip": "#EEF1F5",
     "white": "#FFFFFF",
 }
@@ -67,32 +72,38 @@ DARK = {
     "tbetter": "#2DB98F",
     "tworse": "#EC7A43",
     "tunsure": "#D39B2A",
-    "band": "#1E2C3A",
-    "bandEdge": "#35506B",
+    "band": "#1A2836",
+    "bandEdge": "#3F5F80",
     "chip": "#1C2128",
     "white": "#FFFFFF",
 }
 
-# verdict kind -> (mark token, text token, glyph, word)
+# verdict kind -> (mark token, text token, glyph shape)
 VERDICT = {
-    "improved": ("better", "tbetter", "up", "Improved"),
-    "regressed": ("worse", "tworse", "down", "Regressed"),
-    "equiv": ("ink2", "ink2", "≈", "No change"),
-    "small": ("ink2", "ink2", "≈", "Small gain, within ±Δ"),
-    "unsure": ("unsure", "tunsure", "?", "Inconclusive"),
+    "improved": ("better", "tbetter", "up"),
+    "regressed": ("worse", "tworse", "down"),
+    "equiv": ("ink2", "ink2", "≈"),
+    "small": ("ink2", "ink2", "≈"),
+    "unsure": ("unsure", "tunsure", "?"),
 }
 
+# Ambient motion: slow loops, low amplitude, no change of position of a data mark.
 BASE_CSS = f"""
 text{{font-family:{SANS}}}
 .mono{{font-family:{MONO}}}
 .b{{font-weight:600}}
 .bb{{font-weight:700}}
-@keyframes fade{{from{{opacity:0}}to{{opacity:1}}}}
-@keyframes grow{{from{{stroke-dashoffset:1}}to{{stroke-dashoffset:0}}}}
-.fade{{animation:fade .45s ease-out both}}
-.grow{{stroke-dasharray:1 1;animation:grow 1.1s cubic-bezier(.25,.7,.25,1) .3s both}}
-.hop{{opacity:0}}
-@media (prefers-reduced-motion:reduce){{.fade,.grow,.hop{{animation:none}}.hopnote{{display:none}}}}
+@keyframes breathe{{0%,100%{{opacity:1}}50%{{opacity:.55}}}}
+@keyframes glow{{0%,100%{{stroke-opacity:.2}}50%{{stroke-opacity:1}}}}
+@keyframes drift{{to{{stroke-dashoffset:-24}}}}
+@keyframes slide{{to{{transform:translateX(8px)}}}}
+.breathe{{animation:breathe 4.5s ease-in-out infinite}}
+.pulse{{animation:breathe 3.5s ease-in-out infinite}}
+.glow{{animation:glow 5s ease-in-out infinite}}
+.shimmer{{stroke-dasharray:4 8;animation:drift 5s linear infinite}}
+.hatch{{animation:slide 6s linear infinite}}
+@media (prefers-reduced-motion:reduce){{
+.breathe,.pulse,.glow,.shimmer,.hatch{{animation:none}}.shimmer{{display:none}}}}
 """
 
 
@@ -134,6 +145,15 @@ def quant(a: list[float], p: float) -> float:
     return s[lo] + (s[hi] - s[lo]) * (i - lo)
 
 
+def mean(a: list[float]) -> float:
+    return sum(a) / len(a)
+
+
+def sd(a: list[float]) -> float:
+    m = mean(a)
+    return math.sqrt(sum((x - m) ** 2 for x in a) / (len(a) - 1))
+
+
 def pct(log_ratio: float) -> float:
     return (math.exp(log_ratio) - 1) * 100
 
@@ -154,12 +174,29 @@ def verdict(lo: float, hi: float, d: float) -> str:
     return "unsure"
 
 
+def t_ci(log_diffs: list[float], t: float) -> tuple[float, float, float]:
+    """Return the mean log difference and its t interval."""
+    m = mean(log_diffs)
+    h = t * sd(log_diffs) / math.sqrt(len(log_diffs))
+    return m, m - h, m + h
+
+
 class Pair(NamedTuple):
     shard: int
     idx: int
     base: float
     cand: float
     order: str
+
+
+def _boot(rng: XorShift, xs: list[float], n: int = 4000) -> list[float]:
+    out = []
+    for _ in range(n):
+        acc = 0.0
+        for _j in range(len(xs)):
+            acc += xs[math.floor(rng.rnd() * len(xs))]
+        out.append(acc / len(xs))
+    return out
 
 
 RNG = XorShift(20261019)
@@ -172,17 +209,23 @@ for _s in range(4):
         _c = _b * math.exp(math.log(0.816) + 0.07 * RNG.norm())
         PAIRS.append(Pair(_s, _p, _b, _c, "BA" if _p % 2 else "AB"))
 LOG_DIFF = [math.log(p.cand / p.base) for p in PAIRS]
-BOOTS: list[float] = []
-for _ in range(4000):
-    _acc = 0.0
-    for _j in range(len(LOG_DIFF)):
-        _acc += LOG_DIFF[math.floor(RNG.rnd() * len(LOG_DIFF))]
-    BOOTS.append(_acc / len(LOG_DIFF))
-EST = sum(LOG_DIFF) / len(LOG_DIFF)
+BOOTS = _boot(RNG, LOG_DIFF)
+EST = mean(LOG_DIFF)
 C90 = (quant(BOOTS, 0.05), quant(BOOTS, 0.95))
-C95 = (quant(BOOTS, 0.025), quant(BOOTS, 0.975))
 MARGIN = math.log(1.05)
-N_FASTER = sum(p.cand < p.base for p in PAIRS)
+
+# tracking_error_rms: a second paired metric on the same runs, with no real change
+_TR = XorShift(31)
+TRACK: list[Pair] = []
+for _s in range(4):
+    for _p in range(5):
+        _b = 12.0 * SHARD_SPEED[_s] * math.exp(0.10 * _TR.norm())
+        _c = _b * math.exp(math.log(1.004) + 0.03 * _TR.norm())
+        TRACK.append(Pair(_s, _p, _b, _c, "BA" if _p % 2 else "AB"))
+TRACK_LD = [math.log(p.cand / p.base) for p in TRACK]
+TRACK_BOOTS = _boot(_TR, TRACK_LD)
+TRACK_EST = mean(TRACK_LD)
+TRACK_C90 = (quant(TRACK_BOOTS, 0.05), quant(TRACK_BOOTS, 0.95))
 
 
 # ---------------------------------------------------------------- SVG primitives
@@ -211,7 +254,7 @@ def text(
     y: float,
     s: str,
     cls: str = "f-ink2",
-    size: float = 12,
+    size: float = FS,
     anchor: str | None = None,
     **attrs: object,
 ) -> str:
@@ -225,73 +268,88 @@ def line(
 
 
 def rect(x: float, y: float, w: float, h: float, cls: str, **attrs: object) -> str:
-    return el("rect", x=x, y=y, width=w, height=h, cls=cls, **attrs)
+    return el("rect", x=x, y=y, width=w, height=h, cls=cls or None, **attrs)
 
 
 def circle(cx: float, cy: float, r: float, cls: str, **attrs: object) -> str:
     return el("circle", cx=cx, cy=cy, r=r, cls=cls, **attrs)
 
 
-def glyph(shape: str, x: float, y: float, size: float, tok: str) -> tuple[str, float]:
-    """Draw a verdict glyph with its left edge at x on baseline y; return it and its advance.
+def glyph(kind: str, x: float, y: float, size: float, cls: str = "") -> tuple[str, float]:
+    """Draw the verdict glyph of kind with its left edge at x on baseline y.
 
-    The triangles are paths, so they do not depend on a font that has U+25B2 and U+25BC.
+    Return the SVG and the glyph's width. The triangles are paths, so they do not depend
+    on a font that has U+25B2 and U+25BC.
     """
+    _, tok, shape = VERDICT[kind]
     if shape in {"up", "down"}:
-        w, h = size * 0.72, size * 0.64
+        w, h = size * 0.74, size * 0.66
         if shape == "up":
             bot = y - size * 0.02
             d = f"M{num(x)} {num(bot)}L{num(x + w / 2)} {num(bot - h)}L{num(x + w)} {num(bot)}Z"
         else:
-            top = y - size * 0.68
+            top = y - size * 0.7
             d = f"M{num(x)} {num(top)}L{num(x + w)} {num(top)}L{num(x + w / 2)} {num(top + h)}Z"
-        return el("path", d=d, cls=f"f-{tok}"), w + size * 0.32
-    return text(x, y, shape, f"f-{tok} bb", size), size * 0.62 + size * 0.28
+        return el("path", d=d, cls=f"f-{tok} {cls}".strip()), w
+    return text(x, y, shape, f"f-{tok} bb {cls}".strip(), size), size * 0.62
 
 
-def verdict_text(
-    kind: str, x: float, y: float, size: float, words: str | None = None, cls: str = "b"
-) -> str:
-    _, tok, shape, word = VERDICT[kind]
-    g, adv = glyph(shape, x, y, size, tok)
-    return g + text(x + adv, y, words if words is not None else word, f"f-{tok} {cls}", size)
+def nice_ticks(lo: float, hi: float, n: int = 4) -> list[float]:
+    raw = (hi - lo) / n
+    mag = 10 ** math.floor(math.log10(raw))
+    step = min(m * mag for m in (1, 2, 2.5, 5, 10) if m * mag >= raw)
+    t, out = math.ceil(lo / step) * step, []
+    while t <= hi + 1e-9:
+        out.append(round(t, 10))
+        t += step
+    return out
 
 
-def chips(
-    x0: float, y0: float, items: list[tuple[str, str]], maxx: float, size: float = 11.5
-) -> str:
-    """Draw key/value chips in rows, wrapping at maxx."""
-    out, cx, cy = [], x0, y0
-    for k, v in items:
-        w = len(f"{k}  {v}") * size * 0.6 + 16
-        if cx + w > maxx:
-            cx, cy = x0, cy + 28
-        out.append(rect(cx, cy, w, 22, "f-chip", rx=3))
-        body = escape(k + "  ") + el("tspan", escape(v), cls="f-ink")
-        out.append(el("text", body, x=cx + 8, y=cy + 15, cls="mono f-muted", font_size=size))
-        cx += w + 6
-    return "".join(out)
+def swarm(pos: list[float], r: float, one_sided: bool = False) -> list[float]:
+    """Return offsets that place dots of radius r at pos without overlap (a beeswarm)."""
+    d = 2 * r + 0.8
+    out = [0.0] * len(pos)
+    placed: list[tuple[float, float]] = []
+    for i in sorted(range(len(pos)), key=lambda i: pos[i]):
+        p = pos[i]
+        near = [(q, o) for q, o in placed if abs(q - p) < d]
+        cands = [0.0]
+        for q, o in near:
+            dx = math.sqrt(d * d - (q - p) ** 2)
+            cands += [o + dx, o - dx]
+        if one_sided:
+            cands = [c for c in cands if c >= 0]
+        ok = [c for c in cands if all((c - o) ** 2 + (p - q) ** 2 >= d * d - 1e-6 for q, o in near)]
+        best = min(ok, key=abs) if ok else max((o for _, o in near), default=0) + d
+        out[i] = best
+        placed.append((p, best))
+    return out
 
 
-def legend_arms(right: float, y: float) -> str:
+def legend(right: float, y: float, items: list[tuple[str, str]]) -> str:
+    """Draw colour swatches with labels, right-aligned at right."""
     out, x = [], right
-    for tok, name in (("cand", "candidate (the PR)"), ("base", "base")):
-        x -= len(name) * 6.6
-        out.append(text(x, y, name, "f-ink2", 12))
-        x -= 17
-        out.append(rect(x, y - 10, 11, 11, f"f-{tok}", rx=2))
-        x -= 14
+    for cls, name in reversed(items):
+        x -= len(name) * FS * 0.55
+        out.append(text(x, y, name, "f-ink2"))
+        x -= 19
+        out.append(rect(x, y - 11, 13, 13, cls, rx=2))
+        x -= 18
     return "".join(out)
+
+
+ARMS = [("f-base", "base"), ("f-cand", "candidate")]
 
 
 class Plate:
-    def __init__(self, gid: str, title: str, use: str, height: float, desc: str) -> None:
-        self.gid, self.title, self.use, self.height, self.desc = gid, title, use, height, desc
+    def __init__(
+        self, title: str, height: float, desc: str, big: tuple[str, str] | None = None
+    ) -> None:
+        self.title, self.height, self.desc, self.big = title, height, desc, big
         self.parts: list[str] = []
         self.defs: list[str] = []
         self.extra: dict[str, tuple[str, str]] = {}  # class -> (light fill, dark fill)
-        self.css = ""
-        self.arms = False
+        self.legend = False
 
     def add(self, *parts: str) -> None:
         self.parts.extend(parts)
@@ -302,510 +360,424 @@ class Plate:
         return "".join(rules)
 
     def render(self) -> str:
-        h = HEAD + self.height + 12
+        h = num(float(self.height))
         css = (
             BASE_CSS
             + self._palette(LIGHT, 0)
             + "\n@media (prefers-color-scheme:dark){"
             + self._palette(DARK, 1)
             + "}\n"
-            + self.css
         )
-        bw = len(self.gid) * 7.4 + 14
         head = [
-            rect(0.5, 0.5, W - 1, h - 1, "f-plate s-rule", rx=6),
-            rect(16, 16, bw, 20, "f-ink", rx=3),
-            text(16 + bw / 2, 30.5, self.gid, "mono f-plate", 12, "middle"),
-            text(16 + bw + 10, 31, self.title, "f-ink b", 17),
-            text(16 + bw + 10, 52, self.use, "mono f-muted", 11.5),
+            rect(0.5, 0.5, W - 1, self.height - 1, "f-plate s-rule", rx=6),
+            text(20, 40, self.title, "f-ink bb", 23),
         ]
-        if self.arms:
-            head.append(legend_arms(W - 16, 31))
+        if self.big:
+            kind, s = self.big
+            gw = 30 * 0.74
+            g, _ = glyph(kind, W - 20 - gw, 42, 30)
+            head += [g, text(W - 30 - gw, 42, s, "f-ink bb", 30, "end")]
+        elif self.legend:
+            head.append(legend(W - 20, 38, ARMS))
         defs = el("defs", "".join(self.defs)) if self.defs else ""
-        body = "".join(head) + el("g", "".join(self.parts), transform=f"translate(0,{HEAD})")
-        label = f"{self.gid} {self.title}"
         return (
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{num(float(h))}" '
-            f'viewBox="0 0 {W} {num(float(h))}" role="img" aria-labelledby="t d">'
-            f'<title id="t">{escape(label)}</title><desc id="d">{escape(self.desc)}</desc>'
-            f"<style>{css}</style>{defs}{body}</svg>\n"
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{h}" '
+            f'viewBox="0 0 {W} {h}" role="img" aria-labelledby="t d">'
+            f'<title id="t">{escape(self.title)}</title><desc id="d">{escape(self.desc)}</desc>'
+            f"<style>{css}</style>{defs}{''.join(head)}{''.join(self.parts)}</svg>\n"
         )
 
 
-def eff_axis(x0: float, x1: float, lo: float = math.log(0.68), hi: float = math.log(1.36)):
-    return lambda v: x0 + (v - lo) / (hi - lo) * (x1 - x0)
+# ---------------------------------------------------------------- shared marks
+
+
+def dot_panel(
+    *,
+    x0: float,
+    x1: float,
+    y0: float,
+    y1: float,
+    base: list[float],
+    cand: list[float],
+    lo: float,
+    hi: float,
+    ci: tuple[float, float],
+    est: float,
+    kind: str,
+    paired: bool = True,
+    lower_better: bool = True,
+    ticks: list[float] | None = None,
+    tick_fmt=None,
+    tick_labels: bool = True,
+    labels: str = "two",
+    r: float = 4.5,
+    boots: list[float] | None = None,
+    mark_glyph: bool = False,
+    motion: tuple[str, ...] = ("median",),
+) -> str:
+    """Draw base and candidate as beeswarm dot columns on the metric's own axis.
+
+    The ±Δ band sits around the base median. The bracket beside the candidate column is
+    the CI of the shift, drawn where it puts the candidate median (base median x shift).
+    """
+    out = []
+
+    def ys(v: float) -> float:
+        return y1 - (v - lo) / (hi - lo) * (y1 - y0)
+
+    px = x0 + (48 if tick_labels else 0)
+    wid = x1 - px
+    cb, cc = px + wid * 0.27, px + wid * 0.6
+    for t in ticks or []:
+        out.append(line(px, ys(t), x1, ys(t), "s-grid"))
+        if tick_labels and tick_fmt:
+            out.append(text(px - 7, ys(t) + 5, tick_fmt(t), "mono f-muted", FS, "end"))
+    bmed, cmed = quant(base, 0.5), quant(cand, 0.5)
+    top, bot = ys(bmed * math.exp(MARGIN)), ys(bmed * math.exp(-MARGIN))
+    band_cls = "f-band s-bandEdge" + (" glow" if "band" in motion else "")
+    out.append(rect(px + 2, top, x1 - px - 4, bot - top, band_cls, stroke_width=1))
+    pb, pc = [ys(v) for v in base], [ys(v) for v in cand]
+    ob, oc = swarm(pb, r), swarm(pc, r)
+    mark, _, _ = VERDICT[kind]
+    if paired:
+        for i in range(len(base)):
+            better = (cand[i] < base[i]) == lower_better
+            xa, xb = cb + ob[i], cc + oc[i]
+            out.append(
+                line(
+                    xa,
+                    pb[i],
+                    xb,
+                    pc[i],
+                    "s-cand" if better else "s-worse",
+                    1.2,
+                    stroke_opacity=0.3 if better else 0.6,
+                )
+            )
+            if better and "shimmer" in motion:
+                out.append(line(xa, pb[i], xb, pc[i], "s-cand shimmer", 1.6, stroke_opacity=0.6))
+    out += [
+        circle(cb + o, p, r, "f-base s-plate", stroke_width=1) for o, p in zip(ob, pb, strict=True)
+    ]
+    out += [
+        circle(cc + o, p, r, "f-cand s-plate", stroke_width=1) for o, p in zip(oc, pc, strict=True)
+    ]
+    for cx, offs, med, tok in ((cb, ob, bmed, "base"), (cc, oc, cmed, "cand")):
+        hw = min(max(abs(o) for o in offs) + r + 5, wid * 0.15)
+        bar = line(cx - hw, ys(med), cx + hw, ys(med), "s-plate", 9, stroke_linecap="round")
+        bar += line(cx - hw, ys(med), cx + hw, ys(med), f"s-{tok}", 5, stroke_linecap="round")
+        out.append(el("g", bar, cls="breathe") if tok == "cand" and "median" in motion else bar)
+    bx = min(cc + max(abs(o) for o in oc) + r + 14, x1 - 8)
+    y_lo, y_hi = sorted((ys(bmed * math.exp(ci[0])), ys(bmed * math.exp(ci[1]))))
+    out.append(
+        el(
+            "path",
+            d=f"M{num(bx - 7)} {num(y_lo)}H{num(bx)}V{num(y_hi)}H{num(bx - 7)}",
+            cls=f"s-{mark}",
+            fill="none",
+            stroke_width=3,
+            stroke_linecap="round",
+            stroke_linejoin="round",
+        )
+    )
+    ye = ys(bmed * math.exp(est))
+    out.append(line(bx - 9, ye, bx + 3, ye, f"s-{mark}", 3, stroke_linecap="round"))
+    if boots:
+        step = 2.5
+        hist: dict[int, int] = {}
+        for b in boots:
+            k = round(ys(bmed * math.exp(b)) / step)
+            hist[k] = hist.get(k, 0) + 1
+        hm = max(hist.values())
+        ks = range(min(hist) - 1, max(hist) + 2)
+        d = f"M{num(bx + 8)} {num(ks[0] * step)}"
+        d += "".join(f"L{num(bx + 8 + hist.get(k, 0) / hm * 44)} {num(k * step)}" for k in ks)
+        d += f"L{num(bx + 8)} {num(ks[-1] * step)}Z"
+        out.append(el("path", d=d, cls=f"f-{mark} s-{mark}", fill_opacity=0.22, stroke_width=1))
+    if mark_glyph:
+        g, _ = glyph(kind, bx - 9, y_lo - 9, FS + 1, "pulse" if "glyph" in motion else "")
+        out.append(g)
+    if labels == "two":
+        for cx, name, n in ((cb, "base", len(base)), (cc, "candidate", len(cand))):
+            out += [
+                text(cx, y1 + 26, name, "f-ink2", FS, "middle"),
+                text(cx, y1 + 45, f"n={n}", "mono f-muted", FS, "middle"),
+            ]
+    elif labels == "one":
+        for cx, name, n in ((cb, "base", len(base)), (cc, "candidate", len(cand))):
+            out.append(text(cx, y1 + 28, f"{name} n={n}", "f-ink2", FS, "middle"))
+    return "".join(out)
+
+
+def run_rows(
+    x0: float,
+    y0: float,
+    rows: list[tuple[str, str]],
+    *,
+    cell: float = 16,
+    h: float = 12,
+    gap: float = 3,
+    pair_gap: float = 6,
+    pitch: float = 22,
+    label_w: float = 58,
+    pairs: bool = True,
+) -> str:
+    """Draw one thin row of run-order squares per VM: "A" is base (grey), "B" candidate."""
+    out = []
+    for r, (label, seq) in enumerate(rows):
+        y = y0 + r * pitch
+        out.append(text(x0, y + h, label, "mono f-muted"))
+        for i, a in enumerate(seq):
+            x = x0 + label_w + i * (cell + gap) + ((i // 2) * pair_gap if pairs else 0)
+            out.append(rect(x, y, cell, h, "f-base" if a == "A" else "f-cand", rx=2))
+    return "".join(out)
+
+
+def abba_rows(pairs: list[Pair]) -> list[tuple[str, str]]:
+    return [(f"VM {s + 1}", "".join(p.order for p in pairs if p.shard == s)) for s in range(4)]
+
+
+def axis_range(vals: list[float], pad: float = 0.08) -> tuple[float, float]:
+    lo, hi = min(vals), max(vals)
+    span = hi - lo
+    return lo - span * pad, hi + span * pad
 
 
 # ---------------------------------------------------------------- plates
 
 
 def plate_g1() -> Plate:
-    tiles = [
-        {
-            "m": "planning_time",
-            "claim": "claim: faster · minimize",
-            "big": f"{fmt(pct(EST))} %",
-            "ci": f"90 % CI [{fmt(pct(C90[0]))}, {fmt(pct(C90[1]))}] %",
-            "ci_log": C90,
-            "pe": EST,
-            "v": verdict(-C90[1], -C90[0], MARGIN),
-            "foot": ("n=20 pairs · ABBA · 4 shards", "BCa · Holm ×3 primary"),
-        },
-        {
-            "m": "task_success",
-            "claim": "claim: more reliable · maximize",
-            "big": "+5.6 pp",
-            "note": "17/18 → 18/18",
-            "ci": "90 % CI [−8.9, +25.8] pp",
-            "ci_log": (-0.089, 0.258),
-            "pe": 0.056,
-            "v": "unsure",
-            "bin": True,
-            "foot": ("n=18 per arm · Newcombe", "Barnard p=0.50 · MDE 22 pp"),
-        },
-        {
-            "m": "tracking_error_rms",
-            "claim": "claim: no regression · minimize",
-            "big": "+0.8 %",
-            "ci": "90 % CI [−1.9, +3.6] %",
-            "ci_log": (math.log(0.981), math.log(1.036)),
-            "pe": math.log(1.008),
-            "v": "equiv",
-            "foot": ("n=20 pairs · TOST 90 %", "margin ±5 % (set before run)"),
-        },
+    k_plan = verdict(-C90[1], -C90[0], MARGIN)
+    k_track = verdict(-TRACK_C90[1], -TRACK_C90[0], MARGIN)
+    desc = (
+        f"planning_time {fmt(pct(EST))} % (90 % CI {fmt(pct(C90[0]))} to {fmt(pct(C90[1]))}), "
+        f"improved; task_success 17/18 to 18/18, +5.6 pp, inconclusive; tracking_error_rms "
+        f"{fmt(pct(TRACK_EST))} %, no change. Paired ABBA, 20 pairs on 4 VMs."
+    )
+    pl = Plate(f"Planning is {abs(pct(EST)):.0f} % faster", 540, desc)
+    panels = [
+        ("planning_time · s", f"{fmt(pct(EST))} %", k_plan, PAIRS, C90, EST),
+        ("task_success", "+5.6 pp", "unsure", None, None, None),
+        ("tracking_error · mm", f"{fmt(pct(TRACK_EST))} %", k_track, TRACK, TRACK_C90, TRACK_EST),
     ]
-    desc = "; ".join(f"{t['m']} {t['big']}, {t['ci']}, {VERDICT[t['v']][3]}" for t in tiles)
-    pl = Plate("G1", "Scorecard", "top of every report · one tile per primary metric", 240, desc)
-    for i, t in enumerate(tiles):
-        tx, tw = 16 + i * 300, 288
-        ix = tx + 14
-        mark, _, _, word = VERDICT[t["v"]]
+    for i, (name, big, kind, pairs, ci, est) in enumerate(panels):
+        x0 = 20 + i * 258
+        x1 = x0 + 244
+        g, _ = glyph(kind, x0 + len(big) * 15.5 + 8, 116, 26)
+        pl.add(text(x0, 80, name, "mono f-ink2"), text(x0, 116, big, "f-ink bb", 28), g)
+        y0, y1 = 140, 360
+        if pairs is None:
+            pl.add(_binary_panel(x0, x1, y0, y1))
+            continue
+        lo, hi = axis_range([p.base for p in pairs] + [p.cand for p in pairs])
         pl.add(
-            rect(tx, 0, tw, 240, "f-plate s-rule", rx=6),
-            text(ix, 24, t["m"], "mono f-ink2", 12.5),
-            text(ix, 43, t["claim"], "f-muted", 13),
-            text(ix, 90, t["big"], "f-ink bb", 40),
-            text(ix, 112, t["ci"], "mono f-ink2", 12),
+            dot_panel(
+                x0=x0,
+                x1=x1,
+                y0=y0,
+                y1=y1,
+                base=[p.base for p in pairs],
+                cand=[p.cand for p in pairs],
+                lo=lo,
+                hi=hi,
+                ci=ci,
+                est=est,
+                kind=kind,
+                ticks=nice_ticks(lo, hi),
+                tick_fmt=lambda t: f"{t:g}",
+                r=4,
+            )
         )
-        if "note" in t:
-            pl.add(text(tx + tw - 14, 88, t["note"], "mono f-ink2", 12, "end"))
-        # mini effect bar, 260 wide, on the shared effect axis with the margin band
-        bx, by, bwid = ix, 122, 260
-        if t.get("bin"):
-            m = 0.05
-
-            def sc(v: float, bx: float = bx, bwid: float = bwid) -> float:
-                return bx + bwid / 2 + v / 0.35 * (bwid / 2 - 8)
-        else:
-            m = MARGIN
-            sc = eff_axis(bx + 8, bx + bwid - 8)
-        lo, hi = t["ci_log"]
-        pe = t["pe"]
-        y = by + 15
-        pl.add(
-            rect(sc(-m), by + 6, sc(m) - sc(-m), 18, "f-band s-bandEdge", stroke_width=1),
-            line(sc(0), by + 2, sc(0), by + 28, "s-muted"),
-            el(
-                "path",
-                d=f"M{num(sc(pe))} {y}H{num(sc(lo))}",
-                pathLength=1,
-                cls=f"s-{mark} grow",
-                stroke_width=5,
-                stroke_linecap="round",
-                fill="none",
-            ),
-            el(
-                "path",
-                d=f"M{num(sc(pe))} {y}H{num(sc(hi))}",
-                pathLength=1,
-                cls=f"s-{mark} grow",
-                stroke_width=5,
-                stroke_linecap="round",
-                fill="none",
-            ),
-            circle(sc(pe), y, 5.5, f"f-plate s-{mark}", stroke_width=2.5),
-            text(sc(-m), by + 34, "−Δ", "mono f-muted", 9.5, "middle"),
-            text(sc(m), by + 34, "+Δ", "mono f-muted", 9.5, "middle"),
-        )
-        # verdict pill: glyph + word, so colour is never alone
-        pw = len(word) * 7.7 + 34
-        pill = rect(ix, 166, pw, 24, f"s-{mark}", rx=12, fill="none", stroke_width=1.5)
-        pl.add(
-            el(
-                "g",
-                pill + verdict_text(t["v"], ix + 10, 183, 14),
-                cls="fade",
-                style="animation-delay:1.3s",
-            ),
-            line(ix, 202, tx + tw - 14, 202, "s-rule", stroke_dasharray="3 3"),
-            text(ix, 218, t["foot"][0], "mono f-muted", 10.5),
-            text(ix, 233, t["foot"][1], "mono f-muted", 10.5),
-        )
+    pl.add(run_rows(20, 438, abba_rows(PAIRS)), text(308, 450, "run order →", "f-muted"))
     return pl
+
+
+def _binary_panel(x0: float, x1: float, y0: float, y1: float) -> str:
+    """Draw task_success as one square per run: base 17/18, candidate 18/18."""
+    out = []
+    size, gap = 18, 5
+    px = x0 + 48
+    wid = x1 - px
+    for cx, n_fail, tok, name, count in (
+        (px + wid * 0.27, 1, "base", "base", "17/18"),
+        (px + wid * 0.6, 0, "cand", "candidate", "18/18"),
+    ):
+        left = cx - (3 * size + 2 * gap) / 2
+        for i in range(18):
+            r, k = divmod(i, 3)
+            x, y = left + k * (size + gap), y0 + 40 + r * (size + gap)
+            if i >= 18 - n_fail:
+                cross = f"M{num(x + 4.5)} {num(y + 4.5)}l9 9m0 -9l-9 9"
+                out += [
+                    rect(x, y, size, size, "f-plate s-worse", rx=3, stroke_width=2),
+                    el("path", d=cross, cls="s-worse", stroke_width=2),
+                ]
+            else:
+                out.append(rect(x, y, size, size, f"f-{tok}", rx=3))
+                if tok == "cand" and i == 17:  # the run that changed glows
+                    out.append(
+                        rect(
+                            x - 3,
+                            y - 3,
+                            size + 6,
+                            size + 6,
+                            "s-better glow",
+                            rx=5,
+                            fill="none",
+                            stroke_width=2,
+                        )
+                    )
+        out += [
+            text(cx, y1 + 26, name, "f-ink2", FS, "middle"),
+            text(cx, y1 + 45, count, "mono f-muted", FS, "middle"),
+        ]
+    return "".join(out)
 
 
 def plate_design() -> Plate:
     desc = (
-        "This run is paired ABBA on 4 VMs, 5 pairs each: each pair runs back to back on one VM "
-        "and the order alternates. Contrast: a blocked unpaired design runs all base then all "
-        "candidate, so drift between blocks lands on the effect."
+        "This run: paired ABBA on 4 VMs, 5 pairs each, each pair back to back on one VM. "
+        "Blocked contrast: all base then all candidate on one VM."
     )
-    pl = Plate(
-        "D",
-        "Design strip: how the experiment ran",
-        "part of every graphic · under G1, G2, G3, G5–G7",
-        232,
-        desc,
-    )
-    pl.arms = True
-    cell, gap, x0, y0 = 16, 4, 16, 22
-    pl.add(text(x0, y0, "This run: paired, ABBA, 4 VMs", "f-ink b", 13))
-    for r in range(4):
-        pl.add(text(x0, y0 + 24 + r * (cell + gap) + 12, f"VM {r + 1}", "mono f-muted", 11))
-        seq: list[str] = []
-        for p in range(5):
-            seq += ["B", "A"] if p % 2 else ["A", "B"]
-        for i, a in enumerate(seq):
-            x = x0 + 44 + i * (cell + gap) + (i // 2) * 6
-            delay = 0.2 + i * 0.13 + r * 0.03
-            pl.add(
-                rect(
-                    x,
-                    y0 + 24 + r * (cell + gap),
-                    cell,
-                    cell,
-                    f"f-{'base' if a == 'A' else 'cand'} fade",
-                    rx=3,
-                    style=f"animation-delay:{delay:.2f}s",
-                )
-            )
+    pl = Plate("Paired ABBA on 4 VMs", 290, desc)
+    pl.legend = True
     pl.add(
-        text(
-            x0,
-            y0 + 24 + 4 * (cell + gap) + 16,
-            "each pair runs back to back on one VM; the order alternates",
-            "f-ink2",
-            11.5,
-        )
-    )
-    bx = 526
-    pl.add(text(bx, 22, "For contrast: blocked, unpaired", "f-ink b", 13))
-    for k, a in enumerate("AB"):
-        for i in range(10):
-            x = bx + 44 + i * (cell + gap) / 2 + k * (10 * (cell + gap) / 2 + 14)
-            pl.add(
-                rect(
-                    x,
-                    46,
-                    cell / 2 + 2,
-                    cell * 2 + gap,
-                    f"f-{'base' if a == 'A' else 'cand'} fade",
-                    rx=2,
-                    style=f"animation-delay:{1.9 + k * 0.6:.1f}s",
-                )
-            )
-    pl.add(
-        text(bx, 58, "VM 1", "mono f-muted", 11),
-        text(bx + 44, 100, "all base, then all candidate:", "f-ink2", 11.5),
-        text(bx + 44, 116, "drift between blocks lands on the effect", "f-tworse", 11.5),
-        line(60, 154, 470, 154, "s-muted"),
-        el("path", d="M470 150L478 154L470 158Z", cls="f-muted"),
-        text(486, 158, "run order", "mono f-muted", 10.5),
-        chips(
-            16,
-            176,
-            [
-                ("design", "paired · ABBA"),
-                ("unit", "pair, clustered by VM"),
-                ("n", "20 pairs = 4 VMs × 5"),
-                ("seed", "same seed per pair"),
-                ("margin", "±5 % (set before run)"),
-                ("test", "BCa, paired log diff, 90 % CI"),
-                ("family", "Holm × 3 primary"),
-            ],
-            W - 16,
+        run_rows(20, 80, abba_rows(PAIRS), cell=22, h=16, gap=4, pair_gap=10, pitch=28, label_w=90),
+        run_rows(
+            20,
+            210,
+            [("blocked", "A" * 10 + "B" * 10)],
+            cell=22,
+            h=16,
+            gap=4,
+            pairs=False,
+            label_w=90,
         ),
+        line(110, 258, 600, 258, "s-muted"),
+        el("path", d="M600 253L609 258L600 263Z", cls="f-muted"),
+        text(618, 263, "run order", "f-muted"),
     )
     return pl
 
 
 def plate_g2() -> Plate:
     lg = math.log
-    rows = [
-        ("planning_time", "min", EST, C90, C95, True),
-        (
-            "time_to_simulating",
-            "min",
-            lg(0.93),
-            (lg(0.905), lg(0.957)),
-            (lg(0.90), lg(0.962)),
-            True,
-        ),
-        ("trajectory_time", "min", lg(0.975), (lg(0.93), lg(1.02)), (lg(0.92), lg(1.03)), True),
-        ("path_length", "min", lg(0.995), (lg(0.98), lg(1.01)), (lg(0.977), lg(1.013)), True),
-        (
-            "tracking_error_rms",
-            "min",
-            lg(1.008),
-            (lg(0.981), lg(1.036)),
-            (lg(0.976), lg(1.041)),
-            True,
-        ),
-        ("smoothness", "max", lg(1.003), (lg(0.988), lg(1.019)), (lg(0.985), lg(1.022)), True),
-        ("startup_time", "min", lg(1.01), (lg(0.97), lg(1.045)), (lg(0.962), lg(1.052)), True),
-        ("shutdown_time", "min", lg(1.0), (lg(0.965), lg(1.04)), (lg(0.957), lg(1.049)), True),
-        ("pos_error", "min", lg(1.02), (lg(0.99), lg(1.048)), (lg(0.985), lg(1.055)), True),
-        ("yaw_error", "min", lg(0.99), (lg(0.968), lg(1.012)), (lg(0.962), lg(1.018)), True),
-        ("plan_path_stretch", "min", lg(1.0), (lg(0.982), lg(1.018)), (lg(0.978), lg(1.022)), True),
-        (
-            "tracking_error_max",
-            "min",
-            lg(1.06),
-            (lg(0.99), lg(1.135)),
-            (lg(0.975), lg(1.15)),
-            False,
-        ),
+    spec = [
+        ("time_to_simulating", "min", lg(0.93), (lg(0.905), lg(0.957))),
+        ("trajectory_time", "min", lg(0.975), (lg(0.93), lg(1.02))),
+        ("path_length", "min", lg(0.995), (lg(0.98), lg(1.01))),
+        ("tracking_error_rms", "min", lg(1.008), (lg(0.981), lg(1.036))),
+        ("smoothness", "max", lg(1.003), (lg(0.988), lg(1.019))),
+        ("startup_time", "min", lg(1.01), (lg(0.97), lg(1.045))),
+        ("shutdown_time", "min", lg(1.0), (lg(0.965), lg(1.04))),
+        ("pos_error", "min", lg(1.02), (lg(0.99), lg(1.048))),
+        ("yaw_error", "min", lg(0.99), (lg(0.968), lg(1.012))),
+        ("plan_path_stretch", "min", lg(1.0), (lg(0.982), lg(1.018))),
+        ("tracking_error_max", "min", lg(1.03), (lg(0.97), lg(1.10))),
     ]
-    rows.sort(key=lambda r: r[2])
-    top, rh = 40, 26
-    height = top + len(rows) * rh + 80
-    kinds = []
-    for _name, d, _, a, _, _ in rows:
-        k = verdict(a[0], a[1], MARGIN) if d == "max" else verdict(-a[1], -a[0], MARGIN)
-        kinds.append(k)
-    counts = {k: kinds.count(k) for k in VERDICT}
-    desc = (
-        f"Forest plot of 12 metrics on one log-ratio axis with a ±5 % margin: "
-        f"{counts['improved']} improved, {counts['regressed']} regressed, "
-        f"{counts['equiv'] + counts['small']} within the margin, {counts['unsure']} inconclusive."
-    )
-    pl = Plate(
-        "G2", "Forest plot: 12 metrics on one axis", "many metrics or sweep points", height, desc
-    )
-    x0, x1 = 200, 720
-    sc = eff_axis(x0, x1, math.log(0.74), math.log(1.22))
-    bot = top + len(rows) * rh
-    pl.add(rect(sc(-MARGIN), top - 8, sc(MARGIN) - sc(-MARGIN), len(rows) * rh + 8, "f-band"))
-    for p in (-20, -10, 0, 10, 20):
-        x = sc(math.log(1 + p / 100))
-        pl.add(
-            line(x, top - 8, x, bot, "s-muted" if p == 0 else "s-grid"),
-            text(
-                x,
-                bot + 18,
-                f"{'+' if p > 0 else ''}{p} %".replace("-", "−"),
-                "mono f-muted",
-                11,
-                "middle",
-            ),
+    rng = XorShift(47)
+    bm = quant([p.base for p in PAIRS], 0.5)
+    rows = [
+        (
+            "planning_time",
+            "min",
+            [p.base / bm for p in PAIRS],
+            [p.cand / bm for p in PAIRS],
+            EST,
+            C90,
         )
-    pl.add(
-        text(sc(-MARGIN), top - 14, "−5 %", "mono f-muted", 10.5, "middle"),
-        text(sc(MARGIN), top - 14, "+5 %", "mono f-muted", 10.5, "middle"),
-        text(sc(0), top - 26, "±Δ margin", "f-muted", 10.5, "middle"),
-        text(x0, height - 10, "← candidate lower", "f-muted", 11),
-        text(x1, height - 10, "candidate higher →", "f-muted", 11, "end"),
-        text(
-            (x0 + x1) / 2,
-            height - 10,
-            "design: paired ABBA · 20 pairs · 4 VMs",
-            "mono f-muted",
-            11,
-            "middle",
-        ),
-        text(740, top - 14, "verdict", "mono f-muted", 11),
-        text(905, top - 14, "change", "mono f-muted", 11, "end"),
+    ]
+    for name, d, e, (a0, a1) in spec:
+        s = (a1 - a0) / 2 / 1.729 * math.sqrt(20)
+        base = [math.exp(0.08 * rng.norm()) for _ in range(20)]
+        cand = [b * math.exp(e + s * rng.norm()) for b in base]
+        m, lo_ci, hi_ci = t_ci([math.log(c / b) for b, c in zip(base, cand, strict=True)], 1.729)
+        med = quant(base, 0.5)
+        rows.append((name, d, [b / med for b in base], [c / med for c in cand], m, (lo_ci, hi_ci)))
+    rows.sort(key=lambda r: r[4])
+    kinds = [
+        verdict(a0, a1, MARGIN) if d == "max" else verdict(-a1, -a0, MARGIN)
+        for _, d, _, _, _, (a0, a1) in rows
+    ]
+    n_imp = kinds.count("improved")
+    n_un = kinds.count("unsure") + kinds.count("regressed")
+    n_eq = kinds.count("equiv") + kinds.count("small")
+    desc = "12 metrics, every sample as % of its base median, ±5 % band: " + "; ".join(
+        f"{r[0]} {fmt(pct(r[4]))} %" for r in rows
     )
-    for i, ((name, d, e, a, b, fdr), k) in enumerate(zip(rows, kinds, strict=True)):
-        y = top + i * rh + 8
-        mark = VERDICT[k][0]
-        words = {"small": "small gain"}.get(k)
+    pl = Plate(f"{n_imp} better, {n_un} unclear, {n_eq} same", 616, desc)
+    lo, hi = 0.68, 1.34
+    ticks = [0.8, 1.0, 1.2]
+
+    def tf(t: float) -> str:
+        return "0" if t == 1.0 else f"{fmt((t - 1) * 100, 0)} %"
+
+    left, pw, ph, pitch = 70, 178, 150, 176
+    for i, ((name, d, base, cand, m, ci), kind) in enumerate(zip(rows, kinds, strict=True)):
+        r, k = divmod(i, 4)
+        x0, y = left + k * pw, 66 + r * pitch
+        pl.add(text(x0 + 4, y + 18, name, "mono f-ink2"))
+        if k == 0:
+            for t in ticks:
+                yt = y + ph - (t - lo) / (hi - lo) * (ph - 32)
+                pl.add(text(left - 6, yt + 5, tf(t), "mono f-muted", FS, "end"))
         pl.add(
-            text(x0 - 12, y + 4, name, "mono f-ink", 12.5, "end"),
-            text(
-                x0 - 12 - len(name) * 7.6 - 8,
-                y + 4,
-                "↓" if d == "min" else "↑",
-                "f-muted",
-                11,
-                "end",
-            ),
-            line(sc(b[0]), y, sc(b[1]), y, f"s-{mark}", 1.5, stroke_linecap="round"),
-            line(sc(a[0]), y, sc(a[1]), y, f"s-{mark}", 5, stroke_linecap="round"),
-            circle(
-                sc(e), y, 5, f"f-{mark} s-plate" if fdr else f"f-plate s-{mark}", stroke_width=2
-            ),
-            verdict_text(k, 740, y + 4, 12, words),
-            text(905, y + 4, f"{fmt(pct(e))} %", "mono f-ink2", 12, "end"),
+            dot_panel(
+                x0=x0,
+                x1=x0 + pw - 8,
+                y0=y + 32,
+                y1=y + ph,
+                base=base,
+                cand=cand,
+                lo=lo,
+                hi=hi,
+                ci=ci,
+                est=m,
+                kind=kind,
+                lower_better=d == "min",
+                ticks=ticks,
+                tick_labels=False,
+                labels="none",
+                r=2.6,
+                mark_glyph=True,
+                motion=("glyph",) if kind not in {"equiv", "small"} else (),
+            )
         )
-    ky = height - 36
-    pl.add(
-        line(x0, ky, x0 + 28, ky, "s-ink2", 5, stroke_linecap="round"),
-        text(x0 + 36, ky + 4, "90 % CI", "f-muted", 11),
-        line(x0 + 96, ky, x0 + 124, ky, "s-ink2", 1.5),
-        text(x0 + 132, ky + 4, "95 % CI", "f-muted", 11),
-        circle(x0 + 196, ky, 5, "f-plate s-ink2", stroke_width=2),
-        text(x0 + 206, ky + 4, "hollow: failed BH-FDR", "f-muted", 11),
-    )
+    pl.add(legend(W - 20, 600, [*ARMS, ("f-band", "±5 % of base median")]))
     return pl
 
 
 def plate_g3() -> Plate:
+    kind = verdict(-C90[1], -C90[0], MARGIN)
     desc = (
-        f"planning_time, paired: {N_FASTER} of 20 pairs faster. Effect {fmt(pct(EST))} %, "
-        f"90 % CI [{fmt(pct(C90[0]))}, {fmt(pct(C90[1]))}] %, beyond the ±5 % margin: improved."
+        f"planning_time, 20 ABBA pairs on 4 VMs: {sum(p.cand < p.base for p in PAIRS)} of 20 "
+        f"pairs faster. Effect {fmt(pct(EST))} %, 90 % CI [{fmt(pct(C90[0]))}, "
+        f"{fmt(pct(C90[1]))}] %."
     )
-    pl = Plate(
-        "G3",
-        f"Estimation plot: planning is {abs(pct(EST)):.0f} % faster",
-        "each primary continuous metric",
-        418,
-        desc,
-    )
-    pl.arms = True
-    y_t, y_b, lo, hi = 40, 320, 0.2, 0.72
-
-    def ys(v: float) -> float:
-        return y_b - (v - lo) / (hi - lo) * (y_b - y_t)
-
-    for v in (0.2, 0.3, 0.4, 0.5, 0.6, 0.7):
-        pl.add(
-            line(70, ys(v), 520, ys(v), "s-grid"),
-            text(62, ys(v) + 4, f"{v:.1f}", "mono f-muted", 11, "end"),
-        )
-    pl.add(text(20, y_t - 18, "planning_time (s) · every sample", "f-ink2", 12))
-    xa, xb = 180, 410
-    for i, p in enumerate(PAIRS):
-        j = (i % 10 - 4.5) * 3
-        faster = p.cand < p.base
-        pl.add(
-            line(
-                xa + j,
-                ys(p.base),
-                xb + j,
-                ys(p.cand),
-                "s-cand" if faster else "s-worse",
-                1.5,
-                stroke_opacity=0.35 if faster else 0.8,
-            )
-        )
-    for i, p in enumerate(PAIRS):
-        j = (i % 10 - 4.5) * 3
-        pl.add(
-            circle(xa + j, ys(p.base), 4, "f-base s-plate", stroke_width=1.5),
-            circle(xb + j, ys(p.cand), 4, "f-cand s-plate", stroke_width=1.5),
-        )
-    mb, mc = quant([p.base for p in PAIRS], 0.5), quant([p.cand for p in PAIRS], 0.5)
+    pl = Plate(f"Planning is {abs(pct(EST)):.0f} % faster", 480, desc, (kind, f"{fmt(pct(EST))} %"))
+    lo, hi = axis_range([p.base for p in PAIRS] + [p.cand for p in PAIRS])
     pl.add(
-        line(xa - 36, ys(mb), xa + 36, ys(mb), "s-base", 3),
-        line(xb - 36, ys(mc), xb + 36, ys(mc), "s-cand", 3),
-        text(xa - 40, ys(mb) + 4, f"median {mb:.2f}", "mono f-ink2", 11, "end"),
-        text(xb + 40, ys(mc) + 4, f"median {mc:.2f}", "mono f-ink2", 11),
-        text(xa, y_b + 24, "base", "f-ink b", 13, "middle"),
-        text(xb, y_b + 24, "candidate", "f-ink b", 13, "middle"),
-        text(
-            295,
-            y_b + 46,
-            f"one line per pair · {N_FASTER} of 20 pairs faster",
-            "f-muted",
-            11.5,
-            "middle",
+        dot_panel(
+            x0=20,
+            x1=500,
+            y0=80,
+            y1=420,
+            base=[p.base for p in PAIRS],
+            cand=[p.cand for p in PAIRS],
+            lo=lo,
+            hi=hi,
+            ci=C90,
+            est=EST,
+            kind=kind,
+            ticks=nice_ticks(lo, hi, 5),
+            tick_fmt=lambda t: f"{t:.1f} s",
+            labels="one",
+            r=5.5,
+            boots=BOOTS,
+            motion=("median", "shimmer"),
         ),
-    )
-    ex, ex1, e_t, e_b = 560, 900, 40, 320
-    elo, ehi = math.log(0.72), math.log(1.12)
-
-    def es(v: float) -> float:
-        return e_b - (v - elo) / (ehi - elo) * (e_b - e_t)
-
-    pl.add(
-        text(ex, y_t - 18, "paired effect · bootstrap distribution", "f-ink2", 12),
-        rect(ex + 40, es(MARGIN), ex1 - ex - 40, es(-MARGIN) - es(MARGIN), "f-band"),
-        text(ex1 - 4, es(MARGIN) - 4, "±Δ 5 %", "mono f-muted", 10.5, "end"),
-    )
-    for p in (-25, -20, -15, -10, -5, 0, 5, 10):
-        y = es(math.log(1 + p / 100))
-        pl.add(
-            line(ex + 40, y, ex1, y, "s-muted" if p == 0 else "s-grid"),
-            text(
-                ex + 32,
-                y + 4,
-                f"{'+' if p > 0 else ''}{p} %".replace("-", "−"),
-                "mono f-muted",
-                11,
-                "end",
-            ),
-        )
-    bins = 60
-    hist = [0] * bins
-    for b in BOOTS:
-        k = math.floor((b - elo) / (ehi - elo) * bins)
-        if 0 <= k < bins:
-            hist[k] += 1
-    hm, vx = max(hist), ex + 110
-    d = f"M{vx} {num(es(elo))}"
-    for k, hv in enumerate(hist):
-        d += f"L{num(vx + hv / hm * 150)} {num(es(elo + (k + 0.5) / bins * (ehi - elo)))}"
-    d += f"L{vx} {num(es(ehi))}Z"
-    nz = [k for k, hv in enumerate(hist) if hv]
-    k0, k1 = max(nz[0] - 1, 0), min(nz[-1] + 1, bins - 1)
-    edge = "".join(
-        f"{'L' if k > k0 else 'M'}{num(vx + hist[k] / hm * 150)} {num(es(elo + (k + 0.5) / bins * (ehi - elo)))}"
-        for k in range(k0, k1 + 1)
-    )
-    pl.add(
-        el("path", d=d, cls="f-better", fill_opacity=0.22),
-        el("path", d=edge, cls="s-better", fill="none", stroke_width=1.2),
-        line(vx - 14, es(C95[0]), vx - 14, es(C95[1]), "s-better", 1.5),
-        line(vx - 14, es(C90[0]), vx - 14, es(C90[1]), "s-better", 6, stroke_linecap="round"),
-        circle(vx - 14, es(EST), 6, "f-better s-plate", stroke_width=2),
-    )
-    # Hypothetical outcome plot: a faint marker and tick visit a few bootstrap draws, one
-    # per 1.2 s with a soft fade. It sits on top of the static estimate, CI and density.
-    draws = BOOTS[:6]
-    seg = 100 / len(draws)
-    frames = []
-    for k, dv in enumerate(draws):
-        dy = num(es(dv) - es(EST))
-        a = k * seg
-        for f, op in ((0, 0), (0.3, 0.7), (0.7, 0.7), (0.995, 0)):
-            frames.append(f"{a + f * seg:.2f}%{{transform:translateY({dy}px);opacity:{op}}}")
-    pl.css = (
-        "@keyframes hop{" + "".join(frames) + "}"
-        f".hop{{animation:hop {1.2 * len(draws):.1f}s linear 1.5s infinite}}"
-    )
-    y0 = es(EST)
-    pl.add(
-        el(
-            "g",
-            line(vx - 26, y0, vx + 120, y0, "s-ink2", 1.2)
-            + circle(vx - 14, y0, 4.5, "f-plate s-ink2", stroke_width=1.5),
-            cls="hop",
-        ),
-        text(vx + 40, e_b - 28, f"{fmt(pct(EST))} %", "f-ink bb", 30),
-        text(
-            vx + 40,
-            e_b - 10,
-            f"90 % CI [{fmt(pct(C90[0]))}, {fmt(pct(C90[1]))}]",
-            "mono f-ink2",
-            12,
-        ),
-        verdict_text("improved", vx + 40, e_b + 8, 13, "Improved, beyond ±Δ"),
-        text(ex, y_b + 30, "BCa bootstrap of paired log diffs · 4000 draws", "mono f-muted", 11),
-        text(ex, y_b + 46, "Wilcoxon signed-rank p < 0.001 · agrees", "mono f-muted", 11),
-        text(ex, y_b + 62, "faint tick: one bootstrap draw at a time", "f-muted hopnote", 10.5),
-        chips(
-            20,
-            394,
-            [
-                ("design", "paired · ABBA"),
-                ("n", "20 pairs = 4 VMs × 5"),
-                ("margin", "±5 %"),
-                ("test", "BCa, 90 % CI"),
-            ],
-            W - 16,
-            11,
-        ),
+        run_rows(540, 120, abba_rows(PAIRS), cell=14, gap=3, pair_gap=5, pitch=24, label_w=54),
+        text(594, 236, "run order →", "f-muted"),
     )
     return pl
 
@@ -819,11 +791,6 @@ def plate_g4() -> Plate:
         arm_a.append(va + (0.28 + 0.15 * RNG.rnd() if RNG.rnd() < 0.2 else 0))
         vb = math.exp(math.log(0.30) + 0.25 * RNG.norm())
         arm_b.append(vb + (0.04 + 0.06 * RNG.rnd() if RNG.rnd() < 0.2 else 0))
-    x0, x1, lo, hi = 110, 880, 0.1, 1.0
-
-    def xs(v: float) -> float:
-        return x0 + (v - lo) / (hi - lo) * (x1 - x0)
-
     dec = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     shifts = []
     for p in dec:
@@ -832,307 +799,239 @@ def plate_g4() -> Plate:
             ra = [arm_a[math.floor(RNG.rnd() * n)] for _ in arm_a]
             rb = [arm_b[math.floor(RNG.rnd() * n)] for _ in arm_b]
             diffs.append(quant(rb, p) - quant(ra, p))
-        shifts.append(
-            (p, quant(arm_b, p) - quant(arm_a, p), quant(diffs, 0.025), quant(diffs, 0.975))
-        )
+        shifts.append((quant(arm_b, p) - quant(arm_a, p), quant(diffs, 0.025), quant(diffs, 0.975)))
     p90 = shifts[-1]
     desc = (
-        f"Latency raincloud, 60 runs per arm. Median shift (CI holds 0) {fmt(shifts[4][1] * 1000, 0)} ms; "
-        f"p90 shift {fmt(p90[1] * 1000, 0)} ms, 95 % CI [{fmt(p90[2] * 1000, 0)}, {fmt(p90[3] * 1000, 0)}] ms."
+        f"Latency, 60 runs per arm. Median shift {fmt(shifts[4][0] * 1000, 0)} ms (CI holds 0); "
+        f"p90 shift {fmt(p90[0] * 1000, 0)} ms, 95 % CI [{fmt(p90[1] * 1000, 0)}, "
+        f"{fmt(p90[2] * 1000, 0)}]."
     )
-    pl = Plate(
-        "G4",
-        "Raincloud and shift function: the tail moved, the median did not",
-        "heavy tails, p95 / p99 claims, bimodal data",
-        450,
-        desc,
-    )
-    pl.arms = True
-    for v in (0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9):
-        pl.add(
-            line(xs(v), 20, xs(v), 230, "s-grid"),
-            text(xs(v), 246, f"{v:.1f} s", "mono f-muted", 11, "middle"),
-        )
+    big = ("improved", f"p90 {fmt(p90[0] * 1000, 0)} ms")
+    pl = Plate("The tail moved, median held", 590, desc, big)
+    x0, x1, lo, hi = 140, 780, 0.1, 1.0
 
-    def cloud(arr: list[float], yc: float, tok: str, name: str) -> None:
+    def xs(v: float) -> float:
+        return x0 + (v - lo) / (hi - lo) * (x1 - x0)
+
+    for v in (0.2, 0.4, 0.6, 0.8):
+        pl.add(
+            line(xs(v), 80, xs(v), 372, "s-grid"),
+            text(xs(v), 394, f"{v:.1f} s", "mono f-muted", FS, "middle"),
+        )
+    bmed = quant(arm_a, 0.5)
+    b_lo, b_hi = xs(bmed / math.exp(MARGIN)), xs(bmed * math.exp(MARGIN))
+    pl.add(rect(b_lo, 80, b_hi - b_lo, 292, "f-band s-bandEdge", stroke_width=1))
+    for arr, yb, tok, name in ((arm_a, 170, "base", "base"), (arm_b, 320, "cand", "candidate")):
         bw, pts = 0.03, []
         for k in range(121):
             x = lo + k / 120 * (hi - lo)
             pts.append((x, sum(math.exp(-(((x - a) / bw) ** 2) / 2) for a in arr)))
         m = max(p[1] for p in pts)
-        d = f"M{num(xs(lo))} {yc}" + "".join(
-            f"L{num(xs(x))} {num(yc - v / m * 58)}" for x, v in pts
+        d = f"M{num(xs(lo))} {yb}" + "".join(
+            f"L{num(xs(x))} {num(yb - v / m * 70)}" for x, v in pts
         )
-        d += f"L{num(xs(hi))} {yc}Z"
-        q1, q3, md, q9 = quant(arr, 0.25), quant(arr, 0.75), quant(arr, 0.5), quant(arr, 0.9)
         pl.add(
-            el("path", d=d, cls=f"f-{tok} s-{tok}", fill_opacity=0.25, stroke_width=1.5),
-            rect(xs(q1), yc + 6, xs(q3) - xs(q1), 10, f"f-{tok}", rx=2, fill_opacity=0.9),
-            line(xs(md), yc + 3, xs(md), yc + 19, "s-plate", 2.5),
-            line(xs(q9), yc + 3, xs(q9), yc + 19, f"s-{tok}", 2),
-            text(xs(q9) + 4, yc + 16, "p90", "mono f-muted", 10),
-            *(
-                circle(xs(a), yc + 26 + (i % 5) * 4, 2.4, f"f-{tok}", fill_opacity=0.75)
-                for i, a in enumerate(arr)
-            ),
-            text(x0 - 12, yc + 4, name, "f-ink b", 13, "end"),
+            el(
+                "path",
+                d=d + f"L{num(xs(hi))} {yb}Z",
+                cls=f"f-{tok} s-{tok}",
+                fill_opacity=0.22,
+                stroke_width=1.5,
+            )
         )
-
-    cloud(arm_a, 82, "base", "base")
-    cloud(arm_b, 184, "cand", "candidate")
-    sy0, sy1, dlo, dhi = 290, 390, -0.38, 0.08
+        offs = swarm([xs(a) for a in arr], 3, one_sided=True)
+        pl.add(
+            *(
+                circle(xs(a), yb + 7 + o, 3, f"f-{tok} s-plate", stroke_width=0.8)
+                for a, o in zip(arr, offs, strict=True)
+            )
+        )
+        md = quant(arr, 0.5)
+        pl.add(
+            line(xs(md), yb - 22, xs(md), yb + 2, "s-plate", 9, stroke_linecap="round"),
+            line(xs(md), yb - 22, xs(md), yb + 2, f"s-{tok}", 5, stroke_linecap="round"),
+            text(20, yb - 6, name, "f-ink b"),
+            text(20, yb + 14, f"n={len(arr)}", "mono f-muted"),
+        )
+    sy0, sy1, dlo, dhi = 440, 545, -0.38, 0.08
 
     def ys(v: float) -> float:
         return sy1 - (v - dlo) / (dhi - dlo) * (sy1 - sy0)
 
-    pl.add(
-        text(
-            20, sy0 - 14, "shift function · candidate − base at each decile, 95 % CI", "f-ink2", 12
-        ),
-        text(x1, sy0 - 14, "filled: CI excludes 0", "f-muted", 11, "end"),
-    )
+    pl.add(text(20, ys(0) + 5, "shift", "f-ink b"), text(20, ys(0) + 25, "ms", "mono f-muted"))
     for v in (-0.3, -0.2, -0.1, 0):
-        lab = f"{'+' if v > 0 else '−' if v < 0 else ''}{abs(v * 1000):.0f} ms"
         pl.add(
             line(x0, ys(v), x1, ys(v), "s-muted" if v == 0 else "s-grid"),
-            text(x0 - 8, ys(v) + 4, lab, "mono f-muted", 10.5, "end"),
+            text(x0 - 8, ys(v) + 5, "0" if v == 0 else fmt(v * 1000, 0), "mono f-muted", FS, "end"),
         )
-    step = (x1 - x0) / (len(dec) + 1)
-    for k, (p, dv, lo_ci, hi_ci) in enumerate(shifts):
-        x = x0 + (k + 1) * step
+    step = (x1 - x0) / len(dec)
+    for k, (dv, lo_ci, hi_ci) in enumerate(shifts):
+        x = x0 + (k + 0.5) * step
         sig = hi_ci < 0 or lo_ci > 0
         tok = ("better" if hi_ci < 0 else "worse") if sig else "muted"
+        mark = line(
+            x, ys(max(lo_ci, dlo)), x, ys(min(hi_ci, dhi)), f"s-{tok}", 3, stroke_linecap="round"
+        )
+        mark += circle(
+            x, ys(dv), 6, f"f-{tok} s-{tok}" if sig else f"f-plate s-{tok}", stroke_width=2
+        )
         pl.add(
-            line(
-                x,
-                ys(max(lo_ci, dlo)),
-                x,
-                ys(min(hi_ci, dhi)),
-                f"s-{tok}",
-                2.5,
-                stroke_linecap="round",
-            ),
-            circle(x, ys(dv), 5, f"f-{tok} s-{tok}" if sig else f"f-plate s-{tok}", stroke_width=2),
-            text(x, sy1 + 18, f"q{round(p * 10)}", "mono f-muted", 10.5, "middle"),
+            el("g", mark, cls="breathe") if sig else mark,
+            text(x, sy1 + 24, f"p{round(dec[k] * 100)}", "mono f-muted", FS, "middle"),
         )
-    pl.add(
-        chips(
-            20,
-            420,
-            [
-                ("design", "unpaired · interleaved"),
-                ("n", "60 runs per arm"),
-                ("CI", "bootstrap of deciles, 600 resamples"),
-            ],
-            W - 16,
-            11,
-        )
-    )
     return pl
 
 
 def plate_g5() -> Plate:
     desc = (
         "task_success 17/18 to 18/18: +5.6 pp, 90 % CI [−8.9, +25.8], inconclusive. "
-        "required_sigkill flake: base 4/30, candidate 0/30, true rate at most 10 % (rule of three): improved."
+        "required_sigkill: base 4/30 killed, candidate 0/30, true rate at most 10 %: improved."
     )
-    pl = Plate(
-        "G5",
-        "Waffle: success rates and flakes",
-        "binary metrics: task_success, clean_exit",
-        300,
-        desc,
-    )
-    pl.arms = True
+    pl = Plate("Flake fixed; success still unclear", 340, desc)
 
-    def waffle(x0: float, y0: float, n: int, fails: int, tok: str, cols: int) -> None:
-        c, g = 14, 3
+    def waffle(
+        x0: float, y0: float, n: int, fails: int, tok: str, cols: int, c: float, changed: set[int]
+    ) -> None:
+        g = c * 0.25
         for i in range(n):
             r, k = divmod(i, cols)
             x, y = x0 + k * (c + g), y0 + r * (c + g)
-            fail = i >= n - fails
-            delay = 0.25 + i * 0.05 + (0.4 if fail else 0)
-            style = f"animation-delay:{delay:.2f}s"
-            if fail:
-                body = rect(x, y, c, c, "f-plate s-worse", rx=2.5, stroke_width=2) + el(
-                    "path", d=f"M{x + 3.5} {y + 3.5}l7 7m0 -7l-7 7", cls="s-worse", stroke_width=1.8
+            if i >= n - fails:
+                h = num(c / 2)
+                cross = f"M{num(x + c * 0.25)} {num(y + c * 0.25)}l{h} {h}m0 -{h}l-{h} {h}"
+                pl.add(
+                    rect(x, y, c, c, "f-plate s-worse", rx=3, stroke_width=2),
+                    el("path", d=cross, cls="s-worse", stroke_width=2),
                 )
-                pl.add(el("g", body, cls="fade", style=style))
             else:
-                pl.add(rect(x, y, c, c, f"f-{tok} fade", rx=2.5, style=style))
+                pl.add(rect(x, y, c, c, f"f-{tok}", rx=3))
+                if i in changed:  # a run that failed on base and passed here glows
+                    pl.add(
+                        rect(
+                            x - 3,
+                            y - 3,
+                            c + 6,
+                            c + 6,
+                            "s-better glow",
+                            rx=5,
+                            fill="none",
+                            stroke_width=2,
+                        )
+                    )
 
+    g, _ = glyph("unsure", 138, 120, 26)
     pl.add(
-        text(16, 22, "task_success · 18 runs per arm", "f-ink b", 13),
-        text(16, 58, "base", "f-ink2", 12),
-        text(16, 108, "candidate", "f-ink2", 12),
+        text(20, 82, "task_success", "mono f-ink2"),
+        text(20, 120, "+5.6 pp", "f-ink bb", 28),
+        g,
+        text(20, 165, "base"),
+        text(20, 215, "candidate"),
     )
-    waffle(90, 46, 18, 1, "base", 9)
-    waffle(90, 96, 18, 0, "cand", 9)
-    pl.add(
-        text(260, 58, "17/18 · 94 % [74, 99]", "mono f-ink2", 12),
-        text(260, 108, "18/18 · 100 % [82, 100]", "mono f-ink2", 12),
-    )
-    x0, x1 = 90, 430
+    waffle(110, 146, 18, 1, "base", 9, 18, set())
+    waffle(110, 196, 18, 0, "cand", 9, 18, {17})
+    pl.add(text(330, 165, "17/18", "mono f-muted"), text(330, 215, "18/18", "mono f-muted"))
 
     def sc(v: float) -> float:
-        return x0 + (v + 0.3) / 0.6 * (x1 - x0)
+        return 110 + (v + 0.3) / 0.6 * 220
 
-    pl.add(rect(sc(-0.05), 150, sc(0.05) - sc(-0.05), 26, "f-band"))
-    for v in (-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3):
-        lab = f"{'+' if v > 0 else '−' if v < 0 else ''}{abs(v * 100):.0f} pp"
+    pl.add(
+        text(20, 277, "change"), rect(sc(-0.05), 258, sc(0.05) - sc(-0.05), 26, "f-band s-bandEdge")
+    )
+    for v in (-0.2, 0, 0.2):
+        lab = "0" if v == 0 else f"{fmt(v * 100, 0)} pp"
         pl.add(
-            line(sc(v), 146, sc(v), 180, "s-muted" if v == 0 else "s-grid"),
-            text(sc(v), 196, lab, "mono f-muted", 10.5, "middle"),
+            line(sc(v), 254, sc(v), 288, "s-muted" if v == 0 else "s-grid"),
+            text(sc(v), 310, lab, "mono f-muted", FS, "middle"),
         )
     pl.add(
-        line(sc(-0.089), 163, sc(0.258), 163, "s-unsure", 5, stroke_linecap="round"),
-        circle(sc(0.056), 163, 5.5, "f-plate s-unsure", stroke_width=2.5),
-        text(16, 167, "difference", "f-ink2", 12),
-        verdict_text("unsure", 90, 226, 13, "Inconclusive: +5.6 pp, 90 % CI [−8.9, +25.8]"),
-        text(
-            90,
-            246,
-            "Newcombe CI · Barnard p = 0.50 · this n sees only ≥ 22 pp",
-            "mono f-muted",
-            11.5,
-        ),
+        line(sc(-0.089), 271, sc(0.258), 271, "s-unsure", 5, stroke_linecap="round"),
+        circle(sc(0.056), 271, 6, "f-plate s-unsure", stroke_width=2.5),
     )
-    fx = 500
+    fx = 420
+    g, _ = glyph("improved", fx + 212, 120, 26)
     pl.add(
-        text(fx, 22, "required_sigkill · flake fixed?", "f-ink b", 13),
-        text(fx, 58, "base", "f-ink2", 12),
-        text(fx, 108, "candidate", "f-ink2", 12),
+        text(fx, 82, "required_sigkill", "mono f-ink2"),
+        text(fx, 120, "13 % → ≤ 10 %", "f-ink bb", 28),
+        g,
+        text(fx, 165, "base"),
+        text(fx, 215, "candidate"),
     )
-    waffle(fx + 80, 46, 30, 4, "base", 15)
-    waffle(fx + 80, 96, 30, 0, "cand", 15)
-    rx0, rx1 = fx, 900
+    waffle(fx + 90, 150, 30, 4, "base", 15, 14, set())
+    waffle(fx + 90, 200, 30, 0, "cand", 15, 14, {26, 27, 28, 29})
+    rx0, rx1 = fx + 90, 770
 
-    def rs(n: float) -> float:
-        return rx0 + n / 300 * (rx1 - rx0)
+    def rs(v: float) -> float:
+        return rx0 + v / 300 * (rx1 - rx0)
 
     pl.add(
-        text(fx, 152, "base: 4 / 30 runs killed (13 %)", "mono f-ink2", 12),
-        text(
-            fx, 172, "candidate: 0 / 30 → true rate ≤ 10 % (95 %, rule of three)", "mono f-ink2", 11
-        ),
-        rect(rx0, 196, rx1 - rx0, 10, "f-chip", rx=5),
-        rect(rx0, 196, rs(30) - rx0, 10, "f-cand", rx=5),
+        text(fx, 277, "runs"),
+        rect(rx0, 266, rx1 - rx0, 10, "f-chip", rx=5),
+        rect(rx0, 266, rs(30) - rx0, 10, "f-cand", rx=5),
     )
-    for n, lab in ((29, "10 %"), (59, "5 %"), (299, "1 %")):
+    for v, bound in ((59, "≤5 %"), (299, "≤1 %")):
+        anchor = "middle" if v < 200 else "end"
         pl.add(
-            line(rs(n), 190, rs(n), 212, "s-ink2", 1.5),
-            text(
-                rs(n),
-                226,
-                f"{n} runs → ≤{lab}",
-                "mono f-muted",
-                10.5,
-                {29: "end", 59: "start"}.get(n, "end"),
-            ),
+            line(rs(v), 258, rs(v), 284, "s-ink2", 1.5),
+            text(rs(v), 252, bound, "mono f-muted", FS, anchor),
+            text(rs(v), 306, str(v), "mono f-muted", FS, anchor),
         )
-    pl.add(
-        text(fx, 250, "clean runs needed to bound the flake rate at 95 %", "f-muted", 11.5),
-        verdict_text(
-            "improved", fx, 268, 13, "Improved: 13 % → ≤ 10 %; run 29 more to claim ≤ 5 %"
-        ),
-    )
     return pl
 
 
 def plate_g6() -> Plate:
     sp = [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6]
-    base = [0.9 + 1.1 * v for v in sp]
-    eff = [0.0 if v < 0.6 else -0.06 - 0.08 * (v - 0.6) for v in sp]
-    se = 0.025
-    cand = [b * math.exp(e) for b, e in zip(base, eff, strict=True)]
-    desc = "task_duration over 8 speeds: " + "; ".join(
-        f"{v} m/s {fmt(pct(e))} %" for v, e in zip(sp, eff, strict=True)
+    rng = XorShift(59)
+    groups = []
+    for v in sp:
+        eff = 0.0 if v < 0.6 else -0.06 - 0.08 * (v - 0.6)
+        b0 = 0.9 + 1.1 * v
+        base = [b0 * math.exp(0.035 * rng.norm()) for _ in range(6)]
+        cand = [b * math.exp(eff + 0.03 * rng.norm()) for b in base]
+        m, lo_ci, hi_ci = t_ci([math.log(c / b) for b, c in zip(base, cand, strict=True)], 2.015)
+        groups.append((v, base, cand, m, (lo_ci, hi_ci), verdict(-hi_ci, -lo_ci, MARGIN)))
+    last = groups[-1]
+    desc = "task_duration, 8 speeds x 6 paired repeats: " + "; ".join(
+        f"{g[0]} m/s {fmt(pct(g[3]))} %" for g in groups
     )
-    pl = Plate(
-        "G6", "Sweep panel: faster at every speed above 0.6 m/s", "one swept input", 420, desc
-    )
-    x0, x1 = 90, 820
-
-    def xs(i: int) -> float:
-        return x0 + i / (len(sp) - 1) * (x1 - x0)
-
-    t0, t1, lo, hi = 30, 190, 1.0, 2.9
+    pl = Plate("Faster above 0.6 m/s", 460, desc, (last[5], f"{fmt(pct(last[3]))} %"))
+    x0, x1, y0, y1, lo, hi = 74, 790, 80, 370, 0.95, 2.95
 
     def ys(v: float) -> float:
-        return t1 - (v - lo) / (hi - lo) * (t1 - t0)
+        return y1 - (v - lo) / (hi - lo) * (y1 - y0)
 
-    for v in (1.0, 1.5, 2.0, 2.5):
+    for t in (1.0, 1.5, 2.0, 2.5):
         pl.add(
-            line(x0, ys(v), x1, ys(v), "s-grid"),
-            text(x0 - 8, ys(v) + 4, f"{v:.1f} s", "mono f-muted", 10.5, "end"),
+            line(x0, ys(t), x1, ys(t), "s-grid"),
+            text(x0 - 8, ys(t) + 5, f"{t:.1f} s", "mono f-muted", FS, "end"),
         )
-    pl.add(text(16, 18, "task_duration · median and 90 % CI per point", "f-ink2", 12))
-    for arr, tok, name in ((base, "base", "base"), (cand, "cand", "candidate")):
-        up = "".join(
-            f"{'L' if i else 'M'}{num(xs(i))} {num(ys(v * 1.03))}" for i, v in enumerate(arr)
-        )
-        dn = "".join(f"L{num(xs(i))} {num(ys(arr[i] * 0.97))}" for i in reversed(range(len(arr))))
-        ln = "".join(f"{'L' if i else 'M'}{num(xs(i))} {num(ys(v))}" for i, v in enumerate(arr))
+    step = (x1 - x0) / len(sp)
+    for k, (v, base, cand, m, ci, kind) in enumerate(groups):
+        gx = x0 + (k + 0.5) * step
+        g, _ = glyph(kind, gx - 4, ys(max(base + cand)) - 16, FS + 2)
         pl.add(
-            el("path", d=up + dn + "Z", cls=f"f-{tok}", fill_opacity=0.15),
-            el("path", d=ln, cls=f"s-{tok}", fill="none", stroke_width=2.5),
-        )
-        pl.add(
-            *(
-                circle(xs(i), ys(v), 3.5, f"f-{tok} s-plate", stroke_width=1.5)
-                for i, v in enumerate(arr)
-            )
-        )
-        pl.add(text(xs(len(arr) - 1) + 8, ys(arr[-1]) + 4, name, "f-ink b", 12))
-    b0, b1, elo, ehi = 230, 370, math.log(0.8), math.log(1.08)
-
-    def es(v: float) -> float:
-        return b1 - (v - elo) / (ehi - elo) * (b1 - b0)
-
-    pl.add(
-        text(16, b0 - 12, "effect per point · % change, 90 % CI", "f-ink2", 12),
-        rect(x0, es(MARGIN), x1 - x0, es(-MARGIN) - es(MARGIN), "f-band"),
-    )
-    for p in (-15, -10, -5, 0, 5):
-        y = es(math.log(1 + p / 100))
-        pl.add(
-            line(x0, y, x1, y, "s-muted" if p == 0 else "s-grid"),
-            text(
-                x0 - 8,
-                y + 4,
-                f"{'+' if p > 0 else ''}{p} %".replace("-", "−"),
-                "mono f-muted",
-                10.5,
-                "end",
+            dot_panel(
+                x0=gx - 38,
+                x1=gx + 42,
+                y0=y0,
+                y1=y1,
+                base=base,
+                cand=cand,
+                lo=lo,
+                hi=hi,
+                ci=ci,
+                est=m,
+                kind=kind,
+                ticks=[],
+                tick_labels=False,
+                labels="none",
+                r=3.4,
             ),
-        )
-    for i, v in enumerate(sp):
-        lo_ci, hi_ci = eff[i] - 1.645 * se, eff[i] + 1.645 * se
-        k = verdict(-hi_ci, -lo_ci, MARGIN)
-        mark, _, shape, _ = VERDICT[k]
-        fdr = i != 2
-        g, adv = glyph(shape, 0, es(hi_ci) - 8, 12, VERDICT[k][1])
-        pl.add(
-            line(xs(i), es(lo_ci), xs(i), es(hi_ci), f"s-{mark}", 5, stroke_linecap="round"),
-            circle(
-                xs(i),
-                es(eff[i]),
-                5,
-                f"f-{mark} s-plate" if fdr else f"f-plate s-{mark}",
-                stroke_width=2,
-            ),
-            text(xs(i), b1 + 18, f"{v:.1f}", "mono f-muted", 11, "middle"),
-            el("g", g, transform=f"translate({num(xs(i) - (adv - 3.8) / 2)},0)"),
+            g,
+            text(gx - 6, y1 + 26, f"{v:.1f}", "mono f-muted", FS, "middle"),
         )
     pl.add(
-        text(
-            (x0 + x1) / 2,
-            b1 + 38,
-            "speed (m/s) · 8 points × 6 paired repeats · BH-FDR over 8 points · hollow: failed FDR",
-            "f-muted",
-            11.5,
-            "middle",
-        )
+        text((x0 + x1) / 2, y1 + 54, "speed (m/s)", "f-ink2", FS, "middle"),
+        legend(W - 20, y1 + 54, ARMS),
     )
     return pl
 
@@ -1177,6 +1076,17 @@ def mix(pole: str, other: str, share: float) -> str:
     return _oklab_to_srgb(tuple(share * a + (1 - share) * b for a, b in zip(p, o, strict=True)))
 
 
+def _hatch(x: float, y: float, w: float, h: float, cid: str, moving: bool) -> tuple[str, str]:
+    """Return a clip path and diagonal hatch lines for a w x h box at (x, y)."""
+    clip = el("clipPath", rect(x, y, w, h, "", rx=3), id=cid)
+    lines = "".join(
+        line(x + j, y + h, x + j + h, y, "s-muted", 1.4, stroke_opacity=0.5)
+        for j in range(-int(h) - 8, int(w) + 8, 8)
+    )
+    inner = el("g", lines, cls="hatch") if moving else lines
+    return clip, el("g", inner, clip_path=f"url(#{cid})")
+
+
 def plate_g7() -> Plate:
     sp, mass = [0.4, 0.8, 1.2, 1.6], [0.5, 1, 2, 4, 6]
     cells = []
@@ -1194,23 +1104,11 @@ def plate_g7() -> Plate:
     n_un = sum(c[3] == "unsure" for c in cells)
     best = min(cells, key=lambda c: c[2])
     desc = (
-        f"cycle_time % change over speed and payload, 20 cells: best {fmt(best[2], 0)} % at "
-        f"{sp[best[1]]} m/s and {mass[best[0]]} kg; {n_un} cells inconclusive (hatched)."
+        f"cycle_time % change over speed and payload, 20 cells, 6 paired repeats each: best "
+        f"{fmt(best[2], 0)} % at {sp[best[1]]} m/s and {mass[best[0]]} kg; {n_un} cells "
+        f"inconclusive."
     )
-    pl = Plate(
-        "G7", "Effect heatmap: the gain is in heavy, fast picks", "two swept inputs", 330, desc
-    )
-    pl.defs.append(
-        el(
-            "pattern",
-            rect(0, 0, 7, 7, "f-plate") + line(0, 0, 0, 7, "s-muted", 1.4, stroke_opacity=0.55),
-            id="hatch",
-            width=7,
-            height=7,
-            patternUnits="userSpaceOnUse",
-            patternTransform="rotate(45)",
-        )
-    )
+    pl = Plate("Gain is in heavy, fast picks", 420, desc, ("improved", f"{fmt(best[2], 0)} %"))
 
     def colour_class(p: float) -> str:
         t = min(1.0, abs(p) / 15)
@@ -1224,117 +1122,95 @@ def plate_g7() -> Plate:
         pl.extra[name] = pair
         return name
 
-    x0, y0, cw, ch = 120, 30, 110, 50
+    x0, y0, cw, ch = 100, 76, 110, 58
     for r, m in enumerate(mass):
-        pl.add(text(x0 - 12, y0 + r * ch + ch / 2 + 4, f"{m} kg", "mono f-muted", 11.5, "end"))
-    for r, k, p, kind in cells:
+        pl.add(text(x0 - 10, y0 + r * ch + ch / 2 + 5, f"{m} kg", "mono f-muted", FS, "end"))
+    for i, (r, k, p, kind) in enumerate(cells):
         x, y = x0 + k * cw, y0 + r * ch
         unsure = kind == "unsure"
-        fill = "url(#hatch)" if unsure else None
-        cls = "s-rule" if unsure else colour_class(p)
+        if unsure:
+            clip, hatch = _hatch(x + 1, y + 1, cw - 2, ch - 2, f"c{i}", moving=True)
+            pl.defs.append(clip)
+            pl.add(rect(x + 1, y + 1, cw - 2, ch - 2, "f-plate s-rule", rx=3), hatch)
+        else:
+            pl.add(rect(x + 1, y + 1, cw - 2, ch - 2, colour_class(p), rx=3))
         dark = abs(p) > 9 and not unsure
-        label = f"{fmt(p, 0)} %"
-        tw = len(label) * 7.8
-        tok = "f-white" if dark else "f-ink"
-        _, _, shape, _ = VERDICT[kind]
-        g, adv = glyph(shape, 0, 0, 13, "white" if dark else "ink")
-        sx = x + cw / 2 - (adv + tw) / 2
+        tok = "white" if dark else "ink"
+        label = "0 %" if round(p) == 0 else f"{fmt(p, 0)} %"
+        tw = len(label) * FS * 0.6
+        g, gw = glyph(kind, 0, 0, FS)
+        if dark:
+            g = g.replace(f"f-{VERDICT[kind][1]}", "f-white")
+        sx = x + cw / 2 - (gw + 5 + tw) / 2
         pl.add(
-            rect(x + 1, y + 1, cw - 2, ch - 2, cls, rx=3, fill=fill),
-            el("g", g, transform=f"translate({num(sx)},{num(y + ch / 2 + 5)})"),
-            text(sx + adv, y + ch / 2 + 5, label, f"mono {tok}", 13, font_weight=500),
+            el("g", g, transform=f"translate({num(sx)},{num(y + ch / 2 + 2)})"),
+            text(sx + gw + 5, y + ch / 2 + 2, label, f"mono f-{tok}", FS, font_weight=500),
         )
+        for j in range(6):  # the six paired repeats behind this cell
+            pl.add(circle(x + cw - 34 + j * 5, y + ch - 9, 1.6, f"f-{tok}", fill_opacity=0.6))
     for k, v in enumerate(sp):
         pl.add(
             text(
                 x0 + k * cw + cw / 2,
-                y0 + len(mass) * ch + 18,
+                y0 + len(mass) * ch + 24,
                 f"{v} m/s",
                 "mono f-muted",
-                11.5,
+                FS,
                 "middle",
             )
         )
-    pl.add(
-        text(x0 + 2 * cw, y0 + len(mass) * ch + 38, "speed", "f-ink2", 12, "middle"),
-        text(20, y0 - 12, "payload ↓ · cycle_time % change", "f-ink2", 12),
-    )
-    lx, ly = 620, 60
-    pl.add(text(lx, ly - 14, "% change (lower is better)", "f-ink2", 11.5))
-    for i in range(31):
-        p = -15 + i
-        pl.add(rect(lx + i * 8, ly, 8.5, 14, colour_class(p)))
-    for p in (-15, -5, 0, 5, 15):
-        pl.add(
-            text(
-                lx + (p + 15) * 8 + 4,
-                ly + 30,
-                f"{'+' if p > 0 else ''}{p}".replace("-", "−"),
-                "mono f-muted",
-                10.5,
-                "middle",
-            )
-        )
-    pl.add(
-        rect(lx, ly + 48, 28, 18, "s-rule", rx=2, fill="url(#hatch)"),
-        text(lx + 36, ly + 61, "? CI crosses the ±5 % margin", "f-ink2", 11.5),
-        text(lx, ly + 96, "20 cells · 6 paired repeats each", "mono f-muted", 11),
-        text(lx, ly + 114, "BH-FDR q = 0.05 over 20 cells", "mono f-muted", 11),
-        text(lx, ly + 148, "grid that ran (5 payloads × 4 speeds)", "f-ink2", 11.5),
-    )
-    for r in range(len(mass)):
-        for k in range(len(sp)):
-            pl.add(circle(lx + 6 + k * 12, ly + 162 + r * 10, 3, "f-ink2"))
+    lx, ly = 580, 96
+    pl.add(*(rect(lx + i * 6, ly, 6.5, 18, colour_class(-15 + i)) for i in range(31)))
+    for p in (-15, 0, 15):
+        lab = "0" if p == 0 else f"{fmt(p, 0)} %"
+        pl.add(text(lx + (p + 15) * 6 + 3, ly + 40, lab, "mono f-muted", FS, "middle"))
+    clip, hatch = _hatch(lx, ly + 72, 34, 26, "lg", moving=False)
+    pl.defs.append(clip)
+    g, _ = glyph("unsure", lx + 44, ly + 92, FS + 2)
+    pl.add(rect(lx, ly + 72, 34, 26, "f-plate s-rule", rx=3, stroke_width=1), hatch, g)
     return pl
 
 
 def plate_g8() -> Plate:
-    desc = "Underpowered: n = 8 per arm can see 9.2 % or more; the claim needs 5 %. About 28 runs per arm reach the margin."
-    pl = Plate(
-        "G8",
-        "Power bar: this run can see 9 %, the claim needs 5 %",
-        "under any underpowered verdict",
-        150,
-        desc,
+    desc = (
+        "Underpowered: n = 8 per arm can see 9.2 % or more; the claim needs 5 %. About 28 "
+        "runs per arm reach it."
     )
-    x0, x1 = 40, 880
+    pl = Plate("Too few runs for ±5 %", 270, desc, ("unsure", "MDE 9.2 %"))
+    x0, x1 = 40, 760
 
     def sc(p: float) -> float:
         return x0 + p / 14 * (x1 - x0)
 
     pl.add(
-        rect(x0, 40, x1 - x0, 22, "f-chip", rx=4),
-        rect(x0, 40, sc(5) - x0, 22, "f-band s-bandEdge", rx=4),
-        rect(x0, 46, sc(9.2) - x0, 10, "f-unsure", rx=5),
-        line(sc(5), 32, sc(5), 70, "s-ink", 2),
-        text(sc(5), 26, "margin Δ = 5 %", "f-ink b", 12, "middle"),
-        text(sc(9.2) + 8, 56, "MDE 9.2 % (80 % power)", "mono f-ink2", 12),
-        *(text(sc(p), 82, f"{p} %", "mono f-muted", 10.5, "middle") for p in range(0, 15, 2)),
-        verdict_text(
-            "unsure",
-            x0,
-            112,
-            13,
-            "Underpowered: n = 8 per arm can see a change of 9.2 % or more, the claim needs 5 %.",
-        ),
-        text(
-            x0,
-            132,
-            "Add about 20 runs per arm (n ≈ 8 × (9.2 / 5)² ≈ 28), or pair the runs on one VM.",
-            "f-ink2",
-            12,
-        ),
+        rect(x0, 96, x1 - x0, 24, "f-chip", rx=4),
+        rect(x0, 96, sc(5) - x0, 24, "f-band s-bandEdge", rx=4),
+        rect(x0, 102, sc(9.2) - x0, 12, "f-unsure", rx=6),
+        line(sc(5), 88, sc(5), 128, "s-ink glow", 2.5),
+        text(sc(5), 82, "±Δ", "f-ink b", FS, "middle"),
+        text(sc(9.2), 82, "MDE", "f-ink b", FS, "middle"),
+        *(text(sc(p), 146, f"{p} %", "mono f-muted", FS, "middle") for p in range(0, 15, 2)),
+        text(x0, 196, "now"),
+        text(x0, 232, "needed"),
     )
+    for i in range(28):
+        x = 130 + i * 20
+        if i < 8:
+            pl.add(rect(x, 182, 16, 16, "f-cand", rx=2), rect(x, 218, 16, 16, "f-cand", rx=2))
+        else:
+            pl.add(rect(x + 1, 219, 14, 14, "s-cand", rx=2, fill="none", stroke_width=2))
+    pl.add(text(296, 196, "8", "mono f-muted"), text(696, 232, "28", "mono f-muted"))
     return pl
 
 
 def plate_g9() -> Plate:
-    desc = "planning_time against run order, 40 runs on 4 VMs. No slope inside an arm, so no drift. VM 2 runs 12 % slow on both arms; pairing removes it."
-    pl = Plate(
-        "G9", "Diagnostics: run order and the A/A noise floor", "inside <details>", 260, desc
+    desc = (
+        "planning_time against run order, 40 runs on 4 VMs, with the A/A noise floor (±3 %). "
+        "No slope inside an arm, so no drift."
     )
-    pl.arms = True
-    x0, x1, y0, y1, n, lo, hi = 70, 880, 30, 200, 40, 0.17, 0.64
+    pl = Plate("No drift across run order", 340, desc)
+    pl.legend = True
+    x0, x1, y0, y1, n, lo, hi = 70, 780, 74, 280, 40, 0.17, 0.64
 
     def xs(i: float) -> float:
         return x0 + i / (n - 1) * (x1 - x0)
@@ -1342,82 +1218,47 @@ def plate_g9() -> Plate:
     def ys(v: float) -> float:
         return y1 - (v - lo) / (hi - lo) * (y1 - y0)
 
-    med = quant([p.base for p in PAIRS], 0.5)
-    pl.add(
-        rect(x0, ys(med * 1.03), x1 - x0, ys(med * 0.97) - ys(med * 1.03), "f-band"),
-        text(x1, 18, "band: A/A noise floor of base, ±3 %", "mono f-muted", 11, "end"),
-    )
     for v in (0.2, 0.3, 0.4, 0.5, 0.6):
         pl.add(
             line(x0, ys(v), x1, ys(v), "s-grid"),
-            text(x0 - 8, ys(v) + 4, f"{v:.1f} s", "mono f-muted", 10.5, "end"),
+            text(x0 - 8, ys(v) + 5, f"{v:.1f}", "mono f-muted", FS, "end"),
         )
+    med = quant([p.base for p in PAIRS], 0.5)
+    top, bot = ys(med * 1.03), ys(med * 0.97)
+    pl.add(rect(x0, top, x1 - x0, bot - top, "f-band s-bandEdge glow", stroke_width=1))
     i = 0
     for p in PAIRS:
         seq = [("A", p.base), ("B", p.cand)] if p.order == "AB" else [("B", p.cand), ("A", p.base)]
         for a, v in seq:
-            pl.add(
-                circle(
-                    xs(i),
-                    ys(v),
-                    4.5,
-                    f"f-{'base' if a == 'A' else 'cand'} s-plate",
-                    stroke_width=1.5,
-                )
-            )
+            cls = f"f-{'base' if a == 'A' else 'cand'} s-plate"
+            pl.add(circle(xs(i), ys(v), 5, cls, stroke_width=1.5))
             i += 1
     for k in range(1, 4):
         x = (xs(k * 10 - 1) + xs(k * 10)) / 2
-        pl.add(line(x, y0, x, y1, "s-rule", stroke_dasharray="3 3"))
+        pl.add(line(x, y0, x, y1, "s-rule", 1.5, stroke_dasharray="4 4"))
     for k in range(4):
-        pl.add(
-            text(
-                (xs(k * 10) + xs(k * 10 + 9)) / 2,
-                y1 + 18,
-                f"VM {k + 1}",
-                "mono f-muted",
-                11,
-                "middle",
-            )
-        )
-    pl.add(
-        text(
-            x0,
-            y1 + 42,
-            "run order → · no slope inside an arm, so no drift · VM 2 runs 12 % slow on both arms; pairing removes it",
-            "f-ink2",
-            11.5,
-        ),
-        text(x0, 18, "planning_time by run order", "f-ink2", 12),
-    )
+        cx = (xs(k * 10) + xs(k * 10 + 9)) / 2
+        pl.add(text(cx, y1 + 26, f"VM {k + 1}", "mono f-muted", FS, "middle"))
+    pl.add(text(x0, y1 + 50, "run order →", "f-muted"), text(20, y0 + 4, "s", "mono f-muted"))
     return pl
 
 
-def _wrap(s: str, width: int) -> list[str]:
-    lines, cur = [], ""
-    for word in s.split():
-        if cur and len(cur) + 1 + len(word) > width:
-            lines.append(cur)
-            cur = word
-        else:
-            cur = f"{cur} {word}".strip()
-    return [*lines, cur]
-
-
 def plate_dont() -> Plate:
-    desc = "Charts the report does not draw: radar charts, bars of means with error bars, and 'p > 0.05, unchanged'."
-    pl = Plate("×", "What the report does not draw", "and why", 268, desc)
+    desc = (
+        "Charts the report does not draw: radar charts, bars of means with error bars, and "
+        "'p > 0.05, unchanged'."
+    )
+    pl = Plate("Charts we do not draw", 270, desc)
 
-    def radar(ox: float) -> str:
-        cx, cy, r, k = ox + 150, 80, 62, 6
+    def radar() -> str:
+        cx, cy, r, k = 150, 80, 62, 6
 
         def poly(vals: list[float]) -> str:
             pts = []
             for i in range(k):
                 a = i / k * 2 * math.pi - math.pi / 2
-                pts.append(
-                    f"{'L' if i else 'M'}{num(cx + math.cos(a) * r * vals[i])} {num(cy + math.sin(a) * r * vals[i])}"
-                )
+                px, py = cx + math.cos(a) * r * vals[i], cy + math.sin(a) * r * vals[i]
+                pts.append(f"{'L' if i else 'M'}{num(px)} {num(py)}")
             return "".join(pts) + "Z"
 
         out = [el("path", d=poly([ring / 3] * k), cls="s-grid", fill="none") for ring in (1, 2, 3)]
@@ -1436,9 +1277,9 @@ def plate_dont() -> Plate:
             )
         return "".join(out)
 
-    def bars(ox: float) -> str:
-        out = [line(ox + 40, 140, ox + 280, 140, "s-muted")]
-        for x, tok, h in ((ox + 90, "base", 95), (ox + 190, "cand", 80)):
+    def bars() -> str:
+        out = [line(40, 140, 280, 140, "s-muted")]
+        for x, tok, h in ((90, "base", 95), (190, "cand", 80)):
             out += [
                 rect(x - 30, 140 - h, 60, h, f"f-{tok}", rx=2),
                 line(x, 140 - h - 18, x, 140 - h + 18, "s-ink", 1.5),
@@ -1446,43 +1287,30 @@ def plate_dont() -> Plate:
             ]
         return "".join(out)
 
-    def pval(ox: float) -> str:
+    def pval() -> str:
         def sc(v: float) -> float:
-            return ox + 150 + v * 9
+            return 150 + v * 9
 
+        g, _ = glyph("unsure", 143, 40, 22)
         return "".join(
             [
-                rect(sc(-5), 50, sc(5) - sc(-5), 40, "f-band"),
-                line(sc(0), 40, sc(0), 100, "s-muted"),
-                line(sc(-12), 70, sc(10), 70, "s-unsure", 5, stroke_linecap="round"),
-                circle(sc(-1), 70, 5, "f-plate s-unsure", stroke_width=2.5),
-                verdict_text("unsure", ox + 52, 128, 12, "CI −12 % … +10 % is Inconclusive"),
+                rect(sc(-5), 55, sc(5) - sc(-5), 40, "f-band"),
+                line(sc(0), 50, sc(0), 100, "s-muted"),
+                line(sc(-12), 75, sc(10), 75, "s-unsure", 5, stroke_linecap="round"),
+                circle(sc(-1), 75, 6, "f-plate s-unsure", stroke_width=2.5),
+                g,
             ]
         )
 
-    cards = [
-        (
-            "Radar chart",
-            "The area grows with the square of each value and depends on the axis order. Lower is better on some axes and higher on others, so one polygon mixes directions.",
-            radar,
-        ),
-        (
-            "Bar of means with error bars",
-            "A bar hides n and the shape of the data, and readers take the bar's end as a hard edge. The estimation plot (G3) shows every sample instead.",
-            bars,
-        ),
-        (
-            "“p > 0.05, unchanged”",
-            "A test that fails to reject says the data cannot tell. Only an equivalence test (90 % CI inside ±Δ) can say “no change”.",
-            pval,
-        ),
-    ]
-    for i, (title, why, draw) in enumerate(cards):
-        ox = 10 + i * 300
-        cross = el("path", d=f"M{ox + 6} 171l9 9m0 -9l-9 9", cls="s-tworse", stroke_width=2.2)
-        pl.add(draw(ox), cross, text(ox + 22, 180, title, "f-tworse b", 13.5))
-        for j, ln in enumerate(_wrap(why, 44)):
-            pl.add(text(ox + 6, 202 + j * 17, ln, "f-ink2", 12))
+    cards = (("Radar chart", radar), ("Bar of means", bars), ("“p > 0.05, unchanged”", pval))
+    for i, (title, draw) in enumerate(cards):
+        ox = 20 + i * 260
+        cross = el("path", d=f"M{ox + 6} 233l10 10m0 -10l-10 10", cls="s-tworse", stroke_width=2.4)
+        pl.add(
+            el("g", draw(), transform=f"translate({ox},64) scale(0.8)"),
+            cross,
+            text(ox + 26, 244, title, "f-tworse b", 16),
+        )
     return pl
 
 
@@ -1502,7 +1330,7 @@ PLATES = {
 
 
 def main() -> None:
-    # The plates draw from one RNG stream in page order, like the HTML design page.
+    # G4 draws from the shared RNG stream after the planning_time bootstrap.
     for name, make in PLATES.items():
         (OUT / name).write_text(make().render(), encoding="utf-8")
         sys.stdout.write(f"wrote {name}\n")
