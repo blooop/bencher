@@ -1,24 +1,24 @@
 | Metric | Value |
 |--------|-------|
 | Total tests | 3663 |
-| Total time | 326.17s |
-| Mean | 0.0890s |
-| Median | 0.0020s |
+| Total time | 369.50s |
+| Mean | 0.1009s |
+| Median | 0.0030s |
 
 <details>
 <summary>Top 10 slowest tests</summary>
 
 | Test | Time (s) |
 |------|----------|
-| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 13.638 |
-| `test.test_ab::test_ab_on_a_clean_tree_names_the_head_even_when_its_output_is_not_ignored` | 13.009 |
-| `test.test_ab::test_ab_runs_an_ignored_interpreter_on_the_base_side_too` | 8.695 |
-| `test.test_ab::test_ab_png_dir_writes_one_png_per_metric` | 8.137 |
-| `test.test_ab::test_ab_images_pushes_them_to_the_evidence_ref_and_links_them` | 8.086 |
-| `test.test_ab::test_ab_images_without_a_github_remote_keeps_text_and_exits_0` | 7.893 |
-| `test.test_ab::test_ab_judges_a_claim_on_a_metric_the_change_adds` | 7.794 |
-| `test.test_ab::test_ab_reports_which_side_failed_and_keeps_its_output` | 7.724 |
-| `test.test_ab::test_ab_without_images_pushes_nothing` | 7.558 |
-| `test.test_ab::test_ab_measures_each_side_with_its_own_code` | 7.537 |
+| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 17.556 |
+| `test.test_ab::test_ab_on_a_clean_tree_names_the_head_even_when_its_output_is_not_ignored` | 15.021 |
+| `test.test_ab::test_ab_images_pushes_them_to_the_evidence_ref_and_links_them` | 9.275 |
+| `test.test_ab::test_ab_png_dir_writes_one_png_per_metric` | 9.032 |
+| `test.test_ab::test_ab_images_without_a_github_remote_keeps_text_and_exits_0` | 9.031 |
+| `test.test_ab::test_ab_without_images_pushes_nothing` | 8.725 |
+| `test.test_ab::test_ab_runs_an_ignored_interpreter_on_the_base_side_too` | 8.691 |
+| `test.test_ab::test_ab_explicit_base_and_image_url` | 8.570 |
+| `test.test_ab::test_ab_judges_a_claim_on_a_metric_the_change_adds` | 8.540 |
+| `test.test_ab::test_ab_measures_each_side_with_its_own_code` | 8.515 |
 
 </details>
