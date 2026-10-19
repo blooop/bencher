@@ -598,6 +598,9 @@ def _to_data(m: MetricEvidence, anchor: float, value: float) -> float:
     return anchor * math.exp(value) if m.kind == "positive" else anchor + value
 
 
+_MIN_CI_IN = 0.12  # 12 px at the 800 px display width
+
+
 def _ci_marks(
     ax: Axes,
     pos: float,
@@ -609,20 +612,44 @@ def _ci_marks(
     *,
     vertical: bool = True,
     hollow: bool = False,
-    thick: float = 9.0,
-    size: float = 8.5,
+    thick: float = 7.0,
+    size: float = 7.5,
     show95: bool = True,
+    per_in: float | None = None,
+    cap: float = 0.0,
 ) -> None:
-    """Point + thick decision CI + thin 95 % CI (only when wider) at *pos*.
+    """An interval at *pos*: thin 95 % line (only when wider), rounded decision bar, end caps, point.
 
-    *lows*/*highs* are (decision, 95 %) ends, already on the axis's scale.
+    *lows*/*highs* are (decision, 95 %) ends, already on the axis's scale. *per_in* is
+    the axis's data units per inch: with it, an interval shorter than 12 px at display
+    is drawn at that length (centred on the estimate) and the rounded bar ends are
+    pulled in so the bar's ink ends at the CI ends. *cap* is the end caps' half-width in
+    the other axis's data units (0: no caps).
     """
-    segments = [((lows[0], highs[0]), thick)]
-    if show95:
-        segments.insert(0, ((lows[1], highs[1]), thick * 0.32))
-    for (lo, hi), lw in segments:
-        xy = ([pos, pos], [lo, hi]) if vertical else ([lo, hi], [pos, pos])
-        ax.plot(*xy, color=colour, lw=lw, solid_capstyle="butt", zorder=6)
+    lo90, hi90, lo95, hi95 = lows[0], highs[0], lows[1], highs[1]
+    if per_in is not None:
+        least = _MIN_CI_IN * per_in
+        if hi90 - lo90 < least:
+            lo90, hi90 = estimate - least / 2, estimate + least / 2
+        lo95, hi95 = min(lo95, lo90), max(hi95, hi90)
+    outer = (lo95, hi95) if show95 and (lo95 < lo90 or hi95 > hi90) else (lo90, hi90)
+
+    def line(a: float, b: float, lw: float, capstyle: str) -> None:
+        xy = ([pos, pos], [a, b]) if vertical else ([a, b], [pos, pos])
+        ax.plot(*xy, color=colour, lw=lw, solid_capstyle=capstyle, zorder=6)
+
+    if outer != (lo90, hi90):
+        line(*outer, 2.0, "butt")
+    inset = 0.0 if per_in is None else min(thick / 2 / 72 * per_in, (hi90 - lo90) / 2 * 0.9)
+    line(lo90 + inset, hi90 - inset, thick, "round" if per_in is not None else "butt")
+    if cap > 0:
+        for end in outer:
+            xy = (
+                ([pos - cap, pos + cap], [end, end])
+                if vertical
+                else ([end, end], [pos - cap, pos + cap])
+            )
+            ax.plot(*xy, color=colour, lw=2.0, solid_capstyle="butt", zorder=6)
     pt = ([pos], [estimate]) if vertical else ([estimate], [pos])
     ax.plot(
         *pt,
@@ -630,7 +657,7 @@ def _ci_marks(
         markersize=size,
         markerfacecolor=theme.surface if hollow else colour,
         markeredgecolor=colour if hollow else theme.surface,
-        markeredgewidth=2.0,
+        markeredgewidth=1.6,
         linestyle="",
         zorder=7,
     )
@@ -714,7 +741,7 @@ def _ring(theme: Theme, size: float) -> dict:
 # --------------------------------------------------------------------------------------
 # The arms panel: every sample of both arms, the margin band and the CI bracket.
 
-_CI_X = 1.62  # the bracket's column, right of the candidate column (at 1)
+_CI_X = 1.78  # the bracket's column, right of the candidate column (at 1)
 
 
 def _arm_limits(m: MetricEvidence, *, ci: bool) -> tuple[float, float, float]:
@@ -800,8 +827,10 @@ def _arms(
             colour=colour,
             theme=t,
             hollow=not m.fdr_pass,
-            thick=12.0,
-            size=6.5,
+            thick=6.0,
+            size=5.5,
+            per_in=1 / y_scale,
+            cap=0.07,
             **_effect_ci(m, lambda v: _to_data(m, anchor, v)),
         )
     ax.set_xticks(
@@ -1179,7 +1208,16 @@ def draw_estimation(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | Non
             ex.fill_betweenx(grid, 0.12, 0.12 + dens, color=colour, alpha=0.22, lw=0, zorder=2)
             outline = np.where(dens > _DENSITY_FLOOR, 0.12 + dens, np.nan)
             ex.plot(outline, grid, color=colour, lw=1.2, alpha=0.8, zorder=2)
-        _ci_marks(ex, 0.0, colour=colour, theme=t, hollow=not m.fdr_pass, **_effect_ci(m))
+        _ci_marks(
+            ex,
+            0.0,
+            colour=colour,
+            theme=t,
+            hollow=not m.fdr_pass,
+            per_in=(lim[1] - lim[0]) / plot_h,
+            cap=0.1,
+            **_effect_ci(m),
+        )
         _draw_order(page, [m], _HEAD_IN + plot_h + 0.75, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN)
         return page.fig
 
@@ -1478,7 +1516,14 @@ def draw_sweep(
         for xi, m in zip(x, cells, strict=True):
             colour = t.verdict_colour(m.verdict.kind)
             _ci_marks(
-                ex, xi, colour=colour, theme=t, hollow=not m.fdr_pass, size=7.5, **_effect_ci(m)
+                ex,
+                xi,
+                colour=colour,
+                theme=t,
+                hollow=not m.fdr_pass,
+                per_in=(lim[1] - lim[0]) / eff_h,
+                cap=0.1,
+                **_effect_ci(m),
             )
             ex.text(
                 xi,
