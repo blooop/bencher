@@ -203,7 +203,7 @@ class TestDrawRegression:
 
     def test_row3(self):
         row = Group(children=[Cell() for _ in range(3)], direction="right", depth=0)
-        assert _render_hash(row) == "8613514f3343c0a81220e15fc1047844"
+        assert _render_hash(row) == "9cfebacd30323f501074cce0eaa24490"
 
     def test_grid(self):
         grid = Group(
@@ -214,7 +214,7 @@ class TestDrawRegression:
             direction="down",
             depth=1,
         )
-        assert _render_hash(grid) == "9b5e9198a0d46d6eeee752bfece10ae5"
+        assert _render_hash(grid) == "8ca46b73d20192bc67f5dd773664e45e"
 
     def test_stack(self):
         stack = Group(children=[Cell() for _ in range(3)], direction="stack", depth=2)
@@ -223,7 +223,7 @@ class TestDrawRegression:
     def test_strobe_with_flash(self):
         row = Group(children=[Cell() for _ in range(3)], direction="right", depth=0)
         st = StrobeShape(row, 3, _simple_cfg(), flash=0.8)
-        assert _render_hash(st) == "010e4950df96110c8621f94e7a600c5e"
+        assert _render_hash(st) == "b220672664d234100c9babe8b3b00b7d"
 
     def test_timeline(self):
         """Hashed with the frame labels off: the film chrome is what the hash is for,
@@ -409,6 +409,19 @@ class TestSvgDocument:
         ids_a, _ = _ids_and_refs(_render(self._cube(2), tmp_path))
         ids_b, _ = _ids_and_refs(_render(self._cube(3), tmp_path))
         assert ids_a.isdisjoint(ids_b)
+
+    def test_long_1d_sweep_grows_linearly(self, tmp_path):
+        """Each growth frame of a row adds one cell, so it must cost O(1) new markup.
+
+        Writing every drawn cell again in each frame makes the file grow with the
+        square of the value count: 300 values gave a 1.9 MB SVG.
+        """
+
+        def uses(n: int) -> int:
+            cfg = CartesianProductCfg(all_vars=[SweepVar("x", list(range(n)))], result_names=["r"])
+            return len(list(_render(cfg, tmp_path / str(n)).iter(f"{SVG_NS}use")))
+
+        assert uses(240) < 3 * uses(120)
 
     def test_labels_are_escaped(self, tmp_path):
         cfg = CartesianProductCfg(all_vars=[SweepVar("a<b&c", [0, 1])], result_names=["r"])

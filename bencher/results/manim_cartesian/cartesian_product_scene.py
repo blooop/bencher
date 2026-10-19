@@ -25,6 +25,8 @@ from bencher.results.manim_cartesian.svg_canvas import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from bencher.results.manim_cartesian.cartesian_product_cfg import CartesianProductCfg
 
 logger = logging.getLogger(__name__)
@@ -235,17 +237,39 @@ class Group(Shape):
                 dim_factor = 0.5 + 0.5 * i / max(n - 1, 1)
                 place_shape(canvas, self.children[i], cx, cy, alpha * dim_factor)
             return
-        g = self.gap
-        if self.direction == "right":
-            cx = x
-            for child in self.children:
-                place_shape(canvas, child, cx, y, alpha)
-                cx += child.size()[0] + g
-        else:  # down
-            cy = y
-            for child in self.children:
-                place_shape(canvas, child, x, cy, alpha)
-                cy += child.size()[1] + g
+        # A row or column is drawn as aligned power-of-two runs of children, each a
+        # shared definition built from its two halves. The runs a prefix of k children
+        # needs are the runs every longer prefix starts with, so a growth animation
+        # that redraws the row one child longer per frame adds O(log k) markup per
+        # frame instead of k, and the definitions nest only log k deep.
+        axis = 0 if self.direction == "right" else 1
+        starts = [0]
+        for child in self.children:
+            starts.append(starts[-1] + child.size()[axis] + self.gap)
+
+        def run(lo: int, hi: int) -> tuple[str, Callable[[SvgCanvas], None]]:
+            if hi - lo == 1:
+                child = self.children[lo]
+                return content_key(child.key(), round(alpha, 4)), (
+                    lambda c: child.draw(c, 0, 0, alpha)
+                )
+            mid = (lo + hi) // 2
+            left, right = run(lo, mid), run(mid, hi)
+            step = starts[mid] - starts[lo]
+            dx, dy = (step, 0) if axis == 0 else (0, step)
+
+            def draw(c: SvgCanvas) -> None:
+                c.place(*left, 0, 0)
+                c.place(*right, dx, dy)
+
+            return content_key("run", left[0], right[0], dx, dy), draw
+
+        lo, n = 0, len(self.children)
+        while lo < n:
+            size = 1 << ((n - lo).bit_length() - 1)
+            offset = starts[lo]
+            canvas.place(*run(lo, lo + size), x + offset * (1 - axis), y + offset * axis)
+            lo += size
 
     def key(self) -> str:
         """Cached like ``size()``: the tree is immutable once built."""
