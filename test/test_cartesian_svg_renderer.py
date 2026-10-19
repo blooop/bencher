@@ -26,7 +26,7 @@ from bencher.results.manim_cartesian.cartesian_product_scene import (
     TimelineShape,
     render_animation,
 )
-from bencher.results.manim_cartesian.svg_canvas import SvgCanvas, SvgDefs
+from bencher.results.manim_cartesian.svg_canvas import SvgCanvas, SvgDefs, animated_svg
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
 
@@ -383,6 +383,26 @@ class TestSvgDocument:
         assert slots[0][0] == 0
         assert slots[-1][1] == 1
         assert all(a[1] == b[0] for a, b in itertools.pairwise(slots))
+
+    def test_frame_slots_keep_their_durations(self):
+        """Each slot lasts as long as its frames did, duplicates and end hold included."""
+        frames = [("a", 100), ("b", 200), ("b", 300), ("c", 400), ("c", 1500)]
+        svg = animated_svg(
+            SvgDefs("t-"),
+            [(f"<text>{name}</text>", ms) for name, ms in frames],
+            10,
+            10,
+            (0, 0, 0),
+        )
+        root = ET.fromstring(svg)  # noqa: S314 - parses markup this test just built
+        held = {}
+        for g in _frames(root):
+            anim = g.find(f"{SVG_NS}animate")
+            dur_ms = float(anim.get("dur").removesuffix("s")) * 1000
+            times = [float(t) for t in anim.get("keyTimes").split(";")] + [1.0]
+            i = anim.get("values").split(";").index("visible")
+            held[g.find(f"{SVG_NS}text").text] = (times[i + 1] - times[i]) * dur_ms
+        assert held == pytest.approx({"a": 100, "b": 500, "c": 1900}, abs=1)
 
     def test_id_prefix_differs_between_animations(self, tmp_path):
         """Two animations inlined in one report page must not share ids."""
