@@ -226,7 +226,7 @@ class Group(Shape):
         return result
 
     def draw(self, canvas: SvgCanvas, x: int, y: int, alpha: float = 1.0) -> None:
-        """Draw this shape at position (x, y) on the image."""
+        """Draw this shape at position (x, y) on the canvas."""
         if self.direction == "stack":
             # Isometric 3D stack: back layers at top-right, front at bottom-left.
             # Draw back-to-front (painter's algorithm) with depth dimming.
