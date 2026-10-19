@@ -10,8 +10,8 @@ metric's own axis, and the design is drawn (pair lines, run-order squares). Text
 short finding, one effect number with its verdict glyph, and axis labels.
 
 Each SVG carries a light and a dark palette (``prefers-color-scheme``). Motion is
-ambient emphasis only: a slow CSS loop on one or two marks that carry the finding, never
-a change of position of a data mark, so every frame is the complete chart.
+limited to two things: dashes that flow in the direction of a change, and a highlight
+that walks the run-order strip. No data mark moves, so every frame is the complete chart.
 ``prefers-reduced-motion`` turns it off.
 """
 
@@ -88,42 +88,22 @@ VERDICT = {
     "unsure": ("unsure", "tunsure", "?"),
 }
 
-# Ambient motion: slow loops, low amplitude, no change of position of a data mark.
+# Motion: dashes flow in the direction of a change, and the run-order strip is walked.
+# No data mark changes position.
 BASE_CSS = f"""
 text{{font-family:{SANS}}}
 .mono{{font-family:{MONO}}}
 .b{{font-weight:600}}
 .bb{{font-weight:700}}
-@keyframes breathe{{0%,100%{{opacity:1}}50%{{opacity:.4}}}}
-@keyframes glow{{0%,100%{{stroke-opacity:.15}}50%{{stroke-opacity:1}}}}
-@keyframes glowsq{{0%,100%{{opacity:.45}}50%{{opacity:1}}}}
-@keyframes flicker{{0%,100%{{opacity:1}}50%{{opacity:.35}}}}
 @keyframes drift{{to{{stroke-dashoffset:-24}}}}
 @keyframes flow{{to{{stroke-dashoffset:-20}}}}
-@keyframes slide{{to{{transform:translateX(8px)}}}}
-.breathe{{animation:breathe 3.2s ease-in-out infinite}}
-.pulse{{animation:breathe 2.8s ease-in-out infinite}}
-.glow{{animation:glow 3.5s ease-in-out infinite}}
-.glowsq{{animation:glowsq 2.5s ease-in-out infinite}}
-.flicker{{animation:flicker 3.5s ease-in-out infinite}}
 .shimmer{{stroke-dasharray:4 8;animation:drift 4s linear infinite}}
 .flow{{stroke-dasharray:6 4;animation:flow 3s linear infinite}}
 .still{{stroke-dasharray:6 4}}
-.hatch{{animation:slide 3.5s linear infinite}}
 @media (prefers-reduced-motion:reduce){{
-.breathe,.pulse,.glow,.glowsq,.flicker,.shimmer,.flow,.hatch{{animation:none}}
+.shimmer,.flow{{animation:none}}
 .cur{{animation:none!important}}.shimmer,.overlay{{display:none}}}}
 """
-
-
-_PHASES = itertools.count()
-
-
-def phase() -> str:
-    """Return a style that gives a loop its own period and phase, so marks do not pulse in sync."""
-    k = next(_PHASES)
-    dur = (2.8, 3.4, 3.9, 3.1)[k % 4]
-    return f"animation-duration:{dur}s;animation-delay:-{(k * 0.77) % dur:.2f}s"
 
 
 # ---------------------------------------------------------------- numbers and data
@@ -428,7 +408,7 @@ class Plate:
             gw = 30 * 0.74
             g, _ = glyph(kind, W - 20 - gw, 42, 30)
             head += [
-                el("g", g, cls="pulse", style=phase()),
+                g,
                 text(W - 30 - gw, 42, s, "f-ink bb", 30, "end"),
             ]
         elif self.legend:
@@ -467,9 +447,7 @@ def dot_panel(
     r: float = 4.5,
     boots: list[float] | None = None,
     mark_glyph: bool = False,
-    motion: tuple[str, ...] = ("median", "shimmer"),
-    run_idx: list[tuple[int, int]] | None = None,
-    cursor: Cursor | None = None,
+    motion: tuple[str, ...] = ("connector",),
 ) -> str:
     """Draw base and candidate as beeswarm dot columns on the metric's own axis.
 
@@ -490,8 +468,7 @@ def dot_panel(
             out.append(text(px - 7, ys(t) + 5, tick_fmt(t), "mono f-muted", FS, "end"))
     bmed, cmed = quant(base, 0.5), quant(cand, 0.5)
     top, bot = ys(bmed * math.exp(MARGIN)), ys(bmed * math.exp(-MARGIN))
-    band_cls = "f-band s-bandEdge" + (" glow" if "band" in motion else "")
-    out.append(rect(px + 2, top, x1 - px - 4, bot - top, band_cls, stroke_width=1))
+    out.append(rect(px + 2, top, x1 - px - 4, bot - top, "f-band s-bandEdge", stroke_width=1))
     pb, pc = [ys(v) for v in base], [ys(v) for v in cand]
     ob, oc = swarm(pb, r), swarm(pc, r)
     mark, _, _ = VERDICT[kind]
@@ -510,7 +487,7 @@ def dot_panel(
                     stroke_opacity=0.3 if better else 0.6,
                 )
             )
-            if "shimmer" in motion:  # dashes drift from the base run to its candidate run
+            if "pairs" in motion:  # dashes drift from the base run to its candidate run
                 tok = "cand" if better else "worse"
                 out.append(line(xa, pb[i], xb, pc[i], f"s-{tok} shimmer", 1.6, stroke_opacity=0.65))
     out += [
@@ -520,7 +497,7 @@ def dot_panel(
         circle(cc + o, p, r, "f-cand s-plate", stroke_width=1) for o, p in zip(oc, pc, strict=True)
     ]
     hws = [min(max(abs(o) for o in offs) + r + 5, wid * 0.15) for offs in (ob, oc)]
-    moved = kind in {"improved", "regressed"}
+    moved = kind in {"improved", "regressed"} and "connector" in motion
     out.append(
         line(
             cb + hws[0] + 4,
@@ -535,8 +512,6 @@ def dot_panel(
     for (cx, med, tok), hw in zip(((cb, bmed, "base"), (cc, cmed, "cand")), hws, strict=True):
         bar = line(cx - hw, ys(med), cx + hw, ys(med), "s-plate", 9, stroke_linecap="round")
         bar += line(cx - hw, ys(med), cx + hw, ys(med), f"s-{tok}", 5, stroke_linecap="round")
-        if tok == "cand" and "median" in motion:
-            bar = el("g", bar, cls="breathe", style=phase())
         out.append(bar)
     bx = min(cc + max(abs(o) for o in oc) + r + 14, x1 - 8)
     y_lo, y_hi = sorted((ys(bmed * math.exp(ci[0])), ys(bmed * math.exp(ci[1]))))
@@ -544,8 +519,7 @@ def dot_panel(
         el(
             "path",
             d=f"M{num(bx - 7)} {num(y_lo)}H{num(bx)}V{num(y_hi)}H{num(bx - 7)}",
-            cls=f"s-{mark}" + (" flicker" if kind == "unsure" else ""),
-            style=phase() if kind == "unsure" else None,
+            cls=f"s-{mark}",
             fill="none",
             stroke_width=3,
             stroke_linecap="round",
@@ -554,43 +528,6 @@ def dot_panel(
     )
     ye = ys(bmed * math.exp(est))
     out.append(line(bx - 9, ye, bx + 3, ye, f"s-{mark}", 3, stroke_linecap="round"))
-    if cursor and run_idx:
-        # the playhead rings each dot when its run plays, and lights the pair line when
-        # the second run of the pair has played
-        for i, (ib, ic) in enumerate(run_idx):
-            xa, xb = cb + ob[i], cc + oc[i]
-            out += [
-                circle(
-                    xa,
-                    pb[i],
-                    r + 3,
-                    f"s-ink {cursor.cls()}",
-                    fill="none",
-                    stroke_width=1.6,
-                    style=cursor.at(ib),
-                ),
-                circle(
-                    xb,
-                    pc[i],
-                    r + 3,
-                    f"s-ink {cursor.cls()}",
-                    fill="none",
-                    stroke_width=1.6,
-                    style=cursor.at(ic),
-                ),
-            ]
-            if paired:
-                out.append(
-                    line(
-                        xa,
-                        pb[i],
-                        xb,
-                        pc[i],
-                        f"s-ink {cursor.cls(1.5)}",
-                        2,
-                        style=cursor.at(max(ib, ic)),
-                    )
-                )
     if boots:
         step = 2.5
         hist: dict[int, int] = {}
@@ -605,7 +542,7 @@ def dot_panel(
         out.append(el("path", d=d, cls=f"f-{mark} s-{mark}", fill_opacity=0.22, stroke_width=1))
     if mark_glyph:
         g, _ = glyph(kind, bx - 9, y_lo - 9, FS + 1)
-        out.append(el("g", g, cls="pulse", style=phase()) if "glyph" in motion else g)
+        out.append(g)
     if labels == "two":
         for cx, name, n in ((cb, "base", len(base)), (cc, "candidate", len(cand))):
             out += [
@@ -678,15 +615,6 @@ def run_rows(
     return "".join(out)
 
 
-def abba_idx(pairs: list[Pair]) -> list[tuple[int, int]]:
-    """Return the run index of each pair's base run and candidate run (VM by VM)."""
-    out = []
-    for p in pairs:
-        first = p.shard * 10 + 2 * p.idx
-        out.append((first, first + 1) if p.order == "AB" else (first + 1, first))
-    return out
-
-
 def abba_rows(pairs: list[Pair]) -> list[tuple[str, str]]:
     return [(f"VM {s + 1}", "".join(p.order for p in pairs if p.shard == s)) for s in range(4)]
 
@@ -741,8 +669,6 @@ def plate_g1() -> Plate:
                 ticks=nice_ticks(lo, hi),
                 tick_fmt=lambda t: f"{t:g}",
                 r=4,
-                run_idx=abba_idx(pairs),
-                cursor=cur,
             )
         )
     pl.add(
@@ -773,14 +699,14 @@ def _binary_panel(x0: float, x1: float, y0: float, y1: float) -> str:
                 ]
             else:
                 out.append(rect(x, y, size, size, f"f-{tok}", rx=3))
-                if tok == "cand" and i == 17:  # the run that changed glows
+                if tok == "cand" and i == 17:  # the run that changed is outlined
                     out.append(
                         rect(
                             x - 3,
                             y - 3,
                             size + 6,
                             size + 6,
-                            "s-better glowsq",
+                            "s-better",
                             rx=5,
                             fill="none",
                             stroke_width=2,
@@ -916,7 +842,6 @@ def plate_g2() -> Plate:
                 labels="none",
                 r=2.6,
                 mark_glyph=True,
-                motion=("glyph",) if kind not in {"equiv", "small"} else (),
             )
         )
     pl.add(legend(W - 20, 600, [*ARMS, ("f-band", "±5 % of base median")]))
@@ -931,7 +856,6 @@ def plate_g3() -> Plate:
         f"{fmt(pct(C90[1]))}] %."
     )
     pl = Plate(f"Planning is {abs(pct(EST)):.0f} % faster", 480, desc, (kind, f"{fmt(pct(EST))} %"))
-    cur = pl.cursor = Cursor(40)
     lo, hi = axis_range([p.base for p in PAIRS] + [p.cand for p in PAIRS])
     pl.add(
         dot_panel(
@@ -951,13 +875,9 @@ def plate_g3() -> Plate:
             labels="one",
             r=5.5,
             boots=BOOTS,
-            motion=("median", "shimmer"),
-            run_idx=abba_idx(PAIRS),
-            cursor=cur,
+            motion=("connector", "pairs"),
         ),
-        run_rows(
-            540, 120, abba_rows(PAIRS), cell=14, gap=3, pair_gap=5, pitch=24, label_w=54, cursor=cur
-        ),
+        run_rows(540, 120, abba_rows(PAIRS), cell=14, gap=3, pair_gap=5, pitch=24, label_w=54),
         text(594, 236, "run order →", "f-muted"),
     )
     return pl
@@ -1057,7 +977,7 @@ def plate_g4() -> Plate:
             x, ys(dv), 6, f"f-{tok} s-{tok}" if sig else f"f-plate s-{tok}", stroke_width=2
         )
         pl.add(
-            el("g", mark, cls="breathe", style=phase()) if sig else mark,
+            mark,
             text(x, sy1 + 24, f"p{round(dec[k] * 100)}", "mono f-muted", FS, "middle"),
         )
     return pl
@@ -1070,8 +990,6 @@ def plate_g5() -> Plate:
     )
     pl = Plate("Flake fixed; success still unclear", 340, desc)
 
-    cur = pl.cursor = Cursor(96, step=0.2)
-
     def waffle(
         x0: float,
         y0: float,
@@ -1081,39 +999,11 @@ def plate_g5() -> Plate:
         cols: int,
         c: float,
         changed: set[int],
-        idx0: int,
     ) -> None:
         g = c * 0.25
         for i in range(n):
             r, k = divmod(i, cols)
             x, y = x0 + k * (c + g), y0 + r * (c + g)
-            run = idx0 + 2 * i  # base and candidate runs interleave
-            pl.add(
-                rect(
-                    x - 3,
-                    y - 3,
-                    c + 6,
-                    c + 6,
-                    f"s-ink {cur.cls()}",
-                    rx=5,
-                    fill="none",
-                    stroke_width=1.8,
-                    style=cur.at(run),
-                )
-            )
-            if i >= n - fails:  # a failure flashes softly when the playhead reaches it
-                pl.add(
-                    rect(
-                        x - 1,
-                        y - 1,
-                        c + 2,
-                        c + 2,
-                        f"f-worse {cur.cls(3)}",
-                        rx=4,
-                        fill_opacity=0.45,
-                        style=cur.at(run),
-                    )
-                )
             if i >= n - fails:
                 h = num(c / 2)
                 cross = f"M{num(x + c * 0.25)} {num(y + c * 0.25)}l{h} {h}m0 -{h}l-{h} {h}"
@@ -1123,14 +1013,14 @@ def plate_g5() -> Plate:
                 )
             else:
                 pl.add(rect(x, y, c, c, f"f-{tok}", rx=3))
-                if i in changed:  # a run that failed on base and passed here glows
+                if i in changed:  # a run that failed on base and passed here is outlined
                     pl.add(
                         rect(
                             x - 3,
                             y - 3,
                             c + 6,
                             c + 6,
-                            "s-better glowsq",
+                            "s-better",
                             rx=5,
                             fill="none",
                             stroke_width=2,
@@ -1145,8 +1035,8 @@ def plate_g5() -> Plate:
         text(20, 165, "base"),
         text(20, 215, "candidate"),
     )
-    waffle(110, 146, 18, 1, "base", 9, 18, set(), 0)
-    waffle(110, 196, 18, 0, "cand", 9, 18, {17}, 1)
+    waffle(110, 146, 18, 1, "base", 9, 18, set())
+    waffle(110, 196, 18, 0, "cand", 9, 18, {17})
     pl.add(text(330, 165, "17/18", "mono f-muted"), text(330, 215, "18/18", "mono f-muted"))
 
     def sc(v: float) -> float:
@@ -1163,7 +1053,6 @@ def plate_g5() -> Plate:
         )
     pl.add(
         line(sc(-0.089), 271, sc(0.258), 271, "s-unsure", 5, stroke_linecap="round"),
-        line(sc(0) + 2, 271, sc(0.056) - 7, 271, "s-plate flow overlay", 2),
         circle(sc(0.056), 271, 6, "f-plate s-unsure", stroke_width=2.5),
     )
     fx = 420
@@ -1175,8 +1064,8 @@ def plate_g5() -> Plate:
         text(fx, 165, "base"),
         text(fx, 215, "candidate"),
     )
-    waffle(fx + 90, 150, 30, 4, "base", 15, 14, set(), 36)
-    waffle(fx + 90, 200, 30, 0, "cand", 15, 14, {26, 27, 28, 29}, 37)
+    waffle(fx + 90, 150, 30, 4, "base", 15, 14, set())
+    waffle(fx + 90, 200, 30, 0, "cand", 15, 14, {26, 27, 28, 29})
     rx0, rx1 = fx + 90, 770
 
     def rs(v: float) -> float:
@@ -1224,36 +1113,23 @@ def plate_g6() -> Plate:
             text(x0 - 8, ys(t) + 5, f"{t:.1f} s", "mono f-muted", FS, "end"),
         )
     step = (x1 - x0) / len(sp)
-    cur = pl.cursor = Cursor(48, step=0.4)
-    # candidate medians joined across speeds; the line flows where the point is beyond ±Δ
+    # candidate medians joined across speeds; the line is darker where the point is beyond ±Δ
     meds = [(x0 + (k + 0.5) * step + 10, ys(quant(g[2], 0.5)), g[5]) for k, g in enumerate(groups)]
     for (xa, ya, ka), (xb, yb, kb) in itertools.pairwise(meds):
-        moving = ka == kb == "improved"
+        beyond = ka == kb == "improved"
         pl.add(
             line(
                 xa,
                 ya,
                 xb,
                 yb,
-                f"s-cand {'flow' if moving else 'still'}",
+                "s-cand still",
                 2,
-                stroke_opacity=0.9 if moving else 0.45,
+                stroke_opacity=0.9 if beyond else 0.45,
             )
         )
     for k, (v, base, cand, m, ci, kind) in enumerate(groups):
         gx = x0 + (k + 0.5) * step
-        pl.add(
-            rect(
-                gx - 44,
-                y0 - 10,
-                92,
-                y1 - y0 + 50,
-                f"f-ink {cur.cls(6)}",
-                rx=6,
-                fill_opacity=0.06,
-                style=cur.at(k * 6),
-            )
-        )
         g, _ = glyph(kind, gx - 4, ys(max(base + cand)) - 16, FS + 2)
         pl.add(
             dot_panel(
@@ -1272,8 +1148,6 @@ def plate_g6() -> Plate:
                 tick_labels=False,
                 labels="none",
                 r=3.4,
-                run_idx=[(k * 6 + j, k * 6 + j) for j in range(6)],
-                cursor=cur,
             ),
             g,
             text(gx - 6, y1 + 26, f"{v:.1f}", "mono f-muted", FS, "middle"),
@@ -1325,15 +1199,14 @@ def mix(pole: str, other: str, share: float) -> str:
     return _oklab_to_srgb(tuple(share * a + (1 - share) * b for a, b in zip(p, o, strict=True)))
 
 
-def _hatch(x: float, y: float, w: float, h: float, cid: str, moving: bool) -> tuple[str, str]:
+def _hatch(x: float, y: float, w: float, h: float, cid: str) -> tuple[str, str]:
     """Return a clip path and diagonal hatch lines for a w x h box at (x, y)."""
     clip = el("clipPath", rect(x, y, w, h, "", rx=3), id=cid)
     lines = "".join(
         line(x + j, y + h, x + j + h, y, "s-muted", 1.4, stroke_opacity=0.5)
         for j in range(-int(h) - 8, int(w) + 8, 8)
     )
-    inner = el("g", lines, cls="hatch") if moving else lines
-    return clip, el("g", inner, clip_path=f"url(#{cid})")
+    return clip, el("g", lines, clip_path=f"url(#{cid})")
 
 
 def plate_g7() -> Plate:
@@ -1374,12 +1247,11 @@ def plate_g7() -> Plate:
     x0, y0, cw, ch = 100, 76, 110, 58
     for r, m in enumerate(mass):
         pl.add(text(x0 - 10, y0 + r * ch + ch / 2 + 5, f"{m} kg", "mono f-muted", FS, "end"))
-    cur = pl.cursor = Cursor(120, step=0.15)
     for i, (r, k, p, kind) in enumerate(cells):
         x, y = x0 + k * cw, y0 + r * ch
         unsure = kind == "unsure"
         if unsure:
-            clip, hatch = _hatch(x + 1, y + 1, cw - 2, ch - 2, f"c{i}", moving=True)
+            clip, hatch = _hatch(x + 1, y + 1, cw - 2, ch - 2, f"c{i}")
             pl.defs.append(clip)
             pl.add(rect(x + 1, y + 1, cw - 2, ch - 2, "f-plate s-rule", rx=3), hatch)
         else:
@@ -1396,29 +1268,10 @@ def plate_g7() -> Plate:
             el("g", g, transform=f"translate({num(sx)},{num(y + ch / 2 + 2)})"),
             text(sx + gw + 5, y + ch / 2 + 2, label, f"mono f-{tok}", FS, font_weight=500),
         )
-        for j in range(6):  # the six paired repeats behind this cell
-            pl.add(
-                circle(x + cw - 34 + j * 5, y + ch - 9, 1.6, f"f-{tok}", fill_opacity=0.6),
-                circle(
-                    x + cw - 34 + j * 5,
-                    y + ch - 9,
-                    2.8,
-                    f"f-{tok} {cur.cls()}",
-                    style=cur.at(i * 6 + j),
-                ),
-            )
-        # the cell being run is outlined while its six repeats play
-        pl.add(
-            rect(
-                x + 2,
-                y + 2,
-                cw - 4,
-                ch - 4,
-                f"s-ink {cur.cls(6)}",
-                rx=3,
-                fill="none",
-                stroke_width=2,
-                style=cur.at(i * 6),
+        pl.add(  # the six paired repeats behind this cell
+            *(
+                circle(x + cw - 34 + j * 5, y + ch - 9, 1.6, f"f-{tok}", fill_opacity=0.6)
+                for j in range(6)
             )
         )
     for k, v in enumerate(sp):
@@ -1437,7 +1290,7 @@ def plate_g7() -> Plate:
     for p in (-15, 0, 15):
         lab = "0" if p == 0 else f"{fmt(p, 0)} %"
         pl.add(text(lx + (p + 15) * 6 + 3, ly + 40, lab, "mono f-muted", FS, "middle"))
-    clip, hatch = _hatch(lx, ly + 72, 34, 26, "lg", moving=False)
+    clip, hatch = _hatch(lx, ly + 72, 34, 26, "lg")
     pl.defs.append(clip)
     g, _ = glyph("unsure", lx + 44, ly + 92, FS + 2)
     pl.add(rect(lx, ly + 72, 34, 26, "f-plate s-rule", rx=3, stroke_width=1), hatch, g)
@@ -1461,7 +1314,7 @@ def plate_g8() -> Plate:
         rect(x0, 102, sc(9.2) - x0, 12, "f-unsure", rx=6),
         # more runs close this gap: dashes flow from the MDE toward the margin
         line(sc(9.2) - 6, 108, sc(5) + 3, 108, "s-plate flow overlay", 2.5),
-        line(sc(5), 88, sc(5), 128, "s-ink glow", 2.5),
+        line(sc(5), 88, sc(5), 128, "s-ink", 2.5),
         text(sc(5), 82, "±Δ", "f-ink b", FS, "middle"),
         text(sc(9.2), 82, "MDE", "f-ink b", FS, "middle"),
         *(text(sc(p), 146, f"{p} %", "mono f-muted", FS, "middle") for p in range(0, 15, 2)),
@@ -1500,17 +1353,7 @@ def plate_g9() -> Plate:
         )
     med = quant([p.base for p in PAIRS], 0.5)
     top, bot = ys(med * 1.03), ys(med * 0.97)
-    pl.add(rect(x0, top, x1 - x0, bot - top, "f-band s-bandEdge glow", stroke_width=2))
-    cur = pl.cursor = Cursor(40)
-    on = 40 * cur.step / cur.loop * 100
-    dist = num(float(x1 - x0))
-    cur.css += (
-        f"@keyframes sweep{{0%{{transform:translateX(0);opacity:0}}1%{{opacity:.45}}"
-        f"{on:.2f}%{{transform:translateX({dist}px);opacity:.45}}{on + 2:.2f}%{{opacity:0}}"
-        f"100%{{transform:translateX({dist}px);opacity:0}}}}"
-        f".sweep{{opacity:0;animation:sweep {cur.loop:.2f}s linear infinite}}"
-    )
-    pl.add(line(xs(0), y0, xs(0), y1, "s-ink cur sweep", 1.5))
+    pl.add(rect(x0, top, x1 - x0, bot - top, "f-band s-bandEdge", stroke_width=2))
     i = 0
     for p in PAIRS:
         seq = [("A", p.base), ("B", p.cand)] if p.order == "AB" else [("B", p.cand), ("A", p.base)]
@@ -1518,15 +1361,6 @@ def plate_g9() -> Plate:
             cls = f"f-{'base' if a == 'A' else 'cand'} s-plate"
             pl.add(
                 circle(xs(i), ys(v), 5, cls, stroke_width=1.5),
-                circle(
-                    xs(i),
-                    ys(v),
-                    8,
-                    f"s-ink {cur.cls()}",
-                    fill="none",
-                    stroke_width=1.6,
-                    style=cur.at(i),
-                ),
             )
             i += 1
     for k in range(1, 4):
