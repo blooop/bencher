@@ -248,11 +248,25 @@ def _seed_policy(base: Sequence[Any], cand: Sequence[Any], paired: bool) -> str 
     return f"{distinct} seeds recorded"
 
 
+def _pair_index(arm: Arm) -> dict[tuple[Any, Any], int]:
+    index: dict[tuple[Any, Any], int] = {}
+    for i, key in enumerate(zip(arm.clusters, arm.repeats, strict=True)):
+        if key in index:
+            msg = f"cannot pair: shard {key[0]!r} has repeat {key[1]!r} twice"
+            raise ValueError(msg)
+        index[key] = i
+    return index
+
+
 def _align(base: Arm, cand: Arm, paired: bool) -> _Aligned:
-    """The arm arrays the stats read; paired arms are matched by repeat id."""
+    """The arm arrays the stats read; paired arms are matched by (shard, repeat id).
+
+    kbench shards each count their repeats from 0, so the repeat id alone is not a key.
+    A key that repeats inside one arm cannot pair, and raises.
+    """
     if paired:
-        b_by = dict(zip(base.repeats, range(len(base.values)), strict=True))
-        c_by = dict(zip(cand.repeats, range(len(cand.values)), strict=True))
+        b_by = _pair_index(base)
+        c_by = _pair_index(cand)
         keys = sorted(set(b_by) & set(c_by), key=str)
         bi, ci = [b_by[k] for k in keys], [c_by[k] for k in keys]
     else:

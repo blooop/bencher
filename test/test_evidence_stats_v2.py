@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import bencher as bn
-from bencher import evidence_stats as es, infographic as ig
+from bencher import evidence_report, evidence_stats as es, infographic as ig
 from bencher.evidence_report import (
     analyse_data,
     data_from_rows,
@@ -635,3 +635,35 @@ def test_margin_is_excluded_from_the_hash():
     assert bn.ResultFloat(margin=0.1).hash_persistent() == bn.ResultFloat().hash_persistent()
     with pytest.raises(ValueError, match="margin"):
         bn.ResultFloat(margin=-1)
+
+
+def _shard_rows(scale: float) -> list[dict]:
+    return [
+        {
+            "metric": "t",
+            "units": "s",
+            "direction": "minimize",
+            "repeat": r,
+            "shard": f"vm{s}",
+            "inputs": {},
+            "value": scale * (1.0 + 0.01 * r + 0.1 * s),
+        }
+        for s in range(3)
+        for r in range(3)
+    ]
+
+
+def test_paired_rows_pair_within_each_shard() -> None:
+    """kbench shards reuse repeat ids 0..k, so pairing keys on (shard, repeat)."""
+    ((base, cand),) = data_from_rows(_shard_rows(1.0), _shard_rows(0.9))[0].points.values()
+    aligned = evidence_report._align(base, cand, paired=True)
+    assert len(aligned.base) == 9
+    assert np.allclose(aligned.cand / aligned.base, 0.9)
+
+
+def test_paired_rows_reject_a_repeated_key() -> None:
+    rows = _shard_rows(1.0)
+    rows[1]["repeat"] = 0
+    ((base, cand),) = data_from_rows(rows, _shard_rows(0.9))[0].points.values()
+    with pytest.raises(ValueError, match="cannot pair"):
+        evidence_report._align(base, cand, paired=True)
