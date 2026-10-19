@@ -427,3 +427,76 @@ class TestSvgDocument:
         cfg = CartesianProductCfg(all_vars=[SweepVar("a<b&c", [0, 1])], result_names=["r"])
         texts = [t.text for t in _render(cfg, tmp_path).iter(f"{SVG_NS}text")]
         assert "a<b&c" in texts
+
+
+class TestAnimatedSvgTiming:
+    """``animated_svg`` turns ``(markup, duration_ms)`` frames into SMIL slots."""
+
+    @staticmethod
+    def _groups(frames: list[tuple[str, int]]) -> list[ET.Element]:
+        svg = animated_svg(SvgDefs("t-"), frames, 10, 10, (255, 255, 255))
+        root = ET.fromstring(svg)  # noqa: S314 - parses markup this test just built
+        return _frames(root)
+
+    def test_slot_lengths_follow_durations_and_merge_repeats(self):
+        """Two identical frames in a row merge into one slot holding both durations."""
+        groups = self._groups([("<a/>", 100), ("<b/>", 100), ("<b/>", 100), ("<c/>", 300)])
+        assert len(groups) == 3
+        anims = [g.find(f"{SVG_NS}animate") for g in groups]
+        assert {a.get("dur") for a in anims} == {"0.600s"}
+        assert [(a.get("keyTimes"), a.get("values")) for a in anims] == [
+            ("0;0.1667", "visible;hidden"),
+            ("0;0.1667;0.5", "hidden;visible;hidden"),
+            ("0;0.5", "hidden;visible"),
+        ]
+
+    def test_single_frame_is_static(self):
+        """One frame (here two identical ones, merged) needs no animation at all."""
+        groups = self._groups([("<a/>", 100), ("<a/>", 100)])
+        assert len(groups) == 1
+        assert groups[0].find(f"{SVG_NS}animate") is None
+        assert groups[0].get("visibility") != "hidden"
+
+
+class TestSvgDocumentIds:
+    def test_ids_are_unique_and_prefixed(self, tmp_path):
+        root = _render(
+            CartesianProductCfg(
+                all_vars=[SweepVar(n, list(range(4))) for n in ("x", "y", "z")],
+                result_names=["r"],
+            ),
+            tmp_path,
+        )
+        ids = [el.get("id") for el in root.iter() if el.get("id")]
+        assert len(ids) == len(set(ids))
+        assert all(re.fullmatch(r"c[0-9a-f]{6}-[0-9a-f]+", i) for i in ids)
+
+
+def test_shrunk_strobe_keeps_its_tally_at_full_size(tmp_path):
+    """A grid too big for the canvas is scaled down, but its tally marks are not.
+
+    The marks are drawn after the scaled group, as direct children of the frame,
+    so they keep their pixel size however much the grid shrinks.
+    """
+    cfg = CartesianProductCfg(
+        all_vars=[
+            SweepVar("x", list(range(10))),
+            SweepVar("y", list(range(10))),
+            SweepVar("repeat", [1, 2, 3]),
+        ],
+        result_names=["r"],
+    )
+    frames = _frames(_render(cfg, tmp_path))
+    assert len(frames) >= 5
+    tally = "#{:02x}{:02x}{:02x}".format(*cfg.strobe_color)
+
+    def shrunk_with_tally(frame: ET.Element) -> bool:
+        scaled = [g for g in frame.findall(f"{SVG_NS}g") if "scale(" in (g.get("transform") or "")]
+        marks = [
+            r
+            for r in frame.findall(f"{SVG_NS}rect")
+            if r.get("fill") == tally and r.get("fill-opacity") is None
+        ]
+        return bool(scaled) and bool(marks)
+
+    assert any(shrunk_with_tally(f) for f in frames)
