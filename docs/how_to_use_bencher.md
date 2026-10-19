@@ -814,12 +814,53 @@ bencher ab --base origin/main --out evidence/ -- pixi run python my_bench.py
 - `--out` (default `./bencher-ab/`) receives `base.pkl`, `candidate.pkl`,
   `comparison.json`, the text-only `evidence.md`, and `base.log`/`candidate.log` with each
   side's output. `--png-dir DIR` also writes one PNG per metric there, for local viewing.
-  The paths are printed on stdout.
+  `--images` adds images to `evidence.md` (see below); its PNGs share those file names, so
+  `--png-dir` must not be `<out>/images/`. The paths are printed on stdout.
 - The exit status is 0 when both sides ran, whatever the verdict and whatever the claims
   say (a failed claim, on a metric the base has or not, is reported, not enforced); 1 when
   a side failed or saved no result (stderr names the side and the tail of its log, which is
   kept), or when the two sides share no metric (no claim is judged then, and stderr names
   the metrics on each side); 2 for a usage or git problem.
+
+#### Images in the PR body: `bencher ab --images`
+
+`--images` is opt-in; without it `evidence.md` stays text only. With it, `bencher ab`
+draws a PNG of each metric whose image shows more than its text chart, pushes the PNGs to
+GitHub on a ref that no branch reaches, and links each one above its text chart:
+
+```bash
+bencher ab --base origin/main --images -- python my_bench.py
+```
+
+- **What is drawn.** A metric with more than one sample at a point gets every repeat as a
+  dot, a box of the quartiles per swept point (or per side with no swept input) and the
+  mean ± 1 std, before (grey, hollow) and after (blue, filled), with the claim threshold.
+  Two or more swept inputs get a heatmap of the percent change at each point, blue for
+  better and red for worse by the metric's `direction` (violet down and yellow up with no
+  direction), one panel per value of a third input as in the text heatmap. A metric with
+  one sample per point and one or no swept input gets no image: its text chart already
+  shows everything. Points or inputs that only one side has get no image either.
+- **Where it goes.** The PNGs and a `<metric>.csv` of every sample (side, each input,
+  repeat, value) are written to `images/` under `--out`, then pushed as one commit to
+  `refs/bencher/evidence` on `origin`, under a directory unique to the run (UTC time,
+  candidate revision, random suffix). The commit's parent is the ref's previous tip, so
+  every older run stays reachable and git never deletes it. No branch reaches the ref, so
+  `git clone` and `git fetch` do not download the images; `git ls-remote origin
+  refs/bencher/evidence` shows the ref. Only git plumbing builds the commit: the work tree,
+  the index and `HEAD` do not change, and `--no-filters` stores the real PNG even when
+  `.gitattributes` sends `*.png` to Git LFS. When another run pushes first, the commit is
+  made again on the new tip and pushed again, up to 5 times; the push is never forced.
+  A throwaway repository makes and pushes the commit and fetches only the previous tip,
+  so the local repository keeps no ref, no image and no unpushed commit.
+- **The links.** Each image is linked as
+  `https://github.com/<owner>/<repo>/blob/<commit-sha>/<path>?raw=true`, with the owner and
+  repository read from `origin` (ssh or https). A PR page draws that link for anyone who
+  can read the repository, public or private. A `<sub>` link under the image opens the
+  CSV. The text chart, the caption and the `<details>` CSV block stay under each image, so
+  the PR reads correctly when an image does not load.
+- **When it cannot push.** With no GitHub `origin`, or no push access, the images stay in
+  `images/`, `evidence.md` stays text only, and one line on stderr says why. The exit
+  status does not change.
 
 Each side also runs with `BENCHER_NO_SHOW=1`, which makes `bn.run` and `BenchRunner` show
 nothing: the default `show=True` starts a live report server, and that server keeps a

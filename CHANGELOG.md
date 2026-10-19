@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.143.0] - 2026-10-18
+
+### Added
+- **`bencher ab --images` links real charts in the PR body.** Opt-in; without it
+  `evidence.md` stays text only. Each metric whose image shows more than its text chart
+  gets a matplotlib PNG: every repeat with a box per swept point and the mean ± 1 std, or a
+  heatmap of the percent change for two or more swept inputs. The PNGs and a CSV of every
+  sample are pushed as one commit to `refs/bencher/evidence` on `origin`, a ref that no
+  branch reaches, so `git clone` does not fetch them. Each run's commit sits on top of the
+  last (re-made on the new tip when another run pushes first, never forced), so every run
+  stays reachable. A throwaway repository makes and pushes the commit, so the local
+  repository keeps no ref, no image and no unpushed commit. Only git plumbing builds the
+  commit, so the work tree, index and `HEAD` do not change, and a `*.png filter=lfs` rule does not turn an image into a pointer.
+  `evidence.md` links each image by its commit SHA
+  (`https://github.com/<owner>/<repo>/blob/<sha>/<path>?raw=true`), which a PR page draws
+  in public and private repositories, above the text chart and data block, which stay.
+  With no GitHub `origin` or no push access, the images stay in `<out>/images/`,
+  `evidence.md` stays text only, one line on stderr says so, and the exit status does not
+  change. `write_evidence` takes the matching `images=ImageOutput(dir, publish)` argument
+  (`ValueError` when `images.dir` is `png_dir`: the file names are the same),
+  and `bencher.evidence_ref` holds the git side. `schema_version`, the existing keys,
+  flags and exit codes do not change.
+
 ## [1.142.0] - 2026-10-17
 
 ### Added

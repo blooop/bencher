@@ -68,6 +68,7 @@ from .claims import (
 from .complete_report import verify_report as verify_report
 from .evidence import (
     EvidenceFiles as EvidenceFiles,
+    ImageOutput as ImageOutput,
     evidence_markdown as evidence_markdown,
     write_evidence as write_evidence,
     write_evidence_pngs as write_evidence_pngs,

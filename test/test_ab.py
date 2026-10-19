@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -12,6 +13,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 import bencher as bn
+from bencher.ab import _run_dir
+from bencher.evidence_ref import push_evidence
 from bencher.launch_env import NO_CACHE_ENV, NO_SHOW_ENV, RESULT_PATH_ENV
 
 if TYPE_CHECKING:
@@ -202,6 +205,26 @@ def test_ab_with_an_unknown_base_exits_2_before_it_runs_anything(repo):
     assert "--base 'nosuchref' does not name a commit" in proc.stderr
     assert not (repo / "bencher-ab").exists()
     assert _git(repo, "worktree", "list").count("\n") == 0
+
+
+def test_ab_with_the_png_dir_as_the_image_dir_exits_before_it_runs_anything(repo, tmp_path):
+    marker = tmp_path / "ran"
+    proc = subprocess.run(
+        [
+            *(sys.executable, "-m", "bencher.render", "ab", "--base", "main"),
+            *("--out", "o", "--png-dir", "o/x/../images", "--images", "--"),
+            *(sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"),
+        ],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert proc.returncode == 2
+    assert "--png-dir" in proc.stderr
+    assert not marker.exists()
+    assert not (repo / "o").exists()
 
 
 AB_MAIN = (sys.executable, "-m", "bencher.render", "ab", "--base", "main")
@@ -474,3 +497,81 @@ def test_ab_png_dir_writes_one_png_per_metric(repo, tmp_path):
     assert proc.returncode == 0, proc.stderr
     assert (pngs / "stop_distance.png").exists()
     assert str(pngs / "stop_distance.png") in proc.stdout
+
+
+def _github_remote(repo: Path, tmp_path: Path) -> Path:
+    """Name origin as a GitHub repo, and route it to a local bare repo."""
+    bare = tmp_path / "remote.git"
+    _git(tmp_path, "init", "-q", "--bare", str(bare))
+    github = "git@github.com:someone/braking.git"
+    _git(repo, "remote", "add", "origin", github)
+    _git(repo, "config", f"url.{bare}.insteadOf", github)
+    return bare
+
+
+def test_ab_images_pushes_them_to_the_evidence_ref_and_links_them(repo, tmp_path):
+    bare = _github_remote(repo, tmp_path)
+    (repo / "gain.py").write_text("GAIN = 0.25\n", encoding="utf-8")
+    head = _git(repo, "rev-parse", "HEAD")
+
+    proc = _ab(repo, "--base", "main", "--images")
+
+    assert proc.returncode == 0, proc.stderr
+    commit = _git(bare, "rev-parse", "refs/bencher/evidence")
+    (run_dir,) = _git(bare, "ls-tree", "--name-only", commit).splitlines()
+    assert _git(bare, "ls-tree", "--name-only", f"{commit}:{run_dir}").splitlines() == [
+        "stop_distance.csv",
+        "stop_distance.png",
+    ]
+    md = (repo / "bencher-ab" / "evidence.md").read_text(encoding="utf-8")
+    url = f"https://github.com/someone/braking/blob/{commit}/{run_dir}/stop_distance.png?raw=true"
+    assert f"]({url})" in md
+    assert "```mermaid" in md  # the text chart stays
+    assert str(repo / "bencher-ab" / "images" / "stop_distance.png") in proc.stdout
+    # Nothing else moved: same HEAD, same branch, only the uncommitted change.
+    assert _git(repo, "rev-parse", "HEAD") == head
+    assert _git(repo, "status", "--porcelain", "--untracked-files=no") == "M gain.py"
+    assert _git(bare, "for-each-ref", "refs/heads") == ""
+
+
+def test_ab_images_without_a_github_remote_keeps_text_and_exits_0(repo):
+    (repo / "gain.py").write_text("GAIN = 0.25\n", encoding="utf-8")
+
+    proc = _ab(repo, "--base", "main", "--images")
+
+    assert proc.returncode == 0, proc.stderr
+    notes = [line for line in proc.stderr.splitlines() if "images not linked" in line]
+    assert len(notes) == 1
+    out = repo / "bencher-ab"
+    assert (out / "images" / "stop_distance.png").exists()
+    assert "![" not in (out / "evidence.md").read_text(encoding="utf-8")
+
+
+def test_ab_without_images_pushes_nothing(repo, tmp_path):
+    bare = _github_remote(repo, tmp_path)
+
+    proc = _ab(repo, "--base", "HEAD")
+
+    assert proc.returncode == 0, proc.stderr
+    assert _git(bare, "for-each-ref") == ""
+    assert not (repo / "bencher-ab" / "images").exists()
+
+
+@pytest.mark.parametrize("revision", ["feat/x y", "../..", "a b", "main~1 (dirty)"])
+def test_any_candidate_revision_gives_one_plain_run_dir_the_ref_accepts(tmp_path, revision):
+    bare = tmp_path / "remote.git"
+    _git(tmp_path, "init", "-q", "--bare", str(bare))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "ab@example.test")
+    _git(repo, "config", "user.name", "ab")
+    _git(repo, "remote", "add", "origin", str(bare))
+    png = tmp_path / "a.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    run_dir = _run_dir(revision)
+    commit = push_evidence(repo, {"a.png": png}, run_dir=run_dir)
+
+    assert re.fullmatch(r"[A-Za-z0-9._-]+", run_dir)
+    assert _git(bare, "ls-tree", "--name-only", commit).splitlines() == [run_dir]

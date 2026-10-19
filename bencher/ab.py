@@ -2,7 +2,7 @@
 
 ::
 
-    bencher ab [--base REF] [--out DIR] [--png-dir DIR] -- <command...>
+    bencher ab [--base REF] [--out DIR] [--png-dir DIR] [--images] -- <command...>
 
 The *base* side runs the command in a temporary, detached ``git worktree`` of the
 base revision; the *candidate* side runs it in the current working tree as it is,
@@ -25,6 +25,12 @@ The base revision is ``--base`` when given, else the merge-base of ``HEAD`` with
 ``--out`` (default ``./bencher-ab``) receives ``base.pkl``, ``candidate.pkl``,
 ``comparison.json``, the text-only ``evidence.md`` and each side's log.
 ``--png-dir DIR`` also writes one PNG per metric there, for local viewing.
+``--images`` draws an image of each metric whose image shows more than its text
+chart into ``images/`` under ``--out``, pushes the images and a CSV of the samples
+to ``refs/bencher/evidence`` on ``origin`` (see :mod:`bencher.evidence_ref`), and
+links each image above its text chart in ``evidence.md``. With no GitHub
+``origin`` or no push access, the images stay local, ``evidence.md`` stays text
+only, and one line on stderr says so; the exit status does not change.
 A metric that only one side declares is named in a warning on stderr and in
 ``evidence.md``; a claim on it is still judged.
 Exit status is 0 when both sides ran and were compared, whatever the verdict and
@@ -36,9 +42,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
+import secrets
 import subprocess
 import sys
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -52,7 +61,7 @@ from bencher.launch_env import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
 _DEFAULT_UPSTREAMS = ("origin/HEAD", "origin/main", "main")
 _LOG_TAIL_LINES = 20
@@ -264,12 +273,48 @@ def _parser() -> argparse.ArgumentParser:
         "--png-dir", metavar="DIR", help="Also write one PNG per metric here, for local viewing"
     )
     parser.add_argument(
+        "--images",
+        action="store_true",
+        help=(
+            "Also draw images, push them to refs/bencher/evidence on origin (no branch) "
+            "and link them in evidence.md"
+        ),
+    )
+    parser.add_argument(
         "--png-url-base",
         metavar="URL",
         help="Deprecated and ignored: evidence.md is text only and links no image",
     )
     parser.add_argument("command", nargs=argparse.REMAINDER, help="-- <command...>")
     return parser
+
+
+def _run_dir(candidate_revision: str) -> str:
+    """A directory name unique to this run: UTC time, candidate revision, random suffix."""
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    revision = re.sub(r"[^A-Za-z0-9._-]+", "-", candidate_revision)
+    return f"{stamp}-{revision}-{secrets.token_hex(3)}"
+
+
+def _image_publisher(
+    top: Path, run_dir: str, image_dir: Path
+) -> Callable[[dict[str, Path]], dict[str, str]]:
+    """Push the images to the evidence ref; on failure, say so on one line and link none."""
+    from bencher.evidence_ref import EvidencePublishError, publish_evidence
+
+    def publish(files: dict[str, Path]) -> dict[str, str]:
+        try:
+            return publish_evidence(top, files, run_dir=run_dir)
+        except EvidencePublishError as exc:
+            reason = " ".join(str(exc).split())
+            print(  # noqa: T201 - CLI output
+                f"bencher ab: images not linked ({reason}); they are in {image_dir} "
+                "and evidence.md is text only",
+                file=sys.stderr,
+            )
+            return {}
+
+    return publish
 
 
 def main(argv: list[str]) -> int:
@@ -282,6 +327,11 @@ def main(argv: list[str]) -> int:
 
     here = Path.cwd().resolve()
     out = Path(args.out).resolve()
+    if args.images and args.png_dir is not None and Path(args.png_dir).resolve() == out / "images":
+        parser.error(
+            f"--png-dir {args.png_dir} is where --images writes its PNGs under the same names; "
+            "give another --png-dir"
+        )
     try:
         top = Path(_git(["rev-parse", "--show-toplevel"], here)).resolve()
         base = resolve_base(args.base, top)
@@ -303,12 +353,23 @@ def main(argv: list[str]) -> int:
         print(f"bencher ab: {exc}", file=sys.stderr)  # noqa: T201 - CLI output
         return 2
 
-    from bencher.evidence import PNG_URL_BASE_FLAG_DEPRECATED, unpaired_warnings, write_evidence
+    from bencher.evidence import (
+        PNG_URL_BASE_FLAG_DEPRECATED,
+        ImageOutput,
+        unpaired_warnings,
+        write_evidence,
+    )
     from bencher.render import load_result
 
     if args.png_url_base is not None:
         print(f"bencher ab: warning: {PNG_URL_BASE_FLAG_DEPRECATED}", file=sys.stderr)  # noqa: T201 - CLI output
 
+    images = None
+    if args.images:
+        image_dir = out / "images"
+        images = ImageOutput(
+            image_dir, _image_publisher(top, _run_dir(candidate_revision), image_dir)
+        )
     try:
         files = write_evidence(
             load_result(base_pkl),
@@ -316,6 +377,7 @@ def main(argv: list[str]) -> int:
             json_path=out / "comparison.json",
             markdown_path=out / "evidence.md",
             png_dir=args.png_dir,
+            images=images,
         )
     except ValueError as exc:
         print(f"bencher ab: compare failed: {exc}", file=sys.stderr)  # noqa: T201 - CLI output
@@ -328,6 +390,7 @@ def main(argv: list[str]) -> int:
         files.json_path,
         files.markdown_path,
         *files.pngs.values(),
+        *files.images.values(),
     ):
         print(path)  # noqa: T201 - CLI output
     return 0
