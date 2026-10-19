@@ -29,7 +29,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, NoReturn
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
 
 # Top-level names of every package a full install has and a light install does not.
 # scipy and tornado are not declared by holobench, but come with what it declares
@@ -71,7 +71,7 @@ def _is_heavy(exc: ModuleNotFoundError) -> bool:
 
 
 @contextmanager
-def full_install_required() -> Iterator[None]:
+def full_install_required() -> Generator[None]:
     """Turn a missing heavy package, imported in the block, into a message that says how to get it."""
     try:
         yield

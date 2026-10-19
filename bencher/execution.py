@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Iterator, Mapping
+    from collections.abc import Collection, Generator, Mapping
 
 # The launcher is often not this process: a CI job or a wrapper script starts the
 # benchmark and is the only thing that knows which revision it checked out. These
@@ -127,7 +127,7 @@ def current_execution() -> Execution:
 
 
 @contextmanager
-def execution_context(**provenance: str | int | None) -> Iterator[Execution]:
+def execution_context(**provenance: str | int | None) -> Generator[Execution]:
     """Group collected sweeps into one new execution, including across configurations."""
     execution = Execution.start(**provenance)
     token = _CURRENT.set(execution)
@@ -138,7 +138,7 @@ def execution_context(**provenance: str | int | None) -> Iterator[Execution]:
 
 
 @contextmanager
-def execution_scope() -> Iterator[Execution]:
+def execution_scope() -> Generator[Execution]:
     """Start a runner execution unless its launcher already supplied one."""
     current = _CURRENT.get()
     if current is not None:

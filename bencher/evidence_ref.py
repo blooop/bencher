@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Generator, Mapping, Sequence
 
 EVIDENCE_REF = "refs/bencher/evidence"
 DEFAULT_ATTEMPTS = 5
@@ -162,7 +162,7 @@ def _remote_tip(source: str, ref: str, cwd: Path, env: Mapping[str, str]) -> str
 
 
 @contextmanager
-def _scratch_git_dir(cwd: Path) -> Iterator[dict[str, str]]:
+def _scratch_git_dir(cwd: Path) -> Generator[dict[str, str]]:
     """Env for git calls in a throwaway bare repo that reads the config of the one at *cwd*.
 
     The evidence commit is made and pushed from it, so the user's repo gets no ref,
