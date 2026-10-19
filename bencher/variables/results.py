@@ -389,14 +389,16 @@ class ResultImage(param.Filename):
 
 
 class ResultSVG(param.Filename):
-    """Path to an SVG file, drawn inline in the report.
+    """Path to an SVG file, drawn in the report as a base64 ``<img>``.
 
-    Inline rather than as an ``<img>``: the markup is then part of the page, so it
-    gzips with the page and any SMIL animation in it plays. It is a sibling of
-    ``ResultImage``, not a subclass, because the image paths assume a raster file
-    (a PNG pane, a PNG data URI in the over_time slider, moviepy frames in the video
-    summary, ``rr.EncodedImage`` in rerun). Give each SVG file unique ids: inlined
-    files share one document, so an ``href="#id"`` resolves across them.
+    A browser plays SMIL animation inside an ``<img>``, and each image is its own
+    document, so ids in one file cannot clash with another. Base64 rather than inline
+    markup: Panel HTML-escapes inline markup, which makes a raw page about 1.75x
+    larger, and inline saves only a few KiB per file once the page is gzipped.
+
+    It is a sibling of ``ResultImage``, not a subclass, because the image paths assume
+    a raster file (a PNG pane, a PNG data URI in the over_time slider, moviepy frames
+    in the video summary, ``rr.EncodedImage`` in rerun).
     """
 
     __slots__ = ["units", "max_time_events"]
@@ -418,8 +420,8 @@ class ResultSVG(param.Filename):
         return _hash_slots(self)
 
     def to_container(self) -> partial[pn.pane.SVG]:
-        """Return a partial that creates an inline (not base64-encoded) SVG pane."""
-        return partial(pn.pane.SVG, encode=False)
+        """Return a partial that creates a base64-encoded SVG pane."""
+        return partial(pn.pane.SVG, encode=True)
 
 
 class ResultString(param.String):

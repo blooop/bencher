@@ -172,7 +172,7 @@ Start from what your `benchmark()` method actually produces:
 | a fixed-size vector | `ResultVec` | [Result Vec: 1D input](reference/meta/result_types/result_vec/example_result_vec_1d) |
 | text | `ResultString` | [Result String: 1D input](reference/meta/result_types/result_string/example_result_string_1d) |
 | an image file path | `ResultImage` | [Result Image: 1D input](reference/meta/result_types/result_image/example_result_image_1d) |
-| an SVG file path, shown inline (animations play) | `ResultSVG` | [Cartesian Animation gallery](reference/meta/cartesian_animation/index) |
+| an SVG file path (SMIL animations play) | `ResultSVG` | [Cartesian Animation gallery](reference/meta/cartesian_animation/index) |
 | a video file path | `ResultVideo` | [Result Video: 1D input](reference/meta/result_types/result_video/example_result_video_1d) |
 | any other file path | `ResultPath` | [Result Path: 1D input](reference/meta/result_types/result_path/example_result_path_1d) |
 | a table or array payload | `ResultDataSet` | [Result DataSet: 1D input](reference/meta/result_types/result_dataset/example_result_dataset_1d) |
@@ -194,7 +194,7 @@ The full table, with what to assign in `benchmark()`:
 | `bn.ResultBool()` | Success/failure, pass/fail, any binary outcome | `self.success = True` |
 | `bn.ResultString()` | Text outputs, labels, error messages | `self.error_msg = "timeout"` |
 | `bn.ResultImage()` | Images, GIFs | `self.img = "/path/to/output.png"` |
-| `bn.ResultSVG()` | SVG drawings, SMIL animations — inlined, so they gzip with the page | `self.drawing = "/path/to/output.svg"` |
+| `bn.ResultSVG()` | SVG drawings and SMIL animations, kept out of the raster-only image paths | `self.drawing = "/path/to/output.svg"` |
 | `bn.ResultVideo()` | Videos | `self.vid = video_writer.write()` |
 | `bn.ResultPath()` | Downloadable file outputs | `self.artifact = "/path/to/file"` |
 | `bn.ResultContainer()` | Embeddable HTML/panel content | `self.widget = pane` |

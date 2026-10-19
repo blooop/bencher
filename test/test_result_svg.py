@@ -1,4 +1,4 @@
-"""ResultSVG: an SVG file path that the report draws inline, not as a base64 <img>."""
+"""ResultSVG: an SVG file path that the report draws as an SVG pane, never a raster one."""
 
 from __future__ import annotations
 
@@ -55,20 +55,20 @@ class TestResultSvgType:
         assert spec.is_panel
         assert spec.is_media
 
-    def test_container_inlines_the_markup(self, tmp_path):
+    def test_container_is_a_base64_svg_pane(self, tmp_path):
         path = tmp_path / "a.svg"
         path.write_text('<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>')
         pane = bn.ResultSVG().to_container()(str(path))
         assert isinstance(pane, pn.pane.SVG)
-        assert pane.encode is False
+        assert pane.encode is True
 
 
 class TestResultSvgInReport:
-    def test_each_sample_is_an_inline_svg_pane(self):
+    def test_each_sample_is_a_base64_svg_pane(self):
         panes = _sample_panes(_sweep())
         drawn = {p.object for p in panes}
         assert len(drawn) == 3
-        assert all(p.encode is False for p in panes)
+        assert all(p.encode is True for p in panes)
 
     def test_over_time_uses_the_generic_pane_layout(self):
         """Not ResultImage's slider, which labels every frame image/png."""
@@ -85,7 +85,7 @@ class TestResultSvgInReport:
             )
         panes = _sample_panes(bench)
         assert panes
-        assert all(p.encode is False for p in panes)
+        assert all(p.encode is True for p in panes)
 
     def test_video_summary_skips_it(self):
         """The video summary feeds images to moviepy, which cannot read SVG."""
@@ -96,13 +96,13 @@ class TestResultSvgInReport:
         assert summary is None or len(summary) == 0
 
 
-def test_describe_sweep_inlines_the_cartesian_animation():
-    """The sweep summary embeds the animation as markup, so it gzips with the page."""
+def test_describe_sweep_embeds_the_cartesian_animation_as_svg():
+    """The sweep summary shows the animation in an SVG pane, base64-encoded."""
     bench = _sweep()
     desc = bench.results[-1].bench_cfg.describe_sweep()
     panes = list(desc.select(pn.pane.SVG))
     assert len(panes) == 1
-    assert panes[0].encode is False
+    assert panes[0].encode is True
     assert str(panes[0].object).endswith(".svg")
 
 

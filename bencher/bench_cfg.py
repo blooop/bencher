@@ -1117,9 +1117,9 @@ class BenchCfg(BenchRunCfg):
             from pathlib import Path
 
             abs_path = str(Path(animation_path).resolve())
-            # Inline, not a base64 <img>: the markup then gzips with the page, and
-            # the per-file id prefix keeps several animations on one page apart.
-            parts.append(pn.pane.SVG(abs_path, width=350, encode=False))
+            # A base64 <img>, as for ResultSVG: SMIL still plays, and the raw page
+            # stays smaller than with Panel's HTML-escaped inline markup.
+            parts.append(pn.pane.SVG(abs_path, width=350, encode=True))
 
         parts.append(desc)
         return pn.Column(*parts)

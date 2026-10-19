@@ -750,8 +750,9 @@ def render_animation(
     for name, size in dims:
         logger.info("  %s: %d values", name, size)
 
-    # Ids are prefixed per file so that several animations inlined in one report
-    # page cannot resolve each other's ``<use href="#...">``.
+    # Ids are prefixed per file so that several animations inlined into one page
+    # (a report embeds them as images, but a user may inline them) cannot resolve
+    # each other's ``<use href="#...">``.
     id_prefix = "c" + hashlib.md5(filename.encode(), usedforsecurity=False).hexdigest()[:6] + "-"
     defs = SvgDefs(id_prefix)
     frames: list[str] = []  # markup of each frame
