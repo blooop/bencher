@@ -467,7 +467,7 @@ class TestSvgDocumentIds:
             ),
             tmp_path,
         )
-        ids = [el.get("id") for el in root.iter() if el.get("id")]
+        ids = [ref for el in root.iter() if (ref := el.get("id"))]
         assert len(ids) == len(set(ids))
         assert all(re.fullmatch(r"c[0-9a-f]{6}-[0-9a-f]+", i) for i in ids)
 
