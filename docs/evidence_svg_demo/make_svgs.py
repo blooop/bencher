@@ -25,6 +25,7 @@ import itertools
 import math
 import sys
 from pathlib import Path
+from statistics import NormalDist
 from typing import NamedTuple
 from xml.sax.saxutils import escape
 
@@ -180,6 +181,102 @@ def t_ci(log_diffs: list[float], t: float) -> tuple[float, float, float]:
     return m, m - h, m + h
 
 
+Z = NormalDist()
+Z90 = Z.inv_cdf(0.95)  # two-sided 90 %
+Z80 = Z.inv_cdf(0.80)  # 80 % power
+
+
+def bca(xs: list[float], boots: list[float], level: float = 0.90) -> tuple[float, float]:
+    """Return the BCa bootstrap interval of the mean of xs."""
+    est = mean(xs)
+    z0 = Z.inv_cdf(sum(b < est for b in boots) / len(boots))
+    jack = [(sum(xs) - x) / (len(xs) - 1) for x in xs]
+    jm = mean(jack)
+    num_ = sum((jm - j) ** 3 for j in jack)
+    den = 6 * sum((jm - j) ** 2 for j in jack) ** 1.5
+    acc = num_ / den
+    out = []
+    for q in ((1 - level) / 2, (1 + level) / 2):
+        zq = Z.inv_cdf(q)
+        out.append(quant(boots, Z.cdf(z0 + (z0 + zq) / (1 - acc * (z0 + zq)))))
+    return out[0], out[1]
+
+
+def wilson(k: int, n: int, z: float = Z90) -> tuple[float, float]:
+    p = k / n
+    c = (p + z * z / (2 * n)) / (1 + z * z / n)
+    h = z / (1 + z * z / n) * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))
+    return c - h, c + h
+
+
+def newcombe(k1: int, n1: int, k2: int, n2: int, z: float = Z90) -> tuple[float, float]:
+    """Return the Newcombe hybrid-score interval of p2 - p1."""
+    p1, p2 = k1 / n1, k2 / n2
+    (l1, u1), (l2, u2) = wilson(k1, n1, z), wilson(k2, n2, z)
+    d = p2 - p1
+    return (
+        d - math.sqrt((p2 - l2) ** 2 + (u1 - p1) ** 2),
+        d + math.sqrt((u2 - p2) ** 2 + (p1 - l1) ** 2),
+    )
+
+
+def barnard(k1: int, n1: int, k2: int, n2: int, grid: int = 2000) -> float:
+    """Return the two-sided p of Barnard's exact test (pooled z statistic)."""
+
+    def stat(a: int, b: int) -> float:
+        pp = (a + b) / (n1 + n2)
+        v = pp * (1 - pp) * (1 / n1 + 1 / n2)
+        return 0.0 if v == 0 else (b / n2 - a / n1) / math.sqrt(v)
+
+    t_obs = abs(stat(k1, k2))
+    extreme = [
+        (a, b) for a in range(n1 + 1) for b in range(n2 + 1) if abs(stat(a, b)) >= t_obs - 1e-12
+    ]
+    best = 0.0
+    for g in range(1, grid):
+        pi = g / grid
+        tot = sum(
+            math.comb(n1, a)
+            * pi**a
+            * (1 - pi) ** (n1 - a)
+            * math.comb(n2, b)
+            * pi**b
+            * (1 - pi) ** (n2 - b)
+            for a, b in extreme
+        )
+        best = max(best, tot)
+    return min(best, 1.0)
+
+
+def mde_prop(k: int, n: int) -> float:
+    """Return the smallest change in a rate that n runs per arm detect (80 % power)."""
+    p = k / n
+    return (Z90 + Z80) * math.sqrt(2 * p * (1 - p) / n)
+
+
+def wilcoxon_p(diffs: list[float]) -> float:
+    """Return the exact two-sided p of the Wilcoxon signed-rank test (no ties)."""
+    n = len(diffs)
+    ranks = {i: r + 1 for r, i in enumerate(sorted(range(n), key=lambda i: abs(diffs[i])))}
+    w = sum(ranks[i] for i in range(n) if diffs[i] > 0)
+    dist = [1] + [0] * (n * (n + 1) // 2)
+    for r in range(1, n + 1):
+        for t in range(len(dist) - 1, r - 1, -1):
+            dist[t] += dist[t - r]
+    tot = 2**n
+    lo, hi = sum(dist[: w + 1]) / tot, sum(dist[w:]) / tot
+    return min(1.0, 2 * min(lo, hi))
+
+
+def zero_fail_bound(n: int, alpha: float = 0.05) -> float:
+    """Return the exact one-sided upper bound on a rate after 0 events in n runs."""
+    return 1 - alpha ** (1 / n)
+
+
+def runs_for_bound(bound: float, alpha: float = 0.05) -> int:
+    return math.ceil(math.log(alpha) / math.log(1 - bound))
+
+
 class Pair(NamedTuple):
     shard: int
     idx: int
@@ -210,7 +307,7 @@ for _s in range(4):
 LOG_DIFF = [math.log(p.cand / p.base) for p in PAIRS]
 BOOTS = _boot(RNG, LOG_DIFF)
 EST = mean(LOG_DIFF)
-C90 = (quant(BOOTS, 0.05), quant(BOOTS, 0.95))
+C90 = bca(LOG_DIFF, BOOTS)
 MARGIN = math.log(1.05)
 
 # tracking_error_rms: a second paired metric on the same runs, with no real change
@@ -224,7 +321,55 @@ for _s in range(4):
 TRACK_LD = [math.log(p.cand / p.base) for p in TRACK]
 TRACK_BOOTS = _boot(_TR, TRACK_LD)
 TRACK_EST = mean(TRACK_LD)
-TRACK_C90 = (quant(TRACK_BOOTS, 0.05), quant(TRACK_BOOTS, 0.95))
+TRACK_C90 = bca(TRACK_LD, TRACK_BOOTS)
+
+# task_success counts passes, required_sigkill counts kills, each out of n runs
+TS_BASE, TS_CAND, TS_N = 17, 18, 18
+TS_DIFF = (TS_CAND - TS_BASE) / TS_N
+TS_CI = newcombe(TS_BASE, TS_N, TS_CAND, TS_N)
+TS_P = barnard(TS_BASE, TS_N, TS_CAND, TS_N)
+TS_MDE = mde_prop(TS_BASE, TS_N)
+SK_BASE, SK_CAND, SK_N = 4, 0, 30
+SK_BOUND = zero_fail_bound(SK_N)
+SK_RUNS = {b: runs_for_bound(b) for b in (0.05, 0.01)}
+WILCOXON_P = wilcoxon_p(LOG_DIFF)
+
+# G8: power with n unpaired runs per arm, for an assumed run-to-run SD (log scale)
+PW_N, PW_SD = 8, 0.07
+PW_MDE = (Z90 + Z80) * PW_SD * math.sqrt(2 / PW_N)
+PW_NEED = math.ceil(2 * ((Z90 + Z80) * PW_SD / MARGIN) ** 2)
+
+# G9: run order. Drift is the OLS slope of log value on run index inside each arm, after
+# each VM's own level is removed. The A/A band is an assumed noise floor, not measured.
+AA_BAND = 0.03
+RUNS: list[tuple[int, int, str, float]] = []  # (run index, VM, arm, value)
+for _p in PAIRS:
+    for _a in _p.order:
+        RUNS.append((len(RUNS), _p.shard, _a, _p.base if _a == "A" else _p.cand))
+
+
+def _slope(arm: str) -> tuple[float, float, float]:
+    pts = []
+    for vm in range(4):
+        rs = [(i, math.log(v)) for i, s_, a, v in RUNS if s_ == vm and a == arm]
+        m = mean([y for _, y in rs])
+        pts += [(i, y - m) for i, y in rs]
+    xm, ym = mean([x for x, _ in pts]), mean([y for _, y in pts])
+    sxx = sum((x - xm) ** 2 for x, _ in pts)
+    b = sum((x - xm) * (y - ym) for x, y in pts) / sxx
+    res = [y - ym - b * (x - xm) for x, y in pts]
+    se = math.sqrt(sum(r * r for r in res) / (len(pts) - 2 - 3) / sxx)  # 2 + 3 VM levels
+    t = 1.753  # t(0.95, 15): 20 runs less the slope and 4 VM levels
+    return b, b - t * se, b + t * se
+
+
+DRIFT = {arm: _slope(arm) for arm in "AB"}
+_vm_med = [quant([v for _, s_, a, v in RUNS if s_ == vm and a == "A"], 0.5) for vm in range(4)]
+VM2_SLOW = _vm_med[1] / quant([_vm_med[0], _vm_med[2], _vm_med[3]], 0.5) - 1
+
+TS_KIND = verdict(TS_CI[0], TS_CI[1], 0.05)  # ±5 pp margin
+TS_TXT = f"{fmt(TS_DIFF * 100)} pp"
+TS_CI_TXT = f"[{fmt(TS_CI[0] * 100)}, {fmt(TS_CI[1] * 100)}] pp"
 
 
 # ---------------------------------------------------------------- SVG primitives
@@ -633,14 +778,15 @@ def plate_g1() -> Plate:
     k_track = verdict(-TRACK_C90[1], -TRACK_C90[0], MARGIN)
     desc = (
         f"planning_time {fmt(pct(EST))} % (90 % CI {fmt(pct(C90[0]))} to {fmt(pct(C90[1]))}), "
-        f"improved; task_success 17/18 to 18/18, +5.6 pp, inconclusive; tracking_error_rms "
+        f"improved; task_success {TS_BASE}/{TS_N} to {TS_CAND}/{TS_N}, {TS_TXT}, inconclusive; "
+        f"tracking_error_rms "
         f"{fmt(pct(TRACK_EST))} %, no change. Paired ABBA, 20 pairs on 4 VMs."
     )
     pl = Plate(f"Planning is {abs(pct(EST)):.0f} % faster", 540, desc)
     cur = pl.cursor = Cursor(40)
     panels = [
         ("planning_time · s", f"{fmt(pct(EST))} %", k_plan, PAIRS, C90, EST),
-        ("task_success", "+5.6 pp", "unsure", None, None, None),
+        ("task_success", TS_TXT, TS_KIND, None, None, None),
         ("tracking_error · mm", f"{fmt(pct(TRACK_EST))} %", k_track, TRACK, TRACK_C90, TRACK_EST),
     ]
     for i, (name, big, kind, pairs, ci, est) in enumerate(panels):
@@ -678,20 +824,20 @@ def plate_g1() -> Plate:
 
 
 def _binary_panel(x0: float, x1: float, y0: float, y1: float) -> str:
-    """Draw task_success as one square per run: base 17/18, candidate 18/18."""
+    """Draw task_success as one square per run, a cross for each failure."""
     out = []
     size, gap = 18, 5
     px = x0 + 48
     wid = x1 - px
     for cx, n_fail, tok, name, count in (
-        (px + wid * 0.27, 1, "base", "base", "17/18"),
-        (px + wid * 0.6, 0, "cand", "candidate", "18/18"),
+        (px + wid * 0.27, TS_N - TS_BASE, "base", "base", f"{TS_BASE}/{TS_N}"),
+        (px + wid * 0.6, TS_N - TS_CAND, "cand", "candidate", f"{TS_CAND}/{TS_N}"),
     ):
         left = cx - (3 * size + 2 * gap) / 2
-        for i in range(18):
+        for i in range(TS_N):
             r, k = divmod(i, 3)
             x, y = left + k * (size + gap), y0 + 40 + r * (size + gap)
-            if i >= 18 - n_fail:
+            if i >= TS_N - n_fail:
                 cross = f"M{num(x + 4.5)} {num(y + 4.5)}l9 9m0 -9l-9 9"
                 out += [
                     rect(x, y, size, size, "f-plate s-worse", rx=3, stroke_width=2),
@@ -787,7 +933,15 @@ def plate_g2() -> Plate:
             [p.cand / bm for p in PAIRS],
             EST,
             C90,
-        )
+        ),
+        (
+            "tracking_error_rms",
+            "min",
+            [p.base / quant([q.base for q in TRACK], 0.5) for p in TRACK],
+            [p.cand / quant([q.base for q in TRACK], 0.5) for p in TRACK],
+            TRACK_EST,
+            TRACK_C90,
+        ),
     ]
     for name, d, e, (a0, a1) in spec:
         s = (a1 - a0) / 2 / 1.729 * math.sqrt(20)
@@ -795,6 +949,8 @@ def plate_g2() -> Plate:
         cand = [b * math.exp(e + s * rng.norm()) for b in base]
         m, lo_ci, hi_ci = t_ci([math.log(c / b) for b, c in zip(base, cand, strict=True)], 1.729)
         med = quant(base, 0.5)
+        if name == "tracking_error_rms":
+            continue  # drawn above from TRACK, as in G1; the draws keep the other rows' streams
         rows.append((name, d, [b / med for b in base], [c / med for c in cand], m, (lo_ci, hi_ci)))
     rows.sort(key=lambda r: r[4])
     kinds = [
@@ -985,8 +1141,9 @@ def plate_g4() -> Plate:
 
 def plate_g5() -> Plate:
     desc = (
-        "task_success 17/18 to 18/18: +5.6 pp, 90 % CI [−8.9, +25.8], inconclusive. "
-        "required_sigkill: base 4/30 killed, candidate 0/30, true rate at most 10 %: improved."
+        f"task_success {TS_BASE}/{TS_N} to {TS_CAND}/{TS_N}: {TS_TXT}, 90 % CI {TS_CI_TXT}, "
+        f"inconclusive. required_sigkill: base {SK_BASE}/{SK_N} killed, candidate "
+        f"{SK_CAND}/{SK_N}, true rate at most {SK_BOUND * 100:.1f} %: improved."
     )
     pl = Plate("Flake fixed; success still unclear", 340, desc)
 
@@ -1030,14 +1187,17 @@ def plate_g5() -> Plate:
     g, _ = glyph("unsure", 138, 120, 26)
     pl.add(
         text(20, 82, "task_success", "mono f-ink2"),
-        text(20, 120, "+5.6 pp", "f-ink bb", 28),
+        text(20, 120, TS_TXT, "f-ink bb", 28),
         g,
         text(20, 165, "base"),
         text(20, 215, "candidate"),
     )
-    waffle(110, 146, 18, 1, "base", 9, 18, set())
-    waffle(110, 196, 18, 0, "cand", 9, 18, {17})
-    pl.add(text(330, 165, "17/18", "mono f-muted"), text(330, 215, "18/18", "mono f-muted"))
+    waffle(110, 146, TS_N, TS_N - TS_BASE, "base", 9, 18, set())
+    waffle(110, 196, TS_N, TS_N - TS_CAND, "cand", 9, 18, {17})
+    pl.add(
+        text(330, 165, f"{TS_BASE}/{TS_N}", "mono f-muted"),
+        text(330, 215, f"{TS_CAND}/{TS_N}", "mono f-muted"),
+    )
 
     def sc(v: float) -> float:
         return 110 + (v + 0.3) / 0.6 * 220
@@ -1052,20 +1212,20 @@ def plate_g5() -> Plate:
             text(sc(v), 310, lab, "mono f-muted", FS, "middle"),
         )
     pl.add(
-        line(sc(-0.089), 271, sc(0.258), 271, "s-unsure", 5, stroke_linecap="round"),
-        circle(sc(0.056), 271, 6, "f-plate s-unsure", stroke_width=2.5),
+        line(sc(TS_CI[0]), 271, sc(TS_CI[1]), 271, "s-unsure", 5, stroke_linecap="round"),
+        circle(sc(TS_DIFF), 271, 6, "f-plate s-unsure", stroke_width=2.5),
     )
     fx = 420
-    g, _ = glyph("improved", fx + 212, 120, 26)
+    g, _ = glyph("improved", fx + 226, 120, 26)
     pl.add(
         text(fx, 82, "required_sigkill", "mono f-ink2"),
-        text(fx, 120, "13 % → ≤ 10 %", "f-ink bb", 28),
+        text(fx, 120, f"{SK_BASE / SK_N * 100:.0f} % → ≤ {SK_BOUND * 100:.1f} %", "f-ink bb", 28),
         g,
         text(fx, 165, "base"),
         text(fx, 215, "candidate"),
     )
-    waffle(fx + 90, 150, 30, 4, "base", 15, 14, set())
-    waffle(fx + 90, 200, 30, 0, "cand", 15, 14, {26, 27, 28, 29})
+    waffle(fx + 90, 150, SK_N, SK_BASE, "base", 15, 14, set())
+    waffle(fx + 90, 200, SK_N, SK_CAND, "cand", 15, 14, set(range(SK_N - SK_BASE, SK_N)))
     rx0, rx1 = fx + 90, 770
 
     def rs(v: float) -> float:
@@ -1074,9 +1234,10 @@ def plate_g5() -> Plate:
     pl.add(
         text(fx, 277, "runs"),
         rect(rx0, 266, rx1 - rx0, 10, "f-chip", rx=5),
-        rect(rx0, 266, rs(30) - rx0, 10, "f-cand", rx=5),
+        rect(rx0, 266, rs(SK_N) - rx0, 10, "f-cand", rx=5),
     )
-    for v, bound in ((59, "≤5 %"), (299, "≤1 %")):
+    for b, v in SK_RUNS.items():
+        bound = f"≤{b * 100:.0f} %"
         anchor = "middle" if v < 200 else "end"
         pl.add(
             line(rs(v), 258, rs(v), 284, "s-ink2", 1.5),
@@ -1226,6 +1387,7 @@ def plate_g7() -> Plate:
     n_un = sum(c[3] == "unsure" for c in cells)
     best = min(cells, key=lambda c: c[2])
     desc = (
+        f"Illustrative cell values from a formula, not simulated runs. "
         f"cycle_time % change over speed and payload, 20 cells, 6 paired repeats each: best "
         f"{fmt(best[2], 0)} % at {sp[best[1]]} m/s and {mass[best[0]]} kg; {n_un} cells "
         f"inconclusive."
@@ -1298,11 +1460,12 @@ def plate_g7() -> Plate:
 
 
 def plate_g8() -> Plate:
+    mde = pct(PW_MDE)
     desc = (
-        "Underpowered: n = 8 per arm can see 9.2 % or more; the claim needs 5 %. About 28 "
-        "runs per arm reach it."
+        f"Underpowered: n = {PW_N} per arm can see {mde:.1f} % or more; the claim needs 5 %. "
+        f"About {PW_NEED} runs per arm reach it."
     )
-    pl = Plate("Too few runs for ±5 %", 270, desc, ("unsure", "MDE 9.2 %"))
+    pl = Plate("Too few runs for ±5 %", 270, desc, ("unsure", f"MDE {mde:.1f} %"))
     x0, x1 = 40, 760
 
     def sc(p: float) -> float:
@@ -1311,30 +1474,34 @@ def plate_g8() -> Plate:
     pl.add(
         rect(x0, 96, x1 - x0, 24, "f-chip", rx=4),
         rect(x0, 96, sc(5) - x0, 24, "f-band s-bandEdge", rx=4),
-        rect(x0, 102, sc(9.2) - x0, 12, "f-unsure", rx=6),
+        rect(x0, 102, sc(mde) - x0, 12, "f-unsure", rx=6),
         # more runs close this gap: dashes flow from the MDE toward the margin
-        line(sc(9.2) - 6, 108, sc(5) + 3, 108, "s-plate flow overlay", 2.5),
+        line(sc(mde) - 6, 108, sc(5) + 3, 108, "s-plate flow overlay", 2.5),
         line(sc(5), 88, sc(5), 128, "s-ink", 2.5),
         text(sc(5), 82, "±Δ", "f-ink b", FS, "middle"),
-        text(sc(9.2), 82, "MDE", "f-ink b", FS, "middle"),
+        text(sc(mde), 82, "MDE", "f-ink b", FS, "middle"),
         *(text(sc(p), 146, f"{p} %", "mono f-muted", FS, "middle") for p in range(0, 15, 2)),
         text(x0, 196, "now"),
         text(x0, 232, "needed"),
     )
-    for i in range(28):
+    for i in range(PW_NEED):
         x = 130 + i * 20
-        if i < 8:
+        if i < PW_N:
             pl.add(rect(x, 182, 16, 16, "f-cand", rx=2), rect(x, 218, 16, 16, "f-cand", rx=2))
         else:
             pl.add(rect(x + 1, 219, 14, 14, "s-cand", rx=2, fill="none", stroke_width=2))
-    pl.add(text(296, 196, "8", "mono f-muted"), text(696, 232, "28", "mono f-muted"))
+    pl.add(
+        text(130 + PW_N * 20 + 6, 196, str(PW_N), "mono f-muted"),
+        text(130 + PW_NEED * 20 + 6, 232, str(PW_NEED), "mono f-muted"),
+    )
     return pl
 
 
 def plate_g9() -> Plate:
     desc = (
-        "planning_time against run order, 40 runs on 4 VMs, with the A/A noise floor (±3 %). "
-        "No slope inside an arm, so no drift."
+        f"planning_time against run order, 40 runs on 4 VMs, with an assumed A/A noise floor "
+        f"(±{AA_BAND * 100:.0f} %). Slope per run: base {fmt(pct(DRIFT['A'][0]), 2)} %, "
+        f"candidate {fmt(pct(DRIFT['B'][0]), 2)} %."
     )
     pl = Plate("No drift across run order", 340, desc)
     pl.legend = True
@@ -1352,7 +1519,7 @@ def plate_g9() -> Plate:
             text(x0 - 8, ys(v) + 5, f"{v:.1f}", "mono f-muted", FS, "end"),
         )
     med = quant([p.base for p in PAIRS], 0.5)
-    top, bot = ys(med * 1.03), ys(med * 0.97)
+    top, bot = ys(med * (1 + AA_BAND)), ys(med * (1 - AA_BAND))
     pl.add(rect(x0, top, x1 - x0, bot - top, "f-band s-bandEdge", stroke_width=2))
     i = 0
     for p in PAIRS:
@@ -1459,7 +1626,32 @@ PLATES = {
 }
 
 
+def facts() -> dict[str, str]:
+    """Return every number that the PR captions quote, from the same data as the plates."""
+    p = pct
+    return {
+        "planning_time": f"{fmt(p(EST))} % 90% BCa [{fmt(p(C90[0]))}, {fmt(p(C90[1]))}]",
+        "pairs_faster": f"{sum(q.cand < q.base for q in PAIRS)}/{len(PAIRS)}",
+        "wilcoxon_p": f"{WILCOXON_P:.2g}",
+        "tracking_error": f"{fmt(p(TRACK_EST))} % 90% BCa [{fmt(p(TRACK_C90[0]))}, "
+        f"{fmt(p(TRACK_C90[1]))}]",
+        "task_success": f"{TS_TXT} Newcombe 90% {TS_CI_TXT} Barnard p={TS_P:.2f} "
+        f"MDE={TS_MDE * 100:.0f} pp {TS_KIND}",
+        "sigkill": f"{SK_BASE}/{SK_N}->{SK_CAND}/{SK_N} bound {SK_BOUND * 100:.1f} % runs {SK_RUNS}",
+        "power": f"n={PW_N} sd={PW_SD} MDE={pct(PW_MDE):.1f} % need={PW_NEED}",
+        "drift": "; ".join(
+            f"{a} {fmt(p(b), 2)} [{fmt(p(lo), 2)}, {fmt(p(hi), 2)}] %/run"
+            for a, (b, lo, hi) in DRIFT.items()
+        ),
+        "vm2_slow": f"{VM2_SLOW * 100:.0f} %",
+    }
+
+
 def main() -> None:
+    if "--facts" in sys.argv:
+        for k, v in facts().items():
+            sys.stdout.write(f"{k}: {v}\n")
+        return
     # G4 draws from the shared RNG stream after the planning_time bootstrap.
     for name, make in PLATES.items():
         (OUT / name).write_text(make().render(), encoding="utf-8")
