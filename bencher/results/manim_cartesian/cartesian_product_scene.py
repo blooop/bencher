@@ -1,22 +1,28 @@
-"""Dimensional extrusion animation using PIL.
+"""Dimensional extrusion animation, drawn as an animated SVG.
 
 Shows how each dimension builds on the last:
     point --dim1--> line --dim2--> grid --dim3--> stack
     --repeat--> extrude --over_time--> film strip
     --dim4+--> sets of sets ...
 
-Renders frames directly with PIL (fast), saves as animated PNG (APNG).
+Each frame is drawn as vector markup; repeated sub-shapes are defined once and
+reused, and a SMIL ``<animate>`` per frame plays them in a loop (see ``svg_canvas``).
 """
 
 from __future__ import annotations
 
-import functools
+import hashlib
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PIL import Image, ImageDraw, ImageFont
+from bencher.results.manim_cartesian.svg_canvas import (
+    SvgCanvas,
+    SvgDefs,
+    animated_svg,
+    content_key,
+)
 
 if TYPE_CHECKING:
     from bencher.results.manim_cartesian.cartesian_product_cfg import CartesianProductCfg
@@ -53,32 +59,23 @@ GROUP_GAP = 20
 GAP = "..."
 
 
-def render_shape_to_image(
-    shape: Shape,
-    target_w: int,
-    target_h: int,
-    bg_color: tuple[int, int, int] = BG_COLOR,
-    alpha: float = 1.0,
-) -> Image.Image:
-    """Render `shape` into an offscreen image scaled to fit target_w x target_h.
-
-    The returned image is at most target_w x target_h and centered content-wise.
-    """
+def _fit_scale(shape: Shape, target_w: int, target_h: int) -> float:
+    """Scale that fits ``shape`` inside ``target_w`` x ``target_h``, never enlarging it."""
     sw, sh = shape.size()
-    sw = max(sw, 1)
-    sh = max(sh, 1)
+    return min(target_w / max(sw, 1), target_h / max(sh, 1), 1.0)
 
-    scale = min(target_w / sw, target_h / sh, 1.0)
-    base = Image.new("RGB", (sw, sh), bg_color)
-    draw = ImageDraw.Draw(base)
-    shape.draw(draw, 0, 0, alpha)
 
-    if scale < 1.0:
-        new_w = max(1, int(sw * scale))
-        new_h = max(1, int(sh * scale))
-        base = base.resize((new_w, new_h), Image.Resampling.LANCZOS)
-
-    return base
+def place_shape(
+    canvas: SvgCanvas, shape: Shape, x: float, y: float, alpha: float = 1.0, scale: float = 1.0
+) -> None:
+    """Draw ``shape`` at ``(x, y)`` as a shared definition, so identical copies cost one ``<use>``."""
+    canvas.place(
+        content_key(shape.key(), round(alpha, 4)),
+        lambda c: shape.draw(c, 0, 0, alpha),
+        x,
+        y,
+        scale,
+    )
 
 
 def _generate_unique_filename(cfg: CartesianProductCfg, width: int, height: int) -> str:
@@ -88,21 +85,7 @@ def _generate_unique_filename(cfg: CartesianProductCfg, width: int, height: int)
     dims_str = "_".join(dim_names) if dim_names else "empty"
 
     # Include resolution for uniqueness
-    return f"cartesian_{dims_str}_{width}x{height}.png"
-
-
-@functools.lru_cache(maxsize=8)
-def _get_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    """Get a font, falling back to default if no TTF available."""
-    try:
-        return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
-    except OSError:
-        try:
-            return ImageFont.truetype(
-                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", size
-            )
-        except OSError:
-            return ImageFont.load_default()
+    return f"cartesian_{dims_str}_{width}x{height}.svg"
 
 
 class Shape(ABC):
@@ -145,8 +128,16 @@ class Shape(ABC):
         """Return (width, height) in pixels."""
 
     @abstractmethod
-    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0) -> None:
-        """Draw this shape at position (x, y) on the image."""
+    def draw(self, canvas: SvgCanvas, x: int, y: int, alpha: float = 1.0) -> None:
+        """Draw this shape at position (x, y) on the canvas."""
+
+    @abstractmethod
+    def key(self) -> str:
+        """Name this shape by what it draws: equal keys draw identical markup.
+
+        The SVG writer defines each key once and reuses it, which is what keeps an
+        extrusion of N identical copies at one definition plus N ``<use>`` lines.
+        """
 
     @abstractmethod
     def deep_copy(self) -> Shape: ...
@@ -174,11 +165,14 @@ class Cell(Shape):
     def size(self) -> tuple[int, int]:
         return (CELL_SIZE, CELL_SIZE)
 
-    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0) -> None:
+    def draw(self, canvas: SvgCanvas, x: int, y: int, alpha: float = 1.0) -> None:
         base = DIM_PALETTE[self.color_index % len(DIM_PALETTE)]
         color = tuple(int(c * alpha) for c in base)
         border = tuple(int(c * alpha) for c in CELL_BORDER)
-        img.rectangle([x, y, x + CELL_SIZE, y + CELL_SIZE], fill=color, outline=border)
+        canvas.rectangle([x, y, x + CELL_SIZE, y + CELL_SIZE], fill=color, outline=border)
+
+    def key(self) -> str:
+        return content_key("cell", self.color_index)
 
     def deep_copy(self) -> Cell:
         return Cell(color_index=self.color_index)
@@ -206,6 +200,7 @@ class Group(Shape):
         # theirs from fixed chrome. Previously this lived on the shared base, where the
         # three subclasses that never read it still carried the slot.
         self._cached_size: tuple[int, int] | None = None
+        self._cached_key: str | None = None
 
     def size(self) -> tuple[int, int]:
         """Return (width, height) in pixels.  Cached — tree structure is immutable."""
@@ -228,7 +223,7 @@ class Group(Shape):
         self._cached_size = result
         return result
 
-    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0) -> None:
+    def draw(self, canvas: SvgCanvas, x: int, y: int, alpha: float = 1.0) -> None:
         """Draw this shape at position (x, y) on the image."""
         if self.direction == "stack":
             # Isometric 3D stack: back layers at top-right, front at bottom-left.
@@ -238,19 +233,27 @@ class Group(Shape):
                 cx = x + (n - 1 - i) * DEPTH_DX
                 cy = y + i * abs(DEPTH_DY)
                 dim_factor = 0.5 + 0.5 * i / max(n - 1, 1)
-                self.children[i].draw(img, cx, cy, alpha * dim_factor)
+                place_shape(canvas, self.children[i], cx, cy, alpha * dim_factor)
             return
         g = self.gap
         if self.direction == "right":
             cx = x
             for child in self.children:
-                child.draw(img, cx, y, alpha)
+                place_shape(canvas, child, cx, y, alpha)
                 cx += child.size()[0] + g
         else:  # down
             cy = y
             for child in self.children:
-                child.draw(img, x, cy, alpha)
+                place_shape(canvas, child, x, cy, alpha)
                 cy += child.size()[1] + g
+
+    def key(self) -> str:
+        """Cached like ``size()``: the tree is immutable once built."""
+        if self._cached_key is None:
+            self._cached_key = content_key(
+                "group", self.direction, self.depth, tuple(c.key() for c in self.children)
+            )
+        return self._cached_key
 
     def deep_copy(self) -> Group:
         return Group(
@@ -290,10 +293,10 @@ FILM_FRAME_PAD = 10  # padding inside each frame around the shape
 FILM_FRAME_GAP = 16  # gap between frames
 FILM_SPROCKET_W = 8  # narrow
 FILM_SPROCKET_H = 14  # tall — real film sprockets are taller than wide
-FILM_SPROCKET_R = 2  # corner radius
 FILM_SPROCKET_SPACING = 14  # closely spaced like real film
 FILM_SPROCKET_MARGIN = 4  # small gap between sprocket row and frames
 FILM_LABEL_H = 18  # space for frame labels below strip
+FILM_LABEL_SIZE = 12  # font size of the t=N frame labels
 
 
 class TimelineShape(Shape):
@@ -338,107 +341,108 @@ class TimelineShape(Shape):
         )
         return (total_w, total_h)
 
-    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0) -> None:
+    def draw(self, canvas: SvgCanvas, x: int, y: int, alpha: float = 1.0) -> None:
         frame_w, frame_h = self._outer_frame_size()
         total_w, total_h = self.size()
         strip_h = total_h - FILM_LABEL_H
 
         # --- Film strip background ---
-        img.rounded_rectangle(
+        canvas.rectangle(
             [x, y, x + total_w, y + strip_h], radius=4, fill=FILM_COLOR, outline=FILM_EDGE
         )
 
         # --- Sprocket holes (top and bottom) ---
         sprocket_y_top = y + FILM_PAD
         sprocket_y_bot = y + strip_h - FILM_PAD - FILM_SPROCKET_H
-        self._draw_sprockets(img, x, sprocket_y_top, total_w)
-        self._draw_sprockets(img, x, sprocket_y_bot, total_w)
+        self._draw_sprockets(canvas, x, sprocket_y_top, total_w)
+        self._draw_sprockets(canvas, x, sprocket_y_bot, total_w)
 
-        # --- Pre-render inner shape once, then paste into each frame ---
-        # Pre-render inner shape once, scaled to frame window
-        inner_img = render_shape_to_image(self.inner, self.FRAME_W, self.FRAME_H, BG_COLOR, alpha)
-        scaled_w, scaled_h = inner_img.size
-
-        # Need the underlying PIL Image (not ImageDraw) for pasting
-        base_img: Image.Image = img._image  # noqa: SLF001 - ImageDraw has no public accessor for its image
-
+        # --- One film frame (cutout + inner shape scaled to the window), reused per step ---
         frames_y = y + FILM_PAD + FILM_SPROCKET_H + FILM_SPROCKET_MARGIN
-        font_label = _get_font(12)
+        frame_key = content_key("film-frame", self.inner.key(), round(alpha, 4))
+
+        def draw_frame(c: SvgCanvas) -> None:
+            c.rectangle(
+                [0, 0, frame_w, frame_h], radius=2, fill=BG_COLOR, outline=FILM_FRAME_BORDER
+            )
+            scale = _fit_scale(self.inner, self.FRAME_W, self.FRAME_H)
+            sw, sh = self.inner.size()
+            scaled_w, scaled_h = max(1, int(sw * scale)), max(1, int(sh * scale))
+            place_shape(
+                c,
+                self.inner,
+                FILM_FRAME_PAD + (self.FRAME_W - scaled_w) // 2,
+                FILM_FRAME_PAD + (self.FRAME_H - scaled_h) // 2,
+                alpha,
+                scale,
+            )
 
         for i in range(self.count):
             fx = x + FILM_PAD + i * (frame_w + FILM_FRAME_GAP)
-
-            # Frame cutout
-            img.rounded_rectangle(
-                [fx, frames_y, fx + frame_w, frames_y + frame_h],
-                radius=2,
-                fill=BG_COLOR,
-                outline=FILM_FRAME_BORDER,
-            )
-
-            # Paste inner shape centered in the frame window
-            cx = fx + FILM_FRAME_PAD + (self.FRAME_W - scaled_w) // 2
-            cy = frames_y + FILM_FRAME_PAD + (self.FRAME_H - scaled_h) // 2
-            base_img.paste(inner_img, (cx, cy))
+            canvas.place(frame_key, draw_frame, fx, frames_y)
 
             # Frame number label below the strip (skipped when drawn as fixed-size overlay)
             if not self._skip_labels:
-                label = f"t={i + 1}"
-                bbox = img.textbbox((0, 0), label, font=font_label)
-                tw = bbox[2] - bbox[0]
-                lx = fx + (frame_w - tw) // 2
-                img.text((lx, y + strip_h + 2), label, fill=FILM_LABEL_COLOR, font=font_label)
+                canvas.text(
+                    fx + frame_w / 2,
+                    y + strip_h + 2,
+                    f"t={i + 1}",
+                    FILM_LABEL_SIZE,
+                    FILM_LABEL_COLOR,
+                )
 
     @staticmethod
-    def _draw_sprockets(img: ImageDraw.ImageDraw, strip_x: int, row_y: int, strip_w: int) -> None:
-        """Draw a row of rounded sprocket holes across the strip width."""
+    def _draw_sprockets(canvas: SvgCanvas, strip_x: int, row_y: int, strip_w: int) -> None:
+        """Draw a row of sprocket holes across the strip width.
+
+        The row is one thick dashed line -- each dash is a hole -- rather than one
+        rectangle per hole: a 30-step strip has hundreds of holes per row.
+        """
         margin = FILM_PAD + 6
         avail = strip_w - 2 * margin
         n = max(1, int(avail / FILM_SPROCKET_SPACING))
         actual_spacing = avail / max(n, 1)
 
-        for j in range(n + 1):
-            sx = strip_x + margin + j * actual_spacing - FILM_SPROCKET_W // 2
-            img.rounded_rectangle(
-                [sx, row_y, sx + FILM_SPROCKET_W, row_y + FILM_SPROCKET_H],
-                radius=FILM_SPROCKET_R,
-                fill=BG_COLOR,
-            )
+        first_x = strip_x + margin - FILM_SPROCKET_W // 2
+        mid_y = row_y + FILM_SPROCKET_H / 2
+        canvas.line(
+            [first_x, mid_y, first_x + n * actual_spacing + FILM_SPROCKET_W, mid_y],
+            fill=BG_COLOR,
+            width=FILM_SPROCKET_H,
+            dash=(FILM_SPROCKET_W, actual_spacing - FILM_SPROCKET_W),
+        )
 
     def strip_size(self) -> tuple[int, int]:
         """Size of the film strip excluding the label row below."""
         w, h = self.size()
         return (w, h - FILM_LABEL_H)
 
-    def draw_without_labels(self, img: ImageDraw.ImageDraw, x: int, y: int) -> None:
+    def draw_without_labels(self, canvas: SvgCanvas, x: int, y: int) -> None:
         """Draw the film strip without frame labels, preserving previous state."""
         prev = self._skip_labels
         self._skip_labels = True
         try:
-            self.draw(img, x, y)
+            self.draw(canvas, x, y)
         finally:
             self._skip_labels = prev
 
-    def render_strip_image(self, v_scale: float = 1.0) -> Image.Image:
-        """Render the strip (without labels) into an offscreen image.
+    def draw_strip(self, canvas: SvgCanvas, x: float, y: float, v_scale: float = 1.0) -> None:
+        """Draw the strip (without labels) at ``(x, y)``, uniformly scaled by ``v_scale``.
 
-        The strip is drawn at full resolution and then uniformly scaled by
-        *v_scale* (typically chosen to fit the canvas height).  The returned
-        image can be pasted directly — PIL clips any overflow naturally.
+        *v_scale* is typically chosen to fit the canvas height; whatever runs past
+        the canvas edge is clipped by the SVG viewport.
         """
-        sw, sh = self.strip_size()
-        strip = Image.new("RGB", (sw, sh), BG_COLOR)
-        draw = ImageDraw.Draw(strip)
-        self.draw_without_labels(draw, 0, 0)
-        if v_scale < 1.0:
-            new_w = max(1, int(sw * v_scale))
-            new_h = max(1, int(sh * v_scale))
-            strip = strip.resize((new_w, new_h), Image.Resampling.LANCZOS)
-        return strip
+        canvas.place(
+            content_key("strip", self.key()),
+            lambda c: self.draw_without_labels(c, 0, 0),
+            x,
+            y,
+            v_scale,
+        )
 
     def draw_label_overlay_for_viewport(
         self,
-        img: ImageDraw.ImageDraw,
+        canvas: SvgCanvas,
         strip_x: int,
         strip_y: int,
         strip_h: int,
@@ -446,7 +450,6 @@ class TimelineShape(Shape):
         canvas_w: int,
     ) -> None:
         """Draw frame labels at fixed pixel size for frames visible on canvas."""
-        font_label = _get_font(12)
         frame_w, _ = self._outer_frame_size()
         label_y = strip_y + strip_h + 2
         for i in range(self.count):
@@ -455,15 +458,10 @@ class TimelineShape(Shape):
             center = fx + scaled_fw / 2
             if center < 0 or center > canvas_w:
                 continue
-            label = f"t={i + 1}"
-            bbox = img.textbbox((0, 0), label, font=font_label)
-            tw = bbox[2] - bbox[0]
-            img.text(
-                (int(fx + (scaled_fw - tw) / 2), label_y),
-                label,
-                fill=FILM_LABEL_COLOR,
-                font=font_label,
-            )
+            canvas.text(center, label_y, f"t={i + 1}", FILM_LABEL_SIZE, FILM_LABEL_COLOR)
+
+    def key(self) -> str:
+        return content_key("timeline", self.inner.key(), self.count, self._skip_labels)
 
     def deep_copy(self) -> TimelineShape:
         return TimelineShape(self.inner.deep_copy(), self.count)
@@ -510,7 +508,7 @@ class StrobeShape(Shape):
         total_h = ih + 2 * c.strobe_pad + c.strobe_mark_row_h
         return (total_w, total_h)
 
-    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0) -> None:
+    def draw(self, canvas: SvgCanvas, x: int, y: int, alpha: float = 1.0) -> None:
         c = self.cfg
         iw, ih = self.inner.size()
         total_w, total_h = self.size()
@@ -518,7 +516,7 @@ class StrobeShape(Shape):
 
         # Border — static (no flash)
         border_color = tuple(int(v * 0.25 * alpha) for v in c.strobe_color)
-        img.rounded_rectangle(
+        canvas.rectangle(
             [x, y, x + total_w, y + box_h],
             radius=c.strobe_border_radius,
             outline=border_color,
@@ -528,28 +526,26 @@ class StrobeShape(Shape):
         # Inner shape
         ix = x + (total_w - iw) // 2
         iy = y + (box_h - ih) // 2
-        self.inner.draw(img, ix, iy, alpha)
+        place_shape(canvas, self.inner, ix, iy, alpha)
 
-        # Gentle gray wash on flash
+        # Gentle gray wash on flash: a translucent box over everything drawn so far
         if self.flash > FLASH_WASH_THRESHOLD:
-            fill_alpha = self.flash * 0.08
-            overlay = Image.new("RGB", (total_w, box_h), c.strobe_color)
-            base_img = img._image  # noqa: SLF001 - ImageDraw has no public accessor for its image
-            # Crop the region, blend with overlay, then paste back
-            region = base_img.crop((x, y, x + total_w, y + box_h))
-            blended = Image.blend(region, overlay, fill_alpha)
-            base_img.paste(blended, (x, y))
+            canvas.rectangle(
+                [x, y, x + total_w - 1, y + box_h - 1],
+                fill=c.strobe_color,
+                opacity=self.flash * 0.08,
+            )
 
         # Tally marks + count label below (skipped when drawn as fixed-size overlay)
         if not self._skip_tally:
             marks_y = y + box_h + 6
             mark_color = tuple(int(v * alpha) for v in c.strobe_color)
             avail_w = total_w - 2 * c.strobe_pad
-            self._draw_tally(img, x + c.strobe_pad, marks_y, avail_w, mark_color, c)
+            self._draw_tally(canvas, x + c.strobe_pad, marks_y, avail_w, mark_color, c)
 
     def _draw_tally(
         self,
-        img: ImageDraw.ImageDraw,
+        canvas: SvgCanvas,
         mx0: int,
         my: int,
         avail_w: int,
@@ -568,7 +564,7 @@ class StrobeShape(Shape):
         group_size = 5
         group_gap = c.strobe_mark_gap * 3
 
-        font = _get_font(c.strobe_mark_row_h - 2)
+        font_size = c.strobe_mark_row_h - 2
         one_group_w = (group_size - 1) * stride + mark_w
 
         # Check if all tallies fit
@@ -587,12 +583,12 @@ class StrobeShape(Shape):
             cx = mx0
             for i in range(self.count):
                 group_idx = i % group_size
-                img.rectangle([cx, my, cx + mark_w, my + mark_h], fill=color)
+                canvas.rectangle([cx, my, cx + mark_w, my + mark_h], fill=color)
                 if group_idx == group_size - 1:
                     group_x0 = cx - (group_size - 1) * stride
                     overshoot = stride // 2
                     inset = mark_h // 5
-                    img.line(
+                    canvas.line(
                         [
                             group_x0 - overshoot,
                             my + mark_h - inset,
@@ -607,11 +603,7 @@ class StrobeShape(Shape):
                     cx += stride
         else:
             # Too many — just show the number, centered
-            label = f"x{self.count}"
-            bbox = img.textbbox((0, 0), label, font=font)
-            tw = bbox[2] - bbox[0]
-            lx = mx0 + (avail_w - tw) // 2
-            img.text((lx, my - 1), label, fill=color, font=font)
+            canvas.text(mx0 + avail_w / 2, my - 1, f"x{self.count}", font_size, color)
 
     def content_box_size(self) -> tuple[int, int]:
         """Size of border + inner shape, excluding the tally mark row."""
@@ -619,25 +611,25 @@ class StrobeShape(Shape):
         c = self.cfg
         return (iw + 2 * c.strobe_pad, ih + 2 * c.strobe_pad)
 
-    def draw_without_tally(self, img: ImageDraw.ImageDraw, x: int, y: int) -> None:
+    def draw_without_tally(self, canvas: SvgCanvas, x: int, y: int) -> None:
         """Draw the shape without tallies, preserving previous state."""
         prev = self._skip_tally
         self._skip_tally = True
         try:
-            self.draw(img, x, y)
+            self.draw(canvas, x, y)
         finally:
             self._skip_tally = prev
 
     def draw_tally_overlay(
-        self, img: ImageDraw.ImageDraw, anchor_x: int, anchor_y: int, avail_w: int
+        self, canvas: SvgCanvas, anchor_x: int, anchor_y: int, avail_w: int
     ) -> None:
         """Draw tally marks at fixed pixel size on the final frame."""
         c = self.cfg
         mark_color = tuple(int(v) for v in c.strobe_color)
-        self._draw_tally(img, anchor_x, anchor_y, avail_w, mark_color, c)
+        self._draw_tally(canvas, anchor_x, anchor_y, avail_w, mark_color, c)
 
     def draw_tally_overlay_for_box(
-        self, img: ImageDraw.ImageDraw, box_x: int, box_y: int, box_w: int, box_h: int
+        self, canvas: SvgCanvas, box_x: int, box_y: int, box_w: int, box_h: int
     ) -> None:
         """Draw fixed-size tally overlay below a rendered box.
 
@@ -651,7 +643,24 @@ class StrobeShape(Shape):
         tally_y = box_y + box_h + v_gap
         tally_avail_w = max(box_w - tally_margin, tally_min_w)
         tally_x = box_x + (box_w - tally_avail_w) // 2
-        self.draw_tally_overlay(img, tally_x, tally_y, tally_avail_w)
+        self.draw_tally_overlay(canvas, tally_x, tally_y, tally_avail_w)
+
+    def key(self) -> str:
+        c = self.cfg
+        return content_key(
+            "strobe",
+            self.inner.key(),
+            self.count,
+            self.flash > FLASH_WASH_THRESHOLD and round(self.flash, 4),
+            self._skip_tally,
+            c.strobe_color,
+            c.strobe_pad,
+            c.strobe_mark_size,
+            c.strobe_mark_gap,
+            c.strobe_mark_row_h,
+            c.strobe_border_radius,
+            c.strobe_base_border_w,
+        )
 
     def deep_copy(self) -> StrobeShape:
         return StrobeShape(self.inner.deep_copy(), self.count, self.cfg, self.flash)
@@ -682,18 +691,18 @@ def render_animation(
     cfg : CartesianProductCfg
         Sweep configuration.
     width, height : int
-        Video resolution.
+        Canvas size in pixels.
     fps : int
-        Frames per second.
+        Frame rate the timings are counted in.
     step_frames : int
         Frames to show each extrusion step (per sub-copy).
     output_dir : str
-        Directory for the output video.
+        Directory for the output SVG.
 
     Returns:
     -------
     str
-        Path to the output animation file.
+        Path to the output animated SVG.
     """
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -717,10 +726,11 @@ def render_animation(
     for name, size in dims:
         logger.info("  %s: %d values", name, size)
 
-    font_large = _get_font(24)
-    font_small = _get_font(14)
-
-    frames: list[Image.Image] = []
+    # Ids are prefixed per file so that several animations inlined in one report
+    # page cannot resolve each other's ``<use href="#...">``.
+    id_prefix = "c" + hashlib.md5(filename.encode(), usedforsecurity=False).hexdigest()[:6] + "-"
+    defs = SvgDefs(id_prefix)
+    frames: list[str] = []  # markup of each frame
     durations: list[int] = []  # per-frame duration in ms
     frame_duration_ms = 1000 // fps
 
@@ -737,7 +747,7 @@ def render_animation(
         """Render one frame. Text is persistent — only updates when new values given.
 
         x_offset shifts the shape horizontally (positive = right). Parts that
-        fall outside the canvas are clipped naturally by PIL.
+        fall outside the canvas are clipped by the SVG viewport.
         """
         nonlocal current_dim_label, current_count_label
         if dim_label is not None:
@@ -745,8 +755,7 @@ def render_animation(
         if count_label is not None:
             current_count_label = count_label
 
-        img = Image.new("RGB", (width, height), BG_COLOR)
-        draw = ImageDraw.Draw(img)
+        canvas = SvgCanvas(defs)
 
         # Reserve top 55px for text
         shape_area_top = 55
@@ -763,9 +772,8 @@ def render_animation(
             avail_w = width - 40
             avail_h = height - shape_area_top - 10 - FILM_LABEL_H
             v_scale = min(avail_h / max(sh, 1), 1.0)
-
-            strip_img = shape.render_strip_image(v_scale)
-            rendered_w, rendered_h = strip_img.size
+            rendered_w = max(1, int(sw * v_scale))
+            rendered_h = max(1, int(sh * v_scale))
 
             # Center if fits, right-align if wider (show last frame)
             if rendered_w <= avail_w:
@@ -773,12 +781,12 @@ def render_animation(
             else:
                 nominal_x = width - 20 - rendered_w
 
-            paste_x = nominal_x + x_offset
-            paste_y = shape_area_top + (avail_h - rendered_h) // 2
-            img.paste(strip_img, (paste_x, paste_y))
+            strip_x = nominal_x + x_offset
+            strip_y = shape_area_top + (avail_h - rendered_h) // 2
+            shape.draw_strip(canvas, strip_x, strip_y, v_scale)
 
             shape.draw_label_overlay_for_viewport(
-                draw, paste_x, paste_y, rendered_h, v_scale, width
+                canvas, strip_x, strip_y, rendered_h, v_scale, width
             )
         elif strobe_overlay:
             # Use content box (no tally row) for scale — reserve fixed space for overlay
@@ -795,44 +803,36 @@ def render_animation(
             scale = min(avail_w / max(sw, 1), avail_h / max(sh, 1), 1.0)
 
             if scale < 1.0:
-                big = Image.new("RGB", (sw + 40, sh + 10), BG_COLOR)
-                big_draw = ImageDraw.Draw(big)
+                # Draw at full size with a 20x5 margin, then shrink the whole box
+                new_w = int((sw + 40) * scale)
+                new_h = int((sh + 10) * scale)
+                box_x = (width - new_w) // 2 + x_offset
+                box_y = shape_area_top + (avail_h - new_h) // 2
+                with canvas.transformed(box_x, box_y, scale):
+                    if strobe_overlay:
+                        shape.draw_without_tally(canvas, 20, 5)
+                    else:
+                        shape.draw(canvas, 20, 5)
                 if strobe_overlay:
-                    shape.draw_without_tally(big_draw, 20, 5)
-                else:
-                    shape.draw(big_draw, 20, 5)
-                new_w = int(big.width * scale)
-                new_h = int(big.height * scale)
-                big = big.resize((new_w, new_h), Image.Resampling.LANCZOS)
-                paste_x = (width - big.width) // 2 + x_offset
-                paste_y = shape_area_top + (avail_h - big.height) // 2
-                img.paste(big, (paste_x, paste_y))
-                if strobe_overlay:
-                    shape.draw_tally_overlay_for_box(draw, paste_x, paste_y, new_w, new_h)
+                    shape.draw_tally_overlay_for_box(canvas, box_x, box_y, new_w, new_h)
             else:
                 sx = (width - sw) // 2 + x_offset
                 sy = shape_area_top + (avail_h - sh) // 2
                 if strobe_overlay:
-                    shape.draw_without_tally(draw, sx, sy)
-                    shape.draw_tally_overlay_for_box(draw, sx, sy, sw, sh)
+                    shape.draw_without_tally(canvas, sx, sy)
+                    shape.draw_tally_overlay_for_box(canvas, sx, sy, sw, sh)
                 else:
-                    shape.draw(draw, sx, sy)
+                    shape.draw(canvas, sx, sy)
 
         # Line 1: dimension name (always visible)
         if current_dim_label:
-            bbox = draw.textbbox((0, 0), current_dim_label, font=font_large)
-            tw = bbox[2] - bbox[0]
-            draw.text(((width - tw) // 2, 6), current_dim_label, fill=LABEL_COLOR, font=font_large)
+            canvas.text(width / 2, 6, current_dim_label, 24, LABEL_COLOR)
 
         # Line 2: combination count (always visible, below dim name)
         if current_count_label:
-            bbox = draw.textbbox((0, 0), current_count_label, font=font_small)
-            tw = bbox[2] - bbox[0]
-            draw.text(
-                ((width - tw) // 2, 34), current_count_label, fill=(120, 120, 120), font=font_small
-            )
+            canvas.text(width / 2, 34, current_count_label, 14, (120, 120, 120))
 
-        frames.append(img)
+        frames.append(canvas.markup())
         durations.append(frame_duration_ms)
 
     # Minimum frames to hold each step so labels are readable (~0.5s)
@@ -954,14 +954,9 @@ def render_animation(
     make_frame(shape, count_label=f"{running_product} total combinations")
     durations[-1] += fps * frame_duration_ms  # 1 second hold
 
-    # Write animation — APNG is ~12x faster than GIF to encode
-    frames[0].save(
-        out_path,
-        format="PNG",
-        save_all=True,
-        append_images=frames[1:],
-        duration=durations,
-        loop=0,  # loop forever
+    Path(out_path).write_text(
+        animated_svg(defs, list(zip(frames, durations, strict=False)), width, height, BG_COLOR),
+        encoding="utf-8",
     )
 
     logger.info("Saved %d frames to %s", len(frames), out_path)

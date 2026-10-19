@@ -1,19 +1,20 @@
-"""Regression tests for the PIL-based Cartesian product animation renderer.
+"""Regression tests for the SVG Cartesian product animation renderer.
 
 These tests lock current behavior so that performance optimizations
 do not silently change the visual output.
 """
 
 # TimelineShape._skip_labels is set directly: it is the renderer's own overlay-mode
-# switch, and turning it off is what makes the golden hash independent of the host's
-# fonts. There is no public way to ask for a label-less strip.
+# switch, and there is no public way to ask for a label-less strip.
 
 from __future__ import annotations
 
 import hashlib
+import itertools
+import re
+import xml.etree.ElementTree as ET
 
 import pytest
-from PIL import Image, ImageDraw
 
 from bencher.results.manim_cartesian.cartesian_product_cfg import CartesianProductCfg, SweepVar
 from bencher.results.manim_cartesian.cartesian_product_scene import (
@@ -25,18 +26,41 @@ from bencher.results.manim_cartesian.cartesian_product_scene import (
     TimelineShape,
     render_animation,
 )
+from bencher.results.manim_cartesian.svg_canvas import SvgCanvas, SvgDefs
+
+SVG_NS = "{http://www.w3.org/2000/svg}"
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _render_hash(shape: Shape, w: int = 200, h: int = 200) -> str:
-    """Render a shape on a white canvas and return the MD5 of the pixel data."""
-    img = Image.new("RGB", (w, h), (255, 255, 255))
-    draw = ImageDraw.Draw(img)
-    shape.draw(draw, 10, 10)
-    return hashlib.md5(img.tobytes(), usedforsecurity=False).hexdigest()
+def _markup(shape: Shape) -> str:
+    """Draw a shape at (10, 10) and return its markup, shared definitions first."""
+    defs = SvgDefs("t-")
+    canvas = SvgCanvas(defs)
+    shape.draw(canvas, 10, 10)
+    return defs.markup() + canvas.markup()
+
+
+def _render_hash(shape: Shape) -> str:
+    """MD5 of the SVG markup a shape draws: it pins every coordinate and colour."""
+    return hashlib.md5(_markup(shape).encode(), usedforsecurity=False).hexdigest()
+
+
+def _render(cfg: CartesianProductCfg, tmp_path, **kwargs) -> ET.Element:
+    """Render to a file, check it is well-formed SVG, and return its root element."""
+    kwargs = {"width": 320, "height": 200, "fps": 10, "step_frames": 2, **kwargs}
+    path = render_animation(cfg, output_dir=str(tmp_path), **kwargs)
+    assert path.endswith(".svg")
+    root = ET.parse(path).getroot()  # noqa: S314 - parses the file this test just wrote
+    assert root.tag == f"{SVG_NS}svg"
+    return root
+
+
+def _frames(root: ET.Element) -> list[ET.Element]:
+    """The top-level frame groups, in play order."""
+    return root.findall(f"{SVG_NS}g")
 
 
 def _simple_cfg() -> CartesianProductCfg:
@@ -162,12 +186,12 @@ class TestStrobeShapeSize:
 
 
 # ---------------------------------------------------------------------------
-# Pixel-level draw regression (MD5 checksums)
+# Draw regression (MD5 of the SVG markup)
 # ---------------------------------------------------------------------------
 
 
 class TestDrawRegression:
-    """Pixel-exact checksums on a fixed canvas.
+    """Markup checksums: every coordinate, colour and shared definition.
 
     If an optimization changes rendering output, these will fail — which
     is the point.  Update golden hashes only after visually confirming the
@@ -175,11 +199,11 @@ class TestDrawRegression:
     """
 
     def test_leaf(self):
-        assert _render_hash(Cell()) == "fb8d871ea7cb6c19f9c7e54d837c687f"
+        assert _render_hash(Cell()) == "f1facfadf7faf2e57601406678cf9463"
 
     def test_row3(self):
         row = Group(children=[Cell() for _ in range(3)], direction="right", depth=0)
-        assert _render_hash(row) == "a8c946ecb1dd581b21eed0e795e30885"
+        assert _render_hash(row) == "8613514f3343c0a81220e15fc1047844"
 
     def test_grid(self):
         grid = Group(
@@ -190,57 +214,47 @@ class TestDrawRegression:
             direction="down",
             depth=1,
         )
-        assert _render_hash(grid) == "ceae36e431bb2c991377ffcfa3006a85"
+        assert _render_hash(grid) == "9b5e9198a0d46d6eeee752bfece10ae5"
 
     def test_stack(self):
         stack = Group(children=[Cell() for _ in range(3)], direction="stack", depth=2)
-        assert _render_hash(stack) == "f3fd7f1df0e288ad0165027b6aa83610"
+        assert _render_hash(stack) == "921fcdac900e9459ee71e468c5583a13"
 
     def test_strobe_with_flash(self):
         row = Group(children=[Cell() for _ in range(3)], direction="right", depth=0)
         st = StrobeShape(row, 3, _simple_cfg(), flash=0.8)
-        assert _render_hash(st, 300, 200) == "9626250f8b66be862e0709f1c9814cad"
+        assert _render_hash(st) == "010e4950df96110c8621f94e7a600c5e"
 
     def test_timeline(self):
-        """Hashed with the frame labels off, because their glyphs come from whichever
-        font the host ships.
-
-        ``_get_font`` tries DejaVu, then Liberation, then Pillow's built-in, so this
-        was the one golden hash in the file that locked the *host's font set* rather
-        than the renderer: it was recorded on a box with DejaVu and failed on one with
-        only Liberation, with nothing in the failure to say the fonts were the
-        difference. The film chrome is font-independent and is what the hash is for;
-        the labels are covered by ``test_timeline_labels_stay_in_the_label_band``,
-        which asserts where they land rather than which glyphs they are.
+        """Hashed with the frame labels off: the film chrome is what the hash is for,
+        and ``test_timeline_labels_stay_in_the_label_band`` covers the labels.
         """
         tl = TimelineShape(Cell(), 3)
         tl._skip_labels = True
-        assert _render_hash(tl, 500, 200) == "ef51a6ef6c6a42ad9465fbb27656e160"
+        assert _render_hash(tl) == "8050ddaacfaa66179e78cfafa6982a89"
 
     def test_timeline_labels_stay_in_the_label_band(self):
-        """Turning labels off must change the label band and nothing above it.
+        """Turning labels off must remove the labels and change nothing else.
 
-        Not a pixel hash: which glyphs ``t=1`` draws is the font's business, but the
-        band they are confined to is the renderer's -- a label that overflowed upwards
-        would paint over the film frames, and ``size()`` reserves ``FILM_LABEL_H`` for
-        exactly this strip.
+        Every label must also sit inside the band ``size()`` reserves for it
+        (``FILM_LABEL_H``): one that overflowed upwards would paint over the frames.
         """
-        rendered = {}
+        markup = {}
         for skip in (False, True):
-            img = Image.new("RGB", (500, 200), (255, 255, 255))
             tl = TimelineShape(Cell(), 3)
             tl._skip_labels = skip
-            tl.draw(ImageDraw.Draw(img), 10, 10)
-            rendered[skip] = img
+            markup[skip] = _markup(tl)
+
+        label_re = r"<text [^>]*>t=\d+</text>"
+        labels = re.findall(label_re, markup[False])
+        assert len(labels) == 3
+        assert re.sub(label_re, "", markup[False]) == markup[True]
 
         _, total_h = TimelineShape(Cell(), 3).size()
         band_top = 10 + total_h - FILM_LABEL_H
-        with_labels, without = rendered[False], rendered[True]
-
-        above = (0, 0, 500, band_top)
-        assert with_labels.crop(above).tobytes() == without.crop(above).tobytes()
-        band = (0, band_top, 500, 200)
-        assert with_labels.crop(band).tobytes() != without.crop(band).tobytes()
+        for label in labels:
+            baseline = float(re.search(r' y="([\d.]+)"', label).group(1))
+            assert band_top < baseline <= band_top + FILM_LABEL_H
 
 
 # ---------------------------------------------------------------------------
@@ -251,9 +265,9 @@ class TestDrawRegression:
 class TestRenderAnimation:
     """Integration tests for the full render pipeline.
 
-    We verify that output is a valid animated image with the expected
-    visual content.  Frame counts are checked loosely (>= minimum unique)
-    since encoding format and dedup strategy may change.
+    We verify that output is a well-formed animated SVG with the expected
+    structure.  Frame counts are checked loosely (>= minimum unique)
+    since the dedup strategy may change.
     """
 
     def test_2d(self, tmp_path):
@@ -261,13 +275,9 @@ class TestRenderAnimation:
             all_vars=[SweepVar("x", [0, 1, 2]), SweepVar("y", [0, 1])],
             result_names=["r"],
         )
-        path = render_animation(
-            cfg, width=320, height=200, fps=10, step_frames=2, output_dir=str(tmp_path)
-        )
-        img = Image.open(path)
-        assert img.is_animated
+        root = _render(cfg, tmp_path)
         # Must have at least a few unique frames
-        assert img.n_frames >= 3
+        assert len(_frames(root)) >= 3
 
     def test_3d_with_repeat(self, tmp_path):
         cfg = CartesianProductCfg(
@@ -278,43 +288,29 @@ class TestRenderAnimation:
             ],
             result_names=["r"],
         )
-        path = render_animation(
-            cfg, width=320, height=200, fps=10, step_frames=2, output_dir=str(tmp_path)
-        )
-        img = Image.open(path)
-        assert img.is_animated
-        assert img.n_frames >= 5
+        root = _render(cfg, tmp_path)
+        assert len(_frames(root)) >= 5
 
     def test_2d_with_over_time(self, tmp_path):
         cfg = CartesianProductCfg(
             all_vars=[SweepVar("x", [0, 1, 2]), SweepVar("over_time", [0, 1, 2])],
             result_names=["r"],
         )
-        path = render_animation(
-            cfg, width=320, height=200, fps=10, step_frames=2, output_dir=str(tmp_path)
-        )
-        img = Image.open(path)
-        assert img.is_animated
-        assert img.n_frames >= 5
+        root = _render(cfg, tmp_path)
+        assert len(_frames(root)) >= 5
 
     def test_empty_config(self, tmp_path):
         cfg = CartesianProductCfg(all_vars=[], result_names=["r"])
-        path = render_animation(
-            cfg, width=320, height=200, fps=10, step_frames=2, output_dir=str(tmp_path)
-        )
-        img = Image.open(path)
-        assert img.n_frames >= 1
+        root = _render(cfg, tmp_path)
+        assert len(_frames(root)) >= 1
 
     def test_single_dim_size_1(self, tmp_path):
         cfg = CartesianProductCfg(
             all_vars=[SweepVar("x", [42])],
             result_names=["r"],
         )
-        path = render_animation(
-            cfg, width=320, height=200, fps=10, step_frames=2, output_dir=str(tmp_path)
-        )
-        img = Image.open(path)
-        assert img.n_frames >= 1
+        root = _render(cfg, tmp_path)
+        assert len(_frames(root)) >= 1
 
     def test_5d_full(self, tmp_path):
         cfg = CartesianProductCfg(
@@ -327,9 +323,74 @@ class TestRenderAnimation:
             ],
             result_names=["r"],
         )
-        path = render_animation(
-            cfg, width=640, height=360, fps=15, step_frames=4, output_dir=str(tmp_path)
+        root = _render(cfg, tmp_path, width=640, height=360, fps=15, step_frames=4)
+        assert len(_frames(root)) >= 10
+
+
+# ---------------------------------------------------------------------------
+# SVG document structure
+# ---------------------------------------------------------------------------
+
+
+def _ids_and_refs(root: ET.Element) -> tuple[set[str], list[str]]:
+    ids = {ref for el in root.iter() if (ref := el.get("id"))}
+    refs = [el.get("href", "")[1:] for el in root.iter(f"{SVG_NS}use")]
+    return ids, refs
+
+
+class TestSvgDocument:
+    """Properties the SVG encoding must keep, whatever the shapes look like."""
+
+    def _cube(self, n: int) -> CartesianProductCfg:
+        return CartesianProductCfg(
+            all_vars=[SweepVar(name, list(range(n))) for name in ("x", "y", "z")],
+            result_names=["r"],
         )
-        img = Image.open(path)
-        assert img.is_animated
-        assert img.n_frames >= 10
+
+    def test_every_use_resolves_to_a_definition(self, tmp_path):
+        root = _render(self._cube(4), tmp_path)
+        ids, refs = _ids_and_refs(root)
+        assert refs
+        assert set(refs) <= ids
+
+    def test_identical_copies_are_defined_once(self, tmp_path):
+        """A 10x10x10 cube shows 1000 cells but draws far fewer rectangles.
+
+        Without sharing, the last frame alone would hold 1000 ``<rect>``; every
+        extrusion copy is a ``<use>`` of one definition instead.
+        """
+        root = _render(self._cube(10), tmp_path)
+        rects = len(list(root.iter(f"{SVG_NS}rect")))
+        assert rects < 100
+
+    def test_only_the_last_frame_is_visible_without_animation(self, tmp_path):
+        """A viewer without SMIL shows the finished product, not a blank canvas."""
+        frames = _frames(_render(self._cube(3), tmp_path))
+        assert len(frames) > 1
+        assert [g.get("visibility") for g in frames] == ["hidden"] * (len(frames) - 1) + ["visible"]
+
+    def test_frames_tile_one_loop(self, tmp_path):
+        """Each frame is visible for one slot; the slots cover the loop with no overlap."""
+        frames = _frames(_render(self._cube(3), tmp_path))
+        durs = {g.find(f"{SVG_NS}animate").get("dur") for g in frames}
+        assert len(durs) == 1
+        slots = []
+        for g in frames:
+            anim = g.find(f"{SVG_NS}animate")
+            times = [float(t) for t in anim.get("keyTimes").split(";")] + [1.0]
+            i = anim.get("values").split(";").index("visible")
+            slots.append((times[i], times[i + 1]))
+        assert slots[0][0] == 0
+        assert slots[-1][1] == 1
+        assert all(a[1] == b[0] for a, b in itertools.pairwise(slots))
+
+    def test_id_prefix_differs_between_animations(self, tmp_path):
+        """Two animations inlined in one report page must not share ids."""
+        ids_a, _ = _ids_and_refs(_render(self._cube(2), tmp_path))
+        ids_b, _ = _ids_and_refs(_render(self._cube(3), tmp_path))
+        assert ids_a.isdisjoint(ids_b)
+
+    def test_labels_are_escaped(self, tmp_path):
+        cfg = CartesianProductCfg(all_vars=[SweepVar("a<b&c", [0, 1])], result_names=["r"])
+        texts = [t.text for t in _render(cfg, tmp_path).iter(f"{SVG_NS}text")]
+        assert "a<b&c" in texts

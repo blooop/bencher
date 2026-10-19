@@ -1070,10 +1070,9 @@ class BenchCfg(BenchRunCfg):
     def to_cartesian_animation(self) -> str | None:
         """Render an animation of the Cartesian product data collection.
 
-        Delegates to :func:`bencher.results.manim_cartesian.render_animation`,
-        which currently uses a PIL-based renderer. Returns the filesystem path
-        to the generated animated PNG (or other format, depending on the
-        renderer), or ``None`` on failure so callers can degrade gracefully.
+        Delegates to :func:`bencher.results.manim_cartesian.render_animation`.
+        Returns the filesystem path to the generated animated SVG, or ``None``
+        on failure so callers can degrade gracefully.
 
         Returns:
             str | None: Path to the rendered animation file, or None on failure.
@@ -1118,7 +1117,9 @@ class BenchCfg(BenchRunCfg):
             from pathlib import Path
 
             abs_path = str(Path(animation_path).resolve())
-            parts.append(pn.pane.Image(abs_path, width=350))
+            # Inline, not a base64 <img>: the markup then gzips with the page, and
+            # the per-file id prefix keeps several animations on one page apart.
+            parts.append(pn.pane.SVG(abs_path, width=350, encode=False))
 
         parts.append(desc)
         return pn.Column(*parts)
