@@ -414,12 +414,18 @@ def groups():
 def test_every_graphic_renders(groups, theme, tmp_path):
     from matplotlib.figure import Figure
 
+    for i, fig in enumerate(_all_figures(groups, theme)):
+        assert isinstance(fig, Figure)
+        fig.savefig(tmp_path / f"g{i}.png", dpi=40)
+
+
+def _all_figures(groups, theme):
     cont = groups["planning_time"].cells[0]
     binary = groups["task_success"].cells[0]
     sweep = sorted(groups["line_time"].cells, key=lambda m: m.point["x"])
     grid_cells = {(m.point["x"], m.point["y"]): m for m in groups["sweep_time"].cells}
     grid = [[grid_cells[(x, y)] for x in (1, 2, 3)] for y in ("a", "b")]
-    figures = [
+    return [
         ig.draw_scorecard([cont, binary], theme),
         ig.draw_forest(sweep, theme),
         ig.draw_estimation(cont, theme),
@@ -430,9 +436,52 @@ def test_every_graphic_renders(groups, theme, tmp_path):
         ig.draw_power(cont, theme),
         ig.draw_diagnostics(cont, theme),
     ]
-    for i, fig in enumerate(figures):
-        assert isinstance(fig, Figure)
-        fig.savefig(tmp_path / f"g{i}.png", dpi=40)
+
+
+def _drawn_texts(fig):
+    """Every text the figure draws: figure and axes texts, and the tick labels in view."""
+    texts = list(fig.texts)
+    for ax in fig.axes:
+        texts += [*ax.texts, ax.xaxis.label, ax.yaxis.label]
+        for axis in (ax.xaxis, ax.yaxis):
+            lo, hi = sorted(axis.get_view_interval())
+            for tick in axis.get_major_ticks():
+                if lo - 1e-9 <= tick.get_loc() <= hi + 1e-9:
+                    texts += [lab for lab in (tick.label1, tick.label2) if lab.get_visible()]
+    return [t for t in texts if t.get_visible() and t.get_text().strip()]
+
+
+def test_text_is_large_and_inside_the_figure(groups):
+    """No text under 11 pt (15 px at the 800 px display width), none clipped at the edge."""
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    for fig in _all_figures(groups, ig.LIGHT):
+        canvas = FigureCanvasAgg(fig)
+        canvas.draw()
+        renderer = canvas.get_renderer()
+        box = fig.bbox
+        for t in _drawn_texts(fig):
+            assert t.get_fontsize() >= ig._MIN_PT, (t.get_text(), t.get_fontsize())
+            ext = t.get_window_extent(renderer)
+            inside = (
+                ext.x0 >= box.x0 - 1
+                and ext.x1 <= box.x1 + 1
+                and ext.y0 >= box.y0 - 1
+                and ext.y1 <= box.y1 + 1
+            )
+            assert inside, t.get_text()
+
+
+def test_beeswarm_is_deterministic_and_keeps_dots_apart():
+    rng = np.random.default_rng(3)
+    y = rng.normal(0, 0.3, 40)
+    d = 0.1
+    a, b = ig._beeswarm(y, d, 5.0), ig._beeswarm(y, d, 5.0)
+    assert np.array_equal(a, b)
+    gaps = np.hypot(a[:, None] - a[None, :], y[:, None] - y[None, :])
+    assert gaps[~np.eye(len(y), dtype=bool)].min() >= d * 0.99
+    squeezed = ig._beeswarm(y, d, 0.05)
+    assert np.abs(squeezed).max() <= 0.05 + 1e-12
 
 
 def test_save_both_writes_png_at_2x_and_svg(groups, tmp_path):
@@ -489,6 +538,13 @@ def test_report_from_rows(tmp_path):
     assert "scorecard-dark.png" in md
     assert (tmp_path / "scorecard-light.svg").exists()
     assert "evidence-data.csv" in report.files
+    # The facts the graphics no longer print are in the Markdown.
+    assert "Design: unpaired; n 12 / 12 per arm" in md
+    assert "in execution order (interleaved)" in md
+    assert "The shaded band is the margin ±5 % around the base median" in md
+    assert "Base 11/12 = 92 % (95 % Wilson CI" in md
+    # Two metrics fit the scorecard: no forest plot.
+    assert "forest-light.png" not in md
     linked = report.render("https://github.com/o/r/blob/abc/run")
     assert 'srcset="https://github.com/o/r/blob/abc/run/scorecard-dark.png"' in linked
     mapped = report.render({"scorecard-light.png": "https://x/y.png?raw=true"})
@@ -572,6 +628,7 @@ def test_report_from_recordings(tmp_path):
     # Two recordings are a blocked design: every base run before every candidate run.
     assert ig._order_pattern(ig._runs([m])) == "blocked"
     assert "<picture>" in report.markdown
+    assert "in execution order (blocked)" in report.markdown
 
 
 def test_margin_is_excluded_from_the_hash():

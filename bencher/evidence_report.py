@@ -8,7 +8,7 @@ Two sources feed it, through one intermediate (:class:`MetricData`):
 * two kbench row files (:func:`data_from_rows`): a JSON list of
   ``{metric, units, direction, repeat, inputs, value}`` rows, optionally with a
   ``shard`` (the cluster of the cluster bootstrap), an ``order`` or ``timestamp``
-  (the run order the design strip draws) and a ``seed``.
+  (the run order the graphics draw as rows of squares) and a ``seed``.
 
 :func:`analyse_data` runs :mod:`bencher.evidence_stats` on every metric and point,
 Holm over the primary metrics and Benjamini–Hochberg over the rest.
@@ -60,6 +60,8 @@ if TYPE_CHECKING:
 
 UrlBase = str | Mapping[str, str] | Callable[[str], str] | None
 MAX_TILES = 6
+MAX_FOREST_ROWS = 4
+"""The forest plot is drawn only for more metrics than this; fewer fit the scorecard."""
 """Scorecard tiles when no primary metric is named: the metrics that moved, first."""
 
 
@@ -400,6 +402,20 @@ def _moved(m: MetricEvidence) -> bool:
     return m.verdict.kind in (VerdictKind.IMPROVED, VerdictKind.REGRESSED)
 
 
+def _forest_key(rows: Sequence[MetricEvidence]) -> str:
+    levels = sorted({round(100 * m.effect.ci.level) for m in rows})
+    thick = " / ".join(f"{v} %" for v in levels)
+    key = (
+        "Rows are sorted by effect. Left: every run of each row (grey base above, blue "
+        f"candidate below, black tick the median, on the row's own scale). Right: the change "
+        f"with its decision CI ({thick}, thick) and 95 % CI (thin) over the shaded margin "
+        f"{ig.fmt_margin(rows[0])}; bold rows are primary metrics."
+    )
+    if any(not m.fdr_pass for m in rows):
+        key += " A hollow dot fails the FDR check."
+    return key
+
+
 def _tile_metrics(singles: Sequence[MetricEvidence]) -> list[MetricEvidence]:
     prim = [m for m in singles if m.primary]
     if prim:
@@ -427,6 +443,61 @@ def _design(cells: Sequence[MetricEvidence], primary: int) -> str:
     return ", ".join(parts)
 
 
+def _vm_names(cells: Sequence[MetricEvidence]) -> str:
+    names = ig.shard_names(cells)
+    return ", ".join(f"VM {k + 1} = `{s}`" for k, s in enumerate(names))
+
+
+def _order_note(cells: Sequence[MetricEvidence], *, where: str = "under the panels") -> str:
+    """What the run-order rows show, or why the graphic has none."""
+    if not ig.order_recorded(cells):
+        return "The run order was not recorded, so the graphic has no run-order row."
+    vms = _vm_names(cells)
+    rows = f", one row per VM ({vms})" if vms else ""
+    return (
+        f"The squares {where} are the runs in execution order ({ig.order_pattern(cells)})"
+        f"{rows}: grey base, blue candidate."
+    )
+
+
+def _arms_key(cells: Sequence[MetricEvidence]) -> str:
+    """How to read the arms panels of the scorecard and the estimation plot."""
+    margins = ", ".join(sorted({ig.fmt_margin(m) for m in cells}))
+    parts = []
+    if any(isinstance(m.effect, Effect) for m in cells):
+        levels = sorted({round(100 * m.effect.ci.level) for m in cells})
+        level = " / ".join(f"{v} %" for v in levels)
+        notes = []
+        if any(
+            isinstance(m.effect, Effect) and m.effect.ci95.level > m.effect.ci.level for m in cells
+        ):
+            notes.append("thin line: 95 % CI")
+        if any(not m.fdr_pass for m in cells):
+            notes.append("hollow dot: fails the FDR check")
+        extra = f" ({'; '.join(notes)})" if notes else ""
+        parts.append(
+            "Each dot is one run: grey base, blue candidate; the black bar is the median. "
+            f"The shaded band is the margin {margins} around the base median. The coloured "
+            f"bar at the right of each panel is the {level} CI of the change, drawn from "
+            f"the base median{extra}."
+        )
+        if any(m.paired for m in cells):
+            parts.append(
+                "Faint lines join the two runs of a pair: green when the pair got better, "
+                "orange when it got worse."
+            )
+    if any(isinstance(m.effect, ProportionEffect) for m in cells):
+        parts.append(
+            "For a pass/fail metric each square is one run; a crossed orange square is a bad outcome."
+        )
+    return " ".join(parts)
+
+
+def _design_line(cells: Sequence[MetricEvidence], *, points: int = 1) -> str:
+    facts = ig.design_facts(cells, points=points)
+    return "Design: " + "; ".join(v if k == "design" else f"{k} {v}" for k, v in facts) + "."
+
+
 def _effect_sentence(m: MetricEvidence) -> str:
     e = m.effect
     point = f" at {_point_label(m.point)}" if m.point else ""
@@ -435,18 +506,37 @@ def _effect_sentence(m: MetricEvidence) -> str:
             f"`{m.name}`{point} {ig.fmt_counts(e)}, difference {ig.fmt_effect(m)} "
             f"[{ig.fmt_ci(m)}], {e.method}, {_p(e.p_value)}."
         )
+        text += (
+            f" Base {e.k_base}/{e.n_base} = {100 * e.p_base:.0f} % (95 % Wilson CI "
+            f"{100 * e.wilson_base.low:.0f}–{100 * e.wilson_base.high:.0f} %), candidate "
+            f"{e.k_cand}/{e.n_cand} = {100 * e.p_cand:.0f} % "
+            f"({100 * e.wilson_cand.low:.0f}–{100 * e.wilson_cand.high:.0f} %)."
+        )
         bad = e.n_cand - e.k_cand if m.direction == "maximize" else e.k_cand
         if bad == 0:
+            bound = ig.worst_plausible(m)
             text += (
                 f" No bad outcome in {e.n_cand} candidate runs: its rate is at most "
                 f"{100 * e.bad_upper:.1f} % (95 %, exact; rule of three {300 / e.n_cand:.1f} %)."
+                f" The black tick on the difference bar is that bound: a difference of "
+                f"{ig.fmt_signed(100 * (bound or 0.0))} pp."
+            )
+        else:
+            text += (
+                f" The candidate's bad-outcome rate is at most {100 * e.bad_upper:.1f} % "
+                "(95 % upper bound, exact)."
             )
         return text
     cis = ig.fmt_ci(m)
     if e.ci95.level > e.ci.level:
         cis += f"; {ig.fmt_ci(m, level95=True)}"
     text = f"`{m.name}`{point} {ig.fmt_effect(m)} [{cis}], {e.method}, n={e.n_base}"
-    text += " pairs." if e.paired else f"/{e.n_cand}."
+    text += " pairs" if e.paired else f"/{e.n_cand}"
+    if e.n_clusters:
+        text += f" in {e.n_clusters} shards"
+    text += "."
+    if m.verdict.mde is not None:
+        text += f" MDE {ig.fmt_mde(m)} at 80 % power."
     if e.robust is not None:
         r = e.robust
         verb = "agrees" if r.agrees else "**disagrees**"
@@ -539,15 +629,16 @@ def write_report(
     tiles = _tile_metrics(singles)
     if tiles:
         alt = "Scorecard. " + " ".join(ig.alt_text(m) for m in tiles)
-        sections.append(
-            img.add("scorecard", lambda t: ig.draw_scorecard(tiles, t, title=summary), alt)
-        )
-    text(f"**{summary.replace(' · ', ' · ')}** — {_design(cells, n_primary)}.\n")
+        sections.append(img.add("scorecard", lambda t: ig.draw_scorecard(tiles, t), alt))
+    text(f"**{summary}** — {_design(cells, n_primary)}.\n")
+    if tiles:
+        text(f"*{_arms_key(tiles)} {_order_note(tiles[:1])}*\n")
     for kinds, stem in ((("positive",), "forest"), (("binary", "fraction"), "forest-rates")):
         rows = [m for m in singles if m.kind in kinds]
-        if len(rows) >= 2:  # noqa: PLR2004
+        if len(rows) > MAX_FOREST_ROWS:
             alt = "Forest plot. " + " ".join(ig.alt_text(m) for m in rows)
             sections.append(img.add(stem, lambda t, rows=rows: ig.draw_forest(rows, t), alt))
+            text(f"*{_forest_key(rows)}*\n")
     # One section per primary metric, and per secondary metric that did not stay equivalent.
     shown = [m for m in singles if m.primary or m.verdict.kind != VerdictKind.EQUIVALENT]
     shown.sort(key=lambda m: (not m.primary, m.name))
@@ -574,7 +665,9 @@ def write_report(
                 )
             )
             text(
-                "The rank check or a tail decile disagrees with the mean: read the shift function above, not one number.\n"
+                "The rank check or a tail decile disagrees with the mean: read the shift function above, not one number. "
+                "Top: each arm's density, box (quartiles, median ring) and every run. Bottom: the change "
+                f"at each decile q1…q9 with its 95 % bootstrap CI: {ig.shift_summary(m)}.\n"
             )
         if m.verdict.underpowered and m.verdict.kind not in {
             VerdictKind.IMPROVED,
@@ -586,6 +679,11 @@ def write_report(
                     lambda t, m=m: ig.draw_power(m, t),
                     f"Power. {ig.alt_text(m)} Runs per arm needed: {m.verdict.runs_needed}.",
                 )
+            )
+            text(
+                f"The bar is the smallest change this run can detect at 80 % power (MDE "
+                f"{ig.fmt_mde(m)}); the line Δ is the margin {ig.fmt_margin(m)}. "
+                f"n = {m.verdict.n} → ~{m.verdict.runs_needed} units per arm to reach Δ.\n"
             )
     # Sweeps.
     for g in groups:
@@ -612,6 +710,13 @@ def write_report(
                     alt,
                 )
             )
+            text(
+                f"*Top: every run at each `{key}` point (grey base, blue candidate), lines join "
+                "the medians; the points sit at even steps in sweep order. Bottom: the change at "
+                f"each point with its {round(100 * cells_g[0].effect.ci.level)} % CI (thick) and "
+                f"95 % CI (thin) over the margin {ig.fmt_margin(cells_g[0])}. "
+                f"{_order_note(cells_g, where='under the graphic')}*\n"
+            )
         elif len(varying) == 2:  # noqa: PLR2004
             kx, ky = varying
             xs = sorted({m.point[kx] for m in cells_g}, key=_sort_key)
@@ -628,6 +733,11 @@ def write_report(
                         alt,
                     )
                 )
+                text(
+                    "*Each cell is the change at that point, rounded to a whole number: blue "
+                    f"better, orange worse; hatched (?): the CI crosses {ig.fmt_margin(cells_g[0])}. "
+                    f"{_order_note(cells_g, where='under the graphic')}*\n"
+                )
         elif cells_g[0].kind == "positive" or all(m.kind == cells_g[0].kind for m in cells_g):
             labels = [_point_label(m.point) for m in cells_g]
             sections.append(
@@ -637,8 +747,11 @@ def write_report(
                     alt,
                 )
             )
+            text(f"*{_forest_key(cells_g)}*\n")
         text(
             "<details><summary>Every point</summary>\n\n"
+            + _design_line(cells_g, points=len(cells_g))
+            + "\n\n"
             + _verdict_table(cells_g)
             + "\n</details>\n"
         )
@@ -652,7 +765,11 @@ def write_report(
         "geometric means); binary metrics use Wilson per arm and the Newcombe difference. BCa "
         "bootstrap (10 000 resamples, fixed seed) from 10 units per arm, Welch t below that. "
         "Holm over the primary metrics (their CIs widened to α/m), Benjamini–Hochberg over the "
-        "rest. n was fixed before the run; no peeking correction is applied.\n\n"
+        "rest. n was fixed before the run; no peeking correction is applied. "
+        "In each estimation plot the right panel is the bootstrap distribution of the change "
+        "with its CI, on the % axis; in each waffle the bar under the squares is the "
+        "difference with its CI over the shaded margin.\n\n"
+        + (_design_line(singles[:1]) + "\n\n" if singles else "")
         + _verdict_table(cells)
     )
     if diagnostics:
@@ -665,6 +782,15 @@ def write_report(
                         lambda t, m=m: ig.draw_diagnostics(m, t),
                         f"Diagnostics for {m.name}: value against run order by arm.",
                     )
+                )
+                shape = (
+                    " the marker shape is the shard."
+                    if any(c is not None for c in m.clusters)
+                    else " one dot per run."
+                )
+                text(
+                    f"`{m.name}` against run order: lines are the least-squares trend per arm;"
+                    f"{shape}\n"
                 )
     if skipped:
         text("Not analysed:\n\n" + "\n".join(f"- {s}" for s in skipped) + "\n")
