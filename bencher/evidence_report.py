@@ -433,7 +433,7 @@ def _effect_sentence(m: MetricEvidence) -> str:
     if isinstance(e, ProportionEffect):
         text = (
             f"`{m.name}`{point} {ig.fmt_counts(e)}, difference {ig.fmt_effect(m)} "
-            f"[{ig.fmt_ci(m)}], {e.method}, p = {_p(e.p_value)}."
+            f"[{ig.fmt_ci(m)}], {e.method}, {_p(e.p_value)}."
         )
         bad = e.n_cand - e.k_cand if m.direction == "maximize" else e.k_cand
         if bad == 0:
@@ -442,17 +442,20 @@ def _effect_sentence(m: MetricEvidence) -> str:
                 f"{100 * e.bad_upper:.1f} % (95 %, exact; rule of three {300 / e.n_cand:.1f} %)."
             )
         return text
-    text = f"`{m.name}`{point} {ig.fmt_effect(m)} [{ig.fmt_ci(m)}; {ig.fmt_ci(m, level95=True)}], {e.method}, n={e.n_base}"
+    cis = ig.fmt_ci(m)
+    if e.ci95.level > e.ci.level:
+        cis += f"; {ig.fmt_ci(m, level95=True)}"
+    text = f"`{m.name}`{point} {ig.fmt_effect(m)} [{cis}], {e.method}, n={e.n_base}"
     text += " pairs." if e.paired else f"/{e.n_cand}."
     if e.robust is not None:
         r = e.robust
         verb = "agrees" if r.agrees else "**disagrees**"
-        text += f" {r.method.split(' + ')[-1]} {verb} (p = {_p(r.p_value)})."
+        text += f" {r.method.split(' + ')[-1]} {verb} ({_p(r.p_value)})."
     return text
 
 
 def _p(p: float) -> str:
-    return "< 0.001" if p < 0.001 else f"{p:.3f}"  # noqa: PLR2004
+    return "p < 0.001" if p < 0.001 else f"p = {p:.3f}"  # noqa: PLR2004
 
 
 def _needs_shift(m: MetricEvidence) -> bool:

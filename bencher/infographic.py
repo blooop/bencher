@@ -221,8 +221,8 @@ def headline(m: MetricEvidence) -> str:
     return f"{name}: not yet known ({fmt_effect(m)}, {fmt_ci(m)})"
 
 
-def method_line(m: MetricEvidence) -> str:
-    """The tile footer: ``n=20 paired · BCa · MDE 4.1 %``."""
+def method_line(m: MetricEvidence, *, with_test: bool = True) -> str:
+    """The tile footer: ``n=20 paired · BCa · MDE 4.1 %`` (no test name when not *with_test*)."""
     e = m.effect
     if isinstance(e, ProportionEffect):
         n = f"n={e.n_base}/{e.n_cand}" + (" paired" if e.paired else "")
@@ -237,7 +237,7 @@ def method_line(m: MetricEvidence) -> str:
             n = f"n={e.n_base}/{e.n_cand}"
         if e.n_clusters:
             n += f" · {e.n_clusters} shards"
-        parts = [n, "BCa" if e.bootstrap is not None else "Welch t"]
+        parts = [n, "BCa" if e.bootstrap is not None else "Welch t"] if with_test else [n]
     if m.verdict.mde is not None:
         mde = display(m, m.verdict.mde) if m.kind != "positive" else 100 * math.expm1(m.verdict.mde)
         parts.append(f"MDE {abs(mde):.1f}{unit_suffix(m)}")
@@ -400,8 +400,14 @@ def _ci_marks(
     hollow: bool = False,
     size: float = 8.0,
 ) -> None:
-    """Point + thick 90 % CI + thin 95 % CI at row/column *pos*."""
+    """Point + thick decision CI + thin 95 % CI at row/column *pos*.
+
+    The thin whisker is left out when the decision CI is already as wide (a Holm-adjusted
+    primary metric), so a thin line never sits inside the thick one.
+    """
     lw95, lw90 = 1.4, 4.6
+    if effect.ci95.level <= effect.ci.level:
+        lw95 = 0.0
     if vertical:
         ax.plot(
             [pos, pos],
@@ -990,7 +996,18 @@ def draw_forest(
         row_h = 0.34
         if subtitle is None:
             hollow = " · hollow: fails FDR" if any(not m.fdr_pass for m in metrics) else ""
-            subtitle = f"Shaded: margin {fmt_margin(metrics[0])} · thick: decision CI (90 %) · thin: 95 % CI{hollow}"
+            levels = sorted({round(100 * m.effect.ci.level) for m in metrics})
+            thick = (
+                f"{levels[0]} %"
+                if len(levels) == 1
+                else f"{levels[0]} %, Holm-widened for primaries"
+            )
+            thin = (
+                " · thin: 95 % CI"
+                if any(m.effect.ci95.level > m.effect.ci.level for m in metrics)
+                else ""
+            )
+            subtitle = f"Shaded: margin {fmt_margin(metrics[0])} · thick: decision CI ({thick}){thin}{hollow}"
         head = 1.25
         foot = 0.45
         height = head + n * row_h + foot
@@ -1118,7 +1135,13 @@ def draw_estimation(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | Non
     with mpl.rc_context(_rc()):
         height = 4.4
         root, fig, strip = _figure_with_strip(height, theme, strip_height([m]))
-        _title(fig, title or headline(m), f"{e.method} · {method_line(m)}", theme, height)
+        _title(
+            fig,
+            title or headline(m),
+            f"{e.method} · {method_line(m, with_test=False)}",
+            theme,
+            height,
+        )
         bottom, top = 0.5 / height, 1 - 1.15 / height
         ax = _axes(fig, (0.09, bottom, 0.50, top - bottom), theme)
         _hgrid(ax, theme)
