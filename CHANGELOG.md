@@ -5,6 +5,166 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.143.0] - 2026-10-18
+
+### Added
+- **`bencher ab --images` links real charts in the PR body.** Opt-in; without it
+  `evidence.md` stays text only. Each metric whose image shows more than its text chart
+  gets a matplotlib PNG: every repeat with a box per swept point and the mean ± 1 std, or a
+  heatmap of the percent change for two or more swept inputs. The PNGs and a CSV of every
+  sample are pushed as one commit to `refs/bencher/evidence` on `origin`, a ref that no
+  branch reaches, so `git clone` does not fetch them. Each run's commit sits on top of the
+  last (re-made on the new tip when another run pushes first, never forced), so every run
+  stays reachable. A throwaway repository makes and pushes the commit, so the local
+  repository keeps no ref, no image and no unpushed commit. Only git plumbing builds the
+  commit, so the work tree, index and `HEAD` do not change, and a `*.png filter=lfs` rule does not turn an image into a pointer.
+  `evidence.md` links each image by its commit SHA
+  (`https://github.com/<owner>/<repo>/blob/<sha>/<path>?raw=true`), which a PR page draws
+  in public and private repositories, above the text chart and data block, which stay.
+  With no GitHub `origin` or no push access, the images stay in `<out>/images/`,
+  `evidence.md` stays text only, one line on stderr says so, and the exit status does not
+  change. `write_evidence` takes the matching `images=ImageOutput(dir, publish)` argument
+  (`ValueError` when `images.dir` is `png_dir`: the file names are the same),
+  and `bencher.evidence_ref` holds the git side. `schema_version`, the existing keys,
+  flags and exit codes do not change.
+
+## [1.142.0] - 2026-10-17
+
+### Added
+- **Evidence is text only.** `evidence.md` never links an image: every chart is text that
+  GitHub draws in the PR body, with no external resource. Each case that linked a PNG has a
+  text form now. Two or more swept inputs get an emoji heatmap of the percent change,
+  colored better or worse by the metric's direction, with one table per value of a third
+  input (up to 6) or the mean over the rest. A repeat-to-repeat spread as large as the
+  change gets the two lines with pale ±1 std lines (or ± std on text bars with no swept
+  input). A negative value with no swept input, and swept values that do not print as
+  distinct labels, get text bars in a `diff` fence. Any number of categories gets the
+  category table. Points or inputs that only one side has get a table over the shared
+  points and a "Left out:" line. Every metric ends with a `<details>` block holding a CSV
+  of the points its chart shows.
+- **Each compared metric carries the change with a 95% CI.** `compare_results` adds a
+  `change` record to every entry in `metrics`: the mean difference (candidate − baseline),
+  a bootstrap 95% CI, the method (`paired_bootstrap` over the per-point means when both
+  sides swept the same inputs, `bootstrap` of the difference of means over repeats with no
+  swept input), the sample counts and a `stat_verdict`: "improved" / "regressed" when the
+  CI excludes 0, "equivalent within ±X%" when the whole CI lies inside
+  `regression_percentage` of the baseline mean, "no significant change", "too few samples"
+  (no CI) or "not comparable". The bootstrap uses a fixed seed, so the output is
+  deterministic, and only numpy, so it works on a light install. `evidence.md` shows the
+  change and its CI in each caption. The existing keys, `verdict` among them, and the exit
+  status do not change; `schema_version` stays 1.
+- **A radar chart for three or more metrics.** `evidence.md` draws one Mermaid
+  `radar-beta` chart above the per-metric charts, each metric scaled so its baseline mean
+  is 1. A metric with a zero, negative or non-finite baseline mean, or whose mean changes sign, is
+  left off and named under the chart. The chart draws straight edges, no rings and thick
+  strokes, so both curves read on GitHub's dark theme too.
+
+### Changed
+- **PNGs are opt-in.** `bencher ab` writes no PNG unless `--png-dir DIR` is given, and
+  `write_evidence` and `bencher compare --markdown` write none without `png_dir` / `--png`
+  (`--png-dir` is an alias of `--png`). `write_evidence_pngs`, `png_name`, the JSON schema
+  (`schema_version` 1) and the exit codes do not change.
+- **A numeric sweep is drawn as two lines.** The `evidence.md` chart for one numeric swept
+  input draws the baseline as a grey "before" line and the candidate as a blue "after" line.
+  The lines are named, so GitHub draws a legend, and the colors are fixed in the chart's
+  front matter so both read on GitHub's light and dark themes. Before,
+  the baseline was bars and the candidate a line in the default palette, which made the
+  first series hard to see.
+- **A categorical sweep is a table.** One string, enum or bool swept input gets a Markdown
+  table, one row per category with before, after, the change and its 95% CI, instead of a
+  chart that joined the categories with a line.
+- **No negative bars.** With no swept input, a negative mean is drawn as text bars grown
+  from 0 instead of an `xychart-beta` bar, which grows from the bottom of the axis.
+
+### Deprecated
+- **`--png-url-base` and `png_url_base`.** Still accepted, ignored, and warned about: the
+  CLIs print a warning on stderr and the Python functions raise a `DeprecationWarning`,
+  because there is no image to link.
+- **`bencher.evidence.ImageOnly`.** The chart plan for "draw a PNG instead" still
+  imports and builds, with a `DeprecationWarning`, but `plan_chart` never returns it.
+
+## [1.141.0] - 2026-10-16
+
+### Fixed
+- **A claim on a metric the base does not have is judged.** `compare_results` kept only the
+  metrics both sides measured, so a metric that a change adds, its chart and its claim
+  vanished from `comparison.json` and `evidence.md` without a warning. The comparison now
+  has a top-level `claims` list with one entry per claim the candidate declares, judged on
+  the candidate, with the baseline's outcome or `null` where the baseline does not measure
+  that metric. `evidence.md` lists the claims above the charts. A metric that only one side
+  declares is named in `unpaired`, in a "Not compared" list in `evidence.md` and in a
+  warning from `bencher compare` and `bencher ab`. `metrics` and the exit status do not
+  change: a failed claim is reported, not enforced. When the two sides share no metric the
+  compare still fails (exit 1) and no claim is judged; the error now names the metrics on
+  each side. `schema_version` stays 1, because the new keys are additive.
+
+## [1.140.0] - 2026-10-15
+
+### Added
+- **A result variable can declare a claim.** `bn.ResultFloat(units="m", claim="< 0.7")`
+  says what a change is meant to make true; `<`, `<=`, `>`, `>=` and the range `low..high`
+  are accepted, and an unreadable claim raises where the class is defined. The claim is
+  judged on every sample, repeats included, so it holds only if the worst sample satisfies
+  it. `result_to_dict` reports the outcome, the worst value and the inputs it came from;
+  `compare_results` reports it for the baseline as well as the candidate. `schema_version`
+  stays 1: the `claim` key is additive, and only a breaking change to the shape bumps it.
+- **`bencher compare` writes evidence for a pull request.** `--markdown PATH` writes a block
+  to paste as a PR's Evidence section: per metric, a Mermaid `xychart-beta` chart with the
+  baseline as bars and the candidate as a line, and a caption with the verdict, the values,
+  the claim outcome on each side and each side's revision. A metric that a Mermaid chart
+  cannot show honestly (two swept inputs, a spread as large as the change) links a PNG
+  instead. `--png DIR` writes one PNG per metric with a ±1 std band and the claim drawn in,
+  and `--png-url-base URL` points the Markdown's image links at where the PNGs were pushed.
+  `--json` is now optional when either is given. `bn.write_evidence` is the Python form.
+- **`bencher ab -- <command>` measures a change before and after.** It runs the bench
+  command on the base revision (the merge-base with `origin/HEAD` unless `--base` names
+  one) in a temporary `git worktree`, then on the working tree as it is, and writes
+  `base.pkl`, `candidate.pkl`, `comparison.json`, `evidence.md` and the PNGs into `--out`.
+  Each side runs with the caches off, because the caches are keyed by inputs and would
+  otherwise answer the candidate with the base's samples. A failed side exits 1, names
+  itself and keeps its log.
+- **`BENCHER_RESULT_PATH`, `BENCHER_NO_CACHE` and `BENCHER_NO_SHOW`.** A launcher can ask
+  any bench process to save its collected result to a path, to run every sweep with the
+  result and sample caches off, and to show no report, without editing the bench. The last
+  matters because `bn.run`'s default live report server keeps a non-interactive process
+  alive after the bench finishes.
+
+### Fixed
+- **`bn.load_result` loads a result saved by a script.** A sweep class defined in the
+  script that ran it was pickled as `__main__.<Name>`, which no other process has, so
+  `bencher compare` and `bencher <result.pkl>` failed on such results. A placeholder now
+  stands in for the missing class; the data, result variables and claims load intact.
+
+## [1.139.0] - 2026-10-13
+
+### Added
+- **The rerun backend draws a ±1σ band around a mean.** With `repeats > 1`, a numeric
+  result var is logged as rerun's `Measurements` archetype: the mean across repeats
+  with its variance, which a time series view draws as a line in a translucent band one
+  standard deviation wide each side. This is the rerun counterpart of the `hv.Spread`
+  band on a holoviews curve. A point with one valid repeat has no std, so it gets the
+  line and no band. The result var's units go to the legend and tooltips.
+- `example_rerun_repeats_band` in the Rerun Integration gallery: a noisy sine swept with
+  `repeats=8` on the rerun backend, drawn as the mean line in its ±1σ band.
+- **The rerun mapped viewer opens on the `log_tick` timeline.** rerun still records
+  `log_time` on every row, and the viewer opened on it, so a line graph's points were
+  spaced by logging time instead of by sweep index. The blueprint now pins `log_tick`.
+
+### Fixed
+- **The rerun backend logged nothing for a numeric result var when `repeats > 1`.** The
+  squeezed dataset it mapped kept the `repeat` dim, so every one-value-per-cell read
+  failed with "can only convert an array of size 1 to a Python scalar" and the line
+  graph, scalar and bar chart came out empty. Numeric vars are now reduced to their mean
+  and std across repeats first.
+
+### Changed
+- **The rerun window moves up a minor at each end, to 0.38 and 0.39: `rerun-sdk` and
+  `rerun-notebook` are `>=0.38.0,<0.40`.** `Measurements` first shipped in 0.38. The
+  default environment resolves 0.39.0 and `rerun-floor` pins 0.38 (0.38.1).
+- **`bencher.utils_rerun.rerun_chunk_api()` is removed.** It chose between
+  `rerun.chunk` and `rerun.experimental` for `Chunk` and `RrdReader`, because 0.37 had
+  no `rerun.chunk`. Every rerun in the new window has it, so callers import from
+  `rerun.chunk` directly.
 ## [1.138.0] - 2026-10-12
 
 ### Changed

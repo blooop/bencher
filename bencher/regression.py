@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from bencher.history import BIRTH_ATTR
+from bencher.optional_deps import full_install_required
 from bencher.variables.results import SCALAR_RESULT_TYPES, OptDir
 
 if TYPE_CHECKING:
@@ -233,7 +234,7 @@ class RegressionReport:
 
     def prepend_to_result(self, report: BenchReport, bench_res: BenchResult) -> None:
         """Insert a formatted regression summary at the top of *bench_res*'s tab."""
-        import panel as pn
+        from bencher.optional_deps import pn
 
         md = pn.pane.Markdown(self.to_markdown(), name="Regression Report", width=800)
         report.prepend_to_result(bench_res, md)
@@ -572,7 +573,8 @@ def _ensure_matplotlib_backend_loaded() -> None:
 
     mpl.use("Agg", force=False)
 
-    import holoviews as hv
+    with full_install_required():
+        import holoviews as hv
 
     if "matplotlib" in hv.Store.renderers:
         return
@@ -608,7 +610,8 @@ def build_regression_overlay(
         height: Pixel height for the bokeh backend.
         fig_inches: Figure size in inches for the matplotlib backend.
     """
-    import holoviews as hv
+    with full_install_required():
+        import holoviews as hv
 
     spec = _regression_plot_spec(result, historical, current)
     hist = spec["hist"]
@@ -922,7 +925,8 @@ def render_regression_png(
     Returns:
         Absolute path to the saved PNG as a string.
     """
-    import holoviews as hv
+    with full_install_required():
+        import holoviews as hv
 
     if path is None:
         from bencher.utils import gen_image_path
@@ -1172,7 +1176,8 @@ def detect_adaptive(
     resid_sigma = _residual_sigma(filtered)
     drift_noise = max(resid_sigma, 1e-6 * abs(baseline), 1e-12)
 
-    from scipy.stats import kendalltau, theilslopes
+    with full_install_required():
+        from scipy.stats import kendalltau, theilslopes
 
     slope = float(theilslopes(filtered, indices)[0])
     # Slope is per index-step; total drift across n points spans (n-1) steps.

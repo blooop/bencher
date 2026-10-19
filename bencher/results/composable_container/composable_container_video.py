@@ -10,6 +10,7 @@ import numpy as np
 if TYPE_CHECKING:
     from moviepy import CompositeVideoClip, ImageClip, VideoClip
 
+from bencher.optional_deps import full_install_required
 from bencher.results.composable_container.composable_container_base import (
     ComposableContainerBase,
     ComposeType,
@@ -62,7 +63,8 @@ class ComposableContainerVideo(ComposableContainerBase):
         Raises:
             RuntimeWarning: if file format is not recognised
         """
-        from moviepy import ImageClip, VideoClip, VideoFileClip
+        with full_install_required():
+            from moviepy import ImageClip, VideoClip, VideoFileClip
 
         if obj is not None:
             if isinstance(obj, VideoClip):
@@ -115,7 +117,14 @@ class ComposableContainerVideo(ComposableContainerBase):
         Returns:
             CompositeVideoClip: A composite video clip containing the images/videos added via append()
         """
-        from moviepy import CompositeVideoClip, ImageClip, clips_array, concatenate_videoclips, vfx
+        with full_install_required():
+            from moviepy import (
+                CompositeVideoClip,
+                ImageClip,
+                clips_array,
+                concatenate_videoclips,
+                vfx,
+            )
 
         if render_cfg is None:
             render_cfg = RenderCfg(**kwargs)
@@ -195,7 +204,8 @@ class ComposableContainerVideo(ComposableContainerBase):
         return deepcopy(self)
 
     def extend_clip(self, clip: VideoClip, desired_duration: float) -> VideoClip:
-        from moviepy import ImageClip, concatenate_videoclips
+        with full_install_required():
+            from moviepy import ImageClip, concatenate_videoclips
 
         if clip.duration is None:
             # render() gives every clip a duration before it gets here, so this states

@@ -309,7 +309,7 @@ class TestSaveLoadRender(unittest.TestCase):
             stderr = io.StringIO()
             with (
                 mock.patch(
-                    "bencher.report_export.comparison_to_json",
+                    "bencher.evidence.compare_results",
                     side_effect=ValueError("no comparable scalar result variables"),
                 ),
                 contextlib.redirect_stderr(stderr),

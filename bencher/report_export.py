@@ -17,7 +17,9 @@ Two artifacts:
   shares identical direction/threshold semantics with the normal pipeline.
 
 The contracts carry ``schema_version`` so downstream consumers can pin to a
-shape.
+shape. It counts breaking changes only: an added key (such as ``claim`` on a
+metric whose result variable declares one, or ``claims`` and ``unpaired`` on a
+comparison) leaves it alone, so a reader must tolerate keys it does not know.
 """
 
 from __future__ import annotations
@@ -30,6 +32,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import xarray as xr
 
+from bencher.change_stats import change_between, not_comparable
+from bencher.claims import evaluate_claim, outcome_to_dict
 from bencher.regression import (
     _finite_or_none,
     detect_regressions,
@@ -42,6 +46,7 @@ if TYPE_CHECKING:
     import param
 
     from bencher.bench_cfg import BenchRunCfg
+    from bencher.regression import RegressionResult
     from bencher.results.bench_result import BenchResult
 
 SCHEMA_VERSION = 1
@@ -80,6 +85,11 @@ def _metric_entry(bench_res: BenchResult, rv: param.Parameter) -> dict:
     except (ValueError, IndexError, KeyError, TypeError):
         entry["optimal_value"] = None
         entry["optimal_inputs"] = {}
+    claim = getattr(rv, "claim", None)
+    if claim is not None:
+        # Judged on this run's samples only, not on an accumulated over_time history.
+        da = _snapshot_ds(bench_res)[rv.name]
+        entry["claim"] = {"claim": str(claim), **outcome_to_dict(evaluate_claim(claim, da))}
     return entry
 
 
@@ -141,7 +151,11 @@ def result_to_dict(bench_res: BenchResult, *, include_series: bool = False) -> d
 
     Returns:
         A dict with ``schema_version``, ``bench_name``, ``provenance``,
-        ``input_vars``, ``over_time``, ``metrics``, and ``regressions``.
+        ``input_vars``, ``over_time``, ``metrics``, and ``regressions``. A metric
+        whose result variable declares a claim (``ResultFloat(claim="< 0.7")``)
+        carries ``claim``: the claim text, ``holds`` (None when nothing was
+        recorded), the worst sample's ``worst_value`` and ``worst_inputs``, and
+        the number of ``samples`` judged.
     """
     cfg = bench_res.bench_cfg
     scalar_vars = [rv for rv in cfg.result_vars if isinstance(rv, SCALAR_RESULT_TYPES)]
@@ -308,6 +322,23 @@ def _percent_improved(reg: Mapping[str, object]) -> bool:
     return _beneficial(change_percent, reg.get("direction")) and abs(change_percent) >= threshold
 
 
+def _change(
+    reg: RegressionResult, base_ds: xr.Dataset, cand_ds: xr.Dataset, run_cfg: BenchRunCfg
+) -> dict:
+    """The metric's ``change`` record: mean difference, bootstrap CI and stat verdict.
+
+    The equivalence margin is the percent threshold the verdict uses: the
+    metric's own when its method is ``percentage`` (an override can set it),
+    else ``run_cfg.regression_percentage``.
+    """
+    margin = _finite_value(reg.threshold) if reg.method == "percentage" else None
+    if margin is None:
+        margin = float(run_cfg.regression_percentage)
+    if reg.variable not in base_ds or reg.variable not in cand_ds:
+        return not_comparable("only one side measures it", margin)
+    return change_between(base_ds[reg.variable], cand_ds[reg.variable], reg.direction, margin)
+
+
 def compare_results(
     baseline: BenchResult, candidate: BenchResult, *, run_cfg: BenchRunCfg | None = None
 ) -> dict:
@@ -325,23 +356,61 @@ def compare_results(
             omitted, a percentage comparison (``regression_method='percentage'``)
             is used — the natural choice for a two-point A/B.
 
+    A scalar metric that only one side has is listed in ``unpaired``: it has
+    nothing on the other side to compare against. A claim on a metric the
+    baseline does not have is still judged in ``claims``.
+
     Returns:
         A dict with ``schema_version``, ``baseline``/``candidate`` provenance,
-        per-metric ``metrics`` (with a ``verdict``), and a ``summary`` count.
+        per-metric ``metrics`` (with a ``verdict`` and a ``change``), a ``summary`` count,
+        ``claims`` and ``unpaired``. A metric whose candidate result variable
+        declares a claim carries ``claim``: the claim text and its outcome on each
+        of ``baseline`` and ``candidate`` (shaped as in :func:`result_to_dict`).
+
+        ``claims`` has one entry for each claim the candidate's scalar result
+        variables declare, in declaration order, whether or not the baseline has
+        that metric: ``{"variable", "claim", "candidate", "baseline"}``. Each side
+        is an outcome shaped as in :func:`result_to_dict`; ``baseline`` is
+        ``None`` when the baseline does not measure the metric. For a metric in
+        ``metrics`` that the baseline measures, the entry repeats that metric's
+        ``claim``.
+
+        ``unpaired`` is ``{"candidate_only": [...], "baseline_only": [...]}``: the
+        names of the scalar metrics that only one side declares.
+
+        ``change`` on each metric estimates the move from the data alone (see
+        :mod:`bencher.change_stats`): ``mean_diff`` (candidate - baseline), its
+        bootstrap 95% CI ``ci_low``/``ci_high`` (``None`` when there are too few
+        samples), ``ci_level``, ``method`` (``"paired_bootstrap"`` or
+        ``"bootstrap"``), the counts ``n``/``n_baseline``/``n_candidate``,
+        ``resamples``, ``equivalence_percent`` and ``stat_verdict``. It never
+        changes ``verdict``, which still comes from the regression threshold.
+        When only one side measures the metric, or the sides swept different
+        inputs or share no swept input point, the record is "not comparable":
+        ``method`` is ``None``, ``mean_diff`` and the CI are ``None``, the counts
+        and ``resamples`` are 0, and a ``reason`` key (only this record has it)
+        says why.
 
     Raises:
-        ValueError: when the two results share no comparable scalar metric.
+        ValueError: when the two results share no comparable scalar metric. The
+            compare then fails (``bencher compare`` and ``bencher ab`` exit 1) and no
+            claim is judged; the message names the metrics on each side.
     """
-    base_vars = {
+    base_names = [
         rv.name for rv in baseline.bench_cfg.result_vars if isinstance(rv, SCALAR_RESULT_TYPES)
-    }
+    ]
     cand_scalar = [
         rv for rv in candidate.bench_cfg.result_vars if isinstance(rv, SCALAR_RESULT_TYPES)
     ]
-    shared = [rv for rv in cand_scalar if rv.name in base_vars]
+    cand_names = {rv.name for rv in cand_scalar}
+    shared = [rv for rv in cand_scalar if rv.name in base_names]
+    candidate_only = [rv.name for rv in cand_scalar if rv.name not in base_names]
+    baseline_only = [name for name in base_names if name not in cand_names]
     if not shared:
         raise ValueError(
             "compare_results: baseline and candidate share no comparable scalar result variables"
+            f" (candidate only: {', '.join(candidate_only) or 'none'};"
+            f" baseline only: {', '.join(baseline_only) or 'none'})"
         )
 
     if run_cfg is None:
@@ -357,23 +426,47 @@ def compare_results(
     # detect_regressions only inspects bench_cfg.result_vars; reuse candidate's.
     report = detect_regressions(combined, candidate.bench_cfg, run_cfg)
 
+    # The candidate declares what the change is meant to make true. Judging the
+    # baseline by the same claim, where it has the metric, shows whether the
+    # change made it true.
+    claims = [
+        {
+            "variable": rv.name,
+            "claim": str(rv.claim),
+            "candidate": outcome_to_dict(evaluate_claim(rv.claim, cand_ds[rv.name])),
+            "baseline": (
+                outcome_to_dict(evaluate_claim(rv.claim, base_ds[rv.name]))
+                if rv.name in base_names
+                else None
+            ),
+        }
+        for rv in cand_scalar
+        if getattr(rv, "claim", None) is not None
+    ]
+    claim_of = {c["variable"]: c for c in claims if c["baseline"] is not None}
     metrics = []
     counts = {"improved": 0, "regressed": 0, "unchanged": 0}
     for r in report.results:
         verdict = _verdict(r.to_dict())
         counts[verdict] += 1
-        metrics.append(
-            {
-                "variable": r.variable,
-                "baseline_value": _finite_or_none(r.baseline_value),
-                "current_value": _finite_or_none(r.current_value),
-                "change_percent": _finite_or_none(r.change_percent),
-                "direction": r.direction,
-                "method": r.method,
-                "regressed": bool(r.regressed),
-                "verdict": verdict,
+        metric = {
+            "variable": r.variable,
+            "baseline_value": _finite_or_none(r.baseline_value),
+            "current_value": _finite_or_none(r.current_value),
+            "change_percent": _finite_or_none(r.change_percent),
+            "direction": r.direction,
+            "method": r.method,
+            "regressed": bool(r.regressed),
+            "verdict": verdict,
+            "change": _change(r, base_ds, cand_ds, run_cfg),
+        }
+        if (claim := claim_of.get(r.variable)) is not None:
+            metric["claim"] = {
+                "claim": claim["claim"],
+                "baseline": claim["baseline"],
+                "candidate": claim["candidate"],
             }
-        )
+        metrics.append(metric)
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -387,6 +480,8 @@ def compare_results(
         },
         "metrics": metrics,
         "summary": counts,
+        "claims": claims,
+        "unpaired": {"candidate_only": candidate_only, "baseline_only": baseline_only},
     }
 
 

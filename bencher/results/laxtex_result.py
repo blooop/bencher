@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import panel as pn
-from panel.pane import LaTeX
+from bencher.optional_deps import PLOTTING_INSTALLED, pn
 
 if TYPE_CHECKING:
     from bencher.bench_cfg import BenchCfg
     from bencher.variables.sweep_base import SweepBase
 
-pn.extension("mathjax")
+if PLOTTING_INSTALLED:
+    pn.extension("mathjax")
 
 # More values than this are elided to first/last two with a vertical ellipsis.
 MAX_DISPLAY_VALUES = 5
@@ -82,4 +82,4 @@ def to_latex(bench_cfg: BenchCfg) -> pn.pane.LaTeX | None:
     latex_str += result_var_to_latex(bench_cfg)
     latex_str += r"\]"
 
-    return LaTeX(latex_str.replace("_", r"\;"))
+    return pn.pane.LaTeX(latex_str.replace("_", r"\;"))

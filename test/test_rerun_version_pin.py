@@ -4,7 +4,7 @@ Bencher embeds the rerun web viewer by asking a CDN for a viewer whose version
 matches the ``rerun-sdk`` that recorded the ``.rrd`` file.  That version is read off
 the installed distribution, so the pairing is exact for free — what the ``rerun``
 extra has to state is which *minors* bencher was tested against, since that is where
-this still-alpha API reshapes archetypes, blueprint types and ``rerun.experimental``.
+this still-alpha API reshapes archetypes, blueprint types and ``rerun.chunk``.
 Patches inside a minor are fixes to a format bencher already round-trips, so the
 window floats across them.
 

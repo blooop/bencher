@@ -22,7 +22,7 @@ import logging
 import traceback
 import warnings
 
-import panel as pn
+from bencher.optional_deps import pn
 
 logger = logging.getLogger(__name__)
 

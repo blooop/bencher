@@ -1,0 +1,427 @@
+"""PR-ready evidence from two results: the Markdown block and the PNG charts."""
+
+from __future__ import annotations
+
+import itertools
+import json
+import math
+import re
+
+import numpy as np
+import pytest
+from matplotlib.figure import Figure
+from matplotlib.image import imread
+
+import bencher as bn
+from bencher.evidence import BeforeAfterBars, mermaid_chart
+from bencher.render import main, save_result
+
+_NOISE = itertools.cycle([0.5, -0.5])
+
+
+class Braking(bn.ParametrizedSweep):
+    speed = bn.FloatSweep(default=1.0, bounds=(1.0, 3.0), samples=3)
+    load = bn.FloatSweep(default=1.0, bounds=(1.0, 2.0), samples=2)
+    gain = bn.FloatSweep(default=0.2)
+    noisy = bn.BoolSweep(default=False)
+
+    stop_distance = bn.ResultFloat(units="m", claim="< 0.7")
+
+    def benchmark(self):
+        noise = next(_NOISE) if self.noisy else 0.0
+        self.stop_distance = self.gain * self.speed * self.load + noise
+
+
+def _collect(gain, input_vars=("speed",), repeats=1, noisy=False, samples=3):
+    bench = bn.Bench(f"braking_{gain}", Braking())
+    res = bench.collect(
+        input_vars=[
+            Braking.param.speed.with_samples(samples) if v == "speed" else v for v in input_vars
+        ],
+        result_vars=["stop_distance"],
+        const_vars=[("gain", gain), ("noisy", noisy)],
+        run_cfg=bn.BenchRunCfg(repeats=repeats),
+    )
+    bench.close()
+    return res
+
+
+def _chart(markdown: str) -> str:
+    return re.search(r"```mermaid\n(.*?)```", markdown, re.DOTALL)[1]
+
+
+def test_one_swept_input_draws_before_and_after_as_two_lines():
+    md = bn.evidence_markdown(_collect(0.3), _collect(0.2))
+    chart = _chart(md)
+    assert "\nxychart-beta\n" in chart
+    assert 'title "stop_distance (m): before vs after"' in chart
+    assert 'x-axis "speed" ["1", "2", "3"]' in chart
+    assert 'line "before" [0.3, 0.6, 0.9]\n    line "after" [0.2, 0.4, 0.6]' in chart
+    lo, hi = map(float, re.search(r"y-axis \"[^\"]*\" (\S+) --> (\S+)", chart).groups())
+    assert lo == 0
+    assert hi >= 0.9
+
+
+def test_the_caption_gives_verdict_values_claim_and_provenance():
+    md = bn.evidence_markdown(_collect(0.3), _collect(0.2))
+    assert "**stop_distance** improved: mean 0.6 → 0.4 m (-33.3%)" in md
+    assert (
+        "claim `< 0.7`: baseline fails (worst 0.9 at speed=3, repeat=1)"
+        " → candidate holds (worst 0.6 at speed=3, repeat=1)" in md
+    )
+    assert "3 samples" in md
+
+
+def test_no_swept_input_compares_one_bar_per_side():
+    chart = _chart(bn.evidence_markdown(_collect(0.3, input_vars=()), _collect(0.2, input_vars=())))
+    assert 'x-axis ["before", "after"]' in chart
+    assert "bar [0.3, 0.2]" in chart
+    assert "line" not in chart
+
+
+def test_the_y_range_holds_the_claim_threshold():
+    # Values near 0.2 with a claim at 0.7: the range must reach the threshold.
+    chart = _chart(
+        bn.evidence_markdown(_collect(0.1, input_vars=()), _collect(0.09, input_vars=()))
+    )
+    lo, hi = map(float, re.search(r"y-axis \"[^\"]*\" (\S+) --> (\S+)", chart).groups())
+    assert hi >= 0.7
+    # A change of 0.01 on an axis from 0 would be under 5% of it: the axis starts above 0.
+    assert 0 < lo <= 0.09
+
+
+def test_two_swept_inputs_draw_a_heatmap_not_an_image():
+    md = bn.evidence_markdown(
+        _collect(0.3, input_vars=("speed", "load")),
+        _collect(0.2, input_vars=("speed", "load")),
+    )
+    assert "```mermaid" not in md
+    assert "![" not in md
+    assert "| speed ↓ load → |" in md
+
+
+def test_a_spread_as_large_as_the_change_draws_std_lines_not_an_image():
+    md = bn.evidence_markdown(
+        _collect(0.3, repeats=2, noisy=True), _collect(0.29, repeats=2, noisy=True)
+    )
+    assert "![" not in md
+    assert 'line "before +1 std"' in _chart(md)
+
+
+def test_a_long_sweep_is_binned_to_at_most_thirty_points():
+    chart = _chart(bn.evidence_markdown(_collect(0.3, samples=70), _collect(0.2, samples=70)))
+    labels = re.search(r"x-axis \"speed\" \[(.*)\]", chart)[1].split(", ")
+    # 70 points in bins of ceil(70 / 30) = 3 make 24 points per line.
+    assert len(labels) == 24
+    before, after = re.findall(r"line \"\w+\" \[(.*)\]", chart)
+    assert len(before.split(", ")) == len(after.split(", ")) == len(labels)
+    speeds = np.linspace(1.0, 3.0, 70)
+    assert float(before.split(", ")[0]) == pytest.approx(0.3 * speeds[:3].mean(), rel=1e-3)
+
+
+def test_quotes_in_units_do_not_break_the_title():
+    base, cand = _collect(0.3), _collect(0.2)
+    for res in (base, cand):
+        res.bench_cfg.result_vars[0].units = 'm "wet"'
+    title = re.search(r"title (.*)", _chart(bn.evidence_markdown(base, cand)))[1]
+    assert title.count('"') == 2
+
+
+def test_a_metric_that_reads_zero_on_both_sides_still_charts(monkeypatch):
+    base, cand = _collect(0.0, input_vars=()), _collect(0.0, input_vars=())
+    for res in (base, cand):
+        monkeypatch.setattr(res.bench_cfg.result_vars[0], "claim", None)
+    assert "bar [0, 0]" in _chart(bn.evidence_markdown(base, cand))
+
+
+_NUMBER = r"-?\d+(\.\d+)?"
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "bars"),
+    [
+        (1e5, 2e5, 'line "before" [100000, 200000, 300000]'),
+        (2e-6, 1e-6, 'line "before" [0.000002, 0.000004, 0.000006]'),
+    ],
+)
+def test_large_and_small_values_are_written_without_an_exponent(before, after, bars):
+    # Mermaid's xychart grammar has no exponent: "1e+05" is a parse error on GitHub.
+    chart = _chart(bn.evidence_markdown(_collect(before), _collect(after)))
+    assert bars in chart
+    axis = re.search(r"y-axis \"[^\"]*\" (\S+) --> (\S+)", chart)
+    assert all(re.fullmatch(_NUMBER, bound) for bound in axis.groups())
+    for series in re.findall(r"(?:bar|line(?: \"\w+\")?) \[(.*)\]", chart):
+        assert all(re.fullmatch(_NUMBER, v) for v in series.split(", "))
+
+
+def test_a_png_draws_a_side_that_swept_nothing_beside_one_that_swept(tmp_path):
+    # The change added a swept input: the baseline is one value, the candidate a curve.
+    pngs = bn.write_evidence_pngs(_collect(0.3, input_vars=()), _collect(0.2), tmp_path)
+    assert imread(pngs["stop_distance"]).shape[0] > 0
+
+
+@pytest.fixture(name="saved")
+def saved_pair(tmp_path):
+    a = save_result(_collect(0.3, input_vars=("speed", "load")), tmp_path / "a.pkl")
+    b = save_result(_collect(0.2, input_vars=("speed", "load")), tmp_path / "b.pkl")
+    return a, b
+
+
+def test_compare_writes_markdown_and_one_png_per_metric(saved, tmp_path):
+    a, b = saved
+    md, png_dir = tmp_path / "out" / "evidence.md", tmp_path / "out" / "png"
+    assert main(["compare", str(a), str(b), "--markdown", str(md), "--png", str(png_dir)]) == 0
+    assert ".png" not in md.read_text(encoding="utf-8")
+    image = imread(png_dir / "stop_distance.png")
+    assert image.shape[:2] == (440, 880)
+
+
+def test_compare_markdown_alone_writes_no_png(saved, tmp_path):
+    a, b = saved
+    md = tmp_path / "evidence.md"
+    assert main(["compare", str(a), str(b), "--markdown", str(md)]) == 0
+    assert ".png" not in md.read_text(encoding="utf-8")
+    assert list(tmp_path.rglob("*.png")) == []
+
+
+def test_compare_png_url_base_is_accepted_but_adds_no_link(saved, tmp_path, capsys):
+    a, b = saved
+    md = tmp_path / "evidence.md"
+    base = "https://raw.githubusercontent.com/o/r/sha/evidence"
+    args = ["compare", str(a), str(b), "--markdown", str(md), "--png-url-base", base]
+    assert main(args) == 0
+    assert "--png-url-base is deprecated" in capsys.readouterr().err
+    assert base not in md.read_text(encoding="utf-8")
+
+
+def test_compare_json_still_works_and_carries_the_claim(saved, tmp_path):
+    a, b = saved
+    out = tmp_path / "cmp.json"
+    assert main(["compare", str(a), str(b), "--json", str(out)]) == 0
+    metric = json.loads(out.read_text(encoding="utf-8"))["metrics"][0]
+    assert metric["claim"]["candidate"]["holds"] is False  # 0.2 * 3 * 2 = 1.2
+
+
+def test_compare_needs_at_least_one_output(saved):
+    a, b = saved
+    with pytest.raises(SystemExit) as exc:
+        main(["compare", str(a), str(b)])
+    assert exc.value.code == 2
+
+
+@pytest.mark.parametrize(("before", "after"), [(123456.7, 123500.0), (12345678.0, 12345679.0)])
+def test_a_small_change_on_a_large_value_stays_visible_in_the_chart_text(before, after):
+    chart = mermaid_chart("m", None, BeforeAfterBars(before, after), None)
+    bars = re.search(r"bar \[(.*)\]", chart)[1].split(", ")
+    lo, hi = re.search(r"y-axis \"[^\"]*\" (\S+) --> (\S+)", chart).groups()
+    assert all(re.fullmatch(_NUMBER, v) for v in [*bars, lo, hi])
+    assert bars[0] != bars[1]
+    assert float(lo) < float(hi)
+    assert float(lo) <= min(before, after)
+    assert float(hi) >= max(before, after)
+
+
+class Tuning(bn.ParametrizedSweep):
+    fine = bn.FloatSweep(default=1000.0, bounds=(1000.0, 1001.0), samples=10)
+    count = bn.IntSweep(default=10000, bounds=(10000, 10039))
+    gain = bn.FloatSweep(default=0.2)
+
+    cost = bn.ResultFloat(units="s")
+
+    def benchmark(self):
+        self.cost = self.gain * (1.0 + self.fine + self.count)
+
+
+def _collect_tuning(gain, input_var):
+    bench = bn.Bench(f"tuning_{gain}_{input_var}", Tuning())
+    res = bench.collect(input_vars=[input_var], result_vars=["cost"], const_vars=[("gain", gain)])
+    bench.close()
+    return res
+
+
+@pytest.mark.parametrize("input_var", ["fine", "count"])
+def test_sweep_labels_are_unique_and_written_without_an_exponent(input_var):
+    md = bn.evidence_markdown(_collect_tuning(0.3, input_var), _collect_tuning(0.2, input_var))
+    labels = re.search(rf"x-axis \"{input_var}\" \[(.*)\]", _chart(md))[1].split(", ")
+    assert len(set(labels)) == len(labels)
+    assert all(re.fullmatch(rf'"{_NUMBER}"', label) for label in labels)
+
+
+def test_a_png_draws_sides_that_swept_different_inputs_each_against_its_own(tmp_path, monkeypatch):
+    figures = []
+    save = Figure.savefig
+
+    def record(fig, *args, **kwargs):
+        figures.append(fig)
+        return save(fig, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", record)
+    bn.write_evidence_pngs(
+        _collect(0.3, input_vars=("speed",)), _collect(0.2, input_vars=("load",)), tmp_path
+    )
+    (fig,) = figures
+    assert {ax.get_xlabel() for ax in fig.axes} == {"speed", "load"}
+
+
+class Margin(bn.ParametrizedSweep):
+    speed = bn.FloatSweep(default=1.0, bounds=(1.0, 3.0), samples=3)
+    floor = bn.FloatSweep(default=0.0)
+
+    margin = bn.ResultFloat(units="m", claim="> 0")
+
+    def benchmark(self):
+        self.margin = self.floor if self.speed == 3.0 else self.speed
+
+
+def _collect_margin(floor):
+    bench = bn.Bench(f"margin_{floor}", Margin())
+    res = bench.collect(input_vars=["speed"], result_vars=["margin"], const_vars=[("floor", floor)])
+    bench.close()
+    return res
+
+
+def test_a_minus_inf_worst_sample_is_not_captioned_as_inf():
+    md = bn.evidence_markdown(_collect_margin(1.0), _collect_margin(-math.inf))
+    claim = re.search(r"claim `> 0`: .*", md)[0]
+    assert "candidate fails" in claim
+    assert "worst inf" not in claim
+
+
+def test_png_dir_writes_pngs_the_markdown_does_not_link(tmp_path):
+    md, png_dir = tmp_path / "out" / "e.md", tmp_path / "out" / "png"
+    bn.write_evidence(
+        _collect(0.3, input_vars=("speed", "load")),
+        _collect(0.2, input_vars=("speed", "load")),
+        markdown_path=md,
+        png_dir=png_dir,
+    )
+    assert ".png" not in md.read_text(encoding="utf-8")
+    assert (png_dir / "stop_distance.png").exists()
+
+
+def test_a_baseline_that_swept_nothing_against_a_swept_candidate_compares_the_means():
+    md = bn.evidence_markdown(_collect(0.3, input_vars=()), _collect(0.2))
+    assert "```mermaid" not in md
+    assert "![" not in md
+    assert "| all points |" in md
+
+
+def test_a_point_with_no_recorded_sample_is_left_out_of_a_table():
+    md = bn.evidence_markdown(_collect_margin(1.0), _collect_margin(math.nan))
+    assert "```mermaid" not in md
+    assert "![" not in md
+    assert "Left out:" in md
+
+
+class Fleet(bn.ParametrizedSweep):
+    robot = bn.StringSweep([f"r{i:02d}" for i in range(31)])
+    gain = bn.FloatSweep(default=0.2)
+
+    load = bn.ResultFloat(units="kg")
+
+    def benchmark(self):
+        self.load = self.gain * int(self.robot[1:])
+
+
+def _collect_fleet(gain):
+    bench = bn.Bench(f"fleet_{gain}", Fleet())
+    res = bench.collect(input_vars=["robot"], result_vars=["load"], const_vars=[("gain", gain)])
+    bench.close()
+    return res
+
+
+def test_more_than_thirty_categories_get_a_table():
+    md = bn.evidence_markdown(_collect_fleet(0.3), _collect_fleet(0.2))
+    assert "```mermaid" not in md
+    assert "![" not in md
+    assert len(re.findall(r"^\| r\d\d \|", md, re.MULTILINE)) == 31
+
+
+def test_markdown_alone_with_only_charted_metrics_writes_no_png(tmp_path):
+    files = bn.write_evidence(_collect(0.3), _collect(0.2), markdown_path=tmp_path / "e.md")
+    assert "```mermaid" in (tmp_path / "e.md").read_text(encoding="utf-8")
+    assert files.pngs == {}
+    assert list(tmp_path.rglob("*.png")) == []
+
+
+class Decel(bn.ParametrizedSweep):
+    speed = bn.FloatSweep(default=1.0, bounds=(1.0, 3.0), samples=3)
+    stop_distance = bn.ResultFloat(units="m", claim="< 0.7")
+    peak_decel = bn.ResultFloat(units="m/s^2", claim="< 3.0")
+    reaction = bn.ResultFloat(units="s")
+
+    def benchmark(self):
+        self.stop_distance = 0.2 * self.speed
+        self.peak_decel = 1.5 * self.speed  # 4.5 at speed=3: the claim fails
+        self.reaction = 0.1
+
+
+def _collect_decel(result_vars):
+    bench = bn.Bench("decel", Decel())
+    res = bench.collect(input_vars=["speed"], result_vars=list(result_vars))
+    bench.close()
+    return res
+
+
+@pytest.fixture(name="unpaired")
+def unpaired_pair(tmp_path):
+    """The candidate adds `peak_decel`; the base has `reaction`, which the candidate dropped."""
+    a = save_result(_collect_decel(["stop_distance", "reaction"]), tmp_path / "a.pkl")
+    b = save_result(_collect_decel(["stop_distance", "peak_decel"]), tmp_path / "b.pkl")
+    return a, b
+
+
+def test_the_claims_block_judges_a_metric_the_baseline_does_not_have():
+    md = bn.evidence_markdown(
+        _collect_decel(["stop_distance", "reaction"]),
+        _collect_decel(["stop_distance", "peak_decel"]),
+    )
+    block = md.split("```mermaid")[0]
+    assert "**Claims**" in block
+    assert (
+        "- `peak_decel` `< 3`: candidate fails (worst 4.5 at speed=3, repeat=1) · no baseline"
+        in block
+    )
+    assert (
+        "- `stop_distance` `< 0.7`: candidate holds (worst 0.6 at speed=3, repeat=1)"
+        " · baseline holds (worst 0.6 at speed=3, repeat=1)" in block
+    )
+    assert "**Not compared**" in block
+    assert "`peak_decel` is only in the candidate" in block
+    assert "`reaction` is only in the baseline" in block
+
+
+def test_a_comparison_with_every_metric_paired_lists_none_as_unpaired():
+    md = bn.evidence_markdown(_collect(0.3), _collect(0.2))
+    assert "is only in the" not in md
+    assert "**Claims**" in md
+
+
+def test_a_paired_claim_line_shows_each_side_its_own_outcome():
+    md = bn.evidence_markdown(_collect(0.3), _collect(0.2))
+    assert (
+        "- `stop_distance` `< 0.7`: candidate holds (worst 0.6 at speed=3, repeat=1)"
+        " · baseline fails (worst 0.9 at speed=3, repeat=1)" in md
+    )
+
+
+def test_a_comparison_without_claims_has_no_claims_block(monkeypatch):
+    base, cand = _collect(0.3), _collect(0.2)
+    for res in (base, cand):
+        monkeypatch.setattr(res.bench_cfg.result_vars[0], "claim", None)
+    assert "**Claims**" not in bn.evidence_markdown(base, cand)
+    assert bn.compare_results(base, cand)["claims"] == []
+
+
+def test_compare_warns_about_each_unpaired_metric_and_exits_as_before(unpaired, tmp_path, capsys):
+    a, b = unpaired
+    out = tmp_path / "cmp.json"
+    # A failed claim does not change the exit status, on a paired metric or not.
+    assert main(["compare", str(a), str(b), "--json", str(out)]) == 0
+    err = capsys.readouterr().err
+    assert "warning: `peak_decel` is only in the candidate" in err
+    assert "warning: `reaction` is only in the baseline" in err
+    claims = json.loads(out.read_text(encoding="utf-8"))["claims"]
+    peak = next(c for c in claims if c["variable"] == "peak_decel")
+    assert peak["candidate"]["holds"] is False
+    assert peak["baseline"] is None

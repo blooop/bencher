@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import holoviews as hv
-
+from bencher.optional_deps import hv
 from bencher.results.holoview_results.distribution_result.distribution_result import (
     DistributionResult,
 )

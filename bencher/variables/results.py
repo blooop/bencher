@@ -36,12 +36,12 @@ from enum import auto
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
-import holoviews as hv
-import panel as pn
 import param
 from param import Number
 from strenum import StrEnum
 
+from bencher.claims import Claim, as_claim
+from bencher.optional_deps import hv, pn
 from bencher.utils import hash_sha1
 
 if TYPE_CHECKING:
@@ -107,12 +107,21 @@ class ResultFloat(Number):
     bounds to [0, 1] and produces correct boolean-style plots.
     """
 
-    __slots__ = ["units", "direction", "share_axis", "max_time_events", "meaning_version"]
+    __slots__ = [
+        "units",
+        "direction",
+        "share_axis",
+        "max_time_events",
+        "meaning_version",
+        "claim",
+    ]
     # ``direction`` is excluded because flipping minimize<->maximize does not
     # change the recorded numeric values, only their interpretation for
     # Pareto/optimizer plots.  Keeping it in the hash would needlessly wipe
     # over_time history when the user merely retargets the optimizer.
-    _hash_exclude = ("direction", "share_axis", "max_time_events")
+    # ``claim`` is excluded for the same reason: it judges the values, it does
+    # not change them.
+    _hash_exclude = ("direction", "share_axis", "max_time_events", "claim")
 
     def __init__(
         self,
@@ -122,12 +131,16 @@ class ResultFloat(Number):
         max_time_events: int | None = None,
         default: float = float("nan"),
         meaning_version: int = 1,
+        claim: str | Claim | None = None,
         **params: Any,
     ) -> None:
         Number.__init__(self, **params)
         if not isinstance(units, str):
             raise TypeError(f"units must be a str, got {type(units).__name__}")
         self.units = units
+        # What the change under test is meant to make true, e.g. "< 0.7" (see
+        # bencher.claims). Parsed here so a typo fails at class definition.
+        self.claim = as_claim(claim)
         # The sanctioned way to declare "same name, new semantics": bump
         # meaning_version when the quantity this metric measures changes
         # (e.g. success redefined from reported to physically verified).

@@ -58,7 +58,21 @@ from .bencher import (
     BenchRunCfg as BenchRunCfg,
     SampleErrorPolicyError as SampleErrorPolicyError,
 )
+from .claims import (
+    Claim as Claim,
+    Comparison as Comparison,
+    Threshold as Threshold,
+    Within as Within,
+    parse_claim as parse_claim,
+)
 from .complete_report import verify_report as verify_report
+from .evidence import (
+    EvidenceFiles as EvidenceFiles,
+    ImageOutput as ImageOutput,
+    evidence_markdown as evidence_markdown,
+    write_evidence as write_evidence,
+    write_evidence_pngs as write_evidence_pngs,
+)
 from .example.benchmark_data import ExampleBenchCfg as ExampleBenchCfg
 from .execution import Execution as Execution, execution_context as execution_context
 from .file_server import run_file_server as run_file_server

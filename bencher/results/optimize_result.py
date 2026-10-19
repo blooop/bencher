@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-import optuna
+from bencher.optional_deps import optuna
 
 if TYPE_CHECKING:
     from bencher.bench_cfg import BenchCfg

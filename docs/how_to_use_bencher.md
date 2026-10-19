@@ -413,6 +413,10 @@ on; only the wall-clock `log_time` is dropped). Each result variable gets its ow
 view, so an image swept beside a metric reads as a picture and a time series *of the
 sweep*, moving together under one cursor.
 
+With `repeats > 1`, a number becomes `rr.Measurements` instead: the mean across the
+repeats with its variance, which rerun draws as a line in a ±1σ band. See
+[Rerun Repeats Band](reference/meta/rerun/example_rerun_repeats_band).
+
 The axis is a tick counter, not a clock. Rerun labels a sequence index `#3` with
 no unit, which is the honest reading for a sweep — a polygon with three sides is
 `#3`, where `+3s` would claim a unit the parameter does not have. Where the
@@ -686,6 +690,12 @@ comparison by default), so each metric's `verdict` is one of `improved` / `regre
 `unchanged` using identical direction/threshold semantics. Pass `run_cfg=` to choose a
 different `regression_method`.
 
+A metric that only one side declares has nothing to compare against. It is named in
+`unpaired` (`{"candidate_only": [...], "baseline_only": [...]}`), and `bencher compare` and
+`bencher ab` print a warning on stderr for each one.
+The top-level `claims` list judges every claim the candidate declares, also on a metric
+that the change adds (see [Declaring a claim](#declaring-a-claim)).
+
 The same artifacts are available from the CLI on a saved result (see the collect/render split):
 
 ```bash
@@ -696,9 +706,226 @@ python -m bencher.render result.pkl out_dir --json result.json
 python -m bencher.render compare baseline.pkl candidate.pkl --json comparison.json
 ```
 
+### Evidence for a pull request
+
+`bencher compare` also writes what a reviewer reads. `--markdown PATH` writes a block to
+paste as a PR's `## Evidence` section. It is text only: every chart is text that GitHub
+draws in the PR body, with no image and no external resource, so it works without pushing
+any file. Per metric it has a chart, then a caption with the verdict, the mean before →
+after with the change in percent, the claim outcome on each side (see below), the change
+with its 95% CI and statistical verdict, and each side's revision and sample count, then a
+collapsed `<details>` block with a CSV of the points the chart shows. Above the charts, a
+**Claims** list gives each claim the candidate declares with its outcome on the candidate
+and on the baseline, or "no baseline" for a metric the baseline does not measure, and a
+**Not compared** list names each metric that only one side declares. `--png DIR` (or
+`--png-dir DIR`) also writes one PNG per metric, for local viewing, with the claim
+threshold drawn in and a ±1 std band; the Markdown does not link it. The PNG plots against
+the first swept input; the mean and std pool the repeats and every other swept input, so
+with two or more swept inputs the band also holds the spread across the other inputs. Any
+of `--json`, `--markdown` and `--png` may be given; at least one is required.
+
+```bash
+bencher compare base.pkl candidate.pkl --markdown evidence.md --png evidence/
+```
+
+The chart is the form that shows the metric honestly:
+
+| What was swept | Chart |
+| --- | --- |
+| No input | Mermaid `xychart-beta`, one bar per side |
+| No input, a negative value | `diff` fence of text bars grown from a zero column (an xychart bar grows from the bottom of the axis, not from 0) |
+| No input, a repeat-to-repeat spread as large as the change | `diff` fence of text bars, each with its ± std |
+| One numeric input, same values on both sides | Mermaid `xychart-beta`, a grey "before" line and a blue "after" line with a legend; binned to at most 30 points |
+| ... with a spread as large as the change | The same two lines and a pale line at ±1 std of each (the series colors at 40% opacity) |
+| ... with values that do not print as distinct labels | `diff` fence of text bars, with `#2`, `#3` added to repeated labels |
+| One categorical input (string, enum or bool) | A table: before, after, the change and its 95% CI from that category's repeats, one row per category, however many |
+| Two or more inputs | An emoji heatmap: the percent change at each point of the first two inputs |
+| Points or inputs that only one side has | A table over the shared points, and a "Left out:" line naming the rest |
+
+In the heatmap, the color says better or worse for the metric's `direction`, not the sign
+of the change: 🟦 better by at least twice the margin, 🟩 better by at least the margin,
+⬜ within the margin, 🟧 and 🟥 the same for worse (the margin is the metric's
+`regression_percentage`, 10 by default). With no direction, 🟪 is down and 🟨 is up. A line
+under the table gives the legend. A third swept input with at most 6 values gets one table
+per value; past that, or with four or more inputs, each cell is the mean over the inputs
+after the first two, and a line says so. A numeric axis past 30 rows or 12 columns is
+binned. When the two sides swept different inputs, the table uses the first input both
+swept and averages over the others; with no shared input it compares the overall means.
+
+`--png-url-base` is still accepted but deprecated and ignored: there is no image to link,
+and `bencher compare` and `bencher ab` print a warning saying so.
+
+With three or more compared metrics, a Mermaid `radar-beta` chart above the per-metric
+charts shows them all at once: each axis is one metric's mean divided by its baseline mean,
+so the "before" curve is 1 on every axis and "after" shows the relative change. A metric
+whose baseline mean is 0, negative or not finite, or whose mean changes sign, cannot be scaled that
+way; it is left off and named under the chart.
+
+**The change and its CI.** Each metric in `comparison.json` carries a `change` record
+with `mean_diff` (candidate − baseline), its 95% CI `ci_low`/`ci_high`, `method`, the
+counts and `stat_verdict`: over the input points both sides swept, the per-point
+differences of the repeat means are bootstrapped (`paired_bootstrap`), and with no swept
+input or one shared point the two sides' repeats are resampled on their own (`bootstrap`).
+The CI is the 2.5th–97.5th percentile of 10,000 resamples with a fixed seed, so the same
+results give the same evidence byte for byte. `stat_verdict` is "equivalent within ±X%"
+when the whole CI lies inside ±X% of the baseline mean (X is `regression_percentage`, 10
+by default, or the metric's own percentage override), else "improved"/"regressed" (or
+"increased"/"decreased" with no `direction`) when the CI excludes 0, else "no significant
+change"; too few samples give "too few samples" and no CI, and sides with no shared input
+point give "not comparable" (with `method` null, `mean_diff` and the CI null, and a
+`reason` key that says why; only this record has `reason`). The threshold `verdict` does
+not change, and the caption shows both when they disagree.
+
+In Python: `bn.evidence_markdown(base, cand)`, `bn.write_evidence_pngs(base, cand, out_dir)`
+and `bn.write_evidence(base, cand, json_path=..., markdown_path=..., png_dir=...)`. Their
+`png_url_base` argument is deprecated and ignored, with a `DeprecationWarning`. See
+[`example_evidence.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_evidence.py).
+
+### Before and after a change: `bencher ab`
+
+`bencher ab` runs one bench command on the base revision and on the working tree, then
+writes the comparison and the evidence:
+
+```bash
+bencher ab -- python my_bench.py
+bencher ab --base origin/main --out evidence/ -- pixi run python my_bench.py
+```
+
+- The base is `--base REF` when given, else the merge-base of `HEAD` with `origin/HEAD`
+  (then `origin/main`, then `main`). It runs in a temporary detached `git worktree`,
+  removed afterwards even on failure. The candidate runs in the working tree as it is, so
+  uncommitted changes count.
+- The base run puts the worktree's `src` directory (when it has one) and its root first
+  on `PYTHONPATH`. That shadows an editable install or an absolute `PYTHONPATH` entry
+  that points into the working tree, so the base imports its own package. If the base
+  run still loads a module from the working tree (a package outside `src` or the root,
+  for example), it saves no result and fails, and `base.log` names each such module.
+- A relative path in the command that the base worktree cannot have, because it is outside
+  the repository or ignored by git (a `.venv/bin/python`, a data directory), is made
+  absolute for the base run. A tracked path such as the bench file stays relative, so each
+  side runs its own copy.
+- Each side runs with `BENCHER_NO_CACHE=1` (see [Caching](caching.md)): the caches are
+  keyed by inputs, not code, so without it the candidate could read the base's samples.
+- Each side is told where to save its result with `BENCHER_RESULT_PATH`. Any process that
+  sets it gets every collected sweep saved there with `bn.save_result`; a command that runs
+  several sweeps leaves the last one. `BENCHER_SOURCE_REVISION` is the side's commit (with
+  `+dirty` for a modified working tree) and `BENCHER_DISPLAY_LABEL` is `base <rev>` or
+  `candidate <rev>`.
+- `--out` (default `./bencher-ab/`) receives `base.pkl`, `candidate.pkl`,
+  `comparison.json`, the text-only `evidence.md`, and `base.log`/`candidate.log` with each
+  side's output. `--png-dir DIR` also writes one PNG per metric there, for local viewing.
+  `--images` adds images to `evidence.md` (see below); its PNGs share those file names, so
+  `--png-dir` must not be `<out>/images/`. The paths are printed on stdout.
+- The exit status is 0 when both sides ran, whatever the verdict and whatever the claims
+  say (a failed claim, on a metric the base has or not, is reported, not enforced); 1 when
+  a side failed or saved no result (stderr names the side and the tail of its log, which is
+  kept), or when the two sides share no metric (no claim is judged then, and stderr names
+  the metrics on each side); 2 for a usage or git problem.
+
+#### Images in the PR body: `bencher ab --images`
+
+`--images` is opt-in; without it `evidence.md` stays text only. With it, `bencher ab`
+draws a PNG of each metric whose image shows more than its text chart, pushes the PNGs to
+GitHub on a ref that no branch reaches, and links each one above its text chart:
+
+```bash
+bencher ab --base origin/main --images -- python my_bench.py
+```
+
+- **What is drawn.** A metric with more than one sample at a point gets every repeat as a
+  dot, a box of the quartiles per swept point (or per side with no swept input) and the
+  mean ± 1 std, before (grey, hollow) and after (blue, filled), with the claim threshold.
+  Two or more swept inputs get a heatmap of the percent change at each point, blue for
+  better and red for worse by the metric's `direction` (violet down and yellow up with no
+  direction), one panel per value of a third input as in the text heatmap. A metric with
+  one sample per point and one or no swept input gets no image: its text chart already
+  shows everything. Points or inputs that only one side has get no image either.
+- **Where it goes.** The PNGs and a `<metric>.csv` of every sample (side, each input,
+  repeat, value) are written to `images/` under `--out`, then pushed as one commit to
+  `refs/bencher/evidence` on `origin`, under a directory unique to the run (UTC time,
+  candidate revision, random suffix). The commit's parent is the ref's previous tip, so
+  every older run stays reachable and git never deletes it. No branch reaches the ref, so
+  `git clone` and `git fetch` do not download the images; `git ls-remote origin
+  refs/bencher/evidence` shows the ref. Only git plumbing builds the commit: the work tree,
+  the index and `HEAD` do not change, and `--no-filters` stores the real PNG even when
+  `.gitattributes` sends `*.png` to Git LFS. When another run pushes first, the commit is
+  made again on the new tip and pushed again, up to 5 times; the push is never forced.
+  A throwaway repository makes and pushes the commit and fetches only the previous tip,
+  so the local repository keeps no ref, no image and no unpushed commit.
+- **The links.** Each image is linked as
+  `https://github.com/<owner>/<repo>/blob/<commit-sha>/<path>?raw=true`, with the owner and
+  repository read from `origin` (ssh or https). A PR page draws that link for anyone who
+  can read the repository, public or private. A `<sub>` link under the image opens the
+  CSV. The text chart, the caption and the `<details>` CSV block stay under each image, so
+  the PR reads correctly when an image does not load.
+- **When it cannot push.** With no GitHub `origin`, or no push access, the images stay in
+  `images/`, `evidence.md` stays text only, and one line on stderr says why. The exit
+  status does not change.
+
+Each side also runs with `BENCHER_NO_SHOW=1`, which makes `bn.run` and `BenchRunner` show
+nothing: the default `show=True` starts a live report server, and that server keeps a
+non-interactive process alive after the bench finishes. The bench file must
+exist on the base revision: for a bench added by the change itself, commit it on its own
+first and pass that commit as `--base`.
+
 `BenchReport.save(..., emit_json=True)` writes `result.json` next to the HTML for every
 contained result (opt-in; default off). All JSON output is strict — non-finite values (e.g. a
 zero-baseline percent change) are emitted as `null`.
+
+### Declaring a claim
+
+A result variable can declare what a change is meant to make true:
+
+```python
+class Braking(bn.ParametrizedSweep):
+    speed = bn.FloatSweep(bounds=(0.5, 3.0))
+    stop_distance = bn.ResultFloat(units="m", claim="< 0.7")
+```
+
+The forms are `< x`, `<= x`, `> x`, `>= x` and the inclusive range `low..high`. The string
+is parsed when the class is defined, so a typo fails there and not after the sweep. A claim
+is judged against every sample, repeats included: it holds only if the *worst* sample
+satisfies it (the largest for `<`/`<=`, the smallest for `>`/`>=`, the one nearest or
+furthest past an edge for a range). A mean inside the bound with one point outside it fails.
+
+`result_to_dict` adds a `claim` entry to that metric — `holds` (`null` when nothing was
+recorded), `worst_value`, `worst_inputs` (sweep inputs and `repeat`) and `samples`.
+`compare_results` judges the candidate's claim on both sides, so "the baseline fails the
+claim and the candidate holds it" reads straight off the comparison. Its top-level `claims`
+list has one entry per claim the candidate declares, in declaration order:
+
+```json
+{"variable": "peak_decel", "claim": "< 3",
+ "candidate": {"holds": false, "worst_value": 5.336, "worst_inputs": {"speed": 2.5, "repeat": 4}, "samples": 36},
+ "baseline": null}
+```
+
+`baseline` is `null` when the baseline does not measure the metric, which is the usual case
+for a metric that the change adds; otherwise it is the baseline's outcome, and the entry
+repeats the `claim` on that metric's `metrics` entry. The claim is not part
+of the variable's cache identity: changing it keeps cached samples and over-time history.
+
+### A light install for the evidence tools
+
+A CI job that only gates a change does not need the plotting stack. Install the package
+without its dependencies, then the light ones by hand:
+
+```bash
+pip install --no-deps holobench
+pip install numpy param diskcache xarray pandas strenum matplotlib jinja2 pyyaml
+```
+
+The second list is holobench's own dependencies without the heavy ones, plus pyyaml, which
+bencher imports and a full install gets through panel. pip then warns that holobench's other requirements (holoviews, panel, hvplot, optuna,
+plotly, scikit-learn, moviepy) are missing; that is expected. It can also warn that a light
+package is newer than holobench's upper pin; add the pin to the second command (for example
+`"numpy<=2.5.1"`) if you want to stay inside it.
+
+What works: `import bencher`, sweeps, claims, `bn.compare_results`, `bencher compare` (JSON,
+Markdown and PNG evidence) and `bencher ab`. A sweep that would plot warns once and collects
+without plots. Plots, HTML reports, the report server, `bencher <result.pkl> <dir>`,
+optimisation and video raise an `ImportError` that says to run `pip install holobench`, which
+adds them.
 
 ## Complete execution reports
 

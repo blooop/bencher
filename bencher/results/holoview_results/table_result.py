@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import holoviews as hv
-
+from bencher.optional_deps import hv
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 

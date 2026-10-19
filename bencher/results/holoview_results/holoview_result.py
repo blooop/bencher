@@ -4,10 +4,9 @@ from functools import partial
 from itertools import product as iterproduct
 from typing import TYPE_CHECKING, Any
 
-import holoviews as hv
 import numpy as np
-import panel as pn
 
+from bencher.optional_deps import PLOTTING_INSTALLED, hv, pn
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.pane_result import PaneResult
 from bencher.utils import (
@@ -28,7 +27,8 @@ if TYPE_CHECKING:
 # NOTE: plotly is intentionally NOT registered here. Nothing in bencher renders
 # through the holoviews plotly backend (Surface/Volume use plotly.graph_objs
 # directly via pn.pane.Plotly), and registering it eagerly costs ~6s at import.
-hv.extension("bokeh")
+if PLOTTING_INSTALLED:
+    hv.extension("bokeh")
 
 # What a `to_*_ds` renderer actually hands back (plan 23 P12).
 #
@@ -42,7 +42,13 @@ hv.extension("bokeh")
 # Enumerated rather than collapsed to `Any`: the four shapes are exactly what a caller
 # has to handle, and `pn.Column`/`pn.Tabs` are the ones that surprise -- a caller doing
 # `.opts(...)` on the result works until someone enables over_time.
-PlotResult = hv.Overlay | hv.HoloMap | pn.Column | pn.Tabs
+#
+# A light install has neither package, so there the alias is ``Any``:
+# nothing can produce a plot to annotate.
+if TYPE_CHECKING or PLOTTING_INSTALLED:
+    PlotResult = hv.Overlay | hv.HoloMap | pn.Column | pn.Tabs
+else:
+    PlotResult = Any
 
 # Flag to enable or disable tap tool functionality in visualizations
 use_tap = True
@@ -66,17 +72,22 @@ class HoloviewResult(PaneResult):
     # Element types that carry the shared default figure size. Centralized here (rather
     # than inline in set_default_opts) so tests can assert coverage stays in sync as new
     # element types are added. HeatMap/GridSpace are excluded because they take extra opts.
+    # Empty on a light install, which has no holoviews and draws no plots.
     DEFAULT_SIZED_ELEMENTS = (
-        hv.Curve,
-        hv.Points,
-        hv.Bars,
-        hv.Scatter,
-        hv.BoxWhisker,
-        hv.Violin,
-        hv.Histogram,
-        hv.Area,
-        hv.ErrorBars,
-        hv.HexTiles,
+        (
+            hv.Curve,
+            hv.Points,
+            hv.Bars,
+            hv.Scatter,
+            hv.BoxWhisker,
+            hv.Violin,
+            hv.Histogram,
+            hv.Area,
+            hv.ErrorBars,
+            hv.HexTiles,
+        )
+        if PLOTTING_INSTALLED
+        else ()
     )
 
     @staticmethod
@@ -776,4 +787,5 @@ class HoloviewResult(PaneResult):
         return self.to_holomap().grid(inputs)
 
 
-HoloviewResult.set_default_opts()
+if PLOTTING_INSTALLED:
+    HoloviewResult.set_default_opts()
