@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import panel as pn
 import pytest
 
@@ -16,13 +18,13 @@ class SvgSweep(bn.ParametrizedSweep):
     drawing = bn.ResultSVG()
 
     def benchmark(self):
-        path = bn.gen_image_path(f"svg_{self.n}", filetype=".svg")
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(
-                f'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">'
-                f'<rect id="r{self.n}" width="{self.n * 5}" height="5"/></svg>'
-            )
-        self.drawing = path
+        path = Path(bn.gen_image_path(f"svg_{self.n}", filetype=".svg"))
+        path.write_text(
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">'
+            f'<rect id="r{self.n}" width="{self.n * 5}" height="5"/></svg>',
+            encoding="utf-8",
+        )
+        self.drawing = str(path)
 
 
 def _sweep(**run_cfg_kwargs) -> bn.Bench:
