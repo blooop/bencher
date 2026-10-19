@@ -158,13 +158,21 @@ class Shape(ABC):
     def deep_copy_recolored(self, color_index: int) -> Shape:
         """Copy and recolor in a single traversal."""
 
-    def extrude(self, n: int, direction: str, color_index: int | None = None) -> Group:
+    def extrude(
+        self,
+        n: int,
+        direction: str,
+        color_index: int | None = None,
+        fade_span: int | None = None,
+    ) -> Group:
         """Create a new shape by extruding this one n times along direction."""
         if color_index is not None:
             copies = [self.deep_copy_recolored(color_index) for _ in range(n)]
         else:
             copies = [self.deep_copy() for _ in range(n)]
-        return Group(children=copies, direction=direction, depth=self.depth + 1)
+        return Group(
+            children=copies, direction=direction, depth=self.depth + 1, fade_span=fade_span
+        )
 
 
 class Cell(Shape):
@@ -202,12 +210,30 @@ class Group(Shape):
     sequence, several frames into a render.
     """
 
-    def __init__(self, children: list[Shape], direction: str = "right", depth: int = 0) -> None:
+    def __init__(
+        self,
+        children: list[Shape],
+        direction: str = "right",
+        depth: int = 0,
+        fade_span: int | None = None,
+    ) -> None:
+        """``fade_span`` is the layer count a stack's depth fade runs over, front to back.
+
+        It defaults to the children drawn. A stack that grows one layer per frame
+        passes its final count, so each layer keeps its shade as layers are added in
+        front of it and every frame can share the layers the frame before drew.
+        It is ignored by a row or a column.
+        """
         if not children:
             raise ValueError("Group needs at least one child shape; use Cell() for a leaf.")
+        if fade_span is not None and fade_span < len(children):
+            raise ValueError(
+                f"fade_span {fade_span} is less than the {len(children)} layers drawn."
+            )
         super().__init__(depth=depth)
         self.children = children
         self.direction = direction  # right, down, stack
+        self.fade_span = (fade_span or len(children)) if direction == "stack" else None
         # Only Group memoises: a Cell's size is a constant and the two wrappers derive
         # theirs from fixed chrome. Previously this lived on the shared base, where the
         # three subclasses that never read it still carried the slot.
@@ -237,53 +263,81 @@ class Group(Shape):
 
     def draw(self, canvas: SvgCanvas, x: int, y: int, alpha: float = 1.0) -> None:
         """Draw this shape at position (x, y) on the canvas."""
+        # A row, column or stack is drawn as aligned power-of-two runs of children,
+        # each a shared definition built from its two halves. The runs a prefix of k
+        # children needs are the runs every longer prefix starts with, so a growth
+        # animation that redraws it one child longer per frame adds O(log k) markup
+        # per frame instead of k, and the definitions nest only log k deep.
+        n = len(self.children)
         if self.direction == "stack":
             # Isometric 3D stack: back layers at top-right, front at bottom-left.
-            # Draw back-to-front (painter's algorithm) with depth dimming.
-            n = len(self.children)
-            for i in range(n):
-                cx = x + (n - 1 - i) * DEPTH_DX
-                cy = y + i * abs(DEPTH_DY)
-                dim_factor = 0.5 + 0.5 * i / max(n - 1, 1)
-                place_shape(canvas, self.children[i], cx, cy, alpha * dim_factor)
-            return
-        # A row or column is drawn as aligned power-of-two runs of children, each a
-        # shared definition built from its two halves. The runs a prefix of k children
-        # needs are the runs every longer prefix starts with, so a growth animation
-        # that redraws the row one child longer per frame adds O(log k) markup per
-        # frame instead of k, and the definitions nest only log k deep.
-        axis = 0 if self.direction == "right" else 1
-        starts = [0]
-        for child in self.children:
-            starts.append(starts[-1] + child.size()[axis] + self.gap)
+            # Runs count layers from the front, which a growing stack keeps fixed, and
+            # draw back-to-front (painter's algorithm) with depth dimming.
+            span = self.fade_span or n
+
+            def child_at(d: int) -> tuple[Shape, float]:
+                dim_factor = 0.5 + 0.5 * (span - 1 - d) / max(span - 1, 1)
+                return self.children[n - 1 - d], alpha * dim_factor
+
+            def offset(d: int) -> tuple[float, float]:
+                return d * DEPTH_DX, -d * abs(DEPTH_DY)
+
+            back_first = True
+            origin = (x, y + (n - 1) * abs(DEPTH_DY))
+        else:
+            axis = 0 if self.direction == "right" else 1
+            starts = [0]
+            for child in self.children:
+                starts.append(starts[-1] + child.size()[axis] + self.gap)
+
+            def child_at(d: int) -> tuple[Shape, float]:
+                return self.children[d], alpha
+
+            def offset(d: int) -> tuple[float, float]:
+                return (starts[d], 0) if axis == 0 else (0, starts[d])
+
+            back_first = False
+            origin = (x, y)
 
         def run(lo: int, hi: int) -> tuple[str, Callable[[SvgCanvas], None]]:
             if hi - lo == 1:
-                child = self.children[lo]
-                return content_key(child.key(), alpha), (lambda c: child.draw(c, 0, 0, alpha))
+                child, a = child_at(lo)
+                return content_key(child.key(), a), (lambda c: child.draw(c, 0, 0, a))
             mid = (lo + hi) // 2
             left, right = run(lo, mid), run(mid, hi)
-            step = starts[mid] - starts[lo]
-            dx, dy = (step, 0) if axis == 0 else (0, step)
+            (lx, ly), (mx, my) = offset(lo), offset(mid)
+            dx, dy = mx - lx, my - ly
+            parts = [(left, 0, 0), (right, dx, dy)]
+            if back_first:
+                parts.reverse()
 
             def draw(c: SvgCanvas) -> None:
-                c.place(*left, 0, 0)
-                c.place(*right, dx, dy)
+                for part, px, py in parts:
+                    c.place(*part, px, py)
 
-            return content_key("run", left[0], right[0], dx, dy), draw
+            return content_key("run", back_first, left[0], right[0], dx, dy), draw
 
-        lo, n = 0, len(self.children)
+        runs = []
+        lo = 0
         while lo < n:
             size = 1 << ((n - lo).bit_length() - 1)
-            offset = starts[lo]
-            canvas.place(*run(lo, lo + size), x + offset * (1 - axis), y + offset * axis)
+            runs.append((lo, lo + size))
             lo += size
+        if back_first:
+            runs.reverse()
+        for lo, hi in runs:
+            ox, oy = offset(lo)
+            canvas.place(*run(lo, hi), origin[0] + ox, origin[1] + oy)
 
     def key(self) -> str:
         """Cached like ``size()``: the tree is immutable once built."""
         if self._cached_key is None:
             self._cached_key = content_key(
-                "group", self.direction, self.depth, tuple(c.key() for c in self.children)
+                "group",
+                self.direction,
+                self.depth,
+                self.fade_span,
+                tuple(c.key() for c in self.children),
             )
         return self._cached_key
 
@@ -292,6 +346,7 @@ class Group(Shape):
             children=[c.deep_copy() for c in self.children],
             direction=self.direction,
             depth=self.depth,
+            fade_span=self.fade_span,
         )
 
     def deep_copy_recolored(self, color_index: int) -> Group:
@@ -300,6 +355,7 @@ class Group(Shape):
             children=[c.deep_copy_recolored(color_index) for c in self.children],
             direction=self.direction,
             depth=self.depth,
+            fade_span=self.fade_span,
         )
 
 
@@ -916,7 +972,7 @@ def render_animation(
         old_shape = shape
         n_steps = size - 1  # k goes from 2..size
         for k in range(2, size + 1):
-            shape = old_shape.extrude(k, direction, color_index=dim_color)
+            shape = old_shape.extrude(k, direction, color_index=dim_color, fade_span=size)
             make_frame(shape, count_label=f"{running_product * k} combinations")
             # Hold so total growth time ≈ step_frames regardless of element count
             n_extra = max(0, round(step_frames / n_steps) - 1)

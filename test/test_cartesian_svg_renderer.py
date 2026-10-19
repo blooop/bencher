@@ -220,7 +220,7 @@ class TestDrawRegression:
 
     def test_stack(self):
         stack = Group(children=[Cell() for _ in range(3)], direction="stack", depth=2)
-        assert _render_hash(stack) == "921fcdac900e9459ee71e468c5583a13"
+        assert _render_hash(stack) == "1109720a20e5f6f1062253f260c00b70"
 
     def test_strobe_with_flash(self):
         row = Group(children=[Cell() for _ in range(3)], direction="right", depth=0)
@@ -426,6 +426,28 @@ class TestSvgDocument:
         def uses(n: int) -> int:
             cfg = CartesianProductCfg(all_vars=[SweepVar("x", list(range(n)))], result_names=["r"])
             return len(list(_render(cfg, tmp_path / str(n)).iter(f"{SVG_NS}use")))
+
+        assert uses(240) < 3 * uses(120)
+
+    def test_long_stacked_dimension_grows_linearly(self, tmp_path):
+        """Each growth frame of a stack adds one layer, so it must cost O(1) new markup.
+
+        The frames are counted apart from the ``<defs>``: the definitions dedupe by
+        rounded alpha, which hides a frame that writes every layer again until the
+        stack is longer still.
+        """
+
+        def uses(n: int) -> int:
+            cfg = CartesianProductCfg(
+                all_vars=[
+                    SweepVar("x", [0, 1]),
+                    SweepVar("y", [0, 1]),
+                    SweepVar("z", list(range(n))),
+                ],
+                result_names=["r"],
+            )
+            root = _render(cfg, tmp_path / str(n))
+            return sum(len(list(g.iter(f"{SVG_NS}use"))) for g in _frames(root))
 
         assert uses(240) < 3 * uses(120)
 
