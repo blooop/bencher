@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.144.0] - 2026-10-20
+
+### Added
+- **Python 3.14 support.** `requires-python` is now `>=3.11,<3.15`. A new `py314` pixi
+  environment runs the full CI suite, and the CI matrix runs it next to `py311` and `py313`.
+
+### Changed
+- The conda `sqlite` pin is now `>=3.48.0,!=3.49.1` instead of `==3.48.0`. Python 3.14
+  builds on conda-forge need a newer `libsqlite`, so the exact pin made `py314` unsolvable.
+  The pin existed only to skip the broken 3.49.1 build, and it still skips that build.
+
 ## [1.143.0] - 2026-10-18
 
 ### Added
