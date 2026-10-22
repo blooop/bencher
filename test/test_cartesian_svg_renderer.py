@@ -531,3 +531,14 @@ def test_animations_that_draw_differently_get_different_files(tmp_path):
     paths = [path([1, 2, 3]), path([1, "...", 3]), path([1, 2, 3], fps=10)]
     assert len(set(paths)) == 3
     assert path(["a", "b", "c"]) == paths[0]  # the values themselves are not drawn
+
+
+def test_strobe_settings_and_step_frames_change_the_file(tmp_path):
+    def path(strobe_pad=12, **kwargs) -> str:
+        cfg = CartesianProductCfg(
+            all_vars=[SweepVar("x", [1, 2, 3])], result_names=["r"], strobe_pad=strobe_pad
+        )
+        return render_animation(cfg, output_dir=str(tmp_path), width=320, height=200, **kwargs)
+
+    assert path(strobe_pad=12) != path(strobe_pad=20)
+    assert path(step_frames=2) != path(step_frames=4)
