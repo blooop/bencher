@@ -281,6 +281,10 @@ class TestRenderAnimation:
         # Must have at least a few unique frames
         assert len(_frames(root)) >= 3
 
+    def test_fps_above_1000_renders(self, tmp_path):
+        root = _render(_simple_cfg(), tmp_path, fps=1001)
+        assert len(_frames(root)) >= 1
+
     def test_3d_with_repeat(self, tmp_path):
         cfg = CartesianProductCfg(
             all_vars=[

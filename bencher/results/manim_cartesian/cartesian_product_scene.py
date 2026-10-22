@@ -765,7 +765,7 @@ def render_animation(
     defs = SvgDefs(id_prefix)
     frames: list[str] = []  # markup of each frame
     durations: list[int] = []  # per-frame duration in ms
-    frame_duration_ms = 1000 // fps
+    frame_duration_ms = max(1, 1000 // fps)
 
     # Persistent text state — both lines always visible, no flickering
     current_dim_label = ""
