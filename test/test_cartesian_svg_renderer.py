@@ -18,12 +18,14 @@ import pytest
 
 from bencher.results.manim_cartesian.cartesian_product_cfg import CartesianProductCfg, SweepVar
 from bencher.results.manim_cartesian.cartesian_product_scene import (
+    DIM_PALETTE,
     FILM_LABEL_H,
     Cell,
     Group,
     Shape,
     StrobeShape,
     TimelineShape,
+    place_shape,
     render_animation,
 )
 from bencher.results.manim_cartesian.svg_canvas import SvgCanvas, SvgDefs, animated_svg
@@ -500,3 +502,16 @@ def test_shrunk_strobe_keeps_its_tally_at_full_size(tmp_path):
         return bool(scaled) and bool(marks)
 
     assert any(shrunk_with_tally(f) for f in frames)
+
+
+def test_close_alphas_with_different_colours_do_not_share_a_definition():
+    """Two layer shades 1e-6 apart can still fall on two sides of a colour step."""
+    channel = DIM_PALETTE[0][0]
+    lighter = 100 / channel  # int(channel * lighter) == 100
+    darker = lighter - 1e-6  # int(channel * darker) == 99
+    assert round(lighter, 4) == round(darker, 4)
+    defs = SvgDefs("t-")
+    canvas = SvgCanvas(defs)
+    place_shape(canvas, Cell(), 0, 0, lighter)
+    place_shape(canvas, Cell(), 0, 0, darker)
+    assert defs.markup().count("<g id=") == 2

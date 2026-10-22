@@ -72,7 +72,7 @@ def place_shape(
 ) -> None:
     """Draw ``shape`` at ``(x, y)`` as a shared definition, so identical copies cost one ``<use>``."""
     canvas.place(
-        content_key(shape.key(), round(alpha, 4)),
+        content_key(shape.key(), alpha),
         lambda c: shape.draw(c, 0, 0, alpha),
         x,
         y,
@@ -250,9 +250,7 @@ class Group(Shape):
         def run(lo: int, hi: int) -> tuple[str, Callable[[SvgCanvas], None]]:
             if hi - lo == 1:
                 child = self.children[lo]
-                return content_key(child.key(), round(alpha, 4)), (
-                    lambda c: child.draw(c, 0, 0, alpha)
-                )
+                return content_key(child.key(), alpha), (lambda c: child.draw(c, 0, 0, alpha))
             mid = (lo + hi) // 2
             left, right = run(lo, mid), run(mid, hi)
             step = starts[mid] - starts[lo]
@@ -383,7 +381,7 @@ class TimelineShape(Shape):
 
         # --- One film frame (cutout + inner shape scaled to the window), reused per step ---
         frames_y = y + FILM_PAD + FILM_SPROCKET_H + FILM_SPROCKET_MARGIN
-        frame_key = content_key("film-frame", self.inner.key(), round(alpha, 4))
+        frame_key = content_key("film-frame", self.inner.key(), alpha)
 
         def draw_frame(c: SvgCanvas) -> None:
             c.rectangle(
