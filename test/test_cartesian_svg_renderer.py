@@ -521,6 +521,42 @@ def test_close_alphas_with_different_colours_do_not_share_a_definition():
     assert defs.markup().count("<g id=") == 2
 
 
+def _close_alphas() -> tuple[float, float]:
+    channel = DIM_PALETTE[0][0]
+    lighter = 100 / channel
+    darker = lighter - 1e-6
+    assert round(lighter, 4) == round(darker, 4)
+    return lighter, darker
+
+
+def _cell_fills(markup: str) -> list[str]:
+    return re.findall(r'<rect [^>]*width="19"[^>]*fill="(#[0-9a-f]{6})"', markup)
+
+
+def test_close_alphas_in_a_row_do_not_share_a_leaf_definition():
+    """A row's runs key each leaf by the layer shade, so close shades need two leaves."""
+    defs = SvgDefs("t-")
+    canvas = SvgCanvas(defs)
+    for alpha in _close_alphas():
+        Group([Cell(), Cell()], "right").draw(canvas, 0, 0, alpha)
+    fills = _cell_fills(defs.markup())
+    assert len(fills) == 2
+    assert fills[0] != fills[1]
+
+
+def test_close_alphas_in_a_film_strip_do_not_share_a_frame_definition():
+    """A film frame is keyed by the layer shade, so close shades need two frames."""
+    defs = SvgDefs("t-")
+    canvas = SvgCanvas(defs)
+    for alpha in _close_alphas():
+        TimelineShape(Cell(), 2).draw(canvas, 0, 0, alpha)
+    markup = defs.markup()
+    assert markup.count('width="119"') == 2
+    fills = _cell_fills(markup)
+    assert len(fills) == 2
+    assert fills[0] != fills[1]
+
+
 def test_animations_that_draw_differently_get_different_files(tmp_path):
     """A shared path lets one render overwrite another, and their ids would clash."""
 
