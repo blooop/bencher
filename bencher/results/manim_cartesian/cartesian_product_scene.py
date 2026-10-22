@@ -11,6 +11,7 @@ reused, and a SMIL ``<animate>`` per frame plays them in a loop (see ``svg_canva
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import logging
 from abc import ABC, abstractmethod
@@ -80,14 +81,23 @@ def place_shape(
     )
 
 
-def _generate_unique_filename(cfg: CartesianProductCfg, width: int, height: int) -> str:
-    """Generate a unique filename based on animation parameters."""
-    # Create descriptive filename from key parameters
+def _generate_unique_filename(
+    cfg: CartesianProductCfg, width: int, height: int, fps: int, step_frames: int
+) -> str:
+    """Generate a filename that differs whenever the drawing does.
+
+    The names and value counts keep it readable. The digest covers everything that
+    changes the drawing -- the count of real (non-gap) values, the timing and the
+    strobe tunables -- so two different animations never share a path or the id
+    prefix derived from it. It leaves out the values themselves, which are not drawn
+    and whose repr may hold a memory address.
+    """
     dim_names = [f"{v.name}_{len(v.values)}" for v in cfg.all_vars if len(v.values) > 0]
     dims_str = "_".join(dim_names) if dim_names else "empty"
-
-    # Include resolution for uniqueness
-    return f"cartesian_{dims_str}_{width}x{height}.svg"
+    drawn = [(v.name, sum(val != GAP for val in v.values)) for v in cfg.all_vars]
+    tunables = dataclasses.replace(cfg, all_vars=[], result_names=[])
+    digest = content_key(drawn, tunables, width, height, fps, step_frames)[:8]
+    return f"cartesian_{dims_str}_{width}x{height}_{digest}.svg"
 
 
 class Shape(ABC):
@@ -730,7 +740,7 @@ def render_animation(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate unique filename to prevent collisions
-    filename = _generate_unique_filename(cfg, width, height)
+    filename = _generate_unique_filename(cfg, width, height, fps, step_frames)
     out_path = str(out_dir / filename)
 
     logger.info("Rendering animation: %s", out_path)

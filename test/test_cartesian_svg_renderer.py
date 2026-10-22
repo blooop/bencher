@@ -515,3 +515,15 @@ def test_close_alphas_with_different_colours_do_not_share_a_definition():
     place_shape(canvas, Cell(), 0, 0, lighter)
     place_shape(canvas, Cell(), 0, 0, darker)
     assert defs.markup().count("<g id=") == 2
+
+
+def test_animations_that_draw_differently_get_different_files(tmp_path):
+    """A shared path lets one render overwrite another, and their ids would clash."""
+
+    def path(values, **kwargs) -> str:
+        cfg = CartesianProductCfg(all_vars=[SweepVar("x", values)], result_names=["r"])
+        return render_animation(cfg, output_dir=str(tmp_path), width=320, height=200, **kwargs)
+
+    paths = [path([1, 2, 3]), path([1, "...", 3]), path([1, 2, 3], fps=10)]
+    assert len(set(paths)) == 3
+    assert path(["a", "b", "c"]) == paths[0]  # the values themselves are not drawn
