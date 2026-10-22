@@ -1,0 +1,2124 @@
+"""The ``svg`` plotting backend: charts as self-contained, optionally animated SVG.
+
+``BenchRunCfg(backend="svg")`` swaps holoviews charts for matplotlib-drawn SVGs that
+render anywhere an ``<img>`` does -- a GitHub PR description, an issue, a README --
+because they carry no script, no font and no external reference.
+
+The charts come in three kinds:
+
+* value charts (``line``, ``curve``, ``heatmap``, ``bar``, ``scatter``): one value per
+  sweep point, repeats reduced by mean (the curve shows the standard deviation as a
+  band, like its holoviews twin);
+* distribution charts (``box_whisker``, ``violin``, ``scatter_jitter``, ``histogram``,
+  ``band``): every repeat drawn as a dot, with a thick median mark;
+* the ``table`` of every sample, and the tabular charts (``xy_scatter``, ``xy_curve``,
+  ``xy_histogram``, ``xy_hexbin``) that draw the table one ``ResultDataSet`` sample holds;
+* the 3D charts: ``volume`` (filled contour slices) and ``surface`` (a fixed 3D view).
+
+Each chart shows up to three dimensions (an x axis, a y axis for the heatmap, a colour
+for the hue). Every other swept dimension, ``over_time`` included, is a *frame dim*: each
+combination of their values is one frame. Up to MAX_SVG_PANELS frames are drawn as a grid
+of small panels, all at once, sharing axes, colour scale, legend and title; a CSS
+highlight walks the panels and stops for ``prefers-reduced-motion``. Past that (or with
+``svg_layout="frames"``) the frames are stacked in one chart and switched with SMIL
+``<animate calcMode="discrete">``, with a label naming the current values and a progress
+bar. Either way, axes and colour limits are fixed across frames so frames compare by eye.
+One frame is a static SVG. The band and the table show every dimension at once (the
+band pools them into its percentiles), so they never animate; a tabular chart draws one
+sample per frame.
+
+Each chart declares the sweep shapes it draws as a ``PlotFilter``. A sweep outside them
+selects the holoviews (or plotly) twin instead (see ``bencher/plugins/builtins.py``), and a matching
+sweep with no result var the chart can draw hands over to that twin at render time, so
+the backend swap never loses a plot.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import io
+import itertools
+import logging
+import math
+import re
+import warnings
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+import numpy as np
+
+from bencher.optional_deps import pn
+from bencher.plotting.plot_filter import PlotFilter, VarRange
+from bencher.results.bench_result_base import BenchResultBase
+from bencher.utils import label_with_units
+from bencher.variables.results import (
+    SCALAR_RESULT_TYPES,
+    ResultBool,
+    ResultDataSet,
+    ResultFloat,
+    ResultString,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
+    import pandas as pd
+    import xarray as xr
+    from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
+
+    from bencher.plotting.plt_cnt_cfg import PltCntCfg
+    from bencher.plugins.bench_data import BenchData
+    from bencher.plugins.plugin import PlotPlugin
+
+    # Loads one stored ResultDataSet cell: (cell value, result var) -> payload or None.
+    SampleLoader = Callable[[Any, Any], Any]
+
+log = logging.getLogger(__name__)
+
+SVG_BACKEND = "svg"
+
+# The most combinations of the unshown dims a chart draws, as frames or as a forced
+# grid. A GitHub <img> has no controls, so every frame plays; past this many the
+# animation is too long to read and the file too large to embed. The rest are dropped
+# with a warning in the log and a note on the image.
+MAX_SVG_FRAMES = 60
+FRAME_SECONDS = 1.0
+# Up to this many combinations of the dims a chart does not show are drawn as a grid of
+# small panels, all visible at once; past it the panels get too small to read and the
+# chart steps through them as frames instead (``svg_layout="auto"``).
+MAX_SVG_PANELS = 12
+SVG_LAYOUTS = ("auto", "grid", "frames")
+# The highlight that walks the grid's panels: seconds per panel, the fade at each end,
+# and how far the panels out of turn dim.
+PANEL_SECONDS = 2.5
+_PANEL_FADE = 0.6
+_PANEL_DIM = 0.65
+_PANEL_ACCENT = "#ff7f0e"
+# A table past this many rows is cut, with a last row counting the rest.
+MAX_TABLE_ROWS = 30
+
+_REPEAT = "repeat"
+_OVER_TIME = "over_time"
+_FRAME_GID = "bnframe"
+_PANEL_GID = "bnpanel"
+_GLOW_GID = "bnglow"
+# Set on a grid figure: the panels' axes, so a decorate call draws one shared colour bar.
+_PANELS_ATTR = "_bencher_svg_panels"
+_FONT_STACK = "-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+# matplotlib's tab10, inlined so drawing a chart never touches the colormap registry.
+_HUE_COLOURS = (
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
+    "#7f7f7f",
+    "#bcbd22",
+    "#17becf",
+)
+_MAX_TICKS = 10
+# 9 pt on a 6.4 in figure is 15.6 px when GitHub shows the SVG 800 px wide; the charts
+# added for distributions and tables keep every label at or above it.
+_MIN_FONT = 9
+_MEDIAN_COLOUR = "#222222"
+_GOLDEN = 0.6180339887
+# A density needs a spread, so a violin needs at least two samples.
+_MIN_KDE_SAMPLES = 2
+# A surface or a contour needs at least two samples along each of its axes.
+_MIN_GRID_SAMPLES = 2
+# Up to this many panels sit in rows of three; past it, rows of four or more.
+_THREE_COLUMN_PANELS = 9
+
+
+@dataclass(frozen=True)
+class _Layout:
+    """Which dataset dims a chart shows on its axes; every other dim is a frame dim."""
+
+    x: str | None = None
+    y: str | None = None
+    hue: str | None = None
+
+    def shown(self) -> tuple[str, ...]:
+        return tuple(d for d in (self.x, self.y, self.hue) if d is not None)
+
+    def x_dim(self) -> str:
+        """The x-axis dim of a layout that has one."""
+        if self.x is None:
+            raise ValueError(f"layout {self} has no x dim")
+        return self.x
+
+    def y_dim(self) -> str:
+        """The y-axis dim of a two-axis (heatmap) layout."""
+        if self.y is None:
+            raise ValueError(f"layout {self} has no y dim; only a heatmap layout has one")
+        return self.y
+
+
+@dataclass(frozen=True)
+class _Ctx:
+    """Values fixed across frames: limits, colours, and any per-chart scale."""
+
+    lo: float
+    hi: float
+    hue_values: tuple = ()
+    ylabel: str = ""
+    extra: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class SvgChart:
+    """One chart type of the svg backend that draws a result var's values.
+
+    ``match`` is the sweep shapes it draws (the registry checks it before selection),
+    ``result_types`` the result vars it draws, ``layout`` picks the shown dims from the
+    float and categorical input names and the data (``None``: nothing to draw), and
+    ``draw`` draws one frame. ``keep_repeats`` hands each frame every repeat instead of
+    their mean; ``framed=False`` shows every dim at once instead of animating;
+    ``numeric=False`` keeps the values as they are (the table). ``decorate`` draws what
+    is fixed across frames, ``prepare`` computes a scale fixed across frames, and
+    ``auto=False`` makes it named-only, like its twin. ``projection="3d"`` draws on 3D
+    axes (the surface).
+    """
+
+    name: str
+    match: PlotFilter
+    result_types: tuple[type, ...]
+    layout: Callable[[list[str], list[str], xr.DataArray], _Layout | None]
+    draw: Callable[[Axes, xr.DataArray, xr.DataArray | None, _Layout, _Ctx], list[Any]]
+    figsize: tuple[float, float] | Callable[[xr.DataArray], tuple[float, float]] = (6.4, 4.0)
+    keep_repeats: bool = False
+    framed: bool = True
+    numeric: bool = True
+    decorate: Callable[..., None] | None = None
+    prepare: Callable[[xr.DataArray, _Layout], dict[str, Any]] | None = None
+    title: Callable[[str, _Layout], str] | None = None
+    auto: bool = True
+    projection: str | None = None
+
+
+# ---------------------------------------------------------------- formatting
+
+
+def _fmt(value: Any) -> str:
+    if isinstance(value, np.datetime64):
+        text = np.datetime_as_string(value, unit="s").replace("T", " ")
+        return text.removesuffix(" 00:00:00")
+    if isinstance(value, (float, np.floating)):
+        return f"{value:.4g}"
+    return str(value.item() if isinstance(value, np.generic) else value)
+
+
+def _categorical_ticks(ax_set: Callable, labels: list[str]) -> None:
+    step = max(1, int(np.ceil(len(labels) / _MAX_TICKS)))
+    idx = list(range(0, len(labels), step))
+    ax_set(idx, [labels[i] for i in idx])
+
+
+def _is_axis_valued(values: np.ndarray) -> bool:
+    """Whether coords can sit on an axis as they are (numbers, times), not as positions."""
+    return bool(
+        np.issubdtype(values.dtype, np.number) or np.issubdtype(values.dtype, np.datetime64)
+    )
+
+
+def _colour(i: int) -> str:
+    return _HUE_COLOURS[i % len(_HUE_COLOURS)]
+
+
+# ---------------------------------------------------------------- layouts
+
+
+def _layout_line(floats: list[str], cats: list[str], da: xr.DataArray) -> _Layout:
+    del da
+    return _Layout(x=floats[0], hue=cats[0] if cats else None)
+
+
+def _layout_heatmap(floats: list[str], cats: list[str], da: xr.DataArray) -> _Layout:
+    del da
+    axes = [*floats, *cats]
+    return _Layout(x=axes[0], y=axes[1])
+
+
+def _layout_bar(floats: list[str], cats: list[str], da: xr.DataArray) -> _Layout:
+    del floats, da
+    return _Layout(x=cats[0], hue=cats[1] if len(cats) > 1 else None)
+
+
+def _layout_groups(floats: list[str], cats: list[str], da: xr.DataArray) -> _Layout:
+    """First cat on x (none: one group), second as the hue."""
+    del floats, da
+    return _Layout(x=cats[0] if cats else None, hue=cats[1] if len(cats) > 1 else None)
+
+
+def _layout_none(floats: list[str], cats: list[str], da: xr.DataArray) -> _Layout:
+    del floats, cats, da
+    return _Layout()
+
+
+def _layout_band(floats: list[str], cats: list[str], da: xr.DataArray) -> _Layout | None:
+    """The twin's x: over_time when it has several steps, else the first other dim."""
+    del floats, cats
+    if da.sizes.get(_OVER_TIME, 0) > 1:
+        return _Layout(x=_OVER_TIME)
+    candidates = [str(d) for d in da.dims if d not in (_REPEAT, _OVER_TIME)]
+    return _Layout(x=candidates[0]) if candidates else None
+
+
+# ---------------------------------------------------------------- value-chart drawers
+
+
+def _hue_slices(da: xr.DataArray, layout: _Layout, ctx: _Ctx) -> list[tuple[int, Any, Any]]:
+    """(colour index, hue value, slice) for each hue level, or one slice without a hue."""
+    if layout.hue is None:
+        return [(0, None, da)]
+    return [(i, v, da.sel({layout.hue: v})) for i, v in enumerate(ctx.hue_values)]
+
+
+def _draw_line(
+    ax: Axes, da: xr.DataArray, std: xr.DataArray | None, layout: _Layout, ctx: _Ctx
+) -> list[Any]:
+    del std
+    artists: list[Any] = []
+    x = da[layout.x_dim()].values
+    for i, _value, part in _hue_slices(da, layout, ctx):
+        artists += ax.plot(
+            x, part.transpose(layout.x_dim()).values, color=_colour(i), marker="o", ms=3
+        )
+    return artists
+
+
+def _draw_curve(
+    ax: Axes, da: xr.DataArray, std: xr.DataArray | None, layout: _Layout, ctx: _Ctx
+) -> list[Any]:
+    artists: list[Any] = []
+    x_dim = layout.x_dim()
+    x = da[x_dim].values
+    spread = std if std is not None else da * 0.0
+    for i, value, part in _hue_slices(da, layout, ctx):
+        colour = _colour(i)
+        dev = spread.sel({layout.hue: value}) if layout.hue is not None else spread
+        mean = part.transpose(x_dim).values
+        dev_values = dev.transpose(x_dim).values
+        artists.append(
+            ax.fill_between(x, mean - dev_values, mean + dev_values, color=colour, alpha=0.25, lw=0)
+        )
+        artists += ax.plot(x, mean, color=colour)
+    return artists
+
+
+def _draw_heatmap(
+    ax: Axes, da: xr.DataArray, std: xr.DataArray | None, layout: _Layout, ctx: _Ctx
+) -> list[Any]:
+    del std
+    z = da.transpose(layout.y_dim(), layout.x_dim()).values.astype(float)
+    # interpolation="none" embeds the cell grid as one tiny inline PNG drawn with
+    # pixelated scaling: crisp cells at a fraction of the size of one path per cell.
+    mesh = ax.imshow(
+        z,
+        cmap="plasma",
+        vmin=ctx.lo,
+        vmax=ctx.hi,
+        origin="lower",
+        interpolation="none",
+        aspect="auto",
+    )
+    return [mesh]
+
+
+def _draw_bar(
+    ax: Axes, da: xr.DataArray, std: xr.DataArray | None, layout: _Layout, ctx: _Ctx
+) -> list[Any]:
+    del std
+    parts = _hue_slices(da, layout, ctx)
+    width = 0.8 / len(parts)
+    x_dim = layout.x_dim()
+    n = da.sizes[x_dim]
+    artists: list[Any] = []
+    for i, _value, part in parts:
+        offset = (i - (len(parts) - 1) / 2) * width
+        bars = ax.bar(np.arange(n) + offset, part.transpose(x_dim).values, width, color=_colour(i))
+        artists += list(bars.patches)
+    return artists
+
+
+# ---------------------------------------------------------------- distribution drawers
+
+
+@dataclass(frozen=True)
+class _Group:
+    """One box/violin/strip: where it sits, its colour, and its samples."""
+
+    pos: float
+    colour: str
+    width: float
+    samples: np.ndarray
+
+
+def _groups(da: xr.DataArray, layout: _Layout, ctx: _Ctx) -> list[_Group]:
+    """One group per (x level, hue level) of a frame, with its finite samples."""
+    parts = _hue_slices(da, layout, ctx)
+    width = 0.8 / len(parts)
+    n = da.sizes[layout.x] if layout.x is not None else 1
+    groups = []
+    for xi in range(n):
+        for i, _value, part in parts:
+            cell = part.isel({layout.x: xi}) if layout.x is not None else part
+            values = np.asarray(cell.values, dtype=float).ravel()
+            pos = xi + (i - (len(parts) - 1) / 2) * width
+            groups.append(_Group(pos, _colour(i), width, values[np.isfinite(values)]))
+    return groups
+
+
+def _spread(samples: np.ndarray, width: float) -> np.ndarray:
+    """Deterministic horizontal offsets: neighbours in value land far apart in x.
+
+    A golden-ratio sequence over the value rank spreads a strip evenly without a random
+    seed, so the same data draws the same bytes.
+    """
+    n = samples.size
+    offsets = np.empty(n)
+    order = np.argsort(samples, kind="stable")
+    offsets[order] = ((np.arange(n) * _GOLDEN + 0.5) % 1.0 - 0.5) * width * 0.6
+    return offsets
+
+
+def _dots(ax: Axes, group: _Group, *, jitter: bool = True, size: float = 14) -> list[Any]:
+    if group.samples.size == 0:
+        return []
+    offsets = _spread(group.samples, group.width) if jitter else np.zeros(group.samples.size)
+    return [
+        ax.scatter(
+            group.pos + offsets,
+            group.samples,
+            s=size,
+            color=group.colour,
+            alpha=0.65,
+            linewidths=0.4,
+            edgecolors="white",
+            zorder=3,
+        )
+    ]
+
+
+def _median_mark(ax: Axes, group: _Group) -> list[Any]:
+    if group.samples.size == 0:
+        return []
+    half = group.width * 0.4
+    median = float(np.median(group.samples))
+    return [
+        ax.hlines(median, group.pos - half, group.pos + half, colors=_MEDIAN_COLOUR, lw=3, zorder=4)
+    ]
+
+
+def _box(ax: Axes, group: _Group) -> list[Any]:
+    from matplotlib.patches import Rectangle
+
+    s = group.samples
+    if s.size == 0:
+        return []
+    q1, q3 = np.percentile(s, [25, 75])
+    iqr = q3 - q1
+    lo = s[s >= q1 - 1.5 * iqr].min()
+    hi = s[s <= q3 + 1.5 * iqr].max()
+    half = group.width * 0.35
+    rect = Rectangle(
+        (group.pos - half, q1),
+        2 * half,
+        q3 - q1,
+        facecolor=group.colour,
+        alpha=0.2,
+        edgecolor=group.colour,
+        lw=1.2,
+        zorder=2,
+    )
+    ax.add_patch(rect)
+    whiskers = ax.vlines(
+        [group.pos, group.pos], [lo, q3], [q1, hi], colors=group.colour, lw=1.2, zorder=2
+    )
+    return [rect, whiskers]
+
+
+def _kde(samples: np.ndarray, grid: np.ndarray) -> np.ndarray:
+    """A Gaussian kernel density with Scott's bandwidth (no scipy needed)."""
+    bw = 1.06 * samples.std() * samples.size ** (-1 / 5)
+    z = (grid[:, None] - samples[None, :]) / bw
+    return np.exp(-0.5 * z**2).sum(axis=1)
+
+
+def _violin(ax: Axes, group: _Group, ctx: _Ctx) -> list[Any]:
+    s = group.samples
+    if s.size < _MIN_KDE_SAMPLES or s.std() == 0:
+        return []
+    bw = 1.06 * s.std() * s.size ** (-1 / 5)
+    margin = (ctx.hi - ctx.lo) * _group_pad(ctx)
+    grid = np.linspace(
+        max(s.min() - 2 * bw, ctx.lo - margin), min(s.max() + 2 * bw, ctx.hi + margin), 64
+    )
+    density = _kde(s, grid)
+    half = density / density.max() * group.width * 0.45
+    return [
+        ax.fill_betweenx(
+            grid, group.pos - half, group.pos + half, color=group.colour, alpha=0.25, lw=0, zorder=2
+        )
+    ]
+
+
+def _violin_pad(data: xr.DataArray, layout: _Layout) -> dict[str, Any]:
+    """Room above and below the samples for the violins' tails."""
+    del data, layout
+    return {"pad": 0.15}
+
+
+def _group_pad(ctx: _Ctx) -> float:
+    return float(ctx.extra.get("pad", 0.05))
+
+
+def _draw_box_whisker(
+    ax: Axes, da: xr.DataArray, std: xr.DataArray | None, layout: _Layout, ctx: _Ctx
+) -> list[Any]:
+    del std
+    artists: list[Any] = []
+    for group in _groups(da, layout, ctx):
+        artists += _box(ax, group) + _dots(ax, group) + _median_mark(ax, group)
+    return artists
+
+
+def _draw_violin(
+    ax: Axes, da: xr.DataArray, std: xr.DataArray | None, layout: _Layout, ctx: _Ctx
+) -> list[Any]:
+    del std
+    artists: list[Any] = []
+    for group in _groups(da, layout, ctx):
+        artists += _violin(ax, group, ctx) + _dots(ax, group) + _median_mark(ax, group)
+    return artists
+
+
+def _draw_scatter_jitter(
+    ax: Axes, da: xr.DataArray, std: xr.DataArray | None, layout: _Layout, ctx: _Ctx
+) -> list[Any]:
+    del std
+    artists: list[Any] = []
+    for group in _groups(da, layout, ctx):
+        artists += _dots(ax, group) + _median_mark(ax, group)
+    return artists
+
+
+def _draw_scatter(
+    ax: Axes, da: xr.DataArray, std: xr.DataArray | None, layout: _Layout, ctx: _Ctx
+) -> list[Any]:
+    del std
+    artists: list[Any] = []
+    for group in _groups(da, layout, ctx):
+        artists += _dots(ax, group, jitter=False, size=40)
+    return artists
+
+
+def _decorate_groups(
+    fig: Figure,
+    ax: Axes,
+    chart: SvgChart,
+    data: xr.DataArray,
+    layout: _Layout,
+    ctx: _Ctx,
+    title: str,
+) -> None:
+    """Fixed axes of a chart with one group per category: ticks, limits, legend."""
+    del fig, chart
+    from matplotlib.patches import Patch
+
+    ax.set_title(title)
+    ax.autoscale(False)
+    n = data.sizes[layout.x] if layout.x is not None else 1
+    ax.set_xlim(-0.5, n - 0.5)
+    margin = (ctx.hi - ctx.lo) * _group_pad(ctx)
+    ax.set_ylim(ctx.lo - margin, ctx.hi + margin)
+    if layout.x is not None:
+        ax.set_xlabel(layout.x)
+        _categorical_ticks(ax.set_xticks, [_fmt(v) for v in data[layout.x].values])
+    else:
+        ax.set_xticks([])
+    ax.set_ylabel(ctx.ylabel or str(data.name))
+    ax.grid(True, axis="y", alpha=0.3)
+    if layout.hue is not None:
+        handles = [Patch(color=_colour(i), label=_fmt(v)) for i, v in enumerate(ctx.hue_values)]
+        ax.legend(handles=handles, title=layout.hue, fontsize=_MIN_FONT, title_fontsize=_MIN_FONT)
+
+
+# ---------------------------------------------------------------- histogram
+
+
+def _hist_scale(data: xr.DataArray, layout: _Layout) -> dict[str, Any]:
+    """Bin edges and the tallest bin over every frame, so frames share both axes."""
+    del layout
+    values = np.asarray(data.values, dtype=float)
+    finite = values[np.isfinite(values)]
+    lo, hi = _finite_limits(finite)
+    n_samples = data.sizes.get(_REPEAT, 1)
+    bins = int(np.clip(np.ceil(np.sqrt(n_samples)), 5, 30))
+    edges = np.linspace(lo, hi, bins + 1)
+    rows = (
+        np.moveaxis(values, list(data.dims).index(_REPEAT), -1).reshape(-1, n_samples)
+        if _REPEAT in data.dims
+        else values.reshape(1, -1)
+    )
+    tallest = max((np.histogram(r[np.isfinite(r)], edges)[0].max() for r in rows), default=1)
+    return {"edges": edges, "tallest": max(int(tallest), 1)}
+
+
+def _draw_histogram(
+    ax: Axes, da: xr.DataArray, std: xr.DataArray | None, layout: _Layout, ctx: _Ctx
+) -> list[Any]:
+    del std, layout
+    edges = ctx.extra["edges"]
+    tallest = ctx.extra["tallest"]
+    values = np.asarray(da.values, dtype=float).ravel()
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        return []
+    counts, _ = np.histogram(values, edges)
+    bars = ax.stairs(counts, edges, fill=True, color=_colour(0), alpha=0.35)
+    # Every sample as a dot in a strip under the bars, and the median across both.
+    order = np.argsort(values, kind="stable")
+    lift = np.empty(values.size)
+    lift[order] = (np.arange(values.size) * _GOLDEN + 0.5) % 1.0
+    rug = ax.scatter(
+        values,
+        -tallest * (0.04 + 0.08 * lift),
+        s=14,
+        color=_colour(0),
+        alpha=0.65,
+        linewidths=0.4,
+        edgecolors="white",
+        zorder=3,
+    )
+    median = ax.vlines(
+        float(np.median(values)),
+        -tallest * 0.13,
+        tallest * 1.05,
+        colors=_MEDIAN_COLOUR,
+        lw=3,
+        zorder=4,
+    )
+    return [bars, rug, median]
+
+
+def _decorate_histogram(
+    fig: Figure,
+    ax: Axes,
+    chart: SvgChart,
+    data: xr.DataArray,
+    layout: _Layout,
+    ctx: _Ctx,
+    title: str,
+) -> None:
+    del fig, chart, layout
+    edges = ctx.extra["edges"]
+    tallest = ctx.extra["tallest"]
+    ax.set_title(title)
+    ax.autoscale(False)
+    ax.set_xlim(edges[0], edges[-1])
+    ax.set_ylim(-tallest * 0.15, tallest * 1.1)
+    ax.set_xlabel(ctx.ylabel or str(data.name))
+    ax.set_ylabel("count")
+    ax.grid(True, axis="y", alpha=0.3)
+
+
+# ---------------------------------------------------------------- band
+
+
+def _band_values(da: xr.DataArray, x_dim: str) -> np.ndarray:
+    """(n_x, n_samples): every dim but x pooled into the samples, as the twin does."""
+    others = [str(d) for d in da.dims if d != x_dim]
+    if not others:
+        return np.asarray(da.values, dtype=float)[:, None]
+    stacked = da.stack(sample=others)  # noqa: PD013 - xarray stack, not pandas
+    return np.asarray(stacked.transpose(x_dim, "sample").values, dtype=float)
+
+
+def _x_positions(coords: np.ndarray) -> np.ndarray:
+    return coords if _is_axis_valued(coords) else np.arange(coords.size)
+
+
+def _draw_band(
+    ax: Axes, da: xr.DataArray, std: xr.DataArray | None, layout: _Layout, ctx: _Ctx
+) -> list[Any]:
+    del std, ctx
+    x_dim = layout.x_dim()
+    values = _band_values(da, x_dim)
+    x = _x_positions(da[x_dim].values)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # an all-NaN column
+        p10, p25, p50, p75, p90 = np.nanpercentile(values, [10, 25, 50, 75, 90], axis=1)
+    colour = _colour(0)
+    artists: list[Any] = [
+        ax.fill_between(x, p10, p90, color=colour, alpha=0.15, lw=0, label="10-90%"),
+        ax.fill_between(x, p25, p75, color=colour, alpha=0.3, lw=0, label="25-75%"),
+    ]
+    flat_x = np.repeat(x, values.shape[1])
+    artists.append(
+        ax.scatter(flat_x, values.ravel(), s=10, color=colour, alpha=0.45, linewidths=0, zorder=3)
+    )
+    artists += ax.plot(x, p50, color=_MEDIAN_COLOUR, lw=3, zorder=4, label="median")
+    return artists
+
+
+def _decorate_band(
+    fig: Figure,
+    ax: Axes,
+    chart: SvgChart,
+    data: xr.DataArray,
+    layout: _Layout,
+    ctx: _Ctx,
+    title: str,
+) -> None:
+    del fig, chart
+    x_dim = layout.x_dim()
+    coords = data[x_dim].values
+    ax.set_title(title)
+    ax.autoscale(False)
+    if not _is_axis_valued(coords):
+        ax.set_xlim(-0.5, coords.size - 0.5)
+        _categorical_ticks(ax.set_xticks, [_fmt(v) for v in coords])
+    elif coords.size > 1:
+        ax.set_xlim(coords.min(), coords.max())
+    elif np.issubdtype(coords.dtype, np.number):
+        ax.set_xlim(float(coords[0]) - 0.5, float(coords[0]) + 0.5)
+    margin = (ctx.hi - ctx.lo) * 0.05
+    ax.set_ylim(ctx.lo - margin, ctx.hi + margin)
+    ax.set_xlabel(x_dim)
+    ax.set_ylabel(ctx.ylabel or str(data.name))
+    ax.grid(True, alpha=0.3)
+
+
+def _legend_band(ax: Axes) -> None:
+    ax.legend(fontsize=_MIN_FONT, loc="best")
+
+
+# ---------------------------------------------------------------- surface and volume
+
+
+def _layout_surface(floats: list[str], cats: list[str], da: xr.DataArray) -> _Layout | None:
+    """The twin's two floats as x and y; a float with one sample draws no surface."""
+    del cats
+    if any(da.sizes[f] < _MIN_GRID_SAMPLES for f in floats[:2]):
+        return None
+    return _Layout(x=floats[0], y=floats[1])
+
+
+def _layout_volume(floats: list[str], cats: list[str], da: xr.DataArray) -> _Layout | None:
+    """The twin's first two floats as x and y; the third is the dim of the slice panels.
+
+    ``None`` (the twin's fallback) over time, which the twin skips, and for an x or y
+    with one sample, which has no contour.
+    """
+    if _OVER_TIME in da.dims:
+        return None
+    return _layout_surface(floats, cats, da)
+
+
+def _volume_levels(data: xr.DataArray, layout: _Layout) -> dict[str, Any]:
+    """Contour levels fixed across slices: the twin's isomin..isomax in equal steps."""
+    del layout
+    lo, hi = _finite_limits(data.values)
+    return {"levels": np.linspace(lo, hi, 13)}
+
+
+def _draw_volume(
+    ax: Axes, da: xr.DataArray, std: xr.DataArray | None, layout: _Layout, ctx: _Ctx
+) -> list[Any]:
+    """One slice of the volume: filled iso-bands of x and y, like the twin's isosurfaces."""
+    del std
+    x_dim, y_dim = layout.x_dim(), layout.y_dim()
+    z = da.transpose(y_dim, x_dim).values.astype(float)
+    if not np.isfinite(z).any():
+        return []
+    x = da[x_dim].values.astype(float)
+    y = da[y_dim].values.astype(float)
+    levels = ctx.extra["levels"]
+    bands = ax.contourf(x, y, z, levels=levels, cmap="viridis", vmin=ctx.lo, vmax=ctx.hi)
+    edges = ax.contour(x, y, z, levels=levels, colors="white", linewidths=0.5, alpha=0.6)
+    return [bands, edges]
+
+
+def _decorate_volume(
+    fig: Figure,
+    ax: Axes,
+    chart: SvgChart,
+    data: xr.DataArray,
+    layout: _Layout,
+    ctx: _Ctx,
+    title: str,
+) -> None:
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+
+    del chart
+    x_dim, y_dim = layout.x_dim(), layout.y_dim()
+    xs, ys = data[x_dim].values, data[y_dim].values
+    ax.set_title(title)
+    ax.autoscale(False)
+    ax.set_xlim(xs.min(), xs.max())
+    ax.set_ylim(ys.min(), ys.max())
+    ax.set_xlabel(x_dim)
+    ax.set_ylabel(y_dim)
+    mappable = ScalarMappable(norm=Normalize(ctx.lo, ctx.hi), cmap="viridis")
+    _colorbar(fig, ax, mappable, ctx.ylabel or str(data.name))
+
+
+def _draw_surface(
+    ax: Axes, da: xr.DataArray, std: xr.DataArray | None, layout: _Layout, ctx: _Ctx
+) -> list[Any]:
+    """The mean surface, and every repeat as a dot over its grid point."""
+    del std
+    x_dim, y_dim = layout.x_dim(), layout.y_dim()
+    gx, gy = np.meshgrid(da[x_dim].values.astype(float), da[y_dim].values.astype(float))
+    mean = da.mean(_REPEAT) if _REPEAT in da.dims else da
+    z = mean.transpose(y_dim, x_dim).values.astype(float)
+    surface = ax.plot_surface(  # ty: ignore[unresolved-attribute] - 3D axes
+        gx,
+        gy,
+        z,
+        cmap="viridis",
+        vmin=ctx.lo,
+        vmax=ctx.hi,
+        rstride=1,
+        cstride=1,
+        linewidth=0.3,
+        edgecolor="#ffffff",
+        antialiased=False,
+    )
+    artists: list[Any] = [surface]
+    if da.sizes.get(_REPEAT, 1) > 1:
+        samples = da.transpose(y_dim, x_dim, _REPEAT).values.astype(float)
+        shape = samples.shape
+        # A 3D scatter takes (xs, ys, zs); the 2D signature types the third as ``s``.
+        style = {"s": 8, "color": _MEDIAN_COLOUR, "alpha": 0.7, "depthshade": False}
+        dots = ax.scatter(
+            np.broadcast_to(gx[..., None], shape).ravel(),
+            np.broadcast_to(gy[..., None], shape).ravel(),
+            samples.ravel(),
+            **style,
+        )
+        artists.append(dots)
+    return artists
+
+
+def _decorate_surface(
+    fig: Figure,
+    ax: Axes,
+    chart: SvgChart,
+    data: xr.DataArray,
+    layout: _Layout,
+    ctx: _Ctx,
+    title: str,
+) -> None:
+    """Fixed limits and a fixed camera: the twin's view, without the mouse."""
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+
+    del chart
+    x_dim, y_dim = layout.x_dim(), layout.y_dim()
+    xs, ys = data[x_dim].values, data[y_dim].values
+    label = ctx.ylabel or str(data.name)
+    margin = (ctx.hi - ctx.lo) * 0.05
+    ax.set_title(title)
+    ax.set_xlim(xs.min(), xs.max())
+    ax.set_ylim(ys.min(), ys.max())
+    ax.set_zlim(ctx.lo - margin, ctx.hi + margin)  # ty: ignore[unresolved-attribute]
+    ax.set_xlabel(x_dim)
+    ax.set_ylabel(y_dim)
+    # The colour bar names the value; a z label would sit outside the figure.
+    ax.view_init(elev=28, azim=-60)  # ty: ignore[unresolved-attribute]
+    # Shrunk a little so the tick labels stay inside the axes' box, clear of a neighbour.
+    ax.set_box_aspect(None, zoom=0.85)  # ty: ignore[unknown-argument]
+    mappable = ScalarMappable(norm=Normalize(ctx.lo, ctx.hi), cmap="viridis")
+    _colorbar(fig, ax, mappable, label)
+
+
+# ---------------------------------------------------------------- table
+
+
+def _table_dims(da: xr.DataArray) -> list[str]:
+    """The table's index columns: every dim with more than one value (the twin squeezes)."""
+    return [str(d) for d in da.dims if da.sizes[d] > 1]
+
+
+def _table_rows(da: xr.DataArray) -> tuple[list[str], list[list[str]], int]:
+    """(header, first MAX_TABLE_ROWS rows, total row count) of one result var."""
+    squeezed = da.squeeze(drop=False)
+    dims = _table_dims(da)
+    squeezed = squeezed.transpose(*dims) if dims else squeezed
+    coords = [squeezed[d].values for d in dims]
+    values = squeezed.values
+    total = int(np.prod([c.size for c in coords])) if coords else 1
+    indices = itertools.islice(itertools.product(*(range(c.size) for c in coords)), MAX_TABLE_ROWS)
+    rows = [
+        [*(_fmt(c[i]) for c, i in zip(coords, idx, strict=True)), _fmt(values[idx])]
+        for idx in indices
+    ]
+    return [*dims, str(da.name)], rows, total
+
+
+def _table_figsize(da: xr.DataArray) -> tuple[float, float]:
+    _header, rows, total = _table_rows(da)
+    lines = len(rows) + 1 + (1 if total > len(rows) else 0)
+    return 6.4, 0.7 + 0.28 * lines
+
+
+def _draw_table(
+    ax: Axes, da: xr.DataArray, std: xr.DataArray | None, layout: _Layout, ctx: _Ctx
+) -> list[Any]:
+    del std, layout, ctx
+    header, rows, total = _table_rows(da)
+    if total > len(rows):
+        rows.append([f"... {total - len(rows)} more rows", *([""] * (len(header) - 1))])
+    table = ax.table(cellText=rows, colLabels=header, cellLoc="center", bbox=(0, 0, 1, 1))
+    table.auto_set_font_size(False)
+    table.set_fontsize(_MIN_FONT)
+    for (row, _col), cell in table.get_celld().items():
+        cell.set_edgecolor("#cccccc")
+        if row == 0:
+            cell.set_facecolor("#eeeeee")
+            cell.get_text().set_fontweight("bold")
+    return [table]
+
+
+def _decorate_table(
+    fig: Figure,
+    ax: Axes,
+    chart: SvgChart,
+    data: xr.DataArray,
+    layout: _Layout,
+    ctx: _Ctx,
+    title: str,
+) -> None:
+    del fig, chart, data, layout, ctx
+    ax.set_title(title)
+    ax.axis("off")
+
+
+# ---------------------------------------------------------------- chart table
+
+
+def _distribution_match(cats: VarRange | None = None) -> PlotFilter:
+    # The holoviews distribution twins: no float inputs, any cats, repeats to show.
+    return PlotFilter(
+        float_range=VarRange.exactly(0),
+        cat_range=cats if cats is not None else VarRange.unbounded(),
+        repeats_range=VarRange.at_least(2),
+    )
+
+
+def _title_vs(var: str, layout: _Layout) -> str:
+    return f"{var} vs {layout.x}" if layout.x is not None else var
+
+
+CHARTS: dict[str, SvgChart | TabularSvgChart] = {}
+
+
+def _register(*charts: SvgChart | TabularSvgChart) -> None:
+    for chart in charts:
+        CHARTS[chart.name] = chart
+
+
+_register(
+    SvgChart(
+        name="line",
+        match=PlotFilter(
+            float_range=VarRange.exactly(1),
+            repeats_range=VarRange.exactly(1),
+            input_range=VarRange.at_least(1),
+        ),
+        result_types=SCALAR_RESULT_TYPES,
+        layout=_layout_line,
+        draw=_draw_line,
+    ),
+    SvgChart(
+        name="curve",
+        match=PlotFilter(
+            float_range=VarRange.exactly(1),
+            repeats_range=VarRange.at_least(2),
+            input_range=VarRange.at_least(1),
+        ),
+        result_types=SCALAR_RESULT_TYPES,
+        layout=_layout_line,
+        draw=_draw_curve,
+    ),
+    SvgChart(
+        name="heatmap",
+        match=PlotFilter(
+            float_range=VarRange.at_least(2),
+            input_range=VarRange.at_least(2),
+        ),
+        result_types=(ResultFloat,),
+        layout=_layout_heatmap,
+        draw=_draw_heatmap,
+        figsize=(6.4, 4.8),
+        title=lambda var, _layout: f"Heatmap of {var}",
+    ),
+    SvgChart(
+        name="bar",
+        match=PlotFilter(
+            float_range=VarRange.exactly(0),
+            cat_range=VarRange.at_least(1),
+            repeats_range=VarRange.exactly(1),
+            input_range=VarRange.at_least(1),
+        ),
+        result_types=(ResultFloat,),
+        layout=_layout_bar,
+        draw=_draw_bar,
+    ),
+    SvgChart(
+        name="box_whisker",
+        match=_distribution_match(),
+        result_types=(ResultFloat,),
+        layout=_layout_groups,
+        draw=_draw_box_whisker,
+        keep_repeats=True,
+        decorate=_decorate_groups,
+        title=_title_vs,
+    ),
+    SvgChart(
+        name="histogram",
+        # The twin: no inputs at all, so the repeats are the whole distribution.
+        match=PlotFilter(float_range=VarRange.exactly(0), input_range=VarRange.exactly(0)),
+        result_types=(ResultFloat,),
+        layout=_layout_none,
+        draw=_draw_histogram,
+        keep_repeats=True,
+        decorate=_decorate_histogram,
+        prepare=_hist_scale,
+        title=lambda var, _layout: f"Histogram of {var}",
+    ),
+    SvgChart(
+        name="violin",
+        match=_distribution_match(),
+        result_types=(ResultFloat,),
+        layout=_layout_groups,
+        draw=_draw_violin,
+        keep_repeats=True,
+        decorate=_decorate_groups,
+        prepare=_violin_pad,
+        title=_title_vs,
+        auto=False,
+    ),
+    SvgChart(
+        name="scatter_jitter",
+        match=_distribution_match(VarRange.at_most(1)),
+        result_types=(ResultFloat,),
+        layout=_layout_groups,
+        draw=_draw_scatter_jitter,
+        keep_repeats=True,
+        decorate=_decorate_groups,
+        title=_title_vs,
+        auto=False,
+    ),
+    SvgChart(
+        name="scatter",
+        match=PlotFilter(float_range=VarRange.exactly(0), repeats_range=VarRange.exactly(1)),
+        result_types=SCALAR_RESULT_TYPES,
+        layout=_layout_groups,
+        draw=_draw_scatter,
+        decorate=_decorate_groups,
+        title=_title_vs,
+        auto=False,
+    ),
+    SvgChart(
+        name="band",
+        match=PlotFilter(repeats_range=VarRange.at_least(1)),
+        result_types=SCALAR_RESULT_TYPES,
+        layout=_layout_band,
+        draw=_draw_band,
+        keep_repeats=True,
+        framed=False,
+        decorate=_decorate_band,
+        title=_title_vs,
+        auto=False,
+    ),
+    SvgChart(
+        name="volume",
+        # The twin's rule: three floats, no cats; repeats reduce to their mean.
+        match=PlotFilter(float_range=VarRange.exactly(3), cat_range=VarRange.exactly(0)),
+        result_types=(ResultFloat,),
+        layout=_layout_volume,
+        draw=_draw_volume,
+        figsize=(6.4, 4.8),
+        decorate=_decorate_volume,
+        prepare=_volume_levels,
+        title=lambda var, layout: f"{var} vs {layout.x} and {layout.y}",
+    ),
+    SvgChart(
+        name="surface",
+        # The twin's rule: two floats, any cats (one panel each), no panel results.
+        match=PlotFilter(
+            float_range=VarRange.exactly(2),
+            cat_range=VarRange.unbounded(),
+            panel_range=VarRange.exactly(0),
+            repeats_range=VarRange.at_least(1),
+            input_range=VarRange.at_least(1),
+        ),
+        result_types=(ResultFloat,),
+        layout=_layout_surface,
+        draw=_draw_surface,
+        figsize=(6.4, 4.8),
+        keep_repeats=True,
+        decorate=_decorate_surface,
+        title=lambda var, layout: f"{var} vs {layout.x} and {layout.y}",
+        auto=False,
+        projection="3d",
+    ),
+    SvgChart(
+        name="table",
+        match=PlotFilter(),
+        result_types=(ResultFloat, ResultBool, ResultString),
+        layout=_layout_none,
+        draw=_draw_table,
+        figsize=_table_figsize,
+        framed=False,
+        numeric=False,
+        decorate=_decorate_table,
+        title=lambda var, _layout: var,
+        auto=False,
+    ),
+)
+
+
+# ---------------------------------------------------------------- rendering
+
+
+def frame_dims(da: xr.DataArray, layout: _Layout) -> list[str]:
+    """The dims of ``da`` a chart with ``layout`` draws as panels or frames, in dataset order."""
+    shown = set(layout.shown())
+    return [str(d) for d in da.dims if d not in shown and d != _REPEAT]
+
+
+def _frames(da: xr.DataArray, dims: list[str]) -> tuple[list[dict[str, Any]], int]:
+    """The first MAX_SVG_FRAMES index selections over ``dims``, and the full count."""
+    sizes = [da.sizes[d] for d in dims]
+    total = int(np.prod(sizes)) if sizes else 1
+    combos = itertools.islice(itertools.product(*(range(s) for s in sizes)), MAX_SVG_FRAMES)
+    return [dict(zip(dims, combo, strict=True)) for combo in combos], total
+
+
+def _finite_limits(*arrays: np.ndarray) -> tuple[float, float]:
+    values = np.concatenate([np.asarray(a, dtype=float).ravel() for a in arrays])
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        return 0.0, 1.0
+    lo, hi = float(values.min()), float(values.max())
+    if lo == hi:
+        lo, hi = lo - 0.5, hi + 0.5
+    return lo, hi
+
+
+def render_svg(
+    chart: SvgChart,
+    da: xr.DataArray,
+    layout: _Layout,
+    *,
+    title: str = "",
+    svg_layout: str = "auto",
+) -> str:
+    """Draw ``da`` as one SVG: a static chart, or one panel or frame per frame-dim combination.
+
+    Args:
+        chart: The chart type to draw.
+        da: The result variable, with ``repeat`` (reduced by mean here unless the chart
+            keeps repeats) and any frame dims.
+        layout: Which dims the chart shows; every other non-repeat dim is a frame dim.
+        title: The axes title.
+        svg_layout: How to show the frame dims: ``"grid"`` (small multiples),
+            ``"frames"`` (an animation) or ``"auto"`` (a grid up to MAX_SVG_PANELS).
+
+    Returns:
+        str: A standalone SVG document with no script and no external reference.
+    """
+    std = None
+    if not chart.numeric:
+        data = da
+    else:
+        da = da.astype(float)
+        if chart.keep_repeats or _REPEAT not in da.dims:
+            data = da
+        else:
+            data = da.mean(_REPEAT)
+            std = da.std(_REPEAT).fillna(0.0)
+    if not chart.numeric:
+        lo, hi = 0.0, 1.0
+    elif chart.name == "curve" and std is not None:
+        lo, hi = _finite_limits(data.values - std.values, data.values + std.values)
+    else:
+        lo, hi = _finite_limits(data.values)
+    hue_values = tuple(data[layout.hue].values) if layout.hue is not None else ()
+    ctx = _Ctx(
+        lo=lo,
+        hi=hi,
+        hue_values=hue_values,
+        ylabel=str(da.attrs.get("label", "")),
+        extra=chart.prepare(data, layout) if chart.prepare is not None else {},
+    )
+    dims = frame_dims(data, layout) if chart.framed else []
+    decorate = chart.decorate or _decorate
+
+    def draw(ax: Axes, sel: dict[str, int]) -> list[Any]:
+        frame = data.isel(sel) if sel else data
+        frame_std = None if std is None else (std.isel(sel) if sel else std)
+        return chart.draw(ax, frame, frame_std, layout, ctx)
+
+    figsize = chart.figsize(data) if callable(chart.figsize) else chart.figsize
+    return _draw_frames(
+        name=f"svg {chart.name} of {da.name}",
+        salt=f"bencher-{chart.name}-{da.name}",
+        figsize=figsize,
+        source=data,
+        dims=dims,
+        decorate=lambda fig, ax: decorate(fig, ax, chart, data, layout, ctx, title),
+        draw=draw,
+        finish=_legend_band if chart.name == "band" else None,
+        svg_layout=svg_layout,
+        projection=chart.projection,
+    )
+
+
+def _use_grid(svg_layout: str, total: int) -> bool:
+    """Whether ``total`` frame-dim combinations draw as a grid of panels, not frames."""
+    if svg_layout not in SVG_LAYOUTS:
+        raise ValueError(f"svg_layout must be one of {SVG_LAYOUTS}, not {svg_layout!r}")
+    if total <= 1 or svg_layout == "frames":
+        return False
+    return svg_layout == "grid" or total <= MAX_SVG_PANELS
+
+
+def _draw_frames(
+    *,
+    name: str,
+    salt: str,
+    figsize: tuple[float, float],
+    source: xr.DataArray,
+    dims: list[str],
+    decorate: Callable[[Figure, Axes], None],
+    draw: Callable[[Axes, dict[str, int]], list[Any]],
+    finish: Callable[[Axes], None] | None = None,
+    svg_layout: str = "auto",
+    projection: str | None = None,
+) -> str:
+    """The machinery every chart shares: one panel or frame per ``dims`` combination.
+
+    ``source`` gives the frame dims' sizes and the values each panel title or frame label
+    names; ``decorate`` draws what is fixed across frames and ``draw`` one frame's
+    artists. ``finish`` runs after the last frame (a legend over the frame artists).
+    ``svg_layout`` picks a grid of panels or an animation (see :func:`_use_grid`).
+    """
+    import matplotlib as mpl
+    from matplotlib.figure import Figure
+
+    frames, total = _frames(source, dims)
+    if total > MAX_SVG_FRAMES:
+        log.warning(
+            "%s: %d frames over %s; drawing the first %d", name, total, dims, MAX_SVG_FRAMES
+        )
+    rc = {
+        "svg.fonttype": "none",
+        "svg.hashsalt": salt,
+        "font.family": "sans-serif",
+        "font.size": 9,
+    }
+    subplot_kw = {"projection": projection} if projection is not None else {}
+    grid = _use_grid(svg_layout, total)
+    with mpl.rc_context(rc):
+        if grid:
+            fig = _draw_grid(figsize, source, frames, decorate, draw, subplot_kw)
+        else:
+            fig = Figure(figsize=figsize)
+            animated = len(frames) > 1
+            top = 0.9 if animated else 1.0
+            fig.set_layout_engine("constrained", rect=(0, 0.04 if animated else 0, 1, top))
+            ax = fig.add_subplot(**subplot_kw)
+            decorate(fig, ax)
+            if animated:
+                _progress_track(fig)
+            for i, sel in enumerate(frames):
+                artists = draw(ax, sel)
+                if animated:
+                    artists += _frame_overlay(fig, source, sel, i, len(frames))
+                for k, artist in enumerate(artists):
+                    artist.set_gid(f"{_FRAME_GID}{i}_{k}")
+            if finish is not None:
+                finish(ax)
+        if total > len(frames):
+            fig.text(
+                0.99,
+                _PROGRESS_HEIGHT + 0.004,
+                f"first {len(frames)} of {total} {'panels' if grid else 'frames'}",
+                ha="right",
+                va="bottom",
+                fontsize=7,
+                color="#b00020",
+            )
+        buf = io.StringIO()
+        fig.savefig(buf, format="svg", metadata={"Date": None, "Creator": "bencher"})
+    svg = buf.getvalue()
+    if grid:
+        return _walk_panels(_finish(svg), len(frames))
+    return _animate(svg, len(frames)) if len(frames) > 1 else _finish(svg)
+
+
+def _grid_shape(count: int) -> tuple[int, int]:
+    """(rows, columns) for ``count`` panels: 2x2 for four, then rows of three or more."""
+    if count in (2, 4):
+        cols = 2
+    elif count <= _THREE_COLUMN_PANELS:
+        cols = 3
+    else:
+        cols = max(4, math.ceil(math.sqrt(count)))
+    return math.ceil(count / cols), cols
+
+
+def _panel_title(source: xr.DataArray, sel: dict[str, int], wrap: bool = False) -> str:
+    """``dim=value`` per dim the panel fixes; with ``wrap``, a line per dim and per value."""
+    parts = [f"{d}={_fmt(source[d].values[i])}" for d, i in sel.items()]
+    return "\n".join(p.replace("=", "=\n", 1) for p in parts) if wrap else ", ".join(parts)
+
+
+def _draw_grid(
+    figsize: tuple[float, float],
+    source: xr.DataArray,
+    frames: list[dict[str, int]],
+    decorate: Callable[[Figure, Axes], None],
+    draw: Callable[[Axes, dict[str, int]], list[Any]],
+    subplot_kw: dict[str, Any],
+) -> Figure:
+    """Small multiples: one panel per frame, all decorated alike, sharing the furniture.
+
+    The figure gets one title, one legend and one colour bar. Flat panels share one label
+    per axis; 3D panels keep their own axis labels.
+
+    The figure keeps the chart's width, so text keeps its size at a fixed display width;
+    the panels share it. Each panel's axes group gets an id the walking highlight
+    animates (see :func:`_walk_panels`), and a border that lights on its turn.
+    """
+    from matplotlib.figure import Figure
+    from matplotlib.patches import Rectangle
+
+    rows, cols = _grid_shape(len(frames))
+    width, height = figsize
+    panel_h = float(np.clip(width / cols * height / width * 1.25, 1.5, height))
+    fig = Figure(figsize=(width, rows * panel_h + 0.9))
+    fig.set_layout_engine("constrained")
+    grid = fig.subplots(rows, cols, squeeze=False, subplot_kw=subplot_kw)
+    panels = list(grid.ravel()[: len(frames)])
+    for spare in grid.ravel()[len(frames) :]:
+        spare.remove()
+    setattr(fig, _PANELS_ATTR, panels)
+    for ax in panels:
+        decorate(fig, ax)
+    first = panels[0]
+    fig.suptitle(first.get_title())
+    flat = subplot_kw.get("projection") is None
+    if flat:
+        if first.get_xlabel():
+            fig.supxlabel(first.get_xlabel(), fontsize=_MIN_FONT)
+        if first.get_ylabel():
+            fig.supylabel(first.get_ylabel(), fontsize=_MIN_FONT)
+    legend = first.get_legend()
+    if legend is not None:
+        fig.legend(
+            handles=legend.legend_handles,
+            labels=[t.get_text() for t in legend.get_texts()],
+            title=legend.get_title().get_text() or None,
+            loc="outside right upper",
+            fontsize=_MIN_FONT,
+            title_fontsize=_MIN_FONT,
+        )
+    # The characters that fit across one panel: the axes get about 0.8 of the figure
+    # width (the rest is labels, colour bar and gaps), and a glyph about 0.6 em.
+    title_chars = int(0.8 * width * 72 / cols / (_MIN_FONT * 0.6))
+    # One title too wide for its panel wraps every title, so the panels stay alike.
+    wrap = max(len(_panel_title(source, sel)) for sel in frames) > title_chars
+    for i, (ax, sel) in enumerate(zip(panels, frames, strict=True)):
+        draw(ax, sel)
+        ax.set_title(_panel_title(source, sel, wrap), fontsize=_MIN_FONT)
+        if ax.get_legend() is not None:
+            ax.get_legend().remove()
+        if flat:
+            ax.set_xlabel("")
+            ax.set_ylabel("")
+            # Shared limits: only the panels with none below keep x tick labels, and only
+            # the first column keeps y tick labels.
+            if i + cols < len(panels):
+                ax.tick_params(labelbottom=False)
+            if i % cols:
+                ax.tick_params(labelleft=False)
+            _thin_fixed_ticks(ax.xaxis, max(2, _MAX_TICKS // cols), title_chars)
+            _thin_fixed_ticks(ax.yaxis, max(3, _MAX_TICKS // rows))
+        ax.set_gid(f"{_PANEL_GID}{i}")
+        glow = Rectangle(
+            (0, 0),
+            1,
+            1,
+            transform=ax.transAxes,
+            fill=False,
+            edgecolor=_PANEL_ACCENT,
+            lw=2.5,
+            clip_on=False,
+            zorder=10,
+        )
+        glow.set_gid(f"{_GLOW_GID}{i}")
+        # On the figure, not the axes: 3D axes draw only 3D artists.
+        fig.add_artist(glow)
+    return fig
+
+
+def _thin_fixed_ticks(axis: Any, limit: int, max_chars: int = 0) -> None:
+    """Keep at most ``limit`` of an axis's fixed (categorical) ticks, evenly spaced, ends kept.
+
+    A panel is a fraction of the chart's width, so the labels a full chart fits overlap.
+    With ``max_chars``, the kept labels, a space apart, also fit in that many characters.
+    """
+    from matplotlib.ticker import FixedLocator
+
+    locator = axis.get_major_locator()
+    if not isinstance(locator, FixedLocator) or not len(locator.locs):
+        return
+    locs = list(locator.locs)
+    labels = axis.get_major_formatter().format_ticks(locs)
+    if max_chars:
+        widest = max(len(label) for label in labels) + 1
+        limit = max(2, min(limit, max_chars // widest))
+    if len(locs) <= limit:
+        return
+    # Evenly spaced, first and last kept, so the labels span the whole axis.
+    keep = sorted({int(i) for i in np.linspace(0, len(locs) - 1, limit).round()})
+    axis.set_ticks([locs[i] for i in keep], [labels[i] for i in keep])
+
+
+def _walk_panels(svg: str, count: int) -> str:
+    """Add the CSS that walks a highlight over ``count`` panels, in sweep order, looping.
+
+    Each panel's turn lasts PANEL_SECONDS: its border lights and every other panel dims a
+    little. No mark moves, so every instant is the whole chart. The animation sits in a
+    ``prefers-reduced-motion: no-preference`` block, so a reader who asks for less motion
+    (and any renderer without CSS animation) sees every panel at full strength, unlit.
+    """
+    cycle = count * PANEL_SECONDS
+    lit = (PANEL_SECONDS - _PANEL_FADE) / cycle * 100
+    off = PANEL_SECONDS / cycle * 100
+    back = (cycle - _PANEL_FADE) / cycle * 100
+
+    def keyframes(name: str, on: float, rest: float) -> str:
+        return (
+            f"@keyframes {name}{{0%,{lit:.4g}%{{opacity:{on:g}}}"
+            f"{off:.4g}%,{back:.4g}%{{opacity:{rest:g}}}100%{{opacity:{on:g}}}}}"
+        )
+
+    rules = []
+    for i in range(count):
+        # A negative delay starts panel i's cycle already running, its turn at i steps.
+        delay = f"{i * PANEL_SECONDS - cycle:g}s" if i else "0s"
+        timing = f"{cycle:g}s ease-in-out {delay} infinite"
+        rules.append(f"#{_PANEL_GID}{i}{{animation:bnwalk {timing}}}")
+        rules.append(f"#{_GLOW_GID}{i}{{animation:bnlight {timing}}}")
+    style = (
+        "<style>"
+        f"[id^={_GLOW_GID}]{{opacity:0}}"
+        "@media (prefers-reduced-motion:no-preference){"
+        f"{keyframes('bnwalk', 1, _PANEL_DIM)}{keyframes('bnlight', 1, 0)}{''.join(rules)}"
+        "}</style>"
+    )
+    head = svg.index(">", svg.index("<svg")) + 1
+    return f"{svg[:head]}\n{style}{svg[head:]}"
+
+
+def _colorbar(fig: Figure, ax: Axes, mappable: Any, label: str) -> None:
+    """A colour bar for ``ax``, or one bar for every panel of a grid (drawn once)."""
+    panels = getattr(fig, _PANELS_ATTR, None)
+    if panels is None:
+        fig.colorbar(mappable, ax=ax, label=label)
+    elif ax is panels[0]:
+        rows, _cols = _grid_shape(len(panels))
+        # As thick as a single chart's bar, however many rows it spans.
+        fig.colorbar(mappable, ax=panels, label=label, aspect=20 * rows)
+
+
+def _decorate(
+    fig: Figure,
+    ax: Axes,
+    chart: SvgChart,
+    mean: xr.DataArray,
+    layout: _Layout,
+    ctx: _Ctx,
+    title: str,
+) -> None:
+    """Draw everything fixed across frames: axes, limits, ticks, legend, colour bar."""
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    x_dim = layout.x_dim()
+    ax.set_title(title)
+    ax.set_xlabel(x_dim)
+    ax.autoscale(False)
+    xs = mean[x_dim].values
+    margin = (ctx.hi - ctx.lo) * 0.05
+    if chart.name in ("line", "curve"):
+        # xs.min()/max() keep the dtype, so a datetime64 axis (a time-typed input) works;
+        # one numeric sample gets a unit span around it.
+        if xs.size > 1:
+            ax.set_xlim(xs.min(), xs.max())
+        elif np.issubdtype(xs.dtype, np.number):
+            ax.set_xlim(float(xs[0]) - 0.5, float(xs[0]) + 0.5)
+        ax.set_ylim(ctx.lo - margin, ctx.hi + margin)
+        ax.set_ylabel(ctx.ylabel or str(mean.name))
+        ax.grid(True, alpha=0.3)
+    elif chart.name == "bar":
+        ax.set_xlim(-0.5, len(xs) - 0.5)
+        ax.set_ylim(min(0.0, ctx.lo - margin), max(0.0, ctx.hi + margin))
+        _categorical_ticks(ax.set_xticks, [_fmt(v) for v in xs])
+        ax.set_ylabel(ctx.ylabel or str(mean.name))
+        ax.grid(True, axis="y", alpha=0.3)
+    else:
+        y = layout.y_dim()
+        ys = mean[y].values
+        ax.set_xlim(-0.5, len(xs) - 0.5)
+        ax.set_ylim(-0.5, len(ys) - 0.5)
+        ax.set_ylabel(y)
+        _categorical_ticks(ax.set_xticks, [_fmt(v) for v in xs])
+        _categorical_ticks(ax.set_yticks, [_fmt(v) for v in ys])
+        mappable = ScalarMappable(norm=Normalize(ctx.lo, ctx.hi), cmap="plasma")
+        _colorbar(fig, ax, mappable, ctx.ylabel or str(mean.name))
+    if layout.hue is not None:
+        colours = [_colour(i) for i in range(len(ctx.hue_values))]
+        labels = [_fmt(v) for v in ctx.hue_values]
+        if chart.name == "bar":
+            handles = [Patch(color=c, label=t) for c, t in zip(colours, labels, strict=True)]
+        else:
+            handles = [
+                Line2D([], [], color=c, label=t) for c, t in zip(colours, labels, strict=True)
+            ]
+        ax.legend(handles=handles, title=layout.hue, fontsize=8, title_fontsize=8)
+
+
+_PROGRESS_HEIGHT = 0.012
+
+
+def _progress_track(fig: Figure) -> None:
+    """The static grey track the per-frame progress bar fills."""
+    from matplotlib.patches import Rectangle
+
+    track = Rectangle((0.0, 0.0), 1.0, _PROGRESS_HEIGHT, transform=fig.transFigure, color="#dddddd")
+    fig.add_artist(track)
+
+
+def _frame_overlay(
+    fig: Figure, mean: xr.DataArray, sel: dict[str, int], index: int, count: int
+) -> list[Any]:
+    """The per-frame label naming the frame-dim values, and the filled progress bar."""
+    from matplotlib.patches import Rectangle
+
+    label = ", ".join(f"{d} = {_fmt(mean[d].values[i])}" for d, i in sel.items())
+    text = fig.text(
+        0.5,
+        0.95,
+        f"{label}   ({index + 1}/{count})",
+        ha="center",
+        va="center",
+        fontsize=10,
+        fontweight="bold",
+    )
+    bar = Rectangle(
+        (0.0, 0.0),
+        (index + 1) / count,
+        _PROGRESS_HEIGHT,
+        transform=fig.transFigure,
+        color="#4c72b0",
+    )
+    fig.add_artist(bar)
+    return [text, bar]
+
+
+# A frame artist's opening tag: matplotlib puts the gid on a wrapping <g> for most
+# artists but on the element itself for an image (a self-closing <image .../>).
+_FRAME_ELEMENT = re.compile(rf'<(\w+)([^>]*? id="{_FRAME_GID}(\d+)_\d+"[^>]*?)(/?)>')
+_FONT_FAMILY = re.compile(r"font-family: *[^;\"]+")
+# The XML prolog, the DOCTYPE (which names an external DTD) and matplotlib's RDF
+# metadata block: none of them draws anything, and the SVG pane wants <svg> first.
+_PREAMBLE = re.compile(r"\A.*?(?=<svg)", re.DOTALL)
+_METADATA = re.compile(r"\s*<metadata>.*?</metadata>", re.DOTALL)
+
+
+def _finish(svg: str) -> str:
+    """Strip the preamble and name a generic font stack, so the SVG names no font file."""
+    svg = _PREAMBLE.sub("", svg, count=1)
+    svg = _METADATA.sub("", svg, count=1)
+    return _FONT_FAMILY.sub(f"font-family: {_FONT_STACK}", svg)
+
+
+def _animate(svg: str, count: int) -> str:
+    """Show frame 0 by default and cycle every frame group with discrete SMIL opacity."""
+    key_times = ";".join(f"{i / count:.6g}" for i in range(count))
+    duration = f"{count * FRAME_SECONDS:g}s"
+
+    def repl(m: re.Match) -> str:
+        tag, attrs, index, self_closing = m.groups()
+        i = int(index)
+        values = ";".join("1" if j == i else "0" for j in range(count))
+        animate = (
+            f'<animate attributeName="opacity" values="{values}" keyTimes="{key_times}" '
+            f'dur="{duration}" calcMode="discrete" repeatCount="indefinite"/>'
+        )
+        opened = f'<{tag}{attrs} opacity="{1 if i == 0 else 0}">{animate}'
+        return f"{opened}</{tag}>" if self_closing else opened
+
+    return _finish(_FRAME_ELEMENT.sub(repl, svg))
+
+
+# ---------------------------------------------------------------- tabular charts
+
+
+@dataclass(frozen=True)
+class _TabPlan:
+    """What a tabular chart resolved once for every frame: columns, limits, scales."""
+
+    spec: Any
+    x: Any = None
+    ys: tuple = ()
+    xlim: tuple | None = None
+    ylim: tuple | None = None
+    clim: tuple[float, float] | None = None
+    edges: np.ndarray | None = None
+    xlabel: str = ""
+    ylabel: str = ""
+    title: str = ""
+
+
+@dataclass(frozen=True)
+class TabularSvgChart:
+    """One svg chart that draws the table a ``ResultDataSet`` sample holds.
+
+    The twin draws one plot per sample; this draws one frame per sample, so the frame
+    machinery covers every swept dim (``repeat`` included). ``spec_cls`` is the
+    twin's column spec (``XYScatter``...): its fields are the options this chart takes,
+    from the result var's declared ``container=`` spec or the render keywords, and its
+    helpers resolve the columns the same way. ``plan`` resolves columns and limits over
+    every frame's table, ``draw`` draws one.
+    """
+
+    name: str
+    spec_cls: Callable[[], type]
+    plan: Callable[[Any, list[pd.DataFrame]], _TabPlan]
+    draw: Callable[[Axes, pd.DataFrame, _TabPlan], list[Any]]
+    match: PlotFilter = field(default_factory=lambda: PlotFilter(panel_range=VarRange.at_least(1)))
+    result_types: tuple[type, ...] = (ResultDataSet,)
+    figsize: tuple[float, float] = (6.4, 4.8)
+    auto: bool = False
+
+
+def _column_limits(columns: list[pd.Series]) -> tuple:
+    """Fixed axis limits over one column of every frame, with a 5% margin for numbers."""
+    import pandas as pd
+
+    joined = pd.concat(columns, ignore_index=True)
+    if pd.api.types.is_datetime64_any_dtype(joined):
+        joined = joined.dropna()
+        return (joined.min(), joined.max()) if len(joined) else (None, None)
+    lo, hi = _finite_limits(pd.to_numeric(joined).to_numpy(dtype=float, na_value=np.nan))
+    margin = (hi - lo) * 0.05
+    return lo - margin, hi + margin
+
+
+def _label(spec: Any, role: str, default: str) -> str:
+    value = getattr(spec, role, None)
+    return str(value) if value is not None else default
+
+
+def _plan_xy(spec: Any, frames: list[pd.DataFrame], *, curve: bool = False) -> _TabPlan:
+    first = frames[0]
+    if curve:
+        x, ys = spec._resolve_columns(first)  # noqa: SLF001 - the twin's own resolution
+    else:
+        x, y = spec.axes(first, spec.x, spec.y)
+        ys = [y]
+    for df in frames[1:]:
+        for col in (x, *ys):
+            spec.check(df, col, "column")
+    xlim = _column_limits([df[x] for df in frames])
+    ylim = _column_limits([df[col] for df in frames for col in ys])
+    clim = None
+    colour = getattr(spec, "color", None)
+    if colour is not None:
+        for df in frames:
+            spec.check(df, colour, "color")
+        clim = _finite_limits(*(df[colour].to_numpy(dtype=float) for df in frames))
+    y_default = str(ys[0]) if len(ys) == 1 else ""
+    return _TabPlan(
+        spec=spec,
+        x=x,
+        ys=tuple(ys),
+        xlim=xlim,
+        ylim=ylim,
+        clim=clim,
+        xlabel=_label(spec, "xlabel", str(x)),
+        ylabel=_label(spec, "ylabel", y_default),
+        title=_label(spec, "title", f"{y_default or ', '.join(map(str, ys))} vs {x}"),
+    )
+
+
+def _plan_curve(spec: Any, frames: list[pd.DataFrame]) -> _TabPlan:
+    return _plan_xy(spec, frames, curve=True)
+
+
+def _plan_histogram(spec: Any, frames: list[pd.DataFrame]) -> _TabPlan:
+    cols = spec.columns(frames[0], spec.column, "column")
+    for df in frames[1:]:
+        for col in cols:
+            spec.check(df, col, "column")
+    values = [df[c].to_numpy(dtype=float, na_value=np.nan) for df in frames for c in cols]
+    lo, hi = spec.bin_range if spec.bin_range is not None else _finite_limits(*values)
+    edges = np.linspace(lo, hi, int(spec.bins) + 1)
+    tallest = 0.0
+    for v in values:
+        counts, _ = np.histogram(v[np.isfinite(v)], edges, density=bool(spec.density))
+        tallest = max(tallest, float(np.nan_to_num(counts).max(initial=0)))
+    tallest = tallest or 1.0
+    names = ", ".join(map(str, cols))
+    return _TabPlan(
+        spec=spec,
+        ys=tuple(cols),
+        xlim=(edges[0], edges[-1]),
+        ylim=(-tallest * 0.15, tallest * 1.1),
+        edges=edges,
+        xlabel=_label(spec, "xlabel", str(cols[0]) if len(cols) == 1 else ""),
+        ylabel=_label(spec, "ylabel", "density" if spec.density else "count"),
+        title=_label(spec, "title", f"Histogram of {names}"),
+    )
+
+
+def _plan_hexbin(spec: Any, frames: list[pd.DataFrame]) -> _TabPlan:
+    from matplotlib.figure import Figure
+
+    plan = _plan_xy(spec, frames)
+    # The tallest hexagon over every frame, from a throwaway figure, so every frame
+    # shares one colour scale.
+    scratch = Figure().add_subplot()
+    tallest = 1.0
+    for df in frames:
+        cells = _hexbin(scratch, df, plan)
+        counts = cells.get_array()
+        if counts is not None and counts.size:
+            tallest = max(tallest, float(np.max(counts)))
+    return dataclasses.replace(plan, clim=(0.0, tallest))
+
+
+def _xy_arrays(df: pd.DataFrame, x: Any, y: Any) -> tuple[np.ndarray, np.ndarray]:
+    return df[x].to_numpy(), df[y].to_numpy()
+
+
+def _hexbin(ax: Axes, df: pd.DataFrame, plan: _TabPlan, **kwargs: Any) -> Any:
+    xs, ys = _xy_arrays(df, plan.x, plan.ys[0])
+    extent = (*(plan.xlim or (0, 1)), *(plan.ylim or (0, 1)))
+    return ax.hexbin(
+        xs.astype(float),
+        ys.astype(float),
+        gridsize=int(plan.spec.gridsize),
+        extent=extent,
+        mincnt=plan.spec.min_count if plan.spec.min_count is not None else 1,
+        cmap=plan.spec.cmap,
+        linewidths=0,
+        **kwargs,
+    )
+
+
+def _draw_xy_scatter(ax: Axes, df: pd.DataFrame, plan: _TabPlan) -> list[Any]:
+    xs, ys = _xy_arrays(df, plan.x, plan.ys[0])
+    colour = plan.spec.color
+    if colour is not None and plan.clim is not None:
+        return [
+            ax.scatter(
+                xs,
+                ys,
+                c=df[colour].to_numpy(dtype=float),
+                cmap=plan.spec.cmap,
+                vmin=plan.clim[0],
+                vmax=plan.clim[1],
+                s=plan.spec.size * 3,
+                linewidths=0,
+            )
+        ]
+    return [ax.scatter(xs, ys, s=plan.spec.size * 3, color=_colour(0), alpha=0.75, linewidths=0)]
+
+
+def _draw_xy_curve(ax: Axes, df: pd.DataFrame, plan: _TabPlan) -> list[Any]:
+    if plan.spec.sort:
+        df = df.sort_values(plan.x, kind="stable")
+    artists: list[Any] = []
+    for i, col in enumerate(plan.ys):
+        marker = "o" if plan.spec.markers else None
+        artists += ax.plot(
+            df[plan.x].to_numpy(),
+            df[col].to_numpy(),
+            color=_colour(i),
+            marker=marker,
+            ms=plan.spec.size * 0.6,
+            lw=2,
+        )
+    return artists
+
+
+def _draw_xy_histogram(ax: Axes, df: pd.DataFrame, plan: _TabPlan) -> list[Any]:
+    edges = plan.edges
+    if edges is None:
+        return []
+    alpha = 0.55 if len(plan.ys) > 1 else 0.8
+    top = (plan.ylim or (0, 1))[1]
+    artists: list[Any] = []
+    for i, col in enumerate(plan.ys):
+        values = df[col].to_numpy(dtype=float, na_value=np.nan)
+        values = values[np.isfinite(values)]
+        counts, _ = np.histogram(values, edges, density=bool(plan.spec.density))
+        artists.append(ax.stairs(counts, edges, fill=True, color=_colour(i), alpha=alpha))
+        if values.size:
+            median = float(np.median(values))
+            artists.append(ax.vlines(median, 0, top / 1.1, colors=_colour(i), lw=3, zorder=4))
+    return artists
+
+
+def _draw_xy_hexbin(ax: Axes, df: pd.DataFrame, plan: _TabPlan) -> list[Any]:
+    clim = plan.clim or (0.0, 1.0)
+    return [_hexbin(ax, df, plan, vmin=clim[0], vmax=clim[1])]
+
+
+def _decorate_tabular(fig: Figure, ax: Axes, chart: TabularSvgChart, plan: _TabPlan) -> None:
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    ax.set_title(plan.title)
+    ax.autoscale(False)
+    if plan.xlim is not None and None not in plan.xlim:
+        ax.set_xlim(*plan.xlim)
+    if plan.ylim is not None and None not in plan.ylim:
+        ax.set_ylim(*plan.ylim)
+    ax.set_xlabel(plan.xlabel)
+    ax.set_ylabel(plan.ylabel)
+    ax.grid(True, alpha=0.3)
+    if getattr(plan.spec, "data_aspect", None) is not None:
+        ax.set_aspect(float(plan.spec.data_aspect), adjustable="box")
+    if plan.clim is not None:
+        label = "count" if chart.name == "xy_hexbin" else str(plan.spec.color)
+        mappable = ScalarMappable(norm=Normalize(*plan.clim), cmap=plan.spec.cmap)
+        _colorbar(fig, ax, mappable, label)
+    if len(plan.ys) > 1:
+        names = [str(c) for c in plan.ys]
+        if chart.name == "xy_histogram":
+            handles = [Patch(color=_colour(i), label=n) for i, n in enumerate(names)]
+        else:
+            handles = [Line2D([], [], color=_colour(i), label=n) for i, n in enumerate(names)]
+        ax.legend(handles=handles, fontsize=_MIN_FONT)
+
+
+def _spec_classes() -> dict[str, type]:
+    from bencher.results.holoview_results.xy_curve_result import XYCurve
+    from bencher.results.holoview_results.xy_hexbin_result import XYHexbin
+    from bencher.results.holoview_results.xy_histogram_result import XYHistogram
+    from bencher.results.holoview_results.xy_scatter_result import XYScatter
+
+    return {
+        "xy_scatter": XYScatter,
+        "xy_curve": XYCurve,
+        "xy_histogram": XYHistogram,
+        "xy_hexbin": XYHexbin,
+    }
+
+
+_register(
+    TabularSvgChart(
+        name="xy_scatter",
+        spec_cls=lambda: _spec_classes()["xy_scatter"],
+        plan=_plan_xy,
+        draw=_draw_xy_scatter,
+    ),
+    TabularSvgChart(
+        name="xy_curve",
+        spec_cls=lambda: _spec_classes()["xy_curve"],
+        plan=_plan_curve,
+        draw=_draw_xy_curve,
+        figsize=(6.4, 4.0),
+    ),
+    TabularSvgChart(
+        name="xy_histogram",
+        spec_cls=lambda: _spec_classes()["xy_histogram"],
+        plan=_plan_histogram,
+        draw=_draw_xy_histogram,
+        figsize=(6.4, 4.0),
+    ),
+    TabularSvgChart(
+        name="xy_hexbin",
+        spec_cls=lambda: _spec_classes()["xy_hexbin"],
+        plan=_plan_hexbin,
+        draw=_draw_xy_hexbin,
+    ),
+)
+
+# Options that name columns: a list from the caller becomes the tuple the spec holds.
+_COLUMN_OPTIONS = ("y", "column", "vdims")
+
+
+def _resolve_spec(chart: TabularSvgChart, rv: Any, options: Mapping[str, Any]) -> Any:
+    """The twin's spec for ``rv``: its declared ``container=`` spec, then ``options``."""
+    spec_cls = chart.spec_cls()
+    names = {f.name for f in dataclasses.fields(spec_cls)} - {"opts"}
+    declared = getattr(rv, "container", None)
+    values = {n: getattr(declared, n) for n in names} if isinstance(declared, spec_cls) else {}
+    for key, value in options.items():
+        if key in names and value is not None:
+            values[key] = (
+                tuple(value) if key in _COLUMN_OPTIONS and isinstance(value, list) else value
+            )
+    return spec_cls(**values)
+
+
+def _tabular_svgs(
+    chart: TabularSvgChart,
+    dataset: xr.Dataset,
+    result_vars: tuple | list,
+    loader: SampleLoader | None,
+    options: Mapping[str, Any],
+    svg_layout: str = "auto",
+) -> dict[str, str]:
+    from bencher.results.holoview_results.tabular_spec import to_dataframe
+
+    if loader is None:
+        return {}
+    out: dict[str, str] = {}
+    for rv in result_vars:
+        if not isinstance(rv, chart.result_types) or rv.name not in dataset:
+            continue
+        da = dataset[rv.name]
+        # The twin squeezes to one value per sample; every dim left is a frame dim.
+        da = da.squeeze([d for d in da.dims if da.sizes[d] == 1], drop=False)
+        dims = [str(d) for d in da.dims]
+        frames, _total = _frames(da, dims)
+        tables: list[pd.DataFrame | None] = []
+        for sel in frames:
+            cell = da.isel(sel) if sel else da
+            payload = loader(cell.values.item(), rv)
+            try:
+                tables.append(to_dataframe(payload, chart.name) if payload is not None else None)
+            except TypeError:  # a placeholder pane or a payload that is not a table
+                tables.append(None)
+        present = [t for t in tables if t is not None]
+        if not present:
+            continue
+        try:
+            plan = chart.plan(_resolve_spec(chart, rv, options), present)
+        except (ValueError, TypeError) as exc:
+            log.warning("svg %s of %s: %s; using the holoviews chart", chart.name, rv.name, exc)
+            continue
+
+        def draw(
+            ax: Axes,
+            sel: dict[str, int],
+            _plan: _TabPlan = plan,
+            _tables: list = tables,
+            _frames: list = frames,
+        ) -> list[Any]:
+            table = _tables[_frames.index(sel)] if sel else _tables[0]
+            return chart.draw(ax, table, _plan) if table is not None else []
+
+        out[rv.name] = _draw_frames(
+            name=f"svg {chart.name} of {rv.name}",
+            salt=f"bencher-{chart.name}-{rv.name}",
+            figsize=chart.figsize,
+            source=da,
+            dims=dims,
+            decorate=lambda fig, ax, _plan=plan: _decorate_tabular(fig, ax, chart, _plan),
+            draw=draw,
+            svg_layout=svg_layout,
+        )
+    return out
+
+
+# ---------------------------------------------------------------- BenchData entry points
+
+
+def chart_svgs(
+    chart: SvgChart | TabularSvgChart,
+    dataset: xr.Dataset,
+    result_vars: tuple | list,
+    cfg: PltCntCfg | None,
+    *,
+    loader: SampleLoader | None = None,
+    options: Mapping[str, Any] | None = None,
+    svg_layout: str = "auto",
+) -> dict[str, str]:
+    """Every SVG ``chart`` draws for a sweep, keyed by result var name.
+
+    Empty when the sweep shape (``cfg``) is outside ``chart.match`` or no result var has
+    a type the chart draws. ``loader`` reads a stored ``ResultDataSet`` sample (the
+    tabular charts need it); ``options`` are the twin's chart options (``x=``, ``y=``,
+    ``bins=``...), which only the tabular charts take. ``svg_layout`` shows the dims a
+    chart does not put on an axis as a grid of panels or as frames (``"auto"``: a grid up
+    to MAX_SVG_PANELS panels).
+    """
+    if cfg is None or not chart.match.matches_result(cfg, chart.name, override=False).overall:
+        return {}
+    if isinstance(chart, TabularSvgChart):
+        return _tabular_svgs(chart, dataset, result_vars, loader, options or {}, svg_layout)
+    floats = [v.name for v in cfg.float_vars]
+    cats = [v.name for v in cfg.cat_vars]
+    out: dict[str, str] = {}
+    for rv in result_vars:
+        if not isinstance(rv, chart.result_types) or rv.name not in dataset:
+            continue
+        da = dataset[rv.name].copy()
+        layout = chart.layout(floats, cats, da)
+        if layout is None:
+            continue
+        da.attrs["label"] = label_with_units(rv)
+        title = (
+            chart.title(rv.name, layout) if chart.title is not None else f"{rv.name} vs {layout.x}"
+        )
+        out[rv.name] = render_svg(chart, da, layout, title=title, svg_layout=svg_layout)
+    return out
+
+
+def svg_pane(svg: str) -> pn.pane.SVG:
+    """A Panel pane for one svg-backend chart."""
+    return pn.pane.SVG(svg, sizing_mode="fixed")
+
+
+def _identity(obj: Any) -> Any:
+    return obj
+
+
+def sample_loader(result: Any) -> SampleLoader:
+    """Read one stored ``ResultDataSet`` cell of ``result`` as its raw payload."""
+
+    def load(value: Any, result_var: Any) -> Any:
+        return result._dataset_sample_to_container(value, result_var, container=_identity)  # noqa: SLF001
+
+    return load
+
+
+def _cfg_layout(result: Any) -> str:
+    """The ``svg_layout`` of a result's run config, ``"auto"`` without one."""
+    cfg = getattr(result, "bench_cfg", None)
+    return str(getattr(cfg, "svg_layout", None) or "auto")
+
+
+@dataclass(frozen=True)
+class SvgPlugin:
+    """Plot plugin for one svg chart type.
+
+    ``fallback`` is the twin a matching sweep hands over to when no result var is drawable
+    here, so selecting svg never loses a plot the default backend would have drawn.
+    """
+
+    chart: SvgChart | TabularSvgChart
+    priority: int
+    fallback: PlotPlugin | None = None
+    backend: str = SVG_BACKEND
+    requires: frozenset[str] = frozenset({"legacy_result"})
+
+    @property
+    def name(self) -> str:
+        return self.chart.name
+
+    @property
+    def match(self) -> PlotFilter:
+        return self.chart.match
+
+    @property
+    def auto(self) -> bool:
+        return self.chart.auto
+
+    def render(self, data: BenchData) -> pn.viewable.Viewable | None:
+        legacy = data.legacy_result
+        svgs = chart_svgs(
+            self.chart,
+            data.dataset,
+            data.result_vars,
+            data.plt_cnt_cfg,
+            loader=sample_loader(legacy) if legacy is not None else None,
+            options=data.render_kwargs,
+            svg_layout=_cfg_layout(legacy),
+        )
+        if not svgs:
+            return self.fallback.render(data) if self.fallback is not None else None
+        return pn.Column(*(svg_pane(s) for s in svgs.values()))
+
+
+class SvgResult(BenchResultBase):
+    """Write a result's svg-backend charts as strings or files, for linking from a PR."""
+
+    def to_svgs(
+        self, charts: list[str] | None = None, svg_layout: str | None = None, **options: Any
+    ) -> dict[str, str]:
+        """Every svg-backend chart this sweep draws, keyed ``"<chart>_<result var>"``.
+
+        Args:
+            charts: Chart names to draw (see ``bencher.results.svg_result.CHARTS``).
+                Defaults to every auto-selected svg chart; ones whose shape rule does not
+                match this sweep are skipped. Named-only charts (``violin``, ``table``,
+                ``xy_scatter``...) are drawn only when named here.
+            svg_layout: How to show the dims a chart does not put on an axis:
+                ``"grid"`` (one small panel each, all at once), ``"frames"`` (one
+                animation frame each) or ``"auto"`` (a grid up to MAX_SVG_PANELS panels,
+                frames past it). Defaults to the run config's ``svg_layout``.
+            **options: The tabular charts' options, as their holoviews twins take them
+                (``x=``, ``y=``, ``column=``, ``bins=``...).
+
+        Returns:
+            dict[str, str]: Standalone SVG documents.
+        """
+        names = [n for n, c in CHARTS.items() if c.auto] if charts is None else charts
+        unknown = sorted(set(names) - set(CHARTS))
+        if unknown:
+            raise ValueError(f"Unknown svg charts {unknown}; svg charts are {sorted(CHARTS)}")
+        svg_layout = _cfg_layout(self) if svg_layout is None else svg_layout
+        if svg_layout not in SVG_LAYOUTS:
+            raise ValueError(f"svg_layout must be one of {SVG_LAYOUTS}, not {svg_layout!r}")
+        result_vars = self.bench_cfg.result_vars
+        loader = sample_loader(self)
+        out: dict[str, str] = {}
+        for name in names:
+            svgs = chart_svgs(
+                CHARTS[name],
+                self.ds,
+                result_vars,
+                self.plt_cnt_cfg,
+                loader=loader,
+                options=options,
+                svg_layout=svg_layout,
+            )
+            for var, svg in svgs.items():
+                out[f"{name}_{var}"] = svg
+        return out
+
+    def to_svg_files(
+        self,
+        directory: str | Path,
+        charts: list[str] | None = None,
+        prefix: str = "",
+        svg_layout: str | None = None,
+        **options: Any,
+    ) -> list[Path]:
+        """Write :meth:`to_svgs` to ``directory`` as ``<prefix><chart>_<result var>.svg``.
+
+        Returns:
+            list[Path]: The files written, in chart order.
+        """
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        paths = []
+        for key, svg in self.to_svgs(charts, svg_layout=svg_layout, **options).items():
+            path = directory / f"{prefix}{key}.svg"
+            path.write_text(svg, encoding="utf-8")
+            paths.append(path)
+        return paths

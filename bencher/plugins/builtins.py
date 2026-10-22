@@ -180,30 +180,59 @@ CALLBACK_TO_PLUGIN: dict[Callable, str] = {}
 def register_builtin_plugins() -> None:
     """Register the default chart set with the global registry. Idempotent."""
     priority = 100
+    twins: dict[str, LegacyResultPlugin] = {}
     for name, backend, callback, match in _builtin_specs():
-        register_plugin(
-            LegacyResultPlugin(
-                name=name,
-                backend=backend,
-                match=match,
-                priority=priority,
-                requires=frozenset({"legacy_result"}),
-                callback=callback,
-            )
+        plugin = LegacyResultPlugin(
+            name=name,
+            backend=backend,
+            match=match,
+            priority=priority,
+            requires=frozenset({"legacy_result"}),
+            callback=callback,
         )
+        register_plugin(plugin)
+        if backend in _SVG_TWIN_BACKENDS:
+            twins[name] = plugin
         CALLBACK_TO_PLUGIN[callback] = name
         priority -= 5
     for name, backend, callback in _named_only_specs():
-        register_plugin(
-            LegacyResultPlugin(
-                name=name,
-                backend=backend,
-                match=PlotFilter(),
-                priority=priority,
-                requires=frozenset({"legacy_result"}),
-                callback=callback,
-                auto=False,
-            )
+        plugin = LegacyResultPlugin(
+            name=name,
+            backend=backend,
+            match=PlotFilter(),
+            priority=priority,
+            requires=frozenset({"legacy_result"}),
+            callback=callback,
+            auto=False,
         )
+        register_plugin(plugin)
+        if backend in _SVG_TWIN_BACKENDS:
+            twins[name] = plugin
         CALLBACK_TO_PLUGIN[callback] = name
         priority -= 5
+    _register_svg_plugins(twins)
+
+
+# The backends whose charts the svg backend draws a twin of.
+_SVG_TWIN_BACKENDS = ("holoviews", "plotly")
+
+
+def _register_svg_plugins(twins: dict[str, LegacyResultPlugin]) -> None:
+    """Register the svg backend's twin of each holoviews or plotly chart it covers.
+
+    Each twin shares its chart name with the holoviews (or, for ``surface`` and
+    ``volume``, plotly) implementation, so (as the module docstring requires) it declares
+    a real shape rule: a sweep outside it selects the twin. The priority sits one below
+    the twin's, so the default backend keeps winning ties and the report order is
+    unchanged; only ``backend="svg"`` picks these. The twin is also the render-time fallback for a matching sweep whose
+    result vars the svg chart cannot draw. A twin that is named-only (``violin``,
+    ``table``, ``xy_scatter``...) has a named-only svg chart: ``auto`` comes from the
+    chart, and each chart's ``auto`` matches its twin's.
+    """
+    from bencher.results.svg_result import CHARTS, SvgPlugin
+
+    for name, chart in CHARTS.items():
+        twin = twins[name]
+        if chart.auto != twin.auto:
+            raise ValueError(f"svg chart {name!r} has auto={chart.auto}, its twin {twin.auto}")
+        register_plugin(SvgPlugin(chart=chart, priority=twin.priority - 1, fallback=twin))

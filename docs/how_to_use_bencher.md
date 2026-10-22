@@ -482,6 +482,90 @@ Two things to know if you pick the merged viewer by hand instead:
 * Define the callback at module scope. The callback list is pickled into the result
   cache, so a closure fails with `AttributeError: Can't pickle local object`.
 
+## The svg Backend: Plots for a GitHub PR
+
+`backend="svg"` draws charts with matplotlib as self-contained SVGs. A GitHub `<img>`
+shows them: they hold no script, no font file and no external link. Chart types without
+an svg twin keep the panel pipeline.
+
+The backend is a run config setting, so any example or benchmark draws with it unchanged.
+To run an existing example with the svg backend, pass it the run config:
+
+```python
+example_sweep_1_float_2_cat_no_repeats(bn.BenchRunCfg(backend="svg"))
+```
+
+To write the charts as files:
+
+```python
+run_cfg = bn.BenchRunCfg(backend="svg")
+res = bench.plot_sweep("wave", input_vars=["x", "wave", "envelope"])
+res.to_svg_files("docs/my_plots")  # one <chart>_<result var>.svg per auto-selected chart
+res.to_svg_files("docs/my_plots", charts=["violin", "table"])  # named-only charts
+```
+
+A chart shows two or three dimensions: the x axis, the y axis of a heatmap, and a colour
+per level of a categorical input. Every other swept dimension, `over_time` included,
+becomes a grid of small panels: one panel per combination of values, all visible at
+once, titled with those values. The panels share their axes, their colour scale, the
+title and the legend. A soft highlight walks the panels in sweep order and loops: the
+current panel gets a border and the others dim a little. No mark moves, so every instant
+is the whole chart, and a reader who asks for reduced motion
+(`prefers-reduced-motion`) sees the grid with no animation. A chart with nothing left
+over is a static SVG, as before.
+
+Past `bn.MAX_SVG_PANELS` (12) panels the panels get too small, so the chart steps
+through the combinations as frames instead: one chart, one frame per combination, played
+in a loop with a label naming the current values and a progress bar, on fixed axes. Past
+`bn.MAX_SVG_FRAMES` (60) the rest are dropped, with a log warning and a note on the
+image. To choose the layout, set `svg_layout`:
+
+```python
+run_cfg = bn.BenchRunCfg(backend="svg", svg_layout="frames")  # "auto" (default), "grid"
+res.to_svg_files("docs/my_plots", svg_layout="grid")  # overrides the run config
+```
+
+The value charts reduce repeats by the mean; the curve draws one standard deviation as a
+band. The distribution charts draw every repeat as a dot, with a thick median line.
+
+Each svg chart declares the sweep shapes it draws, the same as its holoviews twin.
+Named-only twins stay named-only: request them with `plot_list=[...]` or
+`to_svgs([...])`.
+
+| Chart | Auto | Shape | Shown | One panel (or frame) per |
+|---|---|---|---|---|
+| `line` | yes | 1 float, any cats, no repeats | x, first cat as colour | other cats, `over_time` |
+| `curve` | yes | 1 float, any cats, repeats | x, first cat as colour, ±1 std | other cats, `over_time` |
+| `heatmap` | yes | 2+ floats | first two floats | other inputs, `over_time` |
+| `bar` | yes | 0 floats, 1+ cats, no repeats | first cat, second cat as colour | other cats, `over_time` |
+| `box_whisker` | yes | 0 floats, any cats, repeats | box, dots, median per first cat; second cat as colour | other cats, `over_time` |
+| `histogram` | yes | no inputs | bins, dots, median of the repeats | `over_time` |
+| `violin` | no | as `box_whisker` | density, dots, median | other cats, `over_time` |
+| `scatter_jitter` | no | 0 floats, 0-1 cats, repeats | dots, median | `over_time` |
+| `scatter` | no | 0 floats, any cats, no repeats | one dot per first cat; second cat as colour | other cats, `over_time` |
+| `band` | no | any | 10-90% and 25-75% bands, median, every sample, over `over_time` or the first input | nothing: other dims are pooled |
+| `table` | no | any | one row per sample (first `bn.MAX_TABLE_ROWS`) | nothing |
+| `xy_scatter`, `xy_curve`, `xy_histogram`, `xy_hexbin` | no | a `ResultDataSet` | one sample's table | sample |
+| `volume` | yes | 3 floats, no cats | filled contour bands of the first two floats | value of the third float (not `over_time`) |
+| `surface` | no | 2 floats, any cats | a 3D surface of the mean from a fixed camera, every repeat as a dot | cat, `over_time` |
+
+The `xy_*` charts take their twin's options (`x=`, `y=`, `color=`, `column=`, `bins=`,
+`gridsize=`...) as keywords to `to_svgs` or `to_auto`, or from a `container=bn.xy_scatter(...)`
+spec declared on the result var.
+
+A sweep outside those shapes (a 0-D `over_time` line, a bool bar with repeats, a violin
+over a float) falls back to the holoviews (or, for `surface` and `volume`, plotly) chart,
+and so does a result var the svg chart cannot draw. `res.to_svgs()` returns the SVG strings instead of files.
+
+To link the files from a PR, commit them and use a URL pinned to the commit. This repo
+keeps `*.svg` in Git LFS, so use
+`https://media.githubusercontent.com/media/<owner>/<repo>/<sha>/<path>`;
+`raw.githubusercontent.com` serves the LFS pointer, not the image.
+
+[The svg backend gallery](reference/meta/svg_backend/index) runs existing examples with
+`backend="svg"` when the docs build. Each page names the example and the run config it
+uses.
+
 ## Running a Sweep
 
 ```python

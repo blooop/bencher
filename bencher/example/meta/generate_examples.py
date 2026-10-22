@@ -4,16 +4,88 @@ import ast
 import html
 import importlib
 import io
+import json
 import os
 import re
 import shutil
 import subprocess
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import bencher as bn
 
 GENERATED_DIR = Path("bencher/example/generated")
+
+# The gallery section that re-runs existing examples with run_cfg.backend = "svg".
+SVG_SECTION = "svg_backend"
+
+
+@dataclass(frozen=True)
+class SvgGalleryEntry:
+    """An existing generated example, re-run with the svg backend for the docs gallery."""
+
+    stem: str  # the generated example's file stem
+    shows: str  # what the svg page shows, for the page intro
+    run_cfg: dict = field(default_factory=dict)  # run_cfg settings on top of backend="svg"
+    suffix: str = ""  # tells apart two pages of the same example
+
+    @property
+    def page_stem(self) -> str:
+        return f"{self.stem}_svg{self.suffix}"
+
+
+# Together these show every auto-selected svg chart. The named-only svg charts (violin,
+# scatter_jitter, scatter, band, table, surface, xy_*) are drawn only by name: no
+# existing example names them, so test/test_svg_examples.py covers them instead.
+SVG_GALLERY = [
+    SvgGalleryEntry("example_sweep_1_float_1_cat_no_repeats", "a static line"),
+    SvgGalleryEntry(
+        "example_sweep_1_float_2_cat_no_repeats",
+        "a line with one small panel per value of the second categorical input",
+    ),
+    SvgGalleryEntry(
+        "example_sweep_1_float_2_cat_no_repeats",
+        "the same sweep as one chart that steps through the panels as frames",
+        {"svg_layout": "frames"},
+        "_frames",
+    ),
+    SvgGalleryEntry(
+        "example_sweep_1_float_1_cat_with_repeats", "a curve: the mean of the repeats in a band"
+    ),
+    SvgGalleryEntry("example_sweep_1_float_1_cat_over_time", "a line with one panel per time"),
+    SvgGalleryEntry("example_sweep_2_float_0_cat_no_repeats", "a heatmap"),
+    SvgGalleryEntry(
+        "example_sweep_2_float_1_cat_no_repeats",
+        "a heatmap with one panel per value of the categorical input",
+    ),
+    SvgGalleryEntry(
+        "example_plot_volume", "a volume, and a heatmap with one panel per third float"
+    ),
+    SvgGalleryEntry("example_sweep_0_float_2_cat_no_repeats", "a bar chart"),
+    SvgGalleryEntry(
+        "example_sweep_0_float_1_cat_with_repeats", "a box and whisker of every repeat"
+    ),
+    SvgGalleryEntry(
+        "example_sweep_0_float_0_cat_with_repeats", "a histogram and a box of the repeats"
+    ),
+]
+
+
+def _svg_variant_intro(py_file: Path, variant: SvgGalleryEntry, rst_path: Path) -> str:
+    """The RST paragraph that says which existing example an svg page re-runs, and how."""
+    original = META_DOCS_DIR / py_file.relative_to(GENERATED_DIR).with_suffix("")
+    link = os.path.relpath(original, rst_path.parent)
+    settings = "".join(f", {k}={json.dumps(v)}" for k, v in variant.run_cfg.items())
+    return f"""
+This page runs the existing example :doc:`{variant.stem} <{link}>` with the svg backend.
+It shows {variant.shows}. The example's source does not change; only the run config does:
+
+.. code-block:: python
+
+   {variant.stem}(bn.BenchRunCfg(backend="svg"{settings}))
+
+"""
 
 
 def _extract_run_kwargs(py_file: Path) -> dict:
@@ -441,16 +513,26 @@ def _find_example_function(mod):
 
 
 def run_example_and_save(
-    py_file: Path, docs_dir: Path, generated_dir: Path, page=None, skip_thumbnails=False
+    py_file: Path,
+    docs_dir: Path,
+    generated_dir: Path,
+    page=None,
+    skip_thumbnails=False,
+    variant: "SvgGalleryEntry | None" = None,
 ):
     """Run a Python example, save HTML report, write RST doc page.
+
+    With ``variant``, the example runs with the svg backend and its page goes in the
+    ``SVG_SECTION`` gallery section, under the variant's own stem.
 
     Returns a metadata dict for gallery generation, or None on failure.
     """
     rel = py_file.relative_to(generated_dir)
+    if variant is not None:
+        rel = Path(SVG_SECTION) / f"{variant.page_stem}.py"
     output_dir = docs_dir / rel.parent
     output_dir.mkdir(parents=True, exist_ok=True)
-    stem = py_file.stem
+    stem = rel.stem
 
     mod = _import_example_module(py_file)
     example_fn = _find_example_function(mod)
@@ -466,6 +548,10 @@ def run_example_and_save(
         run_cfg.use_optuna = run_kwargs["use_optuna"]
     if run_kwargs.get("over_time"):
         run_cfg.over_time = True
+    if variant is not None:
+        run_cfg.backend = "svg"
+        for name, value in variant.run_cfg.items():
+            setattr(run_cfg, name, value)
     optimise = run_kwargs.get("optimise", 0)
     print(f"Running {py_file}...")
     t_exec_start = time.perf_counter()
@@ -509,9 +595,10 @@ def run_example_and_save(
     rst_path = output_dir / f"{stem}.rst"
     py_rel = os.path.relpath(py_file, rst_path.parent)
 
+    intro = "" if variant is None else _svg_variant_intro(py_file, variant, rst_path)
     rst_content = f"""{title_text}
 {underline}
-
+{intro}
 .. raw:: html
 
    <details class="bencher-source" open>
@@ -731,6 +818,7 @@ SECTION_GROUPS = [
             ("Performance", "performance"),
             ("Publishing", "publishing"),
             ("Rerun Integration", "rerun"),
+            ("SVG Backend", SVG_SECTION),
         ],
     ),
 ]
@@ -836,6 +924,26 @@ def _print_timing_summary(examples_metadata: list[dict]) -> None:
     print(f"{'=' * 70}\n")
 
 
+def _run_svg_gallery(only, page, skip_thumbnails) -> list[dict]:
+    """Re-run the SVG_GALLERY examples with the svg backend; return their page metadata."""
+    by_stem = {f.stem: f for f in sorted(GENERATED_DIR.rglob("*.py"))}
+    metadata = []
+    for variant in SVG_GALLERY:
+        if only and not any(pat in variant.page_stem for pat in only):
+            continue
+        meta = run_example_and_save(
+            by_stem[variant.stem],
+            META_DOCS_DIR,
+            GENERATED_DIR,
+            page=page,
+            skip_thumbnails=skip_thumbnails,
+            variant=variant,
+        )
+        if meta:
+            metadata.append(meta)
+    return metadata
+
+
 def generate_all(only: list[str] | None = None, force_skip_thumbnails: bool = False) -> list[Path]:
     """Generate Python examples, run them, save HTML reports, generate RST for docs.
 
@@ -900,6 +1008,7 @@ def generate_all(only: list[str] | None = None, force_skip_thumbnails: bool = Fa
             )
             if meta:
                 examples_metadata.append(meta)
+        examples_metadata += _run_svg_gallery(only, page, skip_thumbnails)
     finally:
         if browser is not None:
             browser.close()

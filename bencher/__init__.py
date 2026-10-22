@@ -47,6 +47,12 @@ from bencher.results.holoview_results.xy_scatter_result import (
     XYScatterResult as XYScatterResult,
     xy_scatter as xy_scatter,
 )
+from bencher.results.svg_result import (
+    MAX_SVG_FRAMES as MAX_SVG_FRAMES,
+    MAX_SVG_PANELS as MAX_SVG_PANELS,
+    MAX_TABLE_ROWS as MAX_TABLE_ROWS,
+    SvgResult as SvgResult,
+)
 from bencher.results.volume_result import VolumeResult as VolumeResult
 
 from .bench_cfg import ShowMode as ShowMode

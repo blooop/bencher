@@ -59,6 +59,7 @@ from bencher.results.optuna_result import OptunaResult
 from bencher.results.pane_result import PaneResult
 from bencher.results.rerun_summary import RerunSummaryResult
 from bencher.results.rerun_timeline import RerunTimelineResult
+from bencher.results.svg_result import SvgResult
 from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.volume_result import VolumeResult
 from bencher.utils import AggFn, listify, resolve_aggregate
@@ -124,6 +125,7 @@ class BenchResult(
     RerunTimelineResult,
     DataSetResult,
     OptunaResult,
+    SvgResult,
 ):
     """Contains the results of the benchmark and has methods to cast the results to various datatypes and graphical representations."""
 
