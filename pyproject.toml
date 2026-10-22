@@ -1,13 +1,13 @@
 [project]
 name = "holobench"
-version = "1.143.0"
+version = "1.144.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
 readme = "README.md"
 license = "MIT"
 
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.11,<3.15"
 
 dependencies = [
     "holoviews>=1.15,<=1.23.2",
@@ -42,7 +42,7 @@ platforms = [{ platform = "linux-64", glibc = "2.31" }]
 
 [tool.pixi.dependencies]
 python = ">=3.11"
-sqlite = "==3.48.0"
+sqlite = ">=3.48.0,!=3.49.1"
 shellcheck = ">=0.10.0,<0.11"
 devpod = ">=0.8.0,<0.9"
 gh = ">=2.83.0,<3.0"
@@ -54,6 +54,8 @@ python = "3.11.*"
 python = "3.12.*"
 [tool.pixi.feature.py313.dependencies]
 python = "3.13.*"
+[tool.pixi.feature.py314.dependencies]
+python = "3.14.*"
 
 # The floor of the window the `rerun` extra declares. The default environment
 # resolves the newest release in that window, so without this feature the older
@@ -122,6 +124,7 @@ docs = { features = ["test", "rerun", "docs"], solve-group = "default" }
 py311 = ["py311", "test", "rerun"]
 py312 = ["py312", "test", "rerun"]
 py313 = ["py313", "test", "rerun"]
+py314 = ["py314", "test", "rerun"]
 rerun-floor = ["py313", "test", "rerun-floor"]
 
 [tool.pixi.tasks]
