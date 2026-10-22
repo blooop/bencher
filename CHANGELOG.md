@@ -38,6 +38,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   third, on one colour scale. `surface` (named-only) draws two float inputs as a 3D
   surface of the mean from a fixed camera, with every repeat as a dot, one panel per
   categorical value. Both keep their plotly twins' shape rules and fall back to them.
+- **The svg backend draws with seaborn when it is installed.** A new optional extra,
+  `holobench[seaborn]` (in the pixi dev environments), in a seaborn `svg_style` gives the
+  svg charts one seaborn theme and draws the value and distribution panels with seaborn: a beeswarm of every
+  repeat (a jitter strip when the dots would not fit), seaborn's boxes, violins, bars and
+  lines, a density curve over the histogram, and heatmap cells with gaps and, when big
+  enough, their values. The theme is applied per chart, never to global matplotlib state.
+  In `"plain"`, or without seaborn, the svg backend draws exactly as before.
+- **`svg_style` picks the look of the svg charts.** `BenchRunCfg.svg_style` and the
+  `svg_style=` keyword of `to_svgs()` / `to_svg_files()` take `"seaborn-ticks"` (the
+  default: seaborn's ticks style, white axes, no top or right spine, and its deep palette),
+  `"seaborn"` (seaborn's darkgrid style) or `"plain"` (plain matplotlib, the same bytes as before). Every
+  chart takes the style, the matplotlib-drawn table, `xy_*`, surface and volume included.
+  Without seaborn every style draws `"plain"`, with one log warning. The docs gallery's
+  "SVG Backend" section shows three existing examples in each style.
 
 ## [1.144.0] - 2026-10-20
 

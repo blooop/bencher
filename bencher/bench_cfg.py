@@ -424,6 +424,16 @@ class BenchRunCfg(BenchPlotSrvCfg):
         "past it.",
     )
 
+    svg_style = param.Selector(
+        default="seaborn-ticks",
+        objects=["seaborn", "seaborn-ticks", "plain"],
+        doc="The look of backend='svg' charts. 'seaborn-ticks' (the default) draws with "
+        "seaborn's ticks style (white axes, outward ticks, no top or right spine) and its "
+        "deep palette; 'seaborn' with seaborn's darkgrid style (grey axes, white grid); "
+        "'plain' with plain matplotlib (tab10). The seaborn styles need the seaborn extra; without it every "
+        "style draws 'plain'.",
+    )
+
     # ==================== TIME & HISTORY PARAMETERS ====================
     # These parameters control time-based features and historical tracking
 

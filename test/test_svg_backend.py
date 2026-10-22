@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import math
 import random
@@ -680,6 +681,43 @@ def test_surface_is_named_only_and_falls_back_outside_its_rule():
     assert "surface_out" not in res.to_svgs()
     assert res.to_svgs(["surface"]) == {}
     assert _chosen_named(res, "surface", "svg") == "plotly"
+
+
+@pytest.mark.parametrize(
+    ("inputs", "repeats"),
+    [
+        (["x", "kind", "mode"], 1),
+        (["x", "kind"], 3),
+        (["x", "y", "z"], 1),
+        (["kind", "mode"], 4),
+        ([], 6),
+    ],
+)
+def test_plain_style_is_the_drawing_without_seaborn(monkeypatch, inputs, repeats):
+    """``svg_style="plain"`` is the look from before the seaborn styles, to the byte.
+
+    Both sides draw here: plain with seaborn importable, and a seaborn style with seaborn
+    gone, which draws with matplotlib alone.
+    """
+    res = _sweep(inputs, repeats=repeats)
+    plain = res.to_svgs(list(CHARTS), svg_style="plain")
+    assert plain
+    monkeypatch.setattr(svg_result, "_seaborn", lambda: None)
+    monkeypatch.setattr(svg_result, "_warned_no_seaborn", True)
+    assert res.to_svgs(list(CHARTS), svg_style="seaborn-ticks") == plain
+
+
+@pytest.mark.skipif(importlib.util.find_spec("seaborn") is not None, reason="seaborn installed")
+def test_without_seaborn_every_style_draws_plain_with_one_warning(monkeypatch, caplog):
+    monkeypatch.setattr(svg_result, "_warned_no_seaborn", False)
+    res = _sweep(["x"])
+    plain = res.to_svgs(svg_style="plain")
+    with caplog.at_level(logging.WARNING, logger="bencher.results.svg_result"):
+        assert res.to_svgs(svg_style="seaborn") == plain
+        assert res.to_svgs(svg_style="seaborn-ticks") == plain
+    warned = [r for r in caplog.records if "needs seaborn" in r.getMessage()]
+    assert len(warned) == 1
+    assert "holobench[seaborn]" in warned[0].getMessage()
 
 
 class WideTicks(bn.ParametrizedSweep):

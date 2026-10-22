@@ -71,6 +71,19 @@ SVG_GALLERY = [
     ),
 ]
 
+# The same examples in the other svg_style looks; the pages above use the default,
+# "seaborn-ticks".
+_STYLED = {
+    "example_sweep_1_float_2_cat_no_repeats": "a line with one panel per value",
+    "example_sweep_2_float_1_cat_no_repeats": "a heatmap with one panel per value",
+    "example_sweep_0_float_1_cat_with_repeats": "a box and whisker of every repeat",
+}
+SVG_GALLERY += [
+    SvgGalleryEntry(stem, f"{shows}, in the {style!r} svg_style", {"svg_style": style}, suffix)
+    for style, suffix in (("seaborn", "_seaborn"), ("plain", "_plain"))
+    for stem, shows in _STYLED.items()
+]
+
 
 def _svg_variant_intro(py_file: Path, variant: SvgGalleryEntry, rst_path: Path) -> str:
     """The RST paragraph that says which existing example an svg page re-runs, and how."""

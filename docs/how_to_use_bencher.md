@@ -528,6 +528,33 @@ res.to_svg_files("docs/my_plots", svg_layout="grid")  # overrides the run config
 The value charts reduce repeats by the mean; the curve draws one standard deviation as a
 band. The distribution charts draw every repeat as a dot, with a thick median line.
 
+seaborn is optional. With it installed (`pip install holobench[seaborn]`; the pixi dev
+environments have it) and a seaborn `svg_style` (below), the svg charts share one seaborn
+theme, and seaborn draws the panels of the value and distribution charts: a beeswarm of every repeat (the jitter
+strip when the dots do not fit side by side), seaborn's boxes, violins, bars and lines,
+a density curve over the histogram, and white gaps between heatmap cells, with each
+value written in a cell big enough to hold it. The `table`, `xy_*`, `volume` and
+`surface` charts keep their matplotlib drawing and take only the theme. In `"plain"`, or
+without seaborn, every chart draws as above with plain matplotlib. Either way the panels, frames, shared
+axes and the highlight are the same, and the theme applies to the svg charts only, not
+to the process's other matplotlib figures.
+
+To choose the look, set `svg_style` (one of `bn.SVG_STYLES`):
+
+```python
+run_cfg = bn.BenchRunCfg(backend="svg", svg_style="seaborn")
+res.to_svg_files("docs/my_plots", svg_style="plain")  # overrides the run config
+```
+
+- `"seaborn-ticks"` (default): seaborn's ticks style (white axes, outward ticks, no top
+  or right spine), its `deep` palette, and its `rocket` and `mako` colour maps. In a
+  grid, only the outer panels carry ticks; the inner edges are a plain line.
+- `"seaborn"`: seaborn's darkgrid style (grey axes, white grid, no spines) with the same
+  palette and colour maps.
+- `"plain"`: plain matplotlib, tab10 on white axes.
+
+Without seaborn every style draws `"plain"`, with one log warning.
+
 Each svg chart declares the sweep shapes it draws, the same as its holoviews twin.
 Named-only twins stay named-only: request them with `plot_list=[...]` or
 `to_svgs([...])`.
