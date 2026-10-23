@@ -17,7 +17,9 @@ themes and writes ``evidence.md``: the scorecard, a one-line summary, the forest
 plot, one section per primary or moving metric, the sweeps, and a ``<details>``
 block with the method, the diagnostics and the data as CSV. Each image is a
 ``<picture>`` with a dark source and alt text that carries the verdict and the
-numbers.
+numbers. The pictures link the animated SVGs by default (GitHub serves a blob's
+``?raw=true`` SVG as ``image/svg+xml``); ``svg=False`` links the still PNGs for a host
+that does not serve SVG as an image.
 
 Image links default to paths relative to the report. *url_base* takes a URL
 prefix, a ``{file name: URL}`` mapping (what
@@ -354,10 +356,24 @@ class Report:
     skipped: list[str] = field(default_factory=list)
     markdown_path: Path | None = None
     markdown: str = ""
+    svg: bool = True
 
-    def render(self, url_base: UrlBase = None) -> str:
-        """The Markdown with every image linked through *url_base*; also rewrites the file."""
-        url_for = _url_for(url_base)
+    def render(self, url_base: UrlBase = None, *, svg: bool | None = None) -> str:
+        """The Markdown with every image linked through *url_base*; also rewrites the file.
+
+        *svg* (default: as last rendered, first True) links each graphic's animated SVG;
+        False links its still PNG.
+        """
+        if svg is not None:
+            self.svg = svg
+        link = _url_for(url_base)
+
+        def url_for(name: str) -> str:
+            twin = name.removesuffix(".png") + ".svg"
+            if self.svg and name.endswith(".png") and twin in self.files:
+                return link(twin)
+            return link(name)
+
         self.markdown = "\n".join(section(url_for) for section in self.sections).rstrip() + "\n"
         if self.markdown_path is not None:
             self.markdown_path.write_text(self.markdown, encoding="utf-8")
@@ -417,17 +433,29 @@ def _moved(m: MetricEvidence) -> bool:
 
 
 def _forest_key(rows: Sequence[MetricEvidence]) -> str:
-    levels = sorted({round(100 * m.effect.ci.level) for m in rows})
-    thick = " / ".join(f"{v} %" for v in levels)
     key = (
         "Rows are sorted by effect. Left: every run of each row (grey base above, blue "
-        f"candidate below, black tick the median, on the row's own scale). Right: the change "
-        f"with its decision CI ({thick}, thick) and 95 % CI (thin) over the shaded margin "
-        f"{ig.fmt_margin(rows[0])}; bold rows are primary metrics."
+        "candidate below, a tick at the median, on the row's own scale). Right: the change "
+        f"as a dot over the shaded margin {ig.fmt_margin(rows[0])}; a dashed line from 0 "
+        "leads to each ▲/▼ estimate, and a still one to each ? estimate. Bold rows are "
+        "primary metrics."
     )
     if any(not m.fdr_pass for m in rows):
         key += " A hollow dot fails the FDR check."
     return key
+
+
+def _ci_line(cells: Sequence[MetricEvidence], labels: Sequence[str] | None = None) -> str:
+    """The CIs the graphic does not draw, exact: ``90 % CI: `a` −17.8 … −13.1 %; …``."""
+    names = labels if labels is not None else [f"`{m.name}`" for m in cells]
+    parts = []
+    for name, m in zip(names, cells, strict=True):
+        level, _, rest = ig.fmt_ci(m).partition(" CI ")
+        parts.append((level, f"{name} {rest}"))
+    levels = sorted({lv for lv, _ in parts})
+    if len(levels) == 1:
+        return f"{levels[0]} CI: " + "; ".join(p for _, p in parts) + ".\n"
+    return "CI: " + "; ".join(f"{p} ({lv})" for lv, p in parts) + ".\n"
 
 
 def _tile_metrics(singles: Sequence[MetricEvidence]) -> list[MetricEvidence]:
@@ -479,21 +507,11 @@ def _arms_key(cells: Sequence[MetricEvidence]) -> str:
     margins = ", ".join(sorted({ig.fmt_margin(m) for m in cells}))
     parts = []
     if any(isinstance(m.effect, Effect) for m in cells):
-        levels = sorted({round(100 * m.effect.ci.level) for m in cells})
-        level = " / ".join(f"{v} %" for v in levels)
-        notes = []
-        if any(
-            isinstance(m.effect, Effect) and m.effect.ci95.level > m.effect.ci.level for m in cells
-        ):
-            notes.append("thin line: 95 % CI")
-        if any(not m.fdr_pass for m in cells):
-            notes.append("hollow dot: fails the FDR check")
-        extra = f" ({'; '.join(notes)})" if notes else ""
         parts.append(
-            "Each dot is one run: grey base, blue candidate; the black bar is the median. "
-            f"The shaded band is the margin {margins} around the base median. The coloured "
-            f"bar at the right of each panel is the {level} CI of the change, drawn from "
-            f"the base median{extra}."
+            "Each dot is one run: grey base, blue candidate; the thick bar is each arm's "
+            f"median. The shaded band is the margin {margins} around the base median. The "
+            "dashed line between the columns runs from the base median to the candidate "
+            "median, in the verdict colour."
         )
         if any(m.paired for m in cells):
             parts.append(
@@ -502,7 +520,9 @@ def _arms_key(cells: Sequence[MetricEvidence]) -> str:
             )
     if any(isinstance(m.effect, ProportionEffect) for m in cells):
         parts.append(
-            "For a pass/fail metric each square is one run; a crossed orange square is a bad outcome."
+            "For a pass/fail metric each square is one run; a crossed orange square is a bad "
+            "outcome, and a dashed outline marks the candidate runs whose outcome differs "
+            "from base."
         )
     return " ".join(parts)
 
@@ -532,7 +552,7 @@ def _effect_sentence(m: MetricEvidence) -> str:
             text += (
                 f" No bad outcome in {e.n_cand} candidate runs: its rate is at most "
                 f"{100 * e.bad_upper:.1f} % (95 %, exact; rule of three {300 / e.n_cand:.1f} %)."
-                f" The black tick on the difference bar is that bound: a difference of "
+                f" The black tick on the difference axis is that bound: a difference of "
                 f"{ig.fmt_signed(100 * (bound or 0.0))} pp."
             )
         else:
@@ -623,6 +643,7 @@ def write_report(
     title: str = "Evidence",
     skipped: Sequence[str] = (),
     diagnostics: bool = True,
+    svg: bool = True,
 ) -> Report:
     """Draw every graphic into *out_dir* and write ``evidence.md`` there (spec §6)."""
     out = Path(out_dir)
@@ -644,6 +665,8 @@ def write_report(
     if tiles:
         alt = "Scorecard. " + " ".join(ig.alt_text(m) for m in tiles)
         sections.append(img.add("scorecard", lambda t: ig.draw_scorecard(tiles, t), alt))
+    if tiles:
+        text(_ci_line(tiles))
     text(f"**{summary}** — {_design(cells, n_primary)}.\n")
     if tiles:
         text(f"*{_arms_key(tiles)} {_order_note(tiles[:1])}*\n")
@@ -652,6 +675,7 @@ def write_report(
         if len(rows) > MAX_FOREST_ROWS:
             alt = "Forest plot. " + " ".join(ig.alt_text(m) for m in rows)
             sections.append(img.add(stem, lambda t, rows=rows: ig.draw_forest(rows, t), alt))
+            text(_ci_line(rows))
             text(f"*{_forest_key(rows)}*\n")
     # One section per primary metric, and per secondary metric that did not stay equivalent.
     shown = [m for m in singles if m.primary or m.verdict.kind != VerdictKind.EQUIVALENT]
@@ -681,7 +705,8 @@ def write_report(
             text(
                 "The rank check or a tail decile disagrees with the mean: read the shift function above, not one number. "
                 "Top: each arm's density, box (quartiles, median ring) and every run. Bottom: the change "
-                f"at each decile q1…q9 with its 95 % bootstrap CI: {ig.shift_summary(m)}.\n"
+                "at each decile q1…q9, coloured where its 95 % bootstrap CI excludes 0: "
+                f"{ig.shift_summary(m)}.\n"
             )
         if m.verdict.underpowered and m.verdict.kind not in {
             VerdictKind.IMPROVED,
@@ -724,11 +749,12 @@ def write_report(
                     alt,
                 )
             )
+            text(_ci_line(cells_g, [f"`{key}`={m.point[key]:g}" for m in cells_g]))
             text(
                 f"*Top: every run at each `{key}` point (grey base, blue candidate), lines join "
-                "the medians; the points sit at even steps in sweep order. Bottom: the change at "
-                f"each point with its {round(100 * cells_g[0].effect.ci.level)} % CI (thick) and "
-                f"95 % CI (thin) over the margin {ig.fmt_margin(cells_g[0])}. "
+                "the medians, and a dashed line runs from the base to the candidate median; the "
+                "points sit at even steps in sweep order. Bottom: the change at each point over "
+                f"the margin {ig.fmt_margin(cells_g[0])}. "
                 f"{_order_note(cells_g, where='under the graphic')}*\n"
             )
         elif len(varying) == 2:  # noqa: PLR2004
@@ -761,6 +787,7 @@ def write_report(
                     alt,
                 )
             )
+            text(_ci_line(cells_g, labels))
             text(f"*{_forest_key(cells_g)}*\n")
         text(
             "<details><summary>Every point</summary>\n\n"
@@ -775,14 +802,14 @@ def write_report(
     text(
         "<details><summary>Method, diagnostics and data</summary>\n\n"
         f"Every decision reads the 90 % CI (one-sided α = {ALPHA}) against the margin; "
-        "the thin whisker is the 95 % CI. Positive metrics compare on the log scale (ratio of "
+        "the charts draw no interval, so each caption gives the CI. Positive metrics compare on the log scale (ratio of "
         "geometric means); binary metrics use Wilson per arm and the Newcombe difference. BCa "
         "bootstrap (10 000 resamples, fixed seed) from 10 units per arm, Welch t below that. "
         "Holm over the primary metrics (their CIs widened to α/m), Benjamini–Hochberg over the "
         "rest. n was fixed before the run; no peeking correction is applied. "
-        "In each estimation plot the right panel is the bootstrap distribution of the change "
-        "with its CI, on the % axis; in each waffle the bar under the squares is the "
-        "difference with its CI over the shaded margin.\n\n"
+        "In each estimation plot the right panel is the bootstrap distribution of the change, "
+        "with the estimate as a dot, on the % axis; in each waffle the dot under the squares "
+        "is the difference over the shaded margin.\n\n"
         + (_design_line(singles[:1]) + "\n\n" if singles else "")
         + _verdict_table(cells)
     )
@@ -811,7 +838,7 @@ def write_report(
     sections.append(lambda u: f"\nData: [{csv_path.name}]({u(csv_path.name)})\n\n</details>\n")
     files = {**img.files, csv_path.name: csv_path}
     report = Report(out, list(groups), files, sections, list(skipped), out / "evidence.md")
-    report.render(url_base)
+    report.render(url_base, svg=svg)
     return report
 
 
@@ -834,12 +861,13 @@ def report_from_rows(
     margin: float | None = None,
     paired: bool = False,
     url_base: UrlBase = None,
+    svg: bool = True,
 ) -> Report:
     """The report for two kbench row lists."""
     groups, skipped = analyse_data(
         data_from_rows(base_rows, cand_rows), primary=primary, margin=margin, paired=paired
     )
-    return write_report(groups, out_dir, url_base=url_base, skipped=skipped)
+    return write_report(groups, out_dir, url_base=url_base, skipped=skipped, svg=svg)
 
 
 def report_from_results(
@@ -851,12 +879,13 @@ def report_from_results(
     margin: float | None = None,
     paired: bool = False,
     url_base: UrlBase = None,
+    svg: bool = True,
 ) -> Report:
     """The report for two bencher recordings."""
     groups, skipped = analyse_data(
         data_from_results(baseline, candidate), primary=primary, margin=margin, paired=paired
     )
-    return write_report(groups, out_dir, url_base=url_base, skipped=skipped)
+    return write_report(groups, out_dir, url_base=url_base, skipped=skipped, svg=svg)
 
 
 def main_rows(argv: Sequence[str]) -> int:
@@ -888,6 +917,7 @@ def main_rows(argv: Sequence[str]) -> int:
             margin=args.margin,
             paired=args.paired,
             url_base=args.url_base,
+            svg=not args.still_png,
         )
     except (ValueError, KeyError) as exc:
         print(f"evidence-rows failed: {exc}", file=sys.stderr)  # noqa: T201 - CLI error output
@@ -913,4 +943,10 @@ def add_report_options(parser: Any) -> None:
     parser.add_argument("--paired", action="store_true", help="pair the arms by repeat id")
     parser.add_argument(
         "--url-base", metavar="URL", help="prefix for image links (default: relative paths)"
+    )
+    parser.add_argument(
+        "--still-png",
+        dest="still_png",
+        action="store_true",
+        help="link the still PNGs, not the animated SVGs (for a host that does not serve SVG as an image)",
     )

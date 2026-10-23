@@ -5,9 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.146.0] - 2026-10-23
 
 ### Added
+- **A statistical evidence report for a base/candidate comparison.** `bencher evidence-rows
+  BASE.json CAND.json --report DIR` and `compare --report DIR` write `evidence.md` with
+  infographics in light and dark: a scorecard, a forest plot, an estimation plot per moved
+  metric, waffles for pass/fail metrics, sweeps, a raincloud + shift function when the tail
+  moves, and power and diagnostics plots. Each decision reads the 90 % CI against a ±Δ
+  margin (`bencher.evidence_stats`); the verdict glyph (▲ ▼ ≈ ?) and the big number carry
+  it, and the caption and alt text give the CI exactly. `docs/statistical_evidence.md` is
+  the spec; `bencher/example/example_evidence_gallery.py` writes a gallery of ten cases.
+- **The evidence graphics show every run and draw no interval.** Every sample is a beeswarm
+  dot, pairs are joined by still lines, each arm has a thick median bar, and the grey band
+  is ±Δ on the metric's own axis. In the SVGs only three dashed lines flow, and only on
+  ▲/▼: the median connector, the forest connector from 0, and the outline of the runs that
+  changed outcome. Only `stroke-dashoffset` animates, `prefers-reduced-motion` stops it,
+  and the PNGs are the still charts. The Markdown links the SVGs (GitHub serves a blob's
+  `?raw=true` SVG as `image/svg+xml`); `--still-png` links the PNGs.
+  `bencher.evidence_ref.push_evidence` publishes the images to `refs/bencher/evidence`.
 - **`backend="svg"` draws charts a GitHub PR description can show.** The `line`, `curve`,
   `heatmap` and `bar` charts get svg twins drawn with matplotlib: self-contained SVGs with
   no script, font file or external link. Every swept dimension the chart does not show,

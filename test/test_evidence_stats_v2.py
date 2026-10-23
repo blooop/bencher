@@ -535,8 +535,8 @@ def test_report_from_rows(tmp_path):
     assert md.count("<picture>") >= 5
     assert 'alt="Scorecard. Planning time: improved' in md
     assert "<details><summary>Method, diagnostics and data</summary>" in md
-    assert "scorecard-dark.png" in md
-    assert (tmp_path / "scorecard-light.svg").exists()
+    assert 'srcset="scorecard-dark.svg"' in md
+    assert (tmp_path / "scorecard-light.png").exists()
     assert "evidence-data.csv" in report.files
     # The facts the graphics no longer print are in the Markdown.
     assert "Design: unpaired; n 12 / 12 per arm" in md
@@ -544,10 +544,10 @@ def test_report_from_rows(tmp_path):
     assert "The shaded band is the margin ±5 % around the base median" in md
     assert "Base 11/12 = 92 % (95 % Wilson CI" in md
     # Two metrics fit the scorecard: no forest plot.
-    assert "forest-light.png" not in md
+    assert "forest-light" not in md
     linked = report.render("https://github.com/o/r/blob/abc/run")
-    assert 'srcset="https://github.com/o/r/blob/abc/run/scorecard-dark.png"' in linked
-    mapped = report.render({"scorecard-light.png": "https://x/y.png?raw=true"})
+    assert 'srcset="https://github.com/o/r/blob/abc/run/scorecard-dark.svg"' in linked
+    mapped = report.render({"scorecard-light.png": "https://x/y.png?raw=true"}, svg=False)
     assert 'src="https://x/y.png?raw=true"' in mapped
 
 

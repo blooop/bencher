@@ -66,7 +66,7 @@ def _bools(n, k, rng):
 
 def scenario_improvement(rng):
     b, c = _paired_lognormal(rng, 20, 0.84, 0.05, -0.18, 0.25)
-    sb, sc = _paired_lognormal(rng, 20, 31.0, 0.03, -0.004, 0.1)
+    sb, sc = _paired_lognormal(rng, 20, 31.0, 0.03, 0.13, 0.1)
     ob, oc = _abba(20)
     seeds = list(range(100, 120))
     kw_b = {"order": ob, "seeds": seeds}
@@ -89,6 +89,31 @@ def scenario_regression(rng):
         _rows("task_duration", "s", "minimize", c, order=oc),
         {"primary": ["task_duration"]},
     )
+
+
+def scenario_forest(rng):
+    """Eight paired metrics: two better, two worse, the rest unchanged or unclear."""
+    effects = {
+        "planning_time": (-0.16, 0.04),
+        "time_to_simulating": (-0.08, 0.04),
+        "yaw_error": (-0.005, 0.03),
+        "path_length": (0.002, 0.02),
+        "smoothness": (0.01, 0.03),
+        "startup_time": (-0.01, 0.25),
+        "pos_error": (0.08, 0.04),
+        "task_duration": (0.13, 0.04),
+    }
+    ob, oc = _abba(20)
+    shards = [f"vm{k % 4}" for k in range(20)]
+    rows_b, rows_c = [], []
+    for name, (effect, cv) in effects.items():
+        b, c = _paired_lognormal(rng, 20, 1.0, cv, effect, 0.1)
+        unit = "s" if "time" in name or "duration" in name else ""
+        kw_b = {"order": ob, "shards": shards}
+        kw_c = {"order": oc, "shards": shards}
+        rows_b += _rows(name, unit, "minimize", b, **kw_b)
+        rows_c += _rows(name, unit, "minimize", c, **kw_c)
+    return rows_b, rows_c, {"paired": True, "primary": ["planning_time"]}
 
 
 def scenario_equivalence(rng):
@@ -214,7 +239,11 @@ def scenario_sweep_2d(rng):
 
 
 SCENARIOS = {
-    "improvement": ("A clear improvement, paired n=20", scenario_improvement),
+    "improvement": (
+        "Planning faster, tasks slower: an improvement and a regression, paired n=20",
+        scenario_improvement,
+    ),
+    "forest": ("Eight metrics: two better, two worse, paired n=20", scenario_forest),
     "regression": ("A regression, unpaired n=15", scenario_regression),
     "equivalence": ("Equivalence: five metrics inside ±5 %", scenario_equivalence),
     "inconclusive": ("Inconclusive: n=6 cannot see a 4 % change", scenario_inconclusive),

@@ -63,7 +63,8 @@ and pick the analysis that matches it.
 ## 4. The test set
 
 All decisions run at one-sided α = 0.05, which is the **90 % two-sided CI**. The
-report draws the 90 % CI thick and the 95 % CI thin.
+report gives the 90 % CI (and the 95 % CI when it is wider) in the caption and alt
+text; the graphics draw no interval mark.
 
 ### 4.1 Continuous
 
@@ -141,15 +142,22 @@ Common rules:
 
 * **Show the data.** A continuous metric shows every sample as a dot, in a beeswarm
   column with deterministic packing (no random jitter): base grey on the left,
-  candidate blue on the right, a short thick median bar across each column, and `n`
-  under each column ("base n=20"). Paired runs are joined by faint lines, green when
+  candidate blue on the right, a thick median bar across each column, and `n`
+  under each column ("base n=20"). Paired runs are joined by still faint lines, green when
   that pair got better and orange when it got worse. Few runs (3–8) get big dots;
   above about 300 samples the dots get small and a soft half-violin sits behind them.
 * **The margin lives in data units.** ±Δ is a shaded band around the base median on
   the metric's own axis, so the eye sees whether the candidate column sits outside
-  it. The CI of the shift is a bar beside the candidate column, drawn from the base
-  median: thick for the decision CI, thin for the 95 % CI only when it is wider. A
+  it. There is no interval mark (no CI bar, cap or whisker): the verdict glyph and the
+  big number carry the verdict, and the caption and alt text give the 90 % CI exactly.
+  A dashed median connector runs from the base median to the candidate median. A
   hollow point fails the FDR check.
+* **Motion is a dash flow, and only on what changed.** In the SVG the median connector
+  and the forest connector (0 to the estimate) flow on ▲/▼, and so does the dashed
+  outline of the runs that failed or changed outcome in a waffle; a ? connector is
+  still, and a ≈ forest row has only its dot. Only `stroke-dashoffset` animates, by
+  CSS; nothing else moves, `prefers-reduced-motion` stops it, and the PNG is the
+  still chart.
 * **A small text budget.** Each graphic carries a title that states the finding in at
   most six words, one big effect number with the verdict glyph, tick labels and column
   labels. Nothing else: no chips, subtitles, footers, method lines, or legends that a
@@ -168,8 +176,10 @@ Common rules:
   inconclusive `#BE8714`. A glyph (▲ ▼ ≈ ?) always backs the colour, and text wears the
   theme's ink, never a data colour.
 * Every image ships in light and dark, as PNG at 2× (1600 px wide, shown at 800), plus
-  SVG. The Markdown uses `<picture>` with `prefers-color-scheme`; the `#gh-dark-mode-only`
-  fragment is deprecated.
+  the animated SVG. The Markdown uses `<picture>` with `prefers-color-scheme`; the
+  `#gh-dark-mode-only` fragment is deprecated. It links the SVG by default (GitHub
+  serves a blob's `?raw=true` SVG as `image/svg+xml`, so a PR page draws it) and the
+  PNG with `--still-png` (or `Report.render(..., svg=False)`) for hosts that do not.
 * Alt text carries the verdict and the numbers, so a screen reader and a broken image
   still give the result.
 

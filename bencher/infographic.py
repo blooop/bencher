@@ -4,17 +4,22 @@ Each ``draw_*`` function takes the :class:`~bencher.evidence_stats.MetricEvidenc
 records it shows and a :class:`Theme` and returns a ``matplotlib.figure.Figure``
 built without pyplot (no global backend state, safe in any process).
 :func:`save_both` draws one graphic in the light and the dark theme and writes
-each as a PNG at 2× (1600 px wide, shown at 800) and as an SVG.
+each as a PNG at 2× (1600 px wide, shown at 800) and as an SVG. In the SVG a few
+dashed lines flow (CSS on ``stroke-dashoffset`` only; ``prefers-reduced-motion`` stops
+it); the PNG is the same chart, still.
 
 The rules every graphic keeps:
 
 * Show the data. A continuous metric shows every sample as a dot in a
   deterministic beeswarm column (base grey on the left, candidate blue on the
-  right), a short thick median bar and ``n`` under each column; paired samples
-  are joined by faint lines, green when the pair got better and orange when worse.
+  right), a thick median bar and ``n`` under each column; paired samples are
+  joined by still faint lines, green when the pair got better and orange when worse.
 * The margin lives in data units: ±Δ is a shaded band around the base median on
-  the metric's own axis, and the CI of the shift is a bracket beside the
-  candidate column (thick: the decision CI; thin: the 95 % CI, only when wider).
+  the metric's own axis. No interval is drawn: the glyph and the big number carry
+  the verdict, and the Markdown caption and alt text give the CI.
+* Only three kinds of dashed line flow, and only on ▲/▼: the median connector
+  (base median to candidate median), the forest connector (0 to the estimate), and
+  the outline of the runs whose outcome changed. A ? connector is still.
 * Little text: a title that states the finding, one big effect number with the
   verdict glyph, tick labels and column labels; nothing under 11 pt (15 px at the
   800 px display width). Everything else goes in the Markdown and the alt text.
@@ -26,8 +31,10 @@ The rules every graphic keeps:
 
 from __future__ import annotations
 
+import io
 import itertools
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -598,61 +605,76 @@ def _to_data(m: MetricEvidence, anchor: float, value: float) -> float:
     return anchor * math.exp(value) if m.kind == "positive" else anchor + value
 
 
-_MIN_CI_IN = 0.12  # 12 px at the 800 px display width
+# --------------------------------------------------------------------------------------
+# Flow: the only motion. A few dashed strokes carry a gid; the saved SVG gets a class on
+# each and a <style> that moves only their stroke-dashoffset. The PNG is the still frame.
+
+_PT_PER_PX = WIDTH_IN * 72.0 / 800.0  # the figure is 8 in (576 pt) shown 800 px wide
+FLOW_DASH_PX = 4.0
+FLOW_TRAVEL_PX = 24.0  # three whole 4-4 cycles: the loop has no seam
+FLOW_SPEED_PX = 8.0  # px per second
+# What may flow: the median connector, the forest connector from 0, and failed/changed runs.
+FLOW_KINDS = ("medflow", "estflow", "runflag")
+_FLOW_GID = "bnflow-"
+_MOVED = (VerdictKind.IMPROVED, VerdictKind.REGRESSED)
 
 
-def _ci_marks(
+def _dashes(lw: float) -> tuple[int, tuple[float, float]]:
+    """A 4-4 px dash pattern for a stroke *lw* pt wide (matplotlib scales dashes by lw)."""
+    on = FLOW_DASH_PX * _PT_PER_PX / lw
+    return (0, (on, on))
+
+
+def _flow(artist: Any, kind: str) -> Any:
+    """Tag *artist* (a dashed stroke) so :func:`animate_flows` makes it flow."""
+    if kind not in FLOW_KINDS:
+        raise ValueError(f"{kind!r} may not flow")
+    fig = artist.figure
+    n = getattr(fig, "_bn_flows", 0)
+    fig._bn_flows = n + 1  # noqa: SLF001
+    artist.set_gid(f"{_FLOW_GID}{kind}-{n}")
+    return artist
+
+
+def _connector(
     ax: Axes,
-    pos: float,
-    lows: tuple[float, float],
-    highs: tuple[float, float],
-    estimate: float,
-    colour: str,
+    xs: Sequence[float],
+    ys: Sequence[float],
+    m: MetricEvidence,
     theme: Theme,
+    kind: str,
     *,
-    vertical: bool = True,
-    hollow: bool = False,
-    thick: float = 7.0,
-    size: float = 7.5,
-    show95: bool = True,
-    per_in: float | None = None,
-    cap: float = 0.0,
+    lw: float = 1.8,
+    still: bool = True,
 ) -> None:
-    """An interval at *pos*: thin 95 % line (only when wider), rounded decision bar, end caps, point.
+    """A dashed line in *m*'s verdict colour; it flows on ▲/▼, is still on ? (and on ≈ if *still*)."""
+    verdict = m.verdict.kind
+    moved = verdict in _MOVED
+    if not moved and not still and verdict == VerdictKind.EQUIVALENT:
+        return
+    (line,) = ax.plot(
+        list(xs),
+        list(ys),
+        color=theme.verdict_colour(verdict),
+        lw=lw if moved else lw * 0.8,
+        alpha=1.0 if moved else 0.55,
+        linestyle=_dashes(lw if moved else lw * 0.8),
+        solid_capstyle="butt",
+        zorder=6,
+    )
+    if moved:
+        _flow(line, kind)
 
-    *lows*/*highs* are (decision, 95 %) ends, already on the axis's scale. *per_in* is
-    the axis's data units per inch: with it, an interval shorter than 12 px at display
-    is drawn at that length (centred on the estimate) and the rounded bar ends are
-    pulled in so the bar's ink ends at the CI ends. *cap* is the end caps' half-width in
-    the other axis's data units (0: no caps).
-    """
-    lo90, hi90, lo95, hi95 = lows[0], highs[0], lows[1], highs[1]
-    if per_in is not None:
-        least = _MIN_CI_IN * per_in
-        if hi90 - lo90 < least:
-            lo90, hi90 = estimate - least / 2, estimate + least / 2
-        lo95, hi95 = min(lo95, lo90), max(hi95, hi90)
-    outer = (lo95, hi95) if show95 and (lo95 < lo90 or hi95 > hi90) else (lo90, hi90)
 
-    def line(a: float, b: float, lw: float, capstyle: str) -> None:
-        xy = ([pos, pos], [a, b]) if vertical else ([a, b], [pos, pos])
-        ax.plot(*xy, color=colour, lw=lw, solid_capstyle=capstyle, zorder=6)
-
-    if outer != (lo90, hi90):
-        line(*outer, 2.0, "butt")
-    inset = 0.0 if per_in is None else min(thick / 2 / 72 * per_in, (hi90 - lo90) / 2 * 0.9)
-    line(lo90 + inset, hi90 - inset, thick, "round" if per_in is not None else "butt")
-    if cap > 0:
-        for end in outer:
-            xy = (
-                ([pos - cap, pos + cap], [end, end])
-                if vertical
-                else ([end, end], [pos - cap, pos + cap])
-            )
-            ax.plot(*xy, color=colour, lw=2.0, solid_capstyle="butt", zorder=6)
-    pt = ([pos], [estimate]) if vertical else ([estimate], [pos])
+def _estimate_dot(
+    ax: Axes, x: float, y: float, m: MetricEvidence, theme: Theme, size: float = 10.0
+) -> None:
+    """The point estimate in the verdict colour; hollow when it fails the FDR check."""
+    colour = theme.verdict_colour(m.verdict.kind)
+    hollow = not m.fdr_pass
     ax.plot(
-        *pt,
+        [x],
+        [y],
         marker="o",
         markersize=size,
         markerfacecolor=theme.surface if hollow else colour,
@@ -663,14 +685,42 @@ def _ci_marks(
     )
 
 
-def _effect_ci(m: MetricEvidence, fn: Callable[[float], float] = float) -> dict:
-    e = m.effect
-    return {
-        "lows": (fn(e.ci.low), fn(e.ci95.low)),
-        "highs": (fn(e.ci.high), fn(e.ci95.high)),
-        "estimate": fn(e.estimate),
-        "show95": e.ci95.level > e.ci.level,
-    }
+_FLOW_TAG = re.compile(
+    rf'(<g id="{_FLOW_GID}(?P<kind>[a-z]+)-\d+">\s*<path )(?P<attrs>[^>]*?)style="(?P<style>[^"]*)"'
+)
+_DASH_DECL = re.compile(r"\s*stroke-dash(?:array|offset):[^;]*;?")
+
+
+def flow_css() -> str:
+    """The <style> block: one keyframe on stroke-dashoffset, stopped by prefers-reduced-motion."""
+    dash = FLOW_DASH_PX * _PT_PER_PX
+    travel = FLOW_TRAVEL_PX * _PT_PER_PX
+    return (
+        "<style>"
+        f"@keyframes bnflow{{to{{stroke-dashoffset:-{travel:.4g}}}}}"
+        f".fl{{stroke-dasharray:{dash:.4g} {dash:.4g};"
+        f"animation:bnflow {FLOW_TRAVEL_PX / FLOW_SPEED_PX:g}s linear infinite}}"
+        "@media (prefers-reduced-motion:reduce){.fl{animation:none!important}}"
+        "</style>"
+    )
+
+
+def animate_flows(svg: str) -> str:
+    """Give each tagged dashed stroke in *svg* its flow class and add the flow <style>.
+
+    The stroke's own dash declarations move to the class, so the CSS sets them; an SVG
+    with no tagged stroke is returned unchanged.
+    """
+
+    def tag(match: re.Match) -> str:
+        style = _DASH_DECL.sub("", match["style"]).strip()
+        return f'{match[1]}class="fl {match["kind"]}" {match["attrs"]}style="{style}"'
+
+    out, count = _FLOW_TAG.subn(tag, svg)
+    if not count:
+        return svg
+    head = out.index(">", out.index("<svg")) + 1
+    return f"{out[:head]}\n{flow_css()}{out[head:]}"
 
 
 def _unit_formatter(units: str) -> Any:
@@ -699,10 +749,10 @@ def _nice_step(span: float) -> float:
 
 
 def effect_limits(metrics: Sequence[MetricEvidence], pad: float = 0.12) -> tuple[float, float]:
-    """Symmetric effect-axis limits that hold every 95 % CI and every margin."""
+    """Symmetric effect-axis limits that hold every decision CI and every margin."""
     reach = 0.0
     for m in metrics:
-        reach = max(reach, abs(m.effect.ci95.low), abs(m.effect.ci95.high), _delta(m))
+        reach = max(reach, abs(m.effect.ci.low), abs(m.effect.ci.high), _delta(m))
     reach = reach * (1 + pad) if reach > 0 else 0.1
     return -reach, reach
 
@@ -739,21 +789,23 @@ def _ring(theme: Theme, size: float) -> dict:
 
 
 # --------------------------------------------------------------------------------------
-# The arms panel: every sample of both arms, the margin band and the CI bracket.
-
-_CI_X = 1.78  # the bracket's column, right of the candidate column (at 1)
+# The arms panel: every sample of both arms, the margin band and the median connector.
 
 
-def _arm_limits(m: MetricEvidence, *, ci: bool) -> tuple[float, float, float]:
+def _arm_limits(m: MetricEvidence) -> tuple[float, float, float]:
     b, c = m.base[np.isfinite(m.base)], m.cand[np.isfinite(m.cand)]
     anchor = float(np.median(b))
     delta = _delta(m)
     vals = [*b, *c, _to_data(m, anchor, -delta), _to_data(m, anchor, delta)]
-    if ci:
-        vals += [_to_data(m, anchor, m.effect.ci95.low), _to_data(m, anchor, m.effect.ci95.high)]
     lo, hi = min(vals), max(vals)
     pad = 0.08 * (hi - lo or abs(anchor) * 0.1 or 1.0)
     return lo - pad, hi + pad, anchor
+
+
+def _median_bar(ax: Axes, x: float, med: float, colour: str, theme: Theme, half: float) -> None:
+    """A thick rounded median bar in the arm's colour, ringed by the surface."""
+    for lw, c in ((6.5, theme.surface), (3.6, colour)):
+        ax.plot([x - half, x + half], [med, med], color=c, lw=lw, solid_capstyle="round", zorder=5)
 
 
 def _arms(
@@ -763,24 +815,30 @@ def _arms(
     w_in: float,
     h_in: float,
     *,
-    ci: bool = True,
     label_size: float = _LABEL,
 ) -> None:
-    """Draw both arms of continuous *m* into *ax* (w_in × h_in inches)."""
+    """Draw both arms of continuous *m* into *ax* (w_in × h_in inches).
+
+    Every sample is a dot (a beeswarm per arm), pairs are joined by still lines, each arm
+    has a thick median bar, and the grey band is ±Δ around the base median on the metric's
+    own axis. A dashed connector runs from the base median to the candidate median: it
+    flows on a ▲/▼ panel and is still on ≈ and ?. There is no interval mark.
+    """
     t = theme
     b, c = m.base, m.cand
-    lo, hi, anchor = _arm_limits(m, ci=ci)
-    xlim = (-0.6, _CI_X + 0.38) if ci else (-0.6, 1.6)
+    lo, hi, anchor = _arm_limits(m)
+    xlim = (-0.6, 1.6)
     ax.set_xlim(*xlim)
     ax.set_ylim(lo, hi)
     x_scale = w_in / (xlim[1] - xlim[0])
     y_scale = h_in / (hi - lo)
     n = max(np.isfinite(b).sum(), np.isfinite(c).sum())
-    size, offsets = _swarm_columns((b, c), _dot_size(int(n)), y_scale, 0.36 * x_scale)
+    size, offsets = _swarm_columns((b, c), _dot_size(int(n)), y_scale, 0.3 * x_scale)
     offsets = [off / x_scale for off in offsets]
-    # The margin: ±Δ around the base median, under both columns and the bracket.
+    # The margin: ±Δ around the base median, under both columns.
     band_lo, band_hi = _to_data(m, anchor, -_delta(m)), _to_data(m, anchor, _delta(m))
     ax.fill_between([-0.5, xlim[1] - 0.06], band_lo, band_hi, color=t.band, lw=0, zorder=0)
+    ax.plot([0.3, 1.45], [anchor, anchor], color=t.muted, lw=0.9, zorder=1)
     ax.grid(axis="y", color=t.grid, linewidth=0.8, zorder=-1)
     ax.set_axisbelow(True)
     if m.paired and len(b) == len(c):
@@ -792,10 +850,11 @@ def _arms(
                 [xb, 1 + xc],
                 [vb, vc],
                 color=t.better if better else t.worse,
-                alpha=0.4,
-                lw=1.1,
+                alpha=0.3 if better else 0.55,
+                lw=0.9,
                 zorder=2,
             )
+    meds = []
     for x, vals, off, colour in ((0, b, offsets[0], t.base), (1, c, offsets[1], t.cand)):
         ok = np.isfinite(vals)
         if ok.sum() > _VIOLIN_N:
@@ -815,30 +874,32 @@ def _arms(
             linestyle="",
             **_ring(t, size),
         )
-        med = float(np.median(vals[ok]))
-        ax.plot(
-            [x - 0.3, x + 0.3], [med, med], color=t.ink, lw=4.0, solid_capstyle="butt", zorder=5
-        )
-    if ci:
-        colour = t.verdict_colour(m.verdict.kind)
-        _ci_marks(
-            ax,
-            _CI_X,
-            colour=colour,
-            theme=t,
-            hollow=not m.fdr_pass,
-            thick=6.0,
-            size=5.5,
-            per_in=1 / y_scale,
-            cap=0.07,
-            **_effect_ci(m, lambda v: _to_data(m, anchor, v)),
-        )
+        meds.append(float(np.median(vals[ok])))
+        _median_bar(ax, x, meds[-1], colour, t, 0.3)
+    _connector(ax, [0.5, 0.5], meds, m, t, "medflow", lw=2.0)
     ax.set_xticks(
         [0, 1],
         [f"base\nn={int(np.isfinite(b).sum())}", f"candidate\nn={int(np.isfinite(c).sum())}"],
     )
     ax.tick_params(axis="x", labelsize=label_size, colors=t.ink, pad=6)
     _value_ticks(ax, m.units)
+
+
+def _outcomes(k: int, n: int, good_is_one: bool) -> list[int]:
+    """The waffle's runs in drawing order: good outcomes first."""
+    out = [1] * k + [0] * (n - k)
+    return out if good_is_one else out[::-1]
+
+
+def _changed(e: ProportionEffect, good_is_one: bool) -> dict[int, bool]:
+    """The candidate squares whose outcome differs from base's square: index -> now good."""
+    base = _outcomes(e.k_base, e.n_base, good_is_one)
+    cand = _outcomes(e.k_cand, e.n_cand, good_is_one)
+    return {
+        i: (cand[i] == 1) == good_is_one
+        for i in range(min(len(base), len(cand)))
+        if base[i] != cand[i]
+    }
 
 
 def _mini_waffles(ax: Axes, m: MetricEvidence, theme: Theme, w_in: float, h_in: float) -> None:
@@ -853,12 +914,25 @@ def _mini_waffles(ax: Axes, m: MetricEvidence, theme: Theme, w_in: float, h_in: 
     rows = math.ceil(nmax / cols)
     cell = min(0.24, (half * 0.82) / cols, (h_in - label_h - 0.1) / rows)
     good_is_one = m.direction == "maximize"
+    changed = _changed(e, good_is_one)
     for arm, (k, n, colour) in enumerate(
         ((e.k_base, e.n_base, theme.base), (e.k_cand, e.n_cand, theme.cand))
     ):
         x0 = arm * half + (half - cols * cell) / 2
         y_top = h_in - 0.05
-        _waffle(ax, k, n, cols, cell, x0, y_top, colour, theme, good_is_one=good_is_one)
+        _waffle(
+            ax,
+            k,
+            n,
+            cols,
+            cell,
+            x0,
+            y_top,
+            colour,
+            theme,
+            good_is_one=good_is_one,
+            changed=changed if arm == 1 else None,
+        )
         ax.text(
             arm * half + half / 2,
             y_top - rows * cell - 0.1,
@@ -883,15 +957,17 @@ def _waffle(
     theme: Theme,
     *,
     good_is_one: bool,
+    changed: dict[int, bool] | None = None,
 ) -> None:
-    """One square per run, filled row by row from the top-left; a bad outcome is a crossed square."""
+    """One square per run, filled row by row from the top-left; a bad outcome is a crossed square.
+
+    *changed* (index -> the run is now good) gets a flowing dashed outline around each row
+    stretch of the runs whose outcome differs from base: the runs that drive the result.
+    """
     from matplotlib.patches import FancyBboxPatch
 
     gap = max(cell * 0.12, 0.02)
-    outcomes = [1] * k + [0] * (n - k)
-    if not good_is_one:
-        outcomes = outcomes[::-1]
-    for idx, out in enumerate(outcomes):
+    for idx, out in enumerate(_outcomes(k, n, good_is_one)):
         r, cc = divmod(idx, cols)
         x = x0 + cc * cell
         y = y_top - (r + 1) * cell
@@ -916,6 +992,30 @@ def _waffle(
                     lw=max(1.2, cell * 9),
                     solid_capstyle="round",
                 )
+    stretches: list[list[int]] = []
+    for i in sorted(changed or {}):
+        last = stretches[-1] if stretches else None
+        if last and last[-1] == i - 1 and i % cols and changed[last[0]] == changed[i]:
+            last.append(i)
+        else:
+            stretches.append([i])
+    for run in stretches:
+        r, cc = divmod(run[0], cols)
+        pad = max(gap, 0.035)
+        lw = 1.6
+        patch = FancyBboxPatch(
+            (x0 + cc * cell - pad / 2, y_top - (r + 1) * cell - pad / 2),
+            len(run) * cell + pad,
+            cell + pad,
+            boxstyle=f"round,pad=0,rounding_size={cell * 0.2}",
+            facecolor="none",
+            edgecolor=theme.better if changed[run[0]] else theme.worse,
+            lw=lw,
+            linestyle=_dashes(lw),
+            zorder=4,
+        )
+        ax.add_patch(patch)
+        _flow(patch, "runflag")
 
 
 # --------------------------------------------------------------------------------------
@@ -1009,7 +1109,7 @@ def draw_scorecard(
     title: str | None = None,
     per_row: int = 4,
 ) -> Figure:
-    """G1: one panel per metric: name, big effect + glyph, every sample, Δ band, CI bracket."""
+    """G1: one panel per metric: name, big effect + glyph, every sample, Δ band, median connector."""
     import matplotlib as mpl
 
     with mpl.rc_context(_rc()):
@@ -1069,9 +1169,11 @@ def draw_forest(
 ) -> Figure:
     """G2: one row per metric or sweep point, sorted by effect, on the shared axis.
 
-    Each row: the name, a dot strip of both arms' samples (on the row's own scale),
-    the point with its decision (thick) and 95 % (thin) CI over the ±Δ band, and the
-    verdict glyph. A row that fails the FDR check is hollow; a primary metric is bold.
+    Each row: the name, a dot strip of both arms' samples (on the row's own scale), the
+    estimate as a dot over the ±Δ band, and the verdict glyph. A ▲/▼ row has a dashed
+    connector from 0 that flows toward its estimate; a ? row's connector is still; a ≈
+    row has only its dot. No interval is drawn (the caption gives the CI). A row that
+    fails the FDR check is hollow; a primary metric is bold.
     """
     import matplotlib as mpl
 
@@ -1100,17 +1202,9 @@ def draw_forest(
             m = metrics[i]
             y = n - 1 - row
             colour = t.verdict_colour(m.verdict.kind)
-            _ci_marks(
-                ax,
-                y,
-                colour=colour,
-                theme=t,
-                vertical=False,
-                hollow=not m.fdr_pass,
-                thick=6.0,
-                size=10.0,
-                **_effect_ci(m),
-            )
+            est = m.effect.estimate
+            _connector(ax, [0.0, est], [y, y], m, t, "estflow", lw=2.0, still=False)
+            _estimate_dot(ax, est, y, m, t)
             top = _HEAD_IN + row * row_h
             page.text(
                 _SIDE_IN + name_w,
@@ -1176,7 +1270,7 @@ def _dot_strip(ax: Axes, m: MetricEvidence, theme: Theme, w_in: float, h_in: flo
 
 
 def draw_estimation(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = None) -> Figure:
-    """G3: both arms (every sample, Δ band, CI bracket) and the bootstrap distribution of the effect."""
+    """G3: both arms (every sample, Δ band, median connector) and the bootstrap distribution of the effect."""
     import matplotlib as mpl
 
     if not isinstance(m.effect, Effect):
@@ -1208,16 +1302,7 @@ def draw_estimation(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | Non
             ex.fill_betweenx(grid, 0.12, 0.12 + dens, color=colour, alpha=0.22, lw=0, zorder=2)
             outline = np.where(dens > _DENSITY_FLOOR, 0.12 + dens, np.nan)
             ex.plot(outline, grid, color=colour, lw=1.2, alpha=0.8, zorder=2)
-        _ci_marks(
-            ex,
-            0.0,
-            colour=colour,
-            theme=t,
-            hollow=not m.fdr_pass,
-            per_in=(lim[1] - lim[0]) / plot_h,
-            cap=0.1,
-            **_effect_ci(m),
-        )
+        _estimate_dot(ex, 0.0, e.estimate, m, t, size=9.0)
         _draw_order(page, [m], _HEAD_IN + plot_h + 0.75, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN)
         return page.fig
 
@@ -1297,21 +1382,13 @@ def draw_raincloud_shift(
         sx = page.axes(1.7, _HEAD_IN + cloud_h + 0.7, cloud_w, 1.9)
         sx.grid(axis="y", color=t.grid, linewidth=0.8)
         x = np.arange(len(sf.probs))
-        lim = (min(sf.low.min(), -_delta(m)) * 1.15, max(sf.high.max(), _delta(m)) * 1.15)
+        lim = (min(sf.diff.min(), -_delta(m)) * 1.3, max(sf.diff.max(), _delta(m)) * 1.3)
         _effect_axis(sx, m, lim, t, vertical=True)
         sx.plot(x, sf.diff, color=t.muted, lw=1.2, zorder=2)
         for i in range(len(x)):
             excl = sf.low[i] > 0 or sf.high[i] < 0
             good = sf.diff[i] * m.sign > 0
             colour = (t.better if good else t.worse) if excl else t.muted
-            sx.plot(
-                [x[i], x[i]],
-                [sf.low[i], sf.high[i]],
-                color=colour,
-                lw=3.0,
-                solid_capstyle="butt",
-                zorder=3,
-            )
             sx.plot(
                 [x[i]],
                 [sf.diff[i]],
@@ -1375,7 +1452,10 @@ def worst_plausible(m: MetricEvidence) -> float | None:
 
 
 def draw_waffle(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = None) -> Figure:
-    """G5: one square per run per arm; the difference CI over the ±Δ band; the zero-failure bound."""
+    """G5: one square per run per arm; the difference over the ±Δ band; the zero-failure bound.
+
+    The candidate runs whose outcome differs from base get a flowing dashed outline.
+    """
     import matplotlib as mpl
 
     e = m.effect
@@ -1402,7 +1482,19 @@ def draw_waffle(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = 
         good_is_one = m.direction == "maximize"
         for (arm, k, n, colour), bh in zip(blocks, heights, strict=True):
             ax = page.canvas(grid_x, top, cols * cell + 0.05, bh)
-            _waffle(ax, k, n, cols, cell, 0, bh - 0.05, colour, t, good_is_one=good_is_one)
+            _waffle(
+                ax,
+                k,
+                n,
+                cols,
+                cell,
+                0,
+                bh - 0.05,
+                colour,
+                t,
+                good_is_one=good_is_one,
+                changed=_changed(e, good_is_one) if arm == "candidate" else None,
+            )
             rows = math.ceil(n / cols)
             page.text(
                 grid_x - 0.2,
@@ -1425,10 +1517,7 @@ def draw_waffle(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = 
             reach = max(abs(lim[0]), abs(bound) * 1.15)
             lim = (-reach, reach)
         _effect_axis(dx, m, lim, t, vertical=False)
-        colour = t.verdict_colour(m.verdict.kind)
-        _ci_marks(
-            dx, 0, colour=colour, theme=t, vertical=False, thick=9.0, size=13.0, **_effect_ci(m)
-        )
+        _estimate_dot(dx, e.estimate, 0, m, t, size=13.0)
         if bound is not None:
             dx.plot(
                 [bound, bound], [-0.75, 0.75], color=t.ink, lw=2.6, zorder=8, solid_capstyle="butt"
@@ -1480,6 +1569,7 @@ def draw_sweep(
         n = max(max(len(m.base), len(m.cand)) for m in cells)
         size = min(_dot_size(n), 6.0 if len(cells) > 4 else 8.0)  # noqa: PLR2004
         half = 0.17
+        arm_meds: dict[str, list[float]] = {}
         for arm, colour, side in (("base", t.base, -0.21), ("cand", t.cand, 0.21)):
             meds = []
             for xi, m in zip(x, cells, strict=True):
@@ -1497,6 +1587,7 @@ def draw_sweep(
                     **_ring(t, size),
                 )
                 meds.append(float(np.median(vals)))
+            arm_meds[arm] = meds
             ax.plot(x + side, meds, color=colour, lw=2.4, zorder=4, solid_capstyle="round")
             ax.text(
                 x[-1] + side + 0.32,
@@ -1507,6 +1598,8 @@ def draw_sweep(
                 fontsize=_LABEL,
                 color=t.ink,
             )
+        for xi, m, bmed, cmed in zip(x, cells, arm_meds["base"], arm_meds["cand"], strict=True):
+            _connector(ax, [xi, xi], [bmed, cmed], m, t, "medflow", lw=1.8)
         ax.set_xticks(x, [])
         _value_ticks(ax, m0.units)
         ex = page.axes(plot_x, _HEAD_IN + 0.1 + top_h + 0.25, plot_w, eff_h)
@@ -1515,19 +1608,10 @@ def draw_sweep(
         ex.grid(axis="y", color=t.grid, linewidth=0.6)
         for xi, m in zip(x, cells, strict=True):
             colour = t.verdict_colour(m.verdict.kind)
-            _ci_marks(
-                ex,
-                xi,
-                colour=colour,
-                theme=t,
-                hollow=not m.fdr_pass,
-                per_in=(lim[1] - lim[0]) / eff_h,
-                cap=0.1,
-                **_effect_ci(m),
-            )
+            _estimate_dot(ex, xi, m.effect.estimate, m, t, size=9.0)
             ex.text(
                 xi,
-                max(m.effect.ci.high, m.effect.ci95.high) + 0.04 * (lim[1] - lim[0]),
+                m.effect.estimate + 0.07 * (lim[1] - lim[0]),
                 m.verdict.glyph,
                 ha="center",
                 va="bottom",
@@ -1859,6 +1943,7 @@ def draw_diagnostics(
 def save_both(draw: Callable[[Theme], Figure], out_dir: str | Path, stem: str) -> dict[str, Path]:
     """Draw *draw(theme)* in both themes; write ``{stem}-{light,dark}.{png,svg}`` to *out_dir*.
 
+    The PNG is still; in the SVG the tagged dashed strokes flow (:func:`animate_flows`).
     Returns ``{"light": png, "dark": png, "light_svg": svg, "dark_svg": svg}``.
     """
     import matplotlib as mpl
@@ -1872,7 +1957,9 @@ def save_both(draw: Callable[[Theme], Figure], out_dir: str | Path, stem: str) -
             png = out / f"{stem}-{theme.name}.png"
             svg = out / f"{stem}-{theme.name}.svg"
             fig.savefig(png, dpi=DPI, facecolor=theme.surface)
-            fig.savefig(svg, facecolor=theme.surface, metadata={"Date": None})
+            buf = io.StringIO()
+            fig.savefig(buf, format="svg", facecolor=theme.surface, metadata={"Date": None})
+            svg.write_text(animate_flows(buf.getvalue()), encoding="utf-8")
         paths[theme.name] = png
         paths[f"{theme.name}_svg"] = svg
     return paths
