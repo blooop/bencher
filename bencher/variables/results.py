@@ -388,6 +388,42 @@ class ResultImage(param.Filename):
         return _hash_slots(self)
 
 
+class ResultSVG(param.Filename):
+    """Path to an SVG file, drawn in the report as a base64 ``<img>``.
+
+    A browser plays SMIL animation inside an ``<img>``, and each image is its own
+    document, so ids in one file cannot clash with another. Base64 rather than inline
+    markup: Panel HTML-escapes inline markup, which makes a raw page about 1.75x
+    larger, and inline saves only a few KiB per file once the page is gzipped.
+
+    It is a sibling of ``ResultImage``, not a subclass, because the image paths assume
+    a raster file (a PNG pane, a PNG data URI in the over_time slider, moviepy frames
+    in the video summary, ``rr.EncodedImage`` in rerun).
+    """
+
+    __slots__ = ["units", "max_time_events"]
+    _hash_exclude = ("max_time_events",)
+
+    def __init__(
+        self,
+        default: str | None = None,
+        units: str = "path",
+        max_time_events: int | None = None,
+        **params: Any,
+    ) -> None:
+        super().__init__(default=default, check_exists=False, **params)
+        self.units = units
+        self.max_time_events = max_time_events
+
+    def hash_persistent(self) -> str:
+        """Hash deterministically, avoiding PYTHONHASHSEED's per-run hash randomisation."""
+        return _hash_slots(self)
+
+    def to_container(self) -> partial[pn.pane.SVG]:
+        """Return a partial that creates a base64-encoded SVG pane."""
+        return partial(pn.pane.SVG, encode=True)
+
+
 class ResultString(param.String):
     """Text the benchmark produced.
 
@@ -624,6 +660,7 @@ class ResultKind(StrEnum):
     FLOAT = "float"
     VEC = "vec"
     IMAGE = "image"
+    SVG = "svg"
     VIDEO = "video"
     PATH = "path"
     STRING = "string"
@@ -719,6 +756,18 @@ RESULT_SPECS: dict[type, ResultSpec] = {
     ),
     ResultImage: ResultSpec(
         kind=ResultKind.IMAGE,
+        missing_fill="NAN",
+        fill_dtype=object,
+        missing_sentinels=frozenset({"NAN"}),
+        is_scalar=False,
+        is_panel=True,
+        is_media=True,
+        is_data_var=True,
+        multidim=True,
+        reference_backed=False,
+    ),
+    ResultSVG: ResultSpec(
+        kind=ResultKind.SVG,
         missing_fill="NAN",
         fill_dtype=object,
         missing_sentinels=frozenset({"NAN"}),
