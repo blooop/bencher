@@ -6,24 +6,26 @@ only the standard library:
     python docs/evidence_dash_flow/make_svgs.py           # write the plates
     python docs/evidence_dash_flow/make_svgs.py --check   # check the motion rule
 
-The style is the one of #1188: every sample is a dot, the margin is a band on the
-metric's own axis, the CI is a capped interval, and text is a short finding, one effect
-number with its verdict glyph, and axis labels.
+The style is the one of #1188: every sample is a dot, the margin is a grey band on the
+metric's own axis, and text is a short finding, one effect number with its verdict glyph,
+and axis labels. The uncertainty is a "likely range" band: the 90 % CI of the candidate
+median, drawn on the same axis as a soft band in the verdict colour with thin solid edges.
+The reader compares two bands and the base median line (0): the coloured band clear of 0
+and past a grey edge is ▲ or ▼, wholly inside the grey band is ≈, and across 0 and a grey
+edge is ?. There are no capped intervals and no leaders.
 
-The motion rule: dots, bars, medians, bands, intervals, text and glyphs never move,
-resize, fade or glow. The only motion is dashes that flow along secondary lines, made
-with stroke-dashoffset on a dashed stroke. Every frame is the complete still chart, and
+The motion rule: dots, bars, medians, bands, text and glyphs never move, resize, fade or
+glow. The only motion is dashes that flow along secondary lines, made with
+stroke-dashoffset on a dashed stroke. Every frame is the complete still chart, and
 ``prefers-reduced-motion`` stops all flow.
 
-The salience rule: every line that flows is salient to the outcome. Three kinds flow:
-the "decision leaders" (short lines from a boundary, 0 or a Δ edge or the commit-noise
-band, to the CI end that beats or fails to beat it), the median connector of a ▲▼ panel
-(the size of the change), and the outline of the runs that drive a binary result. Pair
-lines are still, except on the estimation plate.
+The salience rule: only two kinds of line flow. The median connector of a ▲▼ panel (base
+median to candidate median: the size of the change) and the outline of the runs that
+failed or changed outcome. Pair lines and likely-range bands are still.
 
 ``--check`` parses every SVG's CSS and fails if anything else animates, if an animated
-element is not one of those three kinds, or if a leader does not start on a boundary and
-end on a CI end.
+element is not one of those two kinds, or if a capped interval, a whisker or a leader is
+left in a plate.
 """
 
 # ruff: noqa: PLR2004, RUF001
@@ -32,16 +34,17 @@ end on a CI end.
 
 from __future__ import annotations
 
-import itertools
 import math
 import re
 import sys
 import xml.etree.ElementTree as ET
-from collections.abc import Callable
 from pathlib import Path
 from statistics import NormalDist
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 from xml.sax.saxutils import escape
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 OUT = Path(__file__).resolve().parent
 W = 800
@@ -429,10 +432,10 @@ PATTERNS = {
     "P2": ("dash 4-4", 4.0, 4.0),
     "P3": ("dash 8-6", 8.0, 6.0),
 }
-# C: the stroke opacity of the flowing leaders
+# C: the stroke opacity of the flowing median connector
 CONTRASTS = {"C1": 0.35, "C2": 0.6, "C3": 0.9}
 DEFAULT = Look("S2P2C2", 8.0, 4.0, 4.0, 0.6)
-LEAD = Look("lead", 8.0, 4.0, 4.0, 0.9)  # the decision leaders: C3, short lines need it
+FLOW = Look("flow", 8.0, 4.0, 4.0, 1.0)  # the median connector and the run outline
 
 BASE_CSS = f"""
 text{{font-family:{SANS}}}
@@ -506,25 +509,12 @@ class Plate:
         )
 
 
-# ---------------------------------------------------------------- decision leaders
+# ---------------------------------------------------------------- likely-range bands
 
 
 MOVED = {"improved", "regressed"}
 SAME = {"equiv", "small"}
-
-
-class Lead(NamedTuple):
-    """One decision leader: a short line from a boundary to the CI end it decides.
-
-    start and end are raw values (log ratio or proportion), not oriented. offset is True
-    when the leader runs along the CI itself, so it is drawn beside the CI and joins the
-    CI end with a short step.
-    """
-
-    role: str  # "zero", "delta", "edge", "cross" or "band"
-    start: float
-    end: float
-    offset: bool
+RANGE_OPACITY = 0.3  # the fill of a likely-range band; its edges are solid
 
 
 def kind_of(ci: tuple[float, float], *, lower_better: bool, d: float = MARGIN) -> str:
@@ -532,72 +522,21 @@ def kind_of(ci: tuple[float, float], *, lower_better: bool, d: float = MARGIN) -
     return verdict(-b, -a, d) if lower_better else verdict(a, b, d)
 
 
-def decision_leads(
-    ci: tuple[float, float], *, lower_better: bool, d: float = MARGIN
-) -> tuple[str, list[Lead]]:
-    """Return the verdict of ci and the leaders that show how it was decided.
+def range_band(kind: str, x: float, y: float, w: float, h: float) -> str:
+    """Draw a likely-range band: a soft fill in the verdict colour, thin solid edges.
 
-    Improved or regressed: 0 to the CI end nearest 0, then the Δ edge to the far end.
-    Equivalent: each Δ edge to its nearby CI end, inward. Inconclusive: each Δ edge the CI
-    crosses, outward along the part of the CI beyond it.
-    """
-    a, b = ci
-    kind = kind_of(ci, lower_better=lower_better, d=d)
-    if kind in MOVED:
-        near, far = (a, b) if a > 0 else (b, a)
-        leads = [Lead("zero", 0.0, near, offset=False)]
-        if abs(far) > d:
-            leads.append(Lead("delta", math.copysign(d, far), far, offset=True))
-        return kind, leads
-    if kind in SAME:
-        return kind, [Lead("edge", d, b, offset=False), Lead("edge", -d, a, offset=False)]
-    leads = []
-    if b > d:
-        leads.append(Lead("cross", d, b, offset=True))
-    if a < -d:
-        leads.append(Lead("cross", -d, a, offset=True))
-    return kind, leads
-
-
-Pt = Callable[[float, float], tuple[float, float]]
-
-
-def draw_leads(
-    pl: Plate,
-    kind: str,
-    leads: list[Lead],
-    pt: Pt,
-    off: float,
-    cap: float,
-    look: Look = LEAD,
-) -> str:
-    """Draw each leader as a dashed path from its boundary to its CI end.
-
-    pt(v, o) is the point of value v on the CI's axis, o px to the side of it. An offset
-    leader runs off px beside the CI and steps in to the CI end's vertex at cap px.
+    The edges run along the two ends of the range only (top and bottom of a vertical
+    band, left and right of a horizontal one), so the band reads as "from here to here".
     """
     mark = VERDICT[kind][0]
-    out = []
-    for ld in leads:
-        o = off if ld.offset else 0.0
-        pts = [pt(ld.start, o), pt(ld.end, o)]
-        if ld.offset:
-            pts.append(pt(ld.end, cap))
-        d = "M" + "L".join(f"{num(x)} {num(y)}" for x, y in pts)
-        out.append(
-            el(
-                "path",
-                d=d,
-                cls=f"s-{mark} lead {pl.flow(look)}",
-                fill="none",
-                stroke_width=2.2,
-                stroke_opacity=look.opacity,
-                stroke_linejoin="round",
-                data_role=ld.role,
-                data_verdict=kind,
-            )
-        )
-    return "".join(out)
+    vertical = h > w
+    if vertical:
+        edges = f"M{num(x)} {num(y)}H{num(x + w)}M{num(x)} {num(y + h)}H{num(x + w)}"
+    else:
+        edges = f"M{num(x)} {num(y)}V{num(y + h)}M{num(x + w)} {num(y)}V{num(y + h)}"
+    return rect(x, y, w, h, f"f-{mark} range", fill_opacity=RANGE_OPACITY, data_verdict=kind) + el(
+        "path", d=edges, cls=f"s-{mark} range", fill="none", stroke_width=2
+    )
 
 
 def h_axis(
@@ -609,17 +548,16 @@ def h_axis(
     label_y: float,
 ) -> str:
     """Draw a horizontal change axis: the ±d band, the 0 line and the ticks."""
-    out = [rect(xs(-d), y0, xs(d) - xs(-d), y1 - y0, "f-band s-bandEdge bound", stroke_width=1)]
+    out = [rect(xs(-d), y0, xs(d) - xs(-d), y1 - y0, "f-band s-bandEdge", stroke_width=1)]
     for v, lab in ticks:
         if v:
             out.append(line(xs(v), y0, xs(v), y1, "s-grid"))
         out.append(text(xs(v), label_y, lab, "mono f-muted", FS, "middle"))
-    out.append(line(xs(0), y0, xs(0), y1, "s-muted bound", 1.5))
+    out.append(line(xs(0), y0, xs(0), y1, "s-muted", 1.5))
     return "".join(out)
 
 
 def h_row(
-    pl: Plate,
     xs: Callable[[float], float],
     y: float,
     ci: tuple[float, float],
@@ -627,34 +565,49 @@ def h_row(
     *,
     lower_better: bool,
     d: float = MARGIN,
-    still_same: bool = False,
-    look: Look = LEAD,
+    h: float = 12,
 ) -> str:
-    """Draw one CI on a horizontal axis with its decision leaders; return the SVG."""
-    kind, leads = decision_leads(ci, lower_better=lower_better, d=d)
+    """Draw one likely-range bar on a horizontal axis, with its estimate as a tick."""
+    kind = kind_of(ci, lower_better=lower_better, d=d)
     mark = VERDICT[kind][0]
     x0, x1 = xs(ci[0]), xs(ci[1])
-    path = (
-        f"M{num(x0)} {num(y - 5)}V{num(y + 5)}M{num(x0)} {num(y)}H{num(x1)}"
-        f"M{num(x1)} {num(y - 5)}V{num(y + 5)}"
+    return range_band(kind, x0, y - h / 2, x1 - x0, h) + line(
+        xs(est), y - h / 2 - 3, xs(est), y + h / 2 + 3, f"s-{mark}", 3, stroke_linecap="round"
     )
-    out = [
-        el(
-            "path",
-            d=path,
-            cls=f"s-{mark} ci",
-            fill="none",
-            stroke_width=2.5,
-            stroke_linecap="round",
-        ),
-        circle(xs(est), y, 4.5, f"f-{mark} s-plate", stroke_width=1.5),
-    ]
-    if not (still_same and kind in SAME):
-        out.append(draw_leads(pl, kind, leads, lambda v, o: (xs(v), y + o), -9, -5, look))
-    return "".join(out)
 
 
 # ---------------------------------------------------------------- shared marks
+
+
+def _side_labels(
+    x: float, room: float, items: list[tuple[float, str, str, str]], y_min: float, y_max: float
+) -> str:
+    """Write each (y, label, class, place) at x, on one line if room allows, else on two.
+
+    place is "mid" (centred on y), "above" (ends just above y) or "below" (starts just
+    below y). Labels that would touch are pushed apart.
+    """
+    one_line = all(len(s) * FS * 0.55 <= room for _, s, _, _ in items)
+    rows = [[s] if one_line else s.rsplit(" ", 1) for _, s, _, _ in items]
+    hs = [len(r) * (FS + 2) for r in rows]
+    want = []
+    for (y, _, _, place), h in zip(items, hs, strict=True):
+        want.append({"mid": y - h / 2, "above": y - h - 3, "below": y + 3}[place])
+    order = sorted(range(len(items)), key=lambda i: want[i])
+    tops: dict[int, float] = {}
+    edge = y_min
+    for i in order:
+        tops[i] = max(want[i], edge)
+        edge = tops[i] + hs[i] + 4
+    over = edge - 4 - y_max
+    if over > 0:
+        for i in tops:
+            tops[i] -= over
+    out = []
+    for i, (_, _, cls, _) in enumerate(items):
+        for k, part in enumerate(rows[i]):
+            out.append(text(x, tops[i] + FS - 2 + k * (FS + 2), part, cls, FS))
+    return "".join(out)
 
 
 def dot_panel(
@@ -669,39 +622,34 @@ def dot_panel(
     lo: float,
     hi: float,
     ci: tuple[float, float],
-    est: float,
     lower_better: bool = True,
     ticks: list[float] | None = None,
     tick_fmt: Callable[[float], str] | None = None,
     tick_labels: bool = True,
     labels: str = "two",
     r: float = 4.5,
-    boots: list[float] | None = None,
-    lead: str = "all",
-    pairs_flow: bool = False,
+    range_labels: bool = False,
     connector: bool = False,
-    look: Look = LEAD,
+    look: Look = FLOW,
 ) -> str:
     """Draw base and candidate as beeswarm dot columns on the metric's own axis.
 
-    The ±Δ band sits around the base median, and a thin line marks the base median: the
-    0 of the shift. The bracket beside the candidate column is the CI of the shift, drawn
-    where it puts the candidate median. The leaders run from 0 or a Δ edge to a bracket
-    end. lead is "all", "moved" (none on a ≈ panel) or "none". connector draws the base
-    median to candidate median line, which flows on a ▲▼ panel and is still on ≈ and ?.
-    pairs_flow adds flowing dashes on the pair lines; only the estimation plate may use it.
+    The grey ±Δ band sits around the base median, and a thin line marks the base median:
+    the 0 of the shift. The coloured band across the candidate column is the likely range
+    of the candidate median: the CI of the shift, mapped to data units against the base
+    median. range_labels writes "±5 % margin" and "likely range" beside the bands.
+    connector draws the base median to candidate median line, which flows on a ▲▼ panel
+    and is still on ≈ and ?.
     """
     out = []
 
     def ys(v: float) -> float:
         return y1 - (v - lo) / (hi - lo) * (y1 - y0)
 
-    kind, leads = decision_leads(ci, lower_better=lower_better)
-    if lead == "none" or (lead == "moved" and kind in SAME):
-        leads = []
+    kind = kind_of(ci, lower_better=lower_better)
     px = x0 + (48 if tick_labels else 0)
     wid = x1 - px
-    cb, cc = px + wid * 0.27, px + wid * 0.6
+    cb, cc = (px + wid * 0.2, px + wid * 0.5) if range_labels else (px + wid * 0.27, px + wid * 0.6)
     for t in ticks or []:
         out.append(line(px, ys(t), x1, ys(t), "s-grid"))
         if tick_labels and tick_fmt:
@@ -712,13 +660,15 @@ def dot_panel(
         return ys(bmed * math.exp(v))
 
     top, bot = yv(MARGIN), yv(-MARGIN)
-    out.append(rect(px + 2, top, x1 - px - 4, bot - top, "f-band s-bandEdge bound", stroke_width=1))
+    out.append(rect(px + 2, top, x1 - px - 4, bot - top, "f-band s-bandEdge", stroke_width=1))
     pb, pc = [ys(v) for v in base], [ys(v) for v in cand]
     ob, oc = swarm(pb, r), swarm(pc, r)
     mark, _, _ = VERDICT[kind]
     hws = [min(max(abs(o) for o in offs) + r + 5, wid * 0.15) for offs in (ob, oc)]
-    bx = min(cc + max(abs(o) for o in oc) + r + 14, x1 - 8)
-    out.append(line(cb + hws[0], yv(0), min(bx + 12, x1 - 2), yv(0), "s-muted bound", 1.2))
+    out.append(line(cb + hws[0], yv(0), cc + hws[1] + 4, yv(0), "s-muted", 1.2))
+    y_lo, y_hi = sorted((yv(ci[0]), yv(ci[1])))
+    ext = 14  # the band runs past the column, so the median bar never hides it
+    out.append(range_band(kind, cc - hws[1] - 2, y_lo, 2 * hws[1] + 2 + ext, y_hi - y_lo))
     for i in range(len(base)):
         better = (cand[i] < base[i]) == lower_better
         tok = "cand" if better else "worse"
@@ -726,9 +676,6 @@ def dot_panel(
         out.append(
             line(xa, pb[i], xb, pc[i], f"s-{tok}", 1.2, stroke_opacity=0.3 if better else 0.6)
         )
-        if pairs_flow and kind in MOVED:  # dashes flow from the base run to its candidate run
-            cls = f"s-{tok} pairflow {pl.flow(DEFAULT)}"
-            out.append(line(xa, pb[i], xb, pc[i], cls, 1.6, stroke_opacity=DEFAULT.opacity))
     out += [
         circle(cb + o, p, r, "f-base s-plate", stroke_width=1) for o, p in zip(ob, pb, strict=True)
     ]
@@ -746,40 +693,30 @@ def dot_panel(
                 ys(cmed),
                 cls,
                 2.5,
-                stroke_opacity=1 if moved else 0.5,
+                stroke_opacity=look.opacity if moved else 0.5,
             )
         )
     for (cx, med, tok), hw in zip(((cb, bmed, "base"), (cc, cmed, "cand")), hws, strict=True):
         bar = line(cx - hw, ys(med), cx + hw, ys(med), "s-plate", 9, stroke_linecap="round")
         bar += line(cx - hw, ys(med), cx + hw, ys(med), f"s-{tok}", 5, stroke_linecap="round")
         out.append(bar)
-    y_lo, y_hi = sorted((yv(ci[0]), yv(ci[1])))
-    out.append(
-        el(
-            "path",
-            d=f"M{num(bx - 7)} {num(y_lo)}H{num(bx)}V{num(y_hi)}H{num(bx - 7)}",
-            cls=f"s-{mark} ci",
-            fill="none",
-            stroke_width=3,
-            stroke_linecap="round",
-            stroke_linejoin="round",
+    if range_labels:
+        lx = cc + hws[1] + ext + 6
+        # the margin label sits outside the grey band, on the side away from the range
+        mid = (y_lo + y_hi) / 2
+        m_lab = (bot, "below") if mid < (top + bot) / 2 else (top, "above")
+        out.append(
+            _side_labels(
+                lx,
+                x1 - lx,
+                [
+                    (m_lab[0], f"±{pct(MARGIN):.0f} % margin", "f-muted", m_lab[1]),
+                    (mid, "likely range", f"f-{VERDICT[kind][1]}", "mid"),
+                ],
+                y0,
+                y1,
+            )
         )
-    )
-    ye = yv(est)
-    out.append(line(bx - 9, ye, bx + 3, ye, f"s-{mark}", 3, stroke_linecap="round"))
-    if boots:
-        step, hx = 2.5, bx + 18
-        hist: dict[int, int] = {}
-        for b in boots:
-            k = round(yv(b) / step)
-            hist[k] = hist.get(k, 0) + 1
-        hm = max(hist.values())
-        ks = range(min(hist) - 1, max(hist) + 2)
-        d = f"M{num(hx)} {num(ks[0] * step)}"
-        d += "".join(f"L{num(hx + hist.get(k, 0) / hm * 44)} {num(k * step)}" for k in ks)
-        d += f"L{num(hx)} {num(ks[-1] * step)}Z"
-        out.append(el("path", d=d, cls=f"f-{mark} s-{mark}", fill_opacity=0.22, stroke_width=1))
-    out.append(draw_leads(pl, kind, leads, lambda v, o: (bx + o, yv(v)), 6, 0, look))
     if labels == "two":
         for cx, name, n in ((cb, "base", len(base)), (cc, "candidate", len(cand))):
             out += [
@@ -907,7 +844,8 @@ def _metric_panel(
     pairs: list[Pair],
     ci: tuple[float, float],
     est: float,
-    lead: str,
+    *,
+    range_labels: bool = False,
 ) -> None:
     """Draw one paired metric: its name, its effect and glyph, and its dot panel."""
     kind = kind_of(ci, lower_better=True)
@@ -927,11 +865,10 @@ def _metric_panel(
             lo=lo,
             hi=hi,
             ci=ci,
-            est=est,
             ticks=nice_ticks(lo, hi),
             tick_fmt=lambda t: f"{t:g}",
             r=4,
-            lead=lead,
+            range_labels=range_labels,
             connector=True,
         )
     )
@@ -940,10 +877,10 @@ def _metric_panel(
 def plate_verdicts(code: str) -> Plate:
     desc = (
         f"Three paired metrics, one per verdict. planning_time {fmt(pct(EST))} %, improved: "
-        f"leaders from 0 and from the -5 % edge to the CI. tracking_error "
-        f"{fmt(pct(TRACK_EST))} %, equivalent: leaders from each ±5 % edge in to the CI. "
-        f"startup_time {fmt(pct(UNS_EST))} %, inconclusive: a leader along the part of the "
-        "CI beyond +5 %."
+        "the coloured likely-range band of the candidate median is below the grey "
+        f"±5 % margin band. tracking_error {fmt(pct(TRACK_EST))} %, equivalent: the "
+        f"likely-range band is wholly inside the margin band. startup_time "
+        f"{fmt(pct(UNS_EST))} %, inconclusive: the likely-range band crosses the +5 % edge."
     )
     pl = Plate("Better, same, unclear", 420, desc, code=code)
     for i, (name, pairs, ci, est) in enumerate(
@@ -953,7 +890,7 @@ def plate_verdicts(code: str) -> Plate:
             ("startup_time · s", UNS, UNS_C90, UNS_EST),
         )
     ):
-        _metric_panel(pl, 20 + i * 258, name, pairs, ci, est, "all")
+        _metric_panel(pl, 20 + i * 258, name, pairs, ci, est, range_labels=True)
     return pl
 
 
@@ -963,7 +900,7 @@ def _run_squares(
     y0: float,
     spec: tuple[int, int, str, int, float],
     changed: set[int],
-    look: Look = LEAD,
+    look: Look = FLOW,
 ) -> None:
     """Draw n runs as squares, a cross for each failure.
 
@@ -1017,7 +954,7 @@ def plate_scorecard(code: str) -> Plate:
         f"{k_track}, still. Paired ABBA, 20 pairs on 4 VMs."
     )
     pl = Plate(plan_title(), 536, desc, code=code)
-    _metric_panel(pl, 20, "planning_time · s", PAIRS, C90, EST, "moved")
+    _metric_panel(pl, 20, "planning_time · s", PAIRS, C90, EST, range_labels=True)
     x0 = 278
     g, _ = glyph(TS_KIND, x0 + len(TS_TXT) * 15.5 + 8, 116, 26)
     pl.add(text(x0, 80, "task_success", "mono f-ink2"), text(x0, 116, TS_TXT, "f-ink bb", 28), g)
@@ -1037,9 +974,9 @@ def plate_scorecard(code: str) -> Plate:
 
     pl.add(
         h_axis(xs, 306, 334, 0.05, [(0, "0")], 352),
-        h_row(pl, xs, 320, TS_CI, TS_DIFF, lower_better=False, d=0.05),
+        h_row(xs, 320, TS_CI, TS_DIFF, lower_better=False, d=0.05),
     )
-    _metric_panel(pl, 536, "tracking_error · mm", TRACK, TRACK_C90, TRACK_EST, "moved")
+    _metric_panel(pl, 536, "tracking_error · mm", TRACK, TRACK_C90, TRACK_EST)
     pl.add(
         run_rows(Strip(20, 430), abba_rows(PAIRS)),
         text(308, 442, "run order →", "f-muted"),
@@ -1103,7 +1040,7 @@ def forest_title(rows: list[Metric]) -> str:
 
 def plate_forest(code: str) -> Plate:
     rows = forest_metrics()
-    desc = "12 metrics, change vs base with 90 % CI, ±5 % band: " + "; ".join(
+    desc = "12 metrics, change vs base, likely range (90 % CI) against the ±5 % band: " + "; ".join(
         f"{r.name} {fmt(pct(r.est))} % {r.kind}" for r in rows
     )
     pitch, top = 38, 92
@@ -1126,20 +1063,20 @@ def plate_forest(code: str) -> Plate:
                 for x, o in zip(dx, swarm(dx, 2.2, one_sided=True), strict=True)
             )
         )
-        pl.add(
-            h_row(pl, xs, y - 6, r.ci, r.est, lower_better=r.direction == "min", still_same=True)
-        )
+        pl.add(h_row(xs, y - 6, r.ci, r.est, lower_better=r.direction == "min", h=10))
         g, _ = glyph(r.kind, ax1 + 22, y + 5, FS + 3)
         pl.add(g)
+        if not i:  # name the bar once, above the first row
+            pl.add(text(xs(r.ci[0]), y - 16, "likely range", f"f-{VERDICT[r.kind][1]}", FS))
     pl.add(
         text((ax0 + ax1) / 2, bottom + 70, "change vs base", "f-ink2", FS, "middle"),
-        legend(W - 20, 66, [("f-cand", "one pair"), ("f-band", "±5 %")]),
+        legend(W - 20, 66, [("f-cand", "one pair"), ("f-band", "±5 % margin")]),
     )
     return pl
 
 
-def plate_est(code: str, look: Look = LEAD, *, pairs_flow: bool = False) -> Plate:
-    """Draw planning_time as two dot columns, with the leaders on the CI."""
+def plate_est(code: str) -> Plate:
+    """Draw planning_time as two dot columns, with the likely-range band."""
     kind = plan_kind()
     desc = (
         f"planning_time, 20 ABBA pairs on 4 VMs: {sum(p.cand < p.base for p in PAIRS)} of 20 "
@@ -1160,15 +1097,12 @@ def plate_est(code: str, look: Look = LEAD, *, pairs_flow: bool = False) -> Plat
             lo=lo,
             hi=hi,
             ci=C90,
-            est=EST,
             ticks=nice_ticks(lo, hi, 5),
             tick_fmt=lambda t: f"{t:.1f} s",
             labels="one",
             r=5.5,
-            boots=BOOTS,
+            range_labels=True,
             connector=True,
-            pairs_flow=pairs_flow,
-            look=look,
         ),
         run_rows(Strip(540, 120, cell=14, pair_gap=5, pitch=24, label_w=54), abba_rows(PAIRS)),
         text(594, 236, "run order →", "f-muted"),
@@ -1212,7 +1146,7 @@ def plate_waffle(code: str) -> Plate:
     pl.add(
         text(20, 277, "change"),
         h_axis(sc, 257, 285, 0.05, pp, 310),
-        h_row(pl, sc, 271, TS_CI, TS_DIFF, lower_better=False, d=0.05),
+        h_row(sc, 271, TS_CI, TS_DIFF, lower_better=False, d=0.05),
     )
     fx = 420
     g, _ = glyph(sk_kind, fx + 226, 120, 26)
@@ -1235,7 +1169,7 @@ def plate_waffle(code: str) -> Plate:
     pl.add(
         text(fx, 277, "change"),
         h_axis(rs, 257, 285, 0.05, pp, 310),
-        h_row(pl, rs, 271, SK_CI, SK_DIFF, lower_better=True, d=0.05),
+        h_row(rs, 271, SK_CI, SK_DIFF, lower_better=True, d=0.05),
     )
     return pl
 
@@ -1271,7 +1205,7 @@ def plate_sweep(code: str) -> Plate:
         )
     step = (x1 - x0) / len(sp)
     mids = []
-    for k, (v, base, cand, m, ci, kind) in enumerate(groups):
+    for k, (v, base, cand, _m, ci, kind) in enumerate(groups):
         gx = x0 + (k + 0.5) * step
         g, _ = glyph(kind, gx - 4, ys(max(base + cand)) - 16, FS + 2)
         pl.add(
@@ -1286,11 +1220,9 @@ def plate_sweep(code: str) -> Plate:
                 lo=lo,
                 hi=hi,
                 ci=ci,
-                est=m,
                 tick_labels=False,
                 labels="none",
                 r=3.4,
-                lead="moved",
             ),
             g,
             text(gx - 6, y1 + 26, f"{v:.1f}", "mono f-muted", FS, "middle"),
@@ -1303,7 +1235,7 @@ def plate_sweep(code: str) -> Plate:
     for mx, yb, yc, kind in mids:  # the gap at each speed: base median to candidate median
         if kind in MOVED:
             mark = VERDICT[kind][0]
-            pl.add(line(mx, yb, mx, yc, f"s-{mark} medflow {pl.flow(LEAD)}", 2))
+            pl.add(line(mx, yb, mx, yc, f"s-{mark} medflow {pl.flow(FLOW)}", 2))
         else:
             pl.add(line(mx, yb, mx, yc, "s-muted dash", 1.5, stroke_opacity=0.6))
     pl.add(
@@ -1346,11 +1278,9 @@ def plate_design(code: str) -> Plate:
         el(
             "path",
             d=f"M{num(edge)} {num(206)}L{num(edge)} {num(234)}",
-            cls=f"s-{mark} lead {pl.flow(LEAD)}",
+            cls=f"s-{mark}",
             fill="none",
             stroke_width=2.5,
-            data_role="bias",
-            data_verdict=b_kind,
         ),
         line(78, 252, 440, 252, "s-muted"),
         el("path", d="M440 247L449 252L440 257Z", cls="f-muted"),
@@ -1365,8 +1295,8 @@ def plate_design(code: str) -> Plate:
     yp, yk = st.y(1) + st.h + 5, blk.y(0) + blk.h / 2
     pl.add(
         h_axis(xs, 70, 240, MARGIN, pct_ticks(lo, hi, 3), 262),
-        h_row(pl, xs, yp, p_ci, p_est, lower_better=True),
-        h_row(pl, xs, yk, b_ci, b_est, lower_better=True),
+        h_row(xs, yp, p_ci, p_est, lower_better=True),
+        h_row(xs, yk, b_ci, b_est, lower_better=True),
         text((ax0 + ax1) / 2, 284, "change", "f-ink2", FS, "middle"),
     )
     for yy, kind in ((yp, p_kind), (yk, b_kind)):
@@ -1410,7 +1340,7 @@ def plate_history(code: str) -> Plate:
     ref = HIST_MED[-2]
     top, bot = ys(ref * math.exp(HIST_NOISE)), ys(ref * math.exp(-HIST_NOISE))
     pl.add(
-        rect(x0, top, x1 - x0, bot - top, "f-band s-bandEdge bound", stroke_width=1),
+        rect(x0, top, x1 - x0, bot - top, "f-band s-bandEdge", stroke_width=1),
         text(x0 + 8, bot - 8, "commit noise", "f-muted"),
     )
     for t in nice_ticks(lo, hi, 4):
@@ -1424,8 +1354,13 @@ def plate_history(code: str) -> Plate:
     pl.add(el("path", d=d, cls="s-ink2", fill="none", stroke_width=2, stroke_opacity=0.7))
     xe = xc(len(HIST) - 1) - step / 2
     mark = VERDICT[kind][0]
-    pr = f"M{num(xe)} {num(ys(HIST_MED[-2]))}V{num(ys(HIST_MED[-1]))}H{num(x1)}"
-    pl.add(el("path", d=pr, cls=f"s-{mark} ci", fill="none", stroke_width=2.5))
+    y_prev, y_pr = ys(HIST_MED[-2]), ys(HIST_MED[-1])
+    pl.add(line(xe, y_pr, x1, y_pr, f"s-{mark}", 2.5))
+    # the step from the commit before to the PR's median: the median connector
+    if out_of_band:
+        pl.add(line(xe, y_prev, xe, y_pr, f"s-{mark} medflow {pl.flow(FLOW)}", 2.5))
+    else:
+        pl.add(line(xe, y_prev, xe, y_pr, f"s-{mark} dash", 2.5, stroke_opacity=0.5))
     for k, h in enumerate(HIST):
         tok = "cand" if k == len(HIST) - 1 else "base"
         py = [ys(v) for v in h]
@@ -1433,20 +1368,6 @@ def plate_history(code: str) -> Plate:
             *(
                 circle(xc(k) + o, y, 2.6, f"f-{tok} s-plate", stroke_width=0.8)
                 for y, o in zip(py, swarm(py, 2.6), strict=True)
-            )
-        )
-    if out_of_band:  # the band edge it leaves, to the PR's median
-        edge = bot if HIST_STEP < 0 else top
-        pl.add(
-            el(
-                "path",
-                d=f"M{num(x1)} {num(edge)}L{num(x1)} {num(ys(HIST_MED[-1]))}",
-                cls=f"s-{mark} lead {pl.flow(LEAD)}",
-                fill="none",
-                stroke_width=2.2,
-                stroke_opacity=LEAD.opacity,
-                data_role="band",
-                data_verdict=kind,
             )
         )
     for k in (0, 9, 19):
@@ -1474,9 +1395,9 @@ def look_variants() -> list[list[tuple[str, Look]]]:
 
 def plate_looks(code: str) -> Plate:
     desc = (
-        "The planning_time panel (leaders and median connector flow) in nine looks. Speed "
+        "The planning_time panel (only the median connector flows) in nine looks. Speed "
         "S1-S3 is 4, 8 and 16 px/s. Pattern P1-P3 is 1-3, 4-4 and 8-6 px. Contrast C1-C3 is "
-        "the leaders' stroke opacity."
+        "the connector's stroke opacity."
     )
     pl = Plate("Pick a speed, pattern, contrast", 676, desc, code=code)
     lo, hi = axis_range([p.base for p in PAIRS] + [p.cand for p in PAIRS])
@@ -1496,7 +1417,6 @@ def plate_looks(code: str) -> Plate:
                     lo=lo,
                     hi=hi,
                     ci=C90,
-                    est=EST,
                     tick_labels=False,
                     labels="none",
                     r=2.8,
@@ -1507,14 +1427,11 @@ def plate_looks(code: str) -> Plate:
     return pl
 
 
-ESTIMATION = "d4_estimation.svg"
-PAIRS_FLOW_ON_ESTIMATION = False
-
 PLATES = {
     "d1_verdicts.svg": lambda: plate_verdicts("D1 · one ▲, one ≈, one ?"),
     "d2_scorecard.svg": lambda: plate_scorecard("D2 · scorecard · ≈ is still"),
-    "d3_forest.svg": lambda: plate_forest("D3 · forest · ≈ rows are still"),
-    ESTIMATION: lambda: plate_est("D4 · estimation", pairs_flow=PAIRS_FLOW_ON_ESTIMATION),
+    "d3_forest.svg": lambda: plate_forest("D3 · forest"),
+    "d4_estimation.svg": lambda: plate_est("D4 · estimation"),
     "d5_waffle.svg": lambda: plate_waffle("D5 · waffle"),
     "d6_sweep.svg": lambda: plate_sweep("D6 · sweep · ≈ points are still"),
     "d7_design.svg": lambda: plate_design("D7 · design"),
@@ -1600,116 +1517,38 @@ def check_motion(path: Path) -> tuple[int, list[str]]:
 
 
 # The kinds of element that may flow, by class. Anything else that flows fails the check.
-SALIENT = ("lead", "medflow", "runflag", "pairflow")
-ROLES = {  # the leader roles each verdict allows
-    "improved": {"zero", "delta", "band", "bias"},
-    "regressed": {"zero", "delta", "band", "bias"},
-    "equiv": {"edge"},
-    "small": {"edge"},
-    "unsure": {"cross"},
-}
-TOL = 0.03  # px: the coordinates are written to 0.01 px
-
-
-def _polylines(e: ET.Element) -> list[list[tuple[float, float]]]:
-    """Return the vertices of a line, rect or absolute M/L/H/V/Q path."""
-    tag, a = _strip_ns(e.tag), e.attrib
-    if tag == "line":
-        return [[(float(a["x1"]), float(a["y1"])), (float(a["x2"]), float(a["y2"]))]]
-    if tag == "rect":
-        x, y, w, h = (float(a[k]) for k in ("x", "y", "width", "height"))
-        return [[(x, y), (x + w, y), (x + w, y + h), (x, y + h), (x, y)]]
-    if tag != "path":
-        return []
-    out: list[list[tuple[float, float]]] = []
-    toks = re.findall(r"[A-Za-z]|-?\d*\.?\d+", a.get("d", ""))
-    i, x, y, cmd = 0, 0.0, 0.0, ""
-    while i < len(toks):
-        if toks[i].isalpha():
-            cmd = toks[i]
-            i += 1
-            if cmd in "Zz":
-                if out and out[-1]:
-                    out[-1].append(out[-1][0])
-                continue
-        if cmd == "M":
-            x, y = float(toks[i]), float(toks[i + 1])
-            out.append([(x, y)])
-            i += 2
-        elif cmd == "L":
-            x, y = float(toks[i]), float(toks[i + 1])
-            i += 2
-        elif cmd == "H":
-            x = float(toks[i])
-            i += 1
-        elif cmd == "V":
-            y = float(toks[i])
-            i += 1
-        elif cmd == "Q":
-            x, y = float(toks[i + 2]), float(toks[i + 3])
-            i += 4
-        else:  # a relative command: the mark is not one the check reads
-            return []
-        if cmd != "M":
-            out[-1].append((x, y))
-    return out
-
-
-def _on_segment(p: tuple[float, float], a: tuple[float, float], b: tuple[float, float]) -> bool:
-    (px, py), (ax, ay), (bx, by) = p, a, b
-    dx, dy = bx - ax, by - ay
-    t = 0.0 if not dx and not dy else ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)
-    t = min(max(t, 0.0), 1.0)
-    return math.hypot(px - ax - t * dx, py - ay - t * dy) <= TOL
+SALIENT = ("medflow", "runflag")
+# Classes of the marks this demo dropped: capped CI intervals, whiskers, decision leaders
+# and flowing pair lines. A plate that still has one fails the check.
+GONE = {"ci", "cap", "caps", "whisker", "whiskers", "lead", "pairflow"}
 
 
 def check_salience(path: Path) -> tuple[dict[str, int], list[str]]:
-    """Check that every flowing element is salient to the outcome.
+    """Check that only the median connector and the run outline flow, and nothing is left
+    of the capped CI marker.
 
-    Each .fl element must be a decision leader (.lead), the median connector of a moved
-    panel (.medflow) or the outline of the runs that drive a binary result (.runflag).
-    Pair lines (.pairflow) may flow only on the estimation plate. A leader must carry a
-    role its verdict allows, start on a boundary (.bound: the 0 line, a Δ edge, the noise
-    band) and end on a vertex of a decided mark (.ci: a CI end, or the PR's median). The
-    "bias" leader of the design plate marks the block boundary and has no CI end.
+    Each .fl element must be a median connector (.medflow) or the outline of the runs that
+    failed or changed outcome (.runflag). No element may carry a GONE class, and every
+    likely-range band (.range) must be still and solid.
     """
     root = ET.parse(path).getroot()  # noqa: S314 - our own generated files
     errs: list[str] = []
     counts = dict.fromkeys(SALIENT, 0)
-    bounds, ends = [], []
     for e in root.iter():
+        tag = _strip_ns(e.tag)
         classes = set(e.attrib.get("class", "").split())
-        if "bound" in classes:
-            bounds += _polylines(e)
-        if "ci" in classes:
-            ends += [p for pl in _polylines(e) for p in pl]
-    for e in root.iter():
-        classes = set(e.attrib.get("class", "").split())
+        left = classes & GONE
+        if left:
+            errs.append(f"<{tag}> has a dropped mark class {sorted(left)}")
+        if "range" in classes and ("fl" in classes or "dash" in classes):
+            errs.append(f"<{tag}> likely-range band is dashed or flows")
         if "fl" not in classes:
             continue
         kinds = [k for k in SALIENT if k in classes]
         if len(kinds) != 1:
-            errs.append(f"<{_strip_ns(e.tag)} class={e.attrib['class']!r}> flows, not salient")
+            errs.append(f"<{tag} class={e.attrib['class']!r}> flows, not salient")
             continue
         counts[kinds[0]] += 1
-        if kinds[0] == "pairflow" and path.name != "d4_estimation.svg":
-            errs.append("pair lines flow outside the estimation plate")
-        if kinds[0] != "lead":
-            continue
-        role, kind = e.attrib.get("data-role", ""), e.attrib.get("data-verdict", "")
-        if role not in ROLES.get(kind, set()):
-            errs.append(f"leader role {role!r} does not decide a {kind!r} verdict")
-        if role == "bias":
-            continue
-        pts = [p for pl in _polylines(e) for p in pl]
-        if not pts:
-            errs.append("a leader with no readable path")
-            continue
-        start, end = pts[0], pts[-1]
-        if not any(_on_segment(start, a, b) for pl in bounds for a, b in itertools.pairwise(pl)):
-            errs.append(f"leader {role} starts at {start}, not on a boundary")
-        if not any(math.dist(end, p) <= TOL for p in ends):
-            errs.append(f"leader {role} ends at {end}, not on a CI end")
     return counts, errs
 
 
