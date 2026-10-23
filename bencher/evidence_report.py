@@ -59,10 +59,10 @@ if TYPE_CHECKING:
     from bencher.results.bench_result import BenchResult
 
 UrlBase = str | Mapping[str, str] | Callable[[str], str] | None
+# Scorecard tiles when no primary metric is named: the metrics that moved, first.
 MAX_TILES = 6
+# The forest plot is drawn only for more metrics than this; fewer fit the scorecard.
 MAX_FOREST_ROWS = 4
-"""The forest plot is drawn only for more metrics than this; fewer fit the scorecard."""
-"""Scorecard tiles when no primary metric is named: the metrics that moved, first."""
 
 
 @dataclass

@@ -50,10 +50,10 @@ if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
 WIDTH_IN = 8.0
+# 8 in at 200 dpi is 1600 px: a 2× image for an 800 px wide PR body.
 DPI = 200
-"""8 in at 200 dpi is 1600 px: a 2× image for an 800 px wide PR body."""
+# Open Sans where it is installed; DejaVu Sans (always there) supplies ▲ ▼ ≈ and the fallback.
 FONT = ("Open Sans", "DejaVu Sans")
-"""Open Sans where it is installed; DejaVu Sans (always there) supplies ▲ ▼ ≈ and the fallback."""
 
 
 @dataclass(frozen=True)

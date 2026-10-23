@@ -163,7 +163,7 @@ Common rules:
   each VM to its shard name. When the order is not recorded, the row is left out and the
   Markdown says so. For a sweep, the swept grid is the panel layout itself.
 * Okabe–Ito colours. Base is grey `#8C8C8C`; candidate is blue `#0072B2`. Better is
-  bluish green `#009E73`, worse is vermillion `#D55E00`, inconclusive is amber
+  bluish green `#009E73`, worse is vermilion `#D55E00`, inconclusive is amber
   `#E69F00`. Dark theme: candidate `#3D9BD6`, better `#1FA07C`, worse `#E0662A`,
   inconclusive `#BE8714`. A glyph (▲ ▼ ≈ ?) always backs the colour, and text wears the
   theme's ink, never a data colour.

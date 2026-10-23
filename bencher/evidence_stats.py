@@ -48,24 +48,24 @@ if TYPE_CHECKING:
 
     from numpy.typing import ArrayLike
 
+# One-sided error rate of every decision; the decision CI is the ``1 - 2α`` CI.
 ALPHA = 0.05
-"""One-sided error rate of every decision; the decision CI is the ``1 - 2α`` CI."""
+# Level of the second, thinner CI the report draws.
 REPORT_LEVEL = 0.95
-"""Level of the second, thinner CI the report draws."""
+# Benjamini–Hochberg false discovery rate over secondary metrics and sweep cells.
 FDR_Q = 0.05
-"""Benjamini–Hochberg false discovery rate over secondary metrics and sweep cells."""
+# Power the minimum detectable effect is quoted at.
 POWER = 0.80
-"""Power the minimum detectable effect is quoted at."""
 RESAMPLES = 10_000
 SHIFT_RESAMPLES = 2_000
 SEED = 20_261_019
+# An arm needs this many units (repeats, pairs or clusters) for a BCa CI; below it, Welch t.
 BCA_MIN_UNITS = 10
-"""An arm needs this many units (repeats, pairs or clusters) for a BCa CI; below it, Welch t."""
 MIN_UNITS = 2
+# Default margin of a positive metric: ±5 % (TODO: the larger of this and 2× the A/A floor).
 DEFAULT_RELATIVE_MARGIN = 0.05
-"""Default margin of a positive metric: ±5 % (TODO: the larger of this and 2× the A/A floor)."""
+# Default margin of a binary or fraction metric: ±5 percentage points.
 DEFAULT_ABSOLUTE_MARGIN_PP = 0.05
-"""Default margin of a binary or fraction metric: ±5 percentage points."""
 DECILES = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
 
 # Index arrays above this many entries are drawn in chunks, to bound memory.
