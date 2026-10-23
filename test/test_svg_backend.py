@@ -359,10 +359,15 @@ def test_registered_svg_priorities_sit_just_below_their_twins():
 
 
 def _svg_panes(pane) -> list[pn.pane.SVG]:
+    """The svg backend's panes: SVG panes that hold markup, not a file path.
+
+    The report also shows the Cartesian sampling animation as an SVG pane, but that
+    pane holds the path of its file.
+    """
     found = []
 
     def walk(p):
-        if isinstance(p, pn.pane.SVG):
+        if isinstance(p, pn.pane.SVG) and isinstance(p.object, str) and "<svg" in p.object:
             found.append(p)
         for child in getattr(p, "objects", None) or []:
             walk(child)
