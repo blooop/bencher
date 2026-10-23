@@ -329,9 +329,9 @@ procedures:
   document in `CHANGELOG.md`); the three constants are at `:740-744` (including
   `GOLDEN_BENCH_CFG_HASH_HISTORY` at `:744`), the fixture builder `_build_golden_bench_cfg`
   at `:745`, and `class TestGoldenBenchCfgHash` spans `:766-846` (end of file).
-- The pixel-MD5 goldens in `test/test_cartesian_pil_renderer.py:143-180`, whose
+- The markup-MD5 goldens in `test/test_cartesian_svg_renderer.py` (`TestDrawRegression`), whose
   instruction is "update golden hashes only after visually confirming the new output is
-  acceptable" (`:146-148`).
+  acceptable".
 
 The golden-plan corpus (D7) is therefore new infrastructure and must carry its own
 regeneration task and a documented update procedure modelled on the first of these.

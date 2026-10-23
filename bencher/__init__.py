@@ -182,6 +182,7 @@ from .variables.results import (
     ResultReference as ResultReference,
     ResultRerun as ResultRerun,
     ResultString as ResultString,
+    ResultSVG as ResultSVG,
     ResultVar as ResultVar,
     ResultVec as ResultVec,
     ResultVideo as ResultVideo,
