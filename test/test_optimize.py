@@ -137,6 +137,19 @@ def _run_cfg():
     return cfg
 
 
+def _seeded_sampler(seed: int = 0) -> optuna.samplers.TPESampler:
+    """A TPE sampler that suggests the same trials on every run.
+
+    ``optimize`` defaults to an unseeded ``TPESampler``, so a test that reads the
+    shape of the front reads a different front each run. ``MultiObjective`` trades
+    its two objectives off only for ``x`` in ``[0, 3]``: when every random start-up
+    trial lands above 3, one trial dominates the rest, the front is one design, and
+    ``ReduceType.SQUEEZE`` drops ``pareto_rank`` -- about one run in a thousand at
+    eight trials.
+    """
+    return optuna.samplers.TPESampler(seed=seed)
+
+
 def _collect_markdown(panel):
     """Recursively collect all Markdown text from a nested panel layout."""
     import panel as pn
@@ -450,7 +463,11 @@ class TestPlotParetoFront:
         is usually what it cannot. Defaulting to the objectives left that out."""
         bench = bn.Bench("pareto_rv_default", ArrayLike(), run_cfg=_run_cfg())
         result = bench.optimize(
-            result_vars=["obj1", "obj2"], n_trials=6, warm_start=False, plot=False
+            sampler=_seeded_sampler(),
+            result_vars=["obj1", "obj2"],
+            n_trials=6,
+            warm_start=False,
+            plot=False,
         )
         assert result.target_names == ["obj1", "obj2"]
         res = bench.plot_pareto_front(result, auto_plot=False)
@@ -459,7 +476,9 @@ class TestPlotParetoFront:
     def test_the_front_becomes_a_sweep_over_its_rank(self):
         """Each rank re-evaluates one trial's own design, in the order the walk takes."""
         bench = bn.Bench("pareto_sweep", MultiObjective(), run_cfg=_run_cfg())
-        result = bench.optimize(n_trials=12, warm_start=False, plot=False)
+        result = bench.optimize(
+            sampler=_seeded_sampler(), n_trials=12, warm_start=False, plot=False
+        )
         front = result.pareto_trials()
         res = bench.plot_pareto_front(result)
         ds = res.to_dataset(bn.ReduceType.SQUEEZE)
@@ -484,7 +503,7 @@ class TestPlotParetoFront:
         import panel as pn
 
         bench = bn.Bench("pareto_plotly", MultiObjective(), run_cfg=_run_cfg())
-        result = bench.optimize(n_trials=6, warm_start=False, plot=False)
+        result = bench.optimize(sampler=_seeded_sampler(), n_trials=6, warm_start=False, plot=False)
         bench.plot_pareto_front(result)
         tab = bench.report.pane[-1]
         assert tab.name == "Pareto front of obj1 vs obj2"
@@ -498,7 +517,9 @@ class TestPlotParetoFront:
         import panel as pn
 
         bench = bn.Bench("pareto_plotly_one", SphereWithSeed(), run_cfg=_run_cfg())
-        result = bench.optimize(n_trials=4, aggregate=["seed"], agg_fn="mean", plot=False)
+        result = bench.optimize(
+            sampler=_seeded_sampler(), n_trials=4, aggregate=["seed"], agg_fn="mean", plot=False
+        )
         bench.plot_pareto_front(result)
         tab = bench.report.pane[-1]
         assert not [pane for pane in tab.objects if isinstance(pane, pn.pane.Plotly)]
@@ -508,7 +529,12 @@ class TestPlotParetoFront:
         study's own reading of it -- the aggregate -- rides on the rank."""
         bench = bn.Bench("pareto_agg", MultiObjectiveWithSeed(), run_cfg=_run_cfg())
         result = bench.optimize(
-            n_trials=8, aggregate=["seed"], agg_fn="mean", warm_start=False, plot=False
+            sampler=_seeded_sampler(),
+            n_trials=8,
+            aggregate=["seed"],
+            agg_fn="mean",
+            warm_start=False,
+            plot=False,
         )
         front = result.pareto_trials()
         res = bench.plot_pareto_front(result, auto_plot=False)
@@ -525,7 +551,9 @@ class TestPlotParetoFront:
 
     def test_a_single_objective_front_is_the_winner_as_one_rank(self):
         bench = bn.Bench("pareto_one", SphereWithSeed(), run_cfg=_run_cfg())
-        result = bench.optimize(n_trials=6, aggregate=["seed"], agg_fn="mean", plot=False)
+        result = bench.optimize(
+            sampler=_seeded_sampler(), n_trials=6, aggregate=["seed"], agg_fn="mean", plot=False
+        )
         (best,) = result.pareto_trials()
         res = bench.plot_pareto_front(result, auto_plot=False)
         assert res.ds.sizes["pareto_rank"] == 1
@@ -538,20 +566,24 @@ class TestPlotParetoFront:
         run_cfg = _run_cfg()
         run_cfg.subsampling_divisions = 1
         bench = bn.Bench("pareto_thin", MultiObjective(), run_cfg=run_cfg)
-        result = bench.optimize(n_trials=20, warm_start=False, plot=False)
+        result = bench.optimize(
+            sampler=_seeded_sampler(), n_trials=20, warm_start=False, plot=False
+        )
         assert len(result.pareto_trials()) > 2, "the front is too short for thinning to bite"
         res = bench.plot_pareto_front(result, auto_plot=False)
         assert res.ds.sizes["pareto_rank"] == len(result.pareto_trials())
 
     def test_result_vars_are_named_against_the_worker(self):
         bench = bn.Bench("pareto_rv", MultiObjective(), run_cfg=_run_cfg())
-        result = bench.optimize(n_trials=4, warm_start=False, plot=False)
+        result = bench.optimize(sampler=_seeded_sampler(), n_trials=4, warm_start=False, plot=False)
         res = bench.plot_pareto_front(result, result_vars=["obj2"], auto_plot=False)
         assert list(res.ds.data_vars) == ["obj2"]
 
     def test_the_walk_can_follow_the_other_objective(self):
         bench = bn.Bench("pareto_along", MultiObjective(), run_cfg=_run_cfg())
-        result = bench.optimize(n_trials=12, warm_start=False, plot=False)
+        result = bench.optimize(
+            sampler=_seeded_sampler(), n_trials=12, warm_start=False, plot=False
+        )
         res = bench.plot_pareto_front(result, objective="obj2", auto_plot=False)
         obj2 = list(res.to_dataset(bn.ReduceType.SQUEEZE)["obj2"].values)
         # obj2 is maximised, so its walk starts where it is largest.
@@ -561,7 +593,7 @@ class TestPlotParetoFront:
 
     def test_a_study_that_finished_no_trial_has_no_front(self):
         bench = bn.Bench("pareto_empty", MultiObjective(), run_cfg=_run_cfg())
-        result = bench.optimize(n_trials=1, warm_start=False, plot=False)
+        result = bench.optimize(sampler=_seeded_sampler(), n_trials=1, warm_start=False, plot=False)
         result.study = optuna.create_study(directions=["minimize", "maximize"])
         with pytest.raises(ValueError, match="no front"):
             bench.plot_pareto_front(result)
@@ -575,10 +607,13 @@ class TestPlotParetoFront:
         cfg.repeats = 1
         cfg.executor = bn.Executors.MULTIPROCESSING
         bench = bn.Bench("pareto_multiprocessing", MultiObjective(), run_cfg=cfg)
-        result = bench.optimize(n_trials=8, warm_start=False, plot=False)
+        result = bench.optimize(sampler=_seeded_sampler(), n_trials=8, warm_start=False, plot=False)
         res = bench.plot_pareto_front(result, auto_plot=False)
         ds = res.to_dataset(bn.ReduceType.SQUEEZE)
         front = result.pareto_trials()
+        # A front of one squeezes the rank away, which would hide the sweep this test
+        # is about; the seeded sampler is what keeps the front wider than that.
+        assert len(front) > 1
         assert ds.sizes["pareto_rank"] == len(front)
         assert [float(v) for v in ds["obj1"].values] == pytest.approx(
             [trial.params["x"] ** 2 for trial in front]
@@ -629,7 +664,9 @@ class TestPlotParetoFront:
         its own, as wide as the front and every label the same, so it no longer
         travelled with the rank and the read-out could not name it."""
         bench = bn.Bench("pareto_bool_rank", BoolDesign(), run_cfg=_run_cfg())
-        result = bench.optimize(n_trials=12, warm_start=False, plot=False)
+        result = bench.optimize(
+            sampler=_seeded_sampler(), n_trials=12, warm_start=False, plot=False
+        )
         res = bench.plot_pareto_front(result, auto_plot=False)
         ds = res.to_dataset(bn.ReduceType.SQUEEZE)
         assert "boost" not in ds.sizes
