@@ -16,7 +16,7 @@ from bencher.utils import (
     label_with_units,
     listify,
 )
-from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
+from bencher.variables.results import ResultFloat, ResultImage, ResultSVG, ResultVideo
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -623,12 +623,14 @@ class HoloviewResult(PaneResult):
             result_var (Parameter): The result variable to find a container for.
 
         Returns:
-            The panel container type (PNG, Video, or Column). Narrower than a bare
+            The panel container type (PNG, SVG, Video, or Column). Narrower than a bare
             ``type``, so that ``setup_results_and_containers`` calling it produces a
             checked ``Viewable`` rather than an ``Any`` that satisfies any annotation.
         """
         if isinstance(result_var, ResultImage):
             return pn.pane.PNG
+        if isinstance(result_var, ResultSVG):
+            return pn.pane.SVG  # encodes to base64 by default, as ResultSVG.to_container() does
         return pn.pane.Video if isinstance(result_var, ResultVideo) else pn.Column
 
     def setup_results_and_containers(

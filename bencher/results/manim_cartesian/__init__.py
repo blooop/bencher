@@ -1,7 +1,7 @@
 """Cartesian product animation for bencher sweep visualisation.
 
-Uses a PIL-based renderer for fast frame-by-frame rendering.
-No manim dependency required.
+Draws the animation as one self-contained animated SVG (vector frames + SMIL).
+The package name is historical: there is no manim dependency.
 """
 
 from bencher.results.manim_cartesian.cartesian_product_cfg import (

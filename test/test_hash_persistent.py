@@ -37,6 +37,7 @@ from bencher.variables.results import (
     ResultPath,
     ResultReference,
     ResultString,
+    ResultSVG,
     ResultVec,
     ResultVideo,
 )
@@ -167,6 +168,7 @@ class TestHashPersistentDifferentiation:
         ("cls", "units_a", "units_b"),
         [
             (ResultImage, "path", "custom"),
+            (ResultSVG, "path", "custom"),
             (ResultVideo, "path", "custom"),
             (ResultPath, "path", "custom"),
             (ResultString, "str", "custom"),

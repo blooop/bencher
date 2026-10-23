@@ -1358,8 +1358,8 @@ changes, and both are recorded in the CHANGELOG as such.
 
 4. **`Shape` became a real sum type (`Cell` | `Group`), and the pixel-hash tests made it
    safe to do.** The docstring already said "either a leaf or a collection of sub-shapes";
-   the encoding did not. `test_cartesian_pil_renderer.py` asserts MD5s of rendered pixel
-   data for six shapes, so "no visual change" is checked rather than argued — all six
+   the encoding did not. `test_cartesian_svg_renderer.py` (`TestDrawRegression`) asserts
+   MD5s of the rendered markup for six shapes (pixel MD5s when this change landed), so "no visual change" is checked rather than argued — all six
    hashes are unchanged. `Group([])` — constructible before, then dead inside `max()` on
    an empty sequence — is rejected at construction. The test file moved to `Cell()` /
    `Group(children=...)`; `Shape` stays exported as the base type.

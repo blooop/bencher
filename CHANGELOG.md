@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.145.0] - 2026-10-22
+
+### Added
+- **`bn.ResultSVG`, a result type for SVG files.** The report draws each sample as a base64
+  `<img>`, so an SMIL animation in the file plays. It is a sibling of `ResultImage`, not a
+  subclass, and has the same storage spec. Rerun warns and skips it.
+
+### Changed
+- **The Cartesian sampling animation in each report is now an animated SVG, not an APNG.**
+  `render_animation` writes `cartesian_*.svg`. Over 8 benchmark sweeps, the animation adds
+  85% fewer bytes to a gzipped report and renders 87% faster. The gallery page
+  `example_cartesian_animation` drops from 10315 KiB to 167 KiB gzipped. The PIL renderer
+  functions `render_shape_to_image` and `TimelineShape.render_strip_image` are removed.
+- A long stacked dimension (2 × 2 × 240) is 23% larger on disk than its APNG (3066 against
+  2494 KiB), though 5× smaller gzipped. PR #1192 fixes this case.
+
 ## [1.144.0] - 2026-10-20
 
 ### Added

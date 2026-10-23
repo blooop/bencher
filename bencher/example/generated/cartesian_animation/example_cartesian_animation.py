@@ -28,7 +28,7 @@ class CartesianAnimationSweep(bn.ParametrizedSweep):
     strobe_mark_size = 2
     strobe_mark_gap = 4
 
-    animation = bn.ResultImage()
+    animation = bn.ResultSVG()
 
     def benchmark(self):
         all_spatial = [
