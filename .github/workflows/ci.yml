@@ -51,6 +51,9 @@ jobs:
         run: |
           pixi update
           pixi run -e rerun-floor test-rerun
+      - name: Svg tests without seaborn
+        run: |
+          pixi run -e rerun-floor pytest test/test_svg_backend.py
 
   # Re-run the suite with the collect/render split forced on, so every report
   # build goes through save_result -> load_result -> render. Catches any divergence

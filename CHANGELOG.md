@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`backend="svg"` draws charts a GitHub PR description can show.** The `line`, `curve`,
+  `heatmap` and `bar` charts get svg twins drawn with matplotlib: self-contained SVGs with
+  no script, font file or external link. Every swept dimension the chart does not show,
+  `over_time` included, is drawn in the same SVG (see the small multiples entry below).
+  Each twin declares its sweep shapes; other shapes fall back to the twin's own
+  chart. `BenchResult.to_svgs()` and `BenchResult.to_svg_files(dir)` give the SVGs as
+  strings or files. Any existing example draws with it unchanged:
+  `example_x(bn.BenchRunCfg(backend="svg"))`. The docs gallery gets an "SVG Backend"
+  section that runs existing examples this way when the docs build, and
+  `test/test_svg_examples.py` runs every generated example with the svg backend.
+- **The svg backend draws distributions, tables and `ResultDataSet` tables too.**
+  `box_whisker` and `histogram` (auto-selected), and `violin`, `scatter_jitter`,
+  `scatter`, `band`, `table`, `xy_scatter`, `xy_curve`, `xy_histogram` and `xy_hexbin`
+  (by name in `plot_list`, or `to_svgs([...])`) get svg twins with their twins' shape
+  rules. Distribution charts draw every repeat as a dot with a thick median line. The
+  `xy_*` charts draw one frame per sample and take the twin's options (`x=`, `y=`,
+  `column=`, `bins=`...) from the render keywords or the declared `container=` spec.
+  `to_svgs()` with no chart list draws only the auto-selected charts.
+- **The svg backend draws small multiples instead of an animation.** The dims a chart
+  does not put on an axis now get one small panel per combination of values, all visible
+  at once, with shared axes, colour scale, title and legend. A soft CSS highlight walks
+  the panels in sweep order; it stops for `prefers-reduced-motion`, and no mark ever
+  moves. Past `bn.MAX_SVG_PANELS` (12) panels the chart steps through them as frames, as
+  before. `BenchRunCfg(svg_layout="grid" | "frames" | "auto")`, or `svg_layout=` on
+  `to_svgs` / `to_svg_files`, forces either layout.
+- **svg `volume` and `surface`.** `volume` (auto-selected, like its plotly twin) draws
+  three float inputs as filled contour bands of the first two, one panel per value of the
+  third, on one colour scale. `surface` (named-only) draws two float inputs as a 3D
+  surface of the mean from a fixed camera, with every repeat as a dot, one panel per
+  categorical value. Both keep their plotly twins' shape rules and fall back to them.
+- **The svg backend draws with seaborn when it is installed.** A new optional extra,
+  `holobench[seaborn]` (in the pixi dev environments), in a seaborn `svg_style` gives the
+  svg charts one seaborn theme and draws the value and distribution panels with seaborn: a beeswarm of every
+  repeat (a jitter strip when the dots would not fit), seaborn's boxes, violins, bars and
+  lines, a density curve over the histogram, and heatmap cells with gaps and, when big
+  enough, their values. The theme is applied per chart, never to global matplotlib state.
+  In `"plain"`, or without seaborn, the svg backend draws exactly as before.
+- **`svg_style` picks the look of the svg charts.** `BenchRunCfg.svg_style` and the
+  `svg_style=` keyword of `to_svgs()` / `to_svg_files()` take `"seaborn-ticks"` (the
+  default: seaborn's ticks style, white axes, no top or right spine, and its deep palette),
+  `"seaborn"` (seaborn's darkgrid style) or `"plain"` (plain matplotlib, the same bytes as before). Every
+  chart takes the style, the matplotlib-drawn table, `xy_*`, surface and volume included.
+  Without seaborn every style draws `"plain"`, with one log warning. The docs gallery's
+  "SVG Backend" section shows three existing examples in each style.
+
 ## [1.145.0] - 2026-10-22
 
 ### Added

@@ -107,6 +107,10 @@ docs = [
 #`rerun-floor`, the ceiling by the default env. Widen this only with a job to match.
 rerun = ["rerun-sdk>=0.38.0,<0.40", "rerun-notebook>=0.38.0,<0.40"]
 
+#draws the svg backend's panels with seaborn (beeswarms, boxes, violins, densities);
+#without it the svg backend draws the same charts with plain matplotlib
+seaborn = ["seaborn>=0.13.2,<0.14"]
+
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]
 
@@ -119,12 +123,12 @@ include = ["bencher", "CHANGELOG.md"]
 
 # Environments
 [tool.pixi.environments]
-default = { features = ["test", "rerun"], solve-group = "default" }
-docs = { features = ["test", "rerun", "docs"], solve-group = "default" }
-py311 = ["py311", "test", "rerun"]
-py312 = ["py312", "test", "rerun"]
-py313 = ["py313", "test", "rerun"]
-py314 = ["py314", "test", "rerun"]
+default = { features = ["test", "rerun", "seaborn"], solve-group = "default" }
+docs = { features = ["test", "rerun", "seaborn", "docs"], solve-group = "default" }
+py311 = ["py311", "test", "rerun", "seaborn"]
+py312 = ["py312", "test", "rerun", "seaborn"]
+py313 = ["py313", "test", "rerun", "seaborn"]
+py314 = ["py314", "test", "rerun", "seaborn"]
 rerun-floor = ["py313", "test", "rerun-floor"]
 
 [tool.pixi.tasks]

@@ -87,12 +87,15 @@ class TestExplainMatchesSelect(unittest.TestCase):
     def test_rejection_reasons(self):
         reg = get_registry()
         data = self.results["1_float"].to_bench_data()
-        by_name = {d.name: d for d in reg.explain(data)}
-        violin = by_name["violin"]  # named-only builtin
+        # Keyed by backend too: "line" also has an svg twin, which loses to holoviews here.
+        by_key = {(d.name, d.backend): d for d in reg.explain(data)}
+        violin = by_key["violin", "holoviews"]  # named-only builtin
         assert not violin.chosen
         assert "named-only" in violin.reason
-        line = by_name["line"]
-        assert line.chosen
+        assert by_key["line", "holoviews"].chosen
+        svg_line = by_key["line", "svg"]
+        assert not svg_line.chosen
+        assert "superseded" in svg_line.reason
 
     def test_shape_filter_rejection_reason(self):
         """Built-ins register a permissive default filter (shape gating still lives
