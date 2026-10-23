@@ -13,8 +13,17 @@ number with its verdict glyph, and axis labels.
 The motion rule: dots, bars, medians, bands, intervals, text and glyphs never move,
 resize, fade or glow. The only motion is dashes that flow along secondary lines, made
 with stroke-dashoffset on a dashed stroke. Every frame is the complete still chart, and
-``prefers-reduced-motion`` stops all flow. ``--check`` parses every SVG's CSS and fails
-if anything else animates.
+``prefers-reduced-motion`` stops all flow.
+
+The salience rule: every line that flows is salient to the outcome. Three kinds flow:
+the "decision leaders" (short lines from a boundary, 0 or a Δ edge or the commit-noise
+band, to the CI end that beats or fails to beat it), the median connector of a ▲▼ panel
+(the size of the change), and the outline of the runs that drive a binary result. Pair
+lines are still, except on the estimation plate.
+
+``--check`` parses every SVG's CSS and fails if anything else animates, if an animated
+element is not one of those three kinds, or if a leader does not start on a boundary and
+end on a CI end.
 """
 
 # ruff: noqa: PLR2004, RUF001
@@ -23,10 +32,12 @@ if anything else animates.
 
 from __future__ import annotations
 
+import itertools
 import math
 import re
 import sys
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from pathlib import Path
 from statistics import NormalDist
 from typing import NamedTuple
@@ -350,7 +361,7 @@ def nice_ticks(lo: float, hi: float, n: int = 4) -> list[float]:
     return out
 
 
-def swarm(pos: list[float], r: float, one_sided: bool = False) -> list[float]:
+def swarm(pos: list[float], r: float, *, one_sided: bool = False) -> list[float]:
     """Return offsets that place dots of radius r at pos without overlap (a beeswarm)."""
     d = 2 * r + 0.8
     out = [0.0] * len(pos)
@@ -418,10 +429,10 @@ PATTERNS = {
     "P2": ("dash 4-4", 4.0, 4.0),
     "P3": ("dash 8-6", 8.0, 6.0),
 }
-# C: the stroke opacity of the flowing pair lines
+# C: the stroke opacity of the flowing leaders
 CONTRASTS = {"C1": 0.35, "C2": 0.6, "C3": 0.9}
 DEFAULT = Look("S2P2C2", 8.0, 4.0, 4.0, 0.6)
-EDGE = Look("edge", 4.0, 1.0, 3.0, 0.9)  # the ±Δ band edges: fine dots, slow
+LEAD = Look("lead", 8.0, 4.0, 4.0, 0.9)  # the decision leaders: C3, short lines need it
 
 BASE_CSS = f"""
 text{{font-family:{SANS}}}
@@ -431,13 +442,6 @@ text{{font-family:{SANS}}}
 .dash{{stroke-dasharray:4 4}}
 """
 REDUCED = "\n@media (prefers-reduced-motion:reduce){.fl{animation:none!important}}\n"
-
-
-def size_look(look: Look, size: float, typical: float) -> Look:
-    """Return look with its speed scaled by size / typical (the E1 variant)."""
-    speed = look.speed * min(max(size / typical, 0.4), 2.5)
-    speed = round(speed * 2) / 2
-    return look._replace(code=f"E{speed}", speed=speed)
 
 
 ARMS = [("f-base", "base"), ("f-cand", "candidate")]
@@ -502,10 +506,155 @@ class Plate:
         )
 
 
-# ---------------------------------------------------------------- shared marks
+# ---------------------------------------------------------------- decision leaders
 
 
 MOVED = {"improved", "regressed"}
+SAME = {"equiv", "small"}
+
+
+class Lead(NamedTuple):
+    """One decision leader: a short line from a boundary to the CI end it decides.
+
+    start and end are raw values (log ratio or proportion), not oriented. offset is True
+    when the leader runs along the CI itself, so it is drawn beside the CI and joins the
+    CI end with a short step.
+    """
+
+    role: str  # "zero", "delta", "edge", "cross" or "band"
+    start: float
+    end: float
+    offset: bool
+
+
+def kind_of(ci: tuple[float, float], *, lower_better: bool, d: float = MARGIN) -> str:
+    a, b = ci
+    return verdict(-b, -a, d) if lower_better else verdict(a, b, d)
+
+
+def decision_leads(
+    ci: tuple[float, float], *, lower_better: bool, d: float = MARGIN
+) -> tuple[str, list[Lead]]:
+    """Return the verdict of ci and the leaders that show how it was decided.
+
+    Improved or regressed: 0 to the CI end nearest 0, then the Δ edge to the far end.
+    Equivalent: each Δ edge to its nearby CI end, inward. Inconclusive: each Δ edge the CI
+    crosses, outward along the part of the CI beyond it.
+    """
+    a, b = ci
+    kind = kind_of(ci, lower_better=lower_better, d=d)
+    if kind in MOVED:
+        near, far = (a, b) if a > 0 else (b, a)
+        leads = [Lead("zero", 0.0, near, offset=False)]
+        if abs(far) > d:
+            leads.append(Lead("delta", math.copysign(d, far), far, offset=True))
+        return kind, leads
+    if kind in SAME:
+        return kind, [Lead("edge", d, b, offset=False), Lead("edge", -d, a, offset=False)]
+    leads = []
+    if b > d:
+        leads.append(Lead("cross", d, b, offset=True))
+    if a < -d:
+        leads.append(Lead("cross", -d, a, offset=True))
+    return kind, leads
+
+
+Pt = Callable[[float, float], tuple[float, float]]
+
+
+def draw_leads(
+    pl: Plate,
+    kind: str,
+    leads: list[Lead],
+    pt: Pt,
+    off: float,
+    cap: float,
+    look: Look = LEAD,
+) -> str:
+    """Draw each leader as a dashed path from its boundary to its CI end.
+
+    pt(v, o) is the point of value v on the CI's axis, o px to the side of it. An offset
+    leader runs off px beside the CI and steps in to the CI end's vertex at cap px.
+    """
+    mark = VERDICT[kind][0]
+    out = []
+    for ld in leads:
+        o = off if ld.offset else 0.0
+        pts = [pt(ld.start, o), pt(ld.end, o)]
+        if ld.offset:
+            pts.append(pt(ld.end, cap))
+        d = "M" + "L".join(f"{num(x)} {num(y)}" for x, y in pts)
+        out.append(
+            el(
+                "path",
+                d=d,
+                cls=f"s-{mark} lead {pl.flow(look)}",
+                fill="none",
+                stroke_width=2.2,
+                stroke_opacity=look.opacity,
+                stroke_linejoin="round",
+                data_role=ld.role,
+                data_verdict=kind,
+            )
+        )
+    return "".join(out)
+
+
+def h_axis(
+    xs: Callable[[float], float],
+    y0: float,
+    y1: float,
+    d: float,
+    ticks: list[tuple[float, str]],
+    label_y: float,
+) -> str:
+    """Draw a horizontal change axis: the ±d band, the 0 line and the ticks."""
+    out = [rect(xs(-d), y0, xs(d) - xs(-d), y1 - y0, "f-band s-bandEdge bound", stroke_width=1)]
+    for v, lab in ticks:
+        if v:
+            out.append(line(xs(v), y0, xs(v), y1, "s-grid"))
+        out.append(text(xs(v), label_y, lab, "mono f-muted", FS, "middle"))
+    out.append(line(xs(0), y0, xs(0), y1, "s-muted bound", 1.5))
+    return "".join(out)
+
+
+def h_row(
+    pl: Plate,
+    xs: Callable[[float], float],
+    y: float,
+    ci: tuple[float, float],
+    est: float,
+    *,
+    lower_better: bool,
+    d: float = MARGIN,
+    still_same: bool = False,
+    look: Look = LEAD,
+) -> str:
+    """Draw one CI on a horizontal axis with its decision leaders; return the SVG."""
+    kind, leads = decision_leads(ci, lower_better=lower_better, d=d)
+    mark = VERDICT[kind][0]
+    x0, x1 = xs(ci[0]), xs(ci[1])
+    path = (
+        f"M{num(x0)} {num(y - 5)}V{num(y + 5)}M{num(x0)} {num(y)}H{num(x1)}"
+        f"M{num(x1)} {num(y - 5)}V{num(y + 5)}"
+    )
+    out = [
+        el(
+            "path",
+            d=path,
+            cls=f"s-{mark} ci",
+            fill="none",
+            stroke_width=2.5,
+            stroke_linecap="round",
+        ),
+        circle(xs(est), y, 4.5, f"f-{mark} s-plate", stroke_width=1.5),
+    ]
+    if not (still_same and kind in SAME):
+        out.append(draw_leads(pl, kind, leads, lambda v, o: (xs(v), y + o), -9, -5, look))
+    return "".join(out)
+
+
+# ---------------------------------------------------------------- shared marks
 
 
 def dot_panel(
@@ -521,32 +670,35 @@ def dot_panel(
     hi: float,
     ci: tuple[float, float],
     est: float,
-    kind: str,
     lower_better: bool = True,
     ticks: list[float] | None = None,
-    tick_fmt=None,
+    tick_fmt: Callable[[float], str] | None = None,
     tick_labels: bool = True,
     labels: str = "two",
     r: float = 4.5,
     boots: list[float] | None = None,
-    mark_glyph: bool = False,
-    flows: tuple[str, ...] = (),
-    look: Look = DEFAULT,
-    size_speed: bool = False,
+    lead: str = "all",
+    pairs_flow: bool = False,
+    connector: bool = False,
+    look: Look = LEAD,
 ) -> str:
     """Draw base and candidate as beeswarm dot columns on the metric's own axis.
 
-    The ±Δ band sits around the base median. The bracket beside the candidate column is
-    the CI of the shift, drawn where it puts the candidate median (base median x shift).
-    flows names the secondary lines that flow: "pairs" (base run to its candidate run),
-    "connector" (base median to candidate median), "ref" (the base median carried across
-    the candidate column) and "edges" (the band edges). Lines flow only for a change.
+    The ±Δ band sits around the base median, and a thin line marks the base median: the
+    0 of the shift. The bracket beside the candidate column is the CI of the shift, drawn
+    where it puts the candidate median. The leaders run from 0 or a Δ edge to a bracket
+    end. lead is "all", "moved" (none on a ≈ panel) or "none". connector draws the base
+    median to candidate median line, which flows on a ▲▼ panel and is still on ≈ and ?.
+    pairs_flow adds flowing dashes on the pair lines; only the estimation plate may use it.
     """
     out = []
 
     def ys(v: float) -> float:
         return y1 - (v - lo) / (hi - lo) * (y1 - y0)
 
+    kind, leads = decision_leads(ci, lower_better=lower_better)
+    if lead == "none" or (lead == "moved" and kind in SAME):
+        leads = []
     px = x0 + (48 if tick_labels else 0)
     wid = x1 - px
     cb, cc = px + wid * 0.27, px + wid * 0.6
@@ -555,23 +707,18 @@ def dot_panel(
         if tick_labels and tick_fmt:
             out.append(text(px - 7, ys(t) + 5, tick_fmt(t), "mono f-muted", FS, "end"))
     bmed, cmed = quant(base, 0.5), quant(cand, 0.5)
-    top, bot = ys(bmed * math.exp(MARGIN)), ys(bmed * math.exp(-MARGIN))
-    moved = kind in MOVED
-    if "edges" in flows:
-        out.append(rect(px + 2, top, x1 - px - 4, bot - top, "f-band"))
-        mid = (px + x1) / 2
-        cls = pl.flow(EDGE)
-        for yy in (top, bot):  # each edge flows from both ends toward the middle
-            out += [
-                line(px + 2, yy, mid, yy, f"s-ink2 {cls}", 1.6, stroke_opacity=EDGE.opacity),
-                line(x1 - 2, yy, mid, yy, f"s-ink2 {cls}", 1.6, stroke_opacity=EDGE.opacity),
-            ]
-    else:
-        out.append(rect(px + 2, top, x1 - px - 4, bot - top, "f-band s-bandEdge", stroke_width=1))
+
+    def yv(v: float) -> float:  # a shift v (log ratio), placed against the base median
+        return ys(bmed * math.exp(v))
+
+    top, bot = yv(MARGIN), yv(-MARGIN)
+    out.append(rect(px + 2, top, x1 - px - 4, bot - top, "f-band s-bandEdge bound", stroke_width=1))
     pb, pc = [ys(v) for v in base], [ys(v) for v in cand]
     ob, oc = swarm(pb, r), swarm(pc, r)
     mark, _, _ = VERDICT[kind]
-    typical = mean([abs(math.log(c / b)) for b, c in zip(base, cand, strict=True)])
+    hws = [min(max(abs(o) for o in offs) + r + 5, wid * 0.15) for offs in (ob, oc)]
+    bx = min(cc + max(abs(o) for o in oc) + r + 14, x1 - 8)
+    out.append(line(cb + hws[0], yv(0), min(bx + 12, x1 - 2), yv(0), "s-muted bound", 1.2))
     for i in range(len(base)):
         better = (cand[i] < base[i]) == lower_better
         tok = "cand" if better else "worse"
@@ -579,68 +726,60 @@ def dot_panel(
         out.append(
             line(xa, pb[i], xb, pc[i], f"s-{tok}", 1.2, stroke_opacity=0.3 if better else 0.6)
         )
-        if "pairs" in flows and moved:  # dashes flow from the base run to its candidate run
-            lk = size_look(look, abs(math.log(cand[i] / base[i])), typical) if size_speed else look
-            out.append(
-                line(xa, pb[i], xb, pc[i], f"s-{tok} {pl.flow(lk)}", 1.6, stroke_opacity=lk.opacity)
-            )
-    hws = [min(max(abs(o) for o in offs) + r + 5, wid * 0.15) for offs in (ob, oc)]
-    bx = min(cc + max(abs(o) for o in oc) + r + 14, x1 - 8)
-    if "ref" in flows:  # the base median, carried across the candidate column
-        cls = pl.flow(look) if moved else "dash"
-        out.append(line(cb + hws[0], ys(bmed), bx - 12, ys(bmed), f"s-ink2 {cls}", 1.8))
+        if pairs_flow and kind in MOVED:  # dashes flow from the base run to its candidate run
+            cls = f"s-{tok} pairflow {pl.flow(DEFAULT)}"
+            out.append(line(xa, pb[i], xb, pc[i], cls, 1.6, stroke_opacity=DEFAULT.opacity))
     out += [
         circle(cb + o, p, r, "f-base s-plate", stroke_width=1) for o, p in zip(ob, pb, strict=True)
     ]
     out += [
         circle(cc + o, p, r, "f-cand s-plate", stroke_width=1) for o, p in zip(oc, pc, strict=True)
     ]
-    if "connector" in flows:
-        cls = pl.flow(look) if moved else "dash"
+    if connector:  # base median to candidate median: the size of the change
+        moved = kind in MOVED
+        cls = f"s-{mark} medflow {pl.flow(look)}" if moved else f"s-{mark} dash"
         out.append(
             line(
                 cb + hws[0] + 4,
                 ys(bmed),
                 cc - hws[1] - 4,
                 ys(cmed),
-                f"s-{mark} {cls}",
+                cls,
                 2.5,
-                stroke_opacity=1 if moved else 0.6,
+                stroke_opacity=1 if moved else 0.5,
             )
         )
     for (cx, med, tok), hw in zip(((cb, bmed, "base"), (cc, cmed, "cand")), hws, strict=True):
         bar = line(cx - hw, ys(med), cx + hw, ys(med), "s-plate", 9, stroke_linecap="round")
         bar += line(cx - hw, ys(med), cx + hw, ys(med), f"s-{tok}", 5, stroke_linecap="round")
         out.append(bar)
-    y_lo, y_hi = sorted((ys(bmed * math.exp(ci[0])), ys(bmed * math.exp(ci[1]))))
+    y_lo, y_hi = sorted((yv(ci[0]), yv(ci[1])))
     out.append(
         el(
             "path",
             d=f"M{num(bx - 7)} {num(y_lo)}H{num(bx)}V{num(y_hi)}H{num(bx - 7)}",
-            cls=f"s-{mark}",
+            cls=f"s-{mark} ci",
             fill="none",
             stroke_width=3,
             stroke_linecap="round",
             stroke_linejoin="round",
         )
     )
-    ye = ys(bmed * math.exp(est))
+    ye = yv(est)
     out.append(line(bx - 9, ye, bx + 3, ye, f"s-{mark}", 3, stroke_linecap="round"))
     if boots:
-        step = 2.5
+        step, hx = 2.5, bx + 18
         hist: dict[int, int] = {}
         for b in boots:
-            k = round(ys(bmed * math.exp(b)) / step)
+            k = round(yv(b) / step)
             hist[k] = hist.get(k, 0) + 1
         hm = max(hist.values())
         ks = range(min(hist) - 1, max(hist) + 2)
-        d = f"M{num(bx + 8)} {num(ks[0] * step)}"
-        d += "".join(f"L{num(bx + 8 + hist.get(k, 0) / hm * 44)} {num(k * step)}" for k in ks)
-        d += f"L{num(bx + 8)} {num(ks[-1] * step)}Z"
+        d = f"M{num(hx)} {num(ks[0] * step)}"
+        d += "".join(f"L{num(hx + hist.get(k, 0) / hm * 44)} {num(k * step)}" for k in ks)
+        d += f"L{num(hx)} {num(ks[-1] * step)}Z"
         out.append(el("path", d=d, cls=f"f-{mark} s-{mark}", fill_opacity=0.22, stroke_width=1))
-    if mark_glyph:
-        g, _ = glyph(kind, bx - 9, y_lo - 9, FS + 1)
-        out.append(g)
+    out.append(draw_leads(pl, kind, leads, lambda v, o: (bx + o, yv(v)), 6, 0, look))
     if labels == "two":
         for cx, name, n in ((cb, "base", len(base)), (cc, "candidate", len(cand))):
             out += [
@@ -701,51 +840,209 @@ def axis_range(vals: list[float], pad: float = 0.08) -> tuple[float, float]:
     return lo - span * pad, hi + span * pad
 
 
+def pct_ticks(lo: float, hi: float, n: int = 5) -> list[tuple[float, str]]:
+    """Return (log ratio, label) ticks at nice whole percentages between lo and hi."""
+    return [
+        (math.log(1 + t / 100), "0" if t == 0 else f"{fmt(t, 0)} %")
+        for t in nice_ticks(pct(lo), pct(hi), n)
+    ]
+
+
 def plan_kind() -> str:
-    return verdict(-C90[1], -C90[0], MARGIN)
+    return kind_of(C90, lower_better=True)
 
 
 def plan_title() -> str:
     return f"Planning is {abs(pct(EST)):.0f} % faster"
 
 
-# ---------------------------------------------------------------- section 1: where flow goes
+# startup_time: a third paired metric on the same runs, too noisy to decide
+_UR = XorShift(89)
+UNS: list[Pair] = []
+for _s in range(4):
+    for _p in range(5):
+        _b = 1.6 * SHARD_SPEED[_s] * math.exp(0.08 * _UR.norm())
+        _c = _b * math.exp(math.log(1.02) + 0.11 * _UR.norm())
+        UNS.append(Pair(_s, _p, _b, _c, "BA" if _p % 2 else "AB"))
+UNS_LD = [math.log(p.cand / p.base) for p in UNS]
+UNS_EST = mean(UNS_LD)
+UNS_C90 = bca(UNS_LD, _boot(_UR, UNS_LD))
+
+# the design plate: a metric with no real change, on VMs that slow down run by run
+_DR = XorShift(77)
+DRIFT = 0.008  # log slowdown per run on a VM
+_TRUE = math.log(1.004)
+DES: list[Pair] = []
+for _s in range(4):
+    _t = 0
+    for _p in range(5):
+        _o = "BA" if _p % 2 else "AB"
+        _v = {}
+        for _arm in _o:
+            _v[_arm] = (
+                12.0
+                * SHARD_SPEED[_s]
+                * math.exp(DRIFT * _t + 0.03 * _DR.norm() + (_TRUE if _arm == "B" else 0))
+            )
+            _t += 1
+        DES.append(Pair(_s, _p, _v["A"], _v["B"], _o))
+_m, _a, _b2 = t_ci([math.log(p.cand / p.base) for p in DES], 1.729)
+DES_PAIRED = (_m, (_a, _b2))
+_blk = [
+    math.log(12.0 * math.exp(DRIFT * t + 0.03 * _DR.norm() + (_TRUE if t >= 10 else 0)))
+    for t in range(20)
+]
+_d = mean(_blk[10:]) - mean(_blk[:10])
+_h = 1.734 * math.sqrt(sd(_blk[:10]) ** 2 / 10 + sd(_blk[10:]) ** 2 / 10)
+DES_BLOCKED = (_d, (_d - _h, _d + _h))
 
 
-def plate_est(code: str, flows: tuple[str, ...], look: Look = DEFAULT) -> Plate:
-    """Draw planning_time as two dot columns, with flows on the named secondary lines."""
-    kind = plan_kind()
-    desc = (
-        f"planning_time, 20 ABBA pairs on 4 VMs: {sum(p.cand < p.base for p in PAIRS)} of 20 "
-        f"pairs faster. Effect {fmt(pct(EST))} %, 90 % CI [{fmt(pct(C90[0]))}, "
-        f"{fmt(pct(C90[1]))}] %."
-    )
-    pl = Plate(plan_title(), 480, desc, (kind, f"{fmt(pct(EST))} %"), code)
-    lo, hi = axis_range([p.base for p in PAIRS] + [p.cand for p in PAIRS])
+# ---------------------------------------------------------------- the decision plates
+
+
+def _metric_panel(
+    pl: Plate,
+    x0: float,
+    name: str,
+    pairs: list[Pair],
+    ci: tuple[float, float],
+    est: float,
+    lead: str,
+) -> None:
+    """Draw one paired metric: its name, its effect and glyph, and its dot panel."""
+    kind = kind_of(ci, lower_better=True)
+    big = f"{fmt(pct(est))} %"
+    g, _ = glyph(kind, x0 + len(big) * 15.5 + 8, 116, 26)
+    pl.add(text(x0, 80, name, "mono f-ink2"), text(x0, 116, big, "f-ink bb", 28), g)
+    lo, hi = axis_range([p.base for p in pairs] + [p.cand for p in pairs])
     pl.add(
         dot_panel(
             pl,
-            x0=20,
-            x1=500,
-            y0=80,
-            y1=420,
-            base=[p.base for p in PAIRS],
-            cand=[p.cand for p in PAIRS],
+            x0=x0,
+            x1=x0 + 244,
+            y0=140,
+            y1=360,
+            base=[p.base for p in pairs],
+            cand=[p.cand for p in pairs],
             lo=lo,
             hi=hi,
-            ci=C90,
-            est=EST,
-            kind=kind,
-            ticks=nice_ticks(lo, hi, 5),
-            tick_fmt=lambda t: f"{t:.1f} s",
-            labels="one",
-            r=5.5,
-            boots=BOOTS,
-            flows=flows,
-            look=look,
-        ),
-        run_rows(Strip(540, 120, cell=14, pair_gap=5, pitch=24, label_w=54), abba_rows(PAIRS)),
-        text(594, 236, "run order →", "f-muted"),
+            ci=ci,
+            est=est,
+            ticks=nice_ticks(lo, hi),
+            tick_fmt=lambda t: f"{t:g}",
+            r=4,
+            lead=lead,
+            connector=True,
+        )
+    )
+
+
+def plate_verdicts(code: str) -> Plate:
+    desc = (
+        f"Three paired metrics, one per verdict. planning_time {fmt(pct(EST))} %, improved: "
+        f"leaders from 0 and from the -5 % edge to the CI. tracking_error "
+        f"{fmt(pct(TRACK_EST))} %, equivalent: leaders from each ±5 % edge in to the CI. "
+        f"startup_time {fmt(pct(UNS_EST))} %, inconclusive: a leader along the part of the "
+        "CI beyond +5 %."
+    )
+    pl = Plate("Better, same, unclear", 420, desc, code=code)
+    for i, (name, pairs, ci, est) in enumerate(
+        (
+            ("planning_time · s", PAIRS, C90, EST),
+            ("tracking_error · mm", TRACK, TRACK_C90, TRACK_EST),
+            ("startup_time · s", UNS, UNS_C90, UNS_EST),
+        )
+    ):
+        _metric_panel(pl, 20 + i * 258, name, pairs, ci, est, "all")
+    return pl
+
+
+def _run_squares(
+    pl: Plate,
+    x0: float,
+    y0: float,
+    spec: tuple[int, int, str, int, float],
+    changed: set[int],
+    look: Look = LEAD,
+) -> None:
+    """Draw n runs as squares, a cross for each failure.
+
+    The runs whose outcome differs from base get one flowing outline per row run of them:
+    they are the runs that drive the binary result.
+    """
+    n, fails, tok, cols, c = spec
+    g = c * 0.25
+    for i in range(n):
+        r, k = divmod(i, cols)
+        x, y = x0 + k * (c + g), y0 + r * (c + g)
+        if i >= n - fails:
+            h = num(c / 2)
+            cross = f"M{num(x + c * 0.25)} {num(y + c * 0.25)}l{h} {h}m0 -{h}l-{h} {h}"
+            pl.add(
+                rect(x, y, c, c, "f-plate s-worse", rx=3, stroke_width=2),
+                el("path", d=cross, cls="s-worse", stroke_width=2),
+            )
+            continue
+        pl.add(rect(x, y, c, c, f"f-{tok}", rx=3))
+    runs: list[list[int]] = []
+    for i in sorted(changed):
+        if runs and runs[-1][-1] == i - 1 and i % cols:
+            runs[-1].append(i)
+        else:
+            runs.append([i])
+    for run in runs:
+        r, k = divmod(run[0], cols)
+        x, y = x0 + k * (c + g), y0 + r * (c + g)
+        wide = len(run) * c + (len(run) - 1) * g
+        pl.add(
+            rect(
+                x - 3.5,
+                y - 3.5,
+                wide + 7,
+                c + 7,
+                f"s-better runflag {pl.flow(look)}",
+                rx=5,
+                fill="none",
+                stroke_width=2,
+            )
+        )
+
+
+def plate_scorecard(code: str) -> Plate:
+    k_track = kind_of(TRACK_C90, lower_better=True)
+    desc = (
+        f"planning_time {fmt(pct(EST))} % (90 % CI {fmt(pct(C90[0]))} to {fmt(pct(C90[1]))}), "
+        f"improved; task_success {TS_BASE}/{TS_N} to {TS_CAND}/{TS_N}, {TS_TXT}, 90 % CI "
+        f"{TS_CI_TXT}, inconclusive; tracking_error_rms {fmt(pct(TRACK_EST))} %, "
+        f"{k_track}, still. Paired ABBA, 20 pairs on 4 VMs."
+    )
+    pl = Plate(plan_title(), 536, desc, code=code)
+    _metric_panel(pl, 20, "planning_time · s", PAIRS, C90, EST, "moved")
+    x0 = 278
+    g, _ = glyph(TS_KIND, x0 + len(TS_TXT) * 15.5 + 8, 116, 26)
+    pl.add(text(x0, 80, "task_success", "mono f-ink2"), text(x0, 116, TS_TXT, "f-ink bb", 28), g)
+    px, x1 = x0 + 30, x0 + 244
+    for cx, fails, tok, name, count, changed in (
+        (px + 50, TS_N - TS_BASE, "base", "base", f"{TS_BASE}/{TS_N}", set()),
+        (px + 140, TS_N - TS_CAND, "cand", "candidate", f"{TS_CAND}/{TS_N}", {TS_BASE}),
+    ):
+        _run_squares(pl, cx - 32, 150, (TS_N, fails, tok, 3, 18), changed)
+        pl.add(
+            text(cx, 386, name, "f-ink2", FS, "middle"),
+            text(cx, 405, count, "mono f-muted", FS, "middle"),
+        )
+
+    def xs(v: float) -> float:
+        return px + (v + 0.3) / 0.6 * (x1 - px)
+
+    pl.add(
+        h_axis(xs, 306, 334, 0.05, [(0, "0")], 352),
+        h_row(pl, xs, 320, TS_CI, TS_DIFF, lower_better=False, d=0.05),
+    )
+    _metric_panel(pl, 536, "tracking_error · mm", TRACK, TRACK_C90, TRACK_EST, "moved")
+    pl.add(
+        run_rows(Strip(20, 430), abba_rows(PAIRS)),
+        text(308, 442, "run order →", "f-muted"),
     )
     return pl
 
@@ -759,8 +1056,7 @@ class Metric(NamedTuple):
 
     @property
     def kind(self) -> str:
-        a0, a1 = self.ci
-        return verdict(a0, a1, MARGIN) if self.direction == "max" else verdict(-a1, -a0, MARGIN)
+        return kind_of(self.ci, lower_better=self.direction == "min")
 
 
 def forest_metrics() -> list[Metric]:
@@ -805,10 +1101,10 @@ def forest_title(rows: list[Metric]) -> str:
     return f"{n_imp} better, {n_un} unclear, {n_eq} same"
 
 
-def plate_forest(code: str, look: Look = DEFAULT) -> Plate:
+def plate_forest(code: str) -> Plate:
     rows = forest_metrics()
     desc = "12 metrics, change vs base with 90 % CI, ±5 % band: " + "; ".join(
-        f"{r.name} {fmt(pct(r.est))} %" for r in rows
+        f"{r.name} {fmt(pct(r.est))} % {r.kind}" for r in rows
     )
     pitch, top = 38, 92
     bottom = top + pitch * (len(rows) - 1)
@@ -819,19 +1115,9 @@ def plate_forest(code: str, look: Look = DEFAULT) -> Plate:
     def xs(v: float) -> float:
         return ax0 + (v - lo) / (hi - lo) * (ax1 - ax0)
 
-    pl.add(rect(xs(-MARGIN), top - 24, xs(MARGIN) - xs(-MARGIN), bottom - top + 48, "f-band"))
-    for t in nice_ticks(pct(lo), pct(hi), 5):
-        x = xs(math.log(1 + t / 100))
-        pl.add(
-            line(
-                x, top - 24, x, bottom + 24, "s-muted" if t == 0 else "s-grid", 1.5 if t == 0 else 1
-            ),
-            text(x, bottom + 46, "0" if t == 0 else f"{fmt(t, 0)} %", "mono f-muted", FS, "middle"),
-        )
+    pl.add(h_axis(xs, top - 24, bottom + 24, MARGIN, pct_ticks(lo, hi), bottom + 46))
     for i, r in enumerate(rows):
         y = top + i * pitch
-        kind = r.kind
-        mark, _, _ = VERDICT[kind]
         pl.add(text(20, y + 5, r.name, "mono f-ink2"))
         dx = [xs(d) for d in r.diffs]
         pl.add(
@@ -840,22 +1126,10 @@ def plate_forest(code: str, look: Look = DEFAULT) -> Plate:
                 for x, o in zip(dx, swarm(dx, 2.2, one_sided=True), strict=True)
             )
         )
-        yc = y - 6
-        if kind in MOVED:  # flows from 0 toward the estimate
-            pl.add(line(xs(0), yc, xs(r.est), yc, f"s-{mark} {pl.flow(look)}", 2.2))
         pl.add(
-            el(
-                "path",
-                d=f"M{num(xs(r.ci[0]))} {num(yc - 5)}v10M{num(xs(r.ci[0]))} {num(yc)}"
-                f"H{num(xs(r.ci[1]))}M{num(xs(r.ci[1]))} {num(yc - 5)}v10",
-                cls=f"s-{mark}",
-                fill="none",
-                stroke_width=2.5,
-                stroke_linecap="round",
-            ),
-            circle(xs(r.est), yc, 4.5, f"f-{mark} s-plate", stroke_width=1.5),
+            h_row(pl, xs, y - 6, r.ci, r.est, lower_better=r.direction == "min", still_same=True)
         )
-        g, _ = glyph(kind, ax1 + 22, y + 5, FS + 3)
+        g, _ = glyph(r.kind, ax1 + 22, y + 5, FS + 3)
         pl.add(g)
     pl.add(
         text((ax0 + ax1) / 2, bottom + 70, "change vs base", "f-ink2", FS, "middle"),
@@ -864,7 +1138,109 @@ def plate_forest(code: str, look: Look = DEFAULT) -> Plate:
     return pl
 
 
-def plate_sweep(code: str, look: Look = DEFAULT) -> Plate:
+def plate_est(code: str, look: Look = LEAD, *, pairs_flow: bool = False) -> Plate:
+    """Draw planning_time as two dot columns, with the leaders on the CI."""
+    kind = plan_kind()
+    desc = (
+        f"planning_time, 20 ABBA pairs on 4 VMs: {sum(p.cand < p.base for p in PAIRS)} of 20 "
+        f"pairs faster. Effect {fmt(pct(EST))} %, 90 % CI [{fmt(pct(C90[0]))}, "
+        f"{fmt(pct(C90[1]))}] %, below the -5 % edge."
+    )
+    pl = Plate(plan_title(), 480, desc, (kind, f"{fmt(pct(EST))} %"), code)
+    lo, hi = axis_range([p.base for p in PAIRS] + [p.cand for p in PAIRS])
+    pl.add(
+        dot_panel(
+            pl,
+            x0=20,
+            x1=500,
+            y0=80,
+            y1=420,
+            base=[p.base for p in PAIRS],
+            cand=[p.cand for p in PAIRS],
+            lo=lo,
+            hi=hi,
+            ci=C90,
+            est=EST,
+            ticks=nice_ticks(lo, hi, 5),
+            tick_fmt=lambda t: f"{t:.1f} s",
+            labels="one",
+            r=5.5,
+            boots=BOOTS,
+            connector=True,
+            pairs_flow=pairs_flow,
+            look=look,
+        ),
+        run_rows(Strip(540, 120, cell=14, pair_gap=5, pitch=24, label_w=54), abba_rows(PAIRS)),
+        text(594, 236, "run order →", "f-muted"),
+    )
+    return pl
+
+
+SK_CI = newcombe(SK_BASE, SK_N, SK_CAND, SK_N)  # candidate kill rate minus base
+SK_DIFF = (SK_CAND - SK_BASE) / SK_N
+
+
+def plate_waffle(code: str) -> Plate:
+    sk_kind = kind_of(SK_CI, lower_better=True, d=0.05)
+    desc = (
+        f"task_success {TS_BASE}/{TS_N} to {TS_CAND}/{TS_N}: {TS_TXT}, 90 % CI {TS_CI_TXT}, "
+        f"past the +5 pp edge and across 0: inconclusive. required_sigkill: base "
+        f"{SK_BASE}/{SK_N} killed, candidate {SK_CAND}/{SK_N}, 90 % CI "
+        f"[{fmt(SK_CI[0] * 100)}, {fmt(SK_CI[1] * 100)}] pp: {sk_kind}."
+    )
+    pl = Plate("Flake fixed; success still unclear", 340, desc, code=code)
+    g, _ = glyph(TS_KIND, 138, 120, 26)
+    pl.add(
+        text(20, 82, "task_success", "mono f-ink2"),
+        text(20, 120, TS_TXT, "f-ink bb", 28),
+        g,
+        text(20, 165, "base"),
+        text(20, 215, "candidate"),
+    )
+    _run_squares(pl, 110, 146, (TS_N, TS_N - TS_BASE, "base", 9, 18), set())
+    flipped = set(range(TS_BASE, TS_CAND))  # failed on base, passed on the candidate
+    _run_squares(pl, 110, 196, (TS_N, TS_N - TS_CAND, "cand", 9, 18), flipped)
+    pl.add(
+        text(330, 165, f"{TS_BASE}/{TS_N}", "mono f-muted"),
+        text(330, 215, f"{TS_CAND}/{TS_N}", "mono f-muted"),
+    )
+
+    def sc(v: float) -> float:
+        return 110 + (v + 0.3) / 0.6 * 220
+
+    pp = [(v, "0" if v == 0 else f"{fmt(v * 100, 0)} pp") for v in (-0.2, 0, 0.2)]
+    pl.add(
+        text(20, 277, "change"),
+        h_axis(sc, 257, 285, 0.05, pp, 310),
+        h_row(pl, sc, 271, TS_CI, TS_DIFF, lower_better=False, d=0.05),
+    )
+    fx = 420
+    g, _ = glyph(sk_kind, fx + 226, 120, 26)
+    pl.add(
+        text(fx, 82, "required_sigkill", "mono f-ink2"),
+        text(fx, 120, f"{SK_BASE / SK_N * 100:.0f} % → ≤ {SK_BOUND * 100:.1f} %", "f-ink bb", 28),
+        g,
+        text(fx, 165, "base"),
+        text(fx, 215, "candidate"),
+    )
+    _run_squares(pl, fx + 90, 150, (SK_N, SK_BASE, "base", 15, 14), set())
+    killed = set(range(SK_N - SK_BASE, SK_N))  # killed on base, clean on the candidate
+    _run_squares(pl, fx + 90, 200, (SK_N, SK_CAND, "cand", 15, 14), killed)
+    rx0, rx1 = fx + 90, 770
+
+    def rs(v: float) -> float:
+        return rx0 + (v + 0.3) / 0.4 * (rx1 - rx0)
+
+    pp = [(v, "0" if v == 0 else f"{fmt(v * 100, 0)} pp") for v in (-0.2, -0.1, 0)]
+    pl.add(
+        text(fx, 277, "change"),
+        h_axis(rs, 257, 285, 0.05, pp, 310),
+        h_row(pl, rs, 271, SK_CI, SK_DIFF, lower_better=True, d=0.05),
+    )
+    return pl
+
+
+def plate_sweep(code: str) -> Plate:
     sp = [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6]
     rng = XorShift(59)
     groups = []
@@ -874,10 +1250,12 @@ def plate_sweep(code: str, look: Look = DEFAULT) -> Plate:
         base = [b0 * math.exp(0.035 * rng.norm()) for _ in range(6)]
         cand = [b * math.exp(eff + 0.03 * rng.norm()) for b in base]
         m, lo_ci, hi_ci = t_ci([math.log(c / b) for b, c in zip(base, cand, strict=True)], 2.015)
-        groups.append((v, base, cand, m, (lo_ci, hi_ci), verdict(-hi_ci, -lo_ci, MARGIN)))
+        groups.append(
+            (v, base, cand, m, (lo_ci, hi_ci), kind_of((lo_ci, hi_ci), lower_better=True))
+        )
     last = groups[-1]
     desc = "task_duration, 8 speeds x 6 paired repeats: " + "; ".join(
-        f"{g[0]} m/s {fmt(pct(g[3]))} %" for g in groups
+        f"{g[0]} m/s {fmt(pct(g[3]))} % {g[5]}" for g in groups
     )
     first = next(g[0] for g in groups if g[5] in MOVED)
     pl = Plate(f"Faster from {first:.1f} m/s", 460, desc, (last[5], f"{fmt(pct(last[3]))} %"), code)
@@ -909,10 +1287,10 @@ def plate_sweep(code: str, look: Look = DEFAULT) -> Plate:
                 hi=hi,
                 ci=ci,
                 est=m,
-                kind=kind,
                 tick_labels=False,
                 labels="none",
                 r=3.4,
+                lead="moved",
             ),
             g,
             text(gx - 6, y1 + 26, f"{v:.1f}", "mono f-muted", FS, "middle"),
@@ -922,10 +1300,10 @@ def plate_sweep(code: str, look: Look = DEFAULT) -> Plate:
     for col, tok in ((1, "base"), (2, "cand")):
         d = "M" + "L".join(f"{num(p[0])} {num(p[col])}" for p in mids)
         pl.add(el("path", d=d, cls=f"s-{tok}", fill="none", stroke_width=2, stroke_opacity=0.8))
-    for mx, yb, yc, kind in mids:  # the gap at each speed, base median to candidate median
+    for mx, yb, yc, kind in mids:  # the gap at each speed: base median to candidate median
         if kind in MOVED:
             mark = VERDICT[kind][0]
-            pl.add(line(mx, yb, mx, yc, f"s-{mark} {pl.flow(look)}", 2))
+            pl.add(line(mx, yb, mx, yc, f"s-{mark} medflow {pl.flow(LEAD)}", 2))
         else:
             pl.add(line(mx, yb, mx, yc, "s-muted dash", 1.5, stroke_opacity=0.6))
     pl.add(
@@ -935,162 +1313,69 @@ def plate_sweep(code: str, look: Look = DEFAULT) -> Plate:
     return pl
 
 
-def _waffle(
-    pl: Plate,
-    look: Look,
-    x0: float,
-    y0: float,
-    spec: tuple[int, int, str, int, float],
-    changed: set[int],
-) -> None:
-    """Draw n runs as squares, a cross for each failure.
-
-    Runs that differ from their base runs get a dashed outline that flows around them.
-    """
-    n, fails, tok, cols, c = spec
-    g = c * 0.25
-    for i in range(n):
-        r, k = divmod(i, cols)
-        x, y = x0 + k * (c + g), y0 + r * (c + g)
-        if i >= n - fails:
-            h = num(c / 2)
-            cross = f"M{num(x + c * 0.25)} {num(y + c * 0.25)}l{h} {h}m0 -{h}l-{h} {h}"
-            pl.add(
-                rect(x, y, c, c, "f-plate s-worse", rx=3, stroke_width=2),
-                el("path", d=cross, cls="s-worse", stroke_width=2),
-            )
-            continue
-        pl.add(rect(x, y, c, c, f"f-{tok}", rx=3))
-    # one outline around each row run of changed squares, so neighbours do not collide
-    runs: list[list[int]] = []
-    for i in sorted(changed):
-        if runs and runs[-1][-1] == i - 1 and i % cols:
-            runs[-1].append(i)
-        else:
-            runs.append([i])
-    for run in runs:
-        r, k = divmod(run[0], cols)
-        x, y = x0 + k * (c + g), y0 + r * (c + g)
-        wide = len(run) * c + (len(run) - 1) * g
-        pl.add(
-            rect(
-                x - 3.5,
-                y - 3.5,
-                wide + 7,
-                c + 7,
-                f"s-better {pl.flow(look)}",
-                rx=5,
-                fill="none",
-                stroke_width=2,
-            )
-        )
-
-
-def plate_waffle(code: str, look: Look = DEFAULT) -> Plate:
+def plate_design(code: str) -> Plate:
+    p_est, p_ci = DES_PAIRED
+    b_est, b_ci = DES_BLOCKED
+    p_kind, b_kind = kind_of(p_ci, lower_better=True), kind_of(b_ci, lower_better=True)
     desc = (
-        f"task_success {TS_BASE}/{TS_N} to {TS_CAND}/{TS_N}: {TS_TXT}, 90 % CI {TS_CI_TXT}, "
-        f"inconclusive. required_sigkill: base {SK_BASE}/{SK_N} killed, candidate "
-        f"{SK_CAND}/{SK_N}, true rate at most {SK_BOUND * 100:.1f} %: improved."
+        f"A metric with no real change on VMs that slow down {DRIFT * 100:.1f} % per run. "
+        f"Paired ABBA on 4 VMs: {fmt(pct(p_est))} %, 90 % CI [{fmt(pct(p_ci[0]))}, "
+        f"{fmt(pct(p_ci[1]))}] %, {p_kind}. Blocked, all base then all candidate on one VM: "
+        f"{fmt(pct(b_est))} %, CI [{fmt(pct(b_ci[0]))}, {fmt(pct(b_ci[1]))}] %, {b_kind}: "
+        "the drift lands on the one boundary between the blocks."
     )
-    pl = Plate("Flake fixed; success still unclear", 340, desc, code=code)
-    g, _ = glyph(TS_KIND, 138, 120, 26)
-    pl.add(
-        text(20, 82, "task_success", "mono f-ink2"),
-        text(20, 120, TS_TXT, "f-ink bb", 28),
-        g,
-        text(20, 165, "base"),
-        text(20, 215, "candidate"),
-    )
-    _waffle(pl, look, 110, 146, (TS_N, TS_N - TS_BASE, "base", 9, 18), set())
-    flipped = set(range(TS_BASE, TS_CAND))  # failed on base, passed on the candidate
-    _waffle(pl, look, 110, 196, (TS_N, TS_N - TS_CAND, "cand", 9, 18), flipped)
-    pl.add(
-        text(330, 165, f"{TS_BASE}/{TS_N}", "mono f-muted"),
-        text(330, 215, f"{TS_CAND}/{TS_N}", "mono f-muted"),
-    )
-
-    def sc(v: float) -> float:
-        return 110 + (v + 0.3) / 0.6 * 220
-
-    pl.add(
-        text(20, 277, "change"), rect(sc(-0.05), 258, sc(0.05) - sc(-0.05), 26, "f-band s-bandEdge")
-    )
-    for v in (-0.2, 0, 0.2):
-        lab = "0" if v == 0 else f"{fmt(v * 100, 0)} pp"
-        pl.add(
-            line(sc(v), 254, sc(v), 288, "s-muted" if v == 0 else "s-grid"),
-            text(sc(v), 310, lab, "mono f-muted", FS, "middle"),
-        )
-    pl.add(
-        line(sc(TS_CI[0]), 271, sc(TS_CI[1]), 271, "s-unsure", 5, stroke_linecap="round"),
-        circle(sc(TS_DIFF), 271, 6, "f-plate s-unsure", stroke_width=2.5),
-    )
-    fx = 420
-    g, _ = glyph("improved", fx + 226, 120, 26)
-    pl.add(
-        text(fx, 82, "required_sigkill", "mono f-ink2"),
-        text(fx, 120, f"{SK_BASE / SK_N * 100:.0f} % → ≤ {SK_BOUND * 100:.1f} %", "f-ink bb", 28),
-        g,
-        text(fx, 165, "base"),
-        text(fx, 215, "candidate"),
-    )
-    _waffle(pl, look, fx + 90, 150, (SK_N, SK_BASE, "base", 15, 14), set())
-    killed = set(range(SK_N - SK_BASE, SK_N))  # killed on base, clean on the candidate
-    _waffle(pl, look, fx + 90, 200, (SK_N, SK_CAND, "cand", 15, 14), killed)
-    rx0, rx1 = fx + 90, 770
-
-    def rs(v: float) -> float:
-        return rx0 + v / 300 * (rx1 - rx0)
-
-    pl.add(
-        text(fx, 277, "runs"),
-        rect(rx0, 266, rx1 - rx0, 10, "f-chip", rx=5),
-        rect(rx0, 266, rs(SK_N) - rx0, 10, "f-cand", rx=5),
-    )
-    for b, v in SK_RUNS.items():
-        bound = f"≤{b * 100:.0f} %"
-        anchor = "middle" if v < 200 else "end"
-        pl.add(
-            line(rs(v), 258, rs(v), 284, "s-ink2", 1.5),
-            text(rs(v), 252, bound, "mono f-muted", FS, anchor),
-            text(rs(v), 306, str(v), "mono f-muted", FS, anchor),
-        )
-    return pl
-
-
-def plate_design(code: str, look: Look = DEFAULT) -> Plate:
-    desc = (
-        "This run: paired ABBA on 4 VMs, 5 pairs each, each pair back to back on one VM; "
-        "each pair's base run flows to its candidate run. Blocked contrast: all base then "
-        "all candidate on one VM, so drift lands on the one boundary between the blocks."
-    )
-    pl = Plate("Paired ABBA on 4 VMs", 290, desc, code=code)
+    pl = Plate("Blocked runs fake a slowdown", 300, desc, code=code)
     pl.legend = True
-    st = Strip(20, 80, cell=22, h=16, gap=4, pair_gap=10, pitch=28, label_w=90)
-    rows = abba_rows(PAIRS)
-    pl.add(run_rows(st, rows))
-    for r, (_, seq) in enumerate(rows):  # an arc under each pair, from base run to candidate
-        yb = st.y(r) + st.h + 2
+    st = Strip(20, 92, cell=14, h=12, gap=3, pair_gap=6, pitch=22, label_w=58)
+    rows = abba_rows(DES)
+    pl.add(text(20, 76, "paired ABBA", "f-ink2 b"), run_rows(st, rows))
+    for r, (_, seq) in enumerate(rows):  # an arc under each pair, still
+        yb = st.y(r) + st.h + 1.5
         for j in range(0, len(seq), 2):
             ia = j + seq[j : j + 2].index("A")
             ib = j + seq[j : j + 2].index("B")
             xa, xb = st.x(ia) + st.cell / 2, st.x(ib) + st.cell / 2
-            d = f"M{num(xa)} {num(yb)}Q{num((xa + xb) / 2)} {num(yb + 11)} {num(xb)} {num(yb)}"
-            pl.add(el("path", d=d, cls=f"s-cand {pl.flow(look)}", fill="none", stroke_width=1.8))
-    blk = Strip(20, 210, cell=22, h=16, gap=4, label_w=90, pairs=False)
+            d = f"M{num(xa)} {num(yb)}Q{num((xa + xb) / 2)} {num(yb + 7)} {num(xb)} {num(yb)}"
+            pl.add(el("path", d=d, cls="s-cand", fill="none", stroke_width=1.4, stroke_opacity=0.7))
+    blk = Strip(20, 214, cell=14, h=12, gap=3, label_w=58, pairs=False)
     edge = blk.x(10) - blk.gap / 2
+    mark = VERDICT[b_kind][0]
     pl.add(
-        run_rows(blk, [("blocked", "A" * 10 + "B" * 10)]),
-        line(edge, 196, edge, 240, f"s-unsure {pl.flow(look)}", 2.5),
-        text(blk.x(19) + blk.cell + 14, 223, "drift lands here", "f-muted"),
-        line(110, 258, 600, 258, "s-muted"),
-        el("path", d="M600 253L609 258L600 263Z", cls="f-muted"),
-        text(618, 263, "run order", "f-muted"),
+        text(20, 198, "blocked", "f-ink2 b"),
+        run_rows(blk, [("VM 1", "A" * 10 + "B" * 10)]),
+        el(
+            "path",
+            d=f"M{num(edge)} {num(206)}L{num(edge)} {num(234)}",
+            cls=f"s-{mark} lead {pl.flow(LEAD)}",
+            fill="none",
+            stroke_width=2.5,
+            data_role="bias",
+            data_verdict=b_kind,
+        ),
+        line(78, 252, 440, 252, "s-muted"),
+        el("path", d="M440 247L449 252L440 257Z", cls="f-muted"),
+        text(458, 257, "run order", "f-muted"),
     )
+    lo, hi = math.log(0.91), math.log(1.15)
+    ax0, ax1 = 540, 750
+
+    def xs(v: float) -> float:
+        return ax0 + (v - lo) / (hi - lo) * (ax1 - ax0)
+
+    yp, yk = st.y(1) + st.h + 5, blk.y(0) + blk.h / 2
+    pl.add(
+        h_axis(xs, 70, 240, MARGIN, pct_ticks(lo, hi, 3), 262),
+        h_row(pl, xs, yp, p_ci, p_est, lower_better=True),
+        h_row(pl, xs, yk, b_ci, b_est, lower_better=True),
+        text((ax0 + ax1) / 2, 284, "change", "f-ink2", FS, "middle"),
+    )
+    for yy, kind in ((yp, p_kind), (yk, b_kind)):
+        g, _ = glyph(kind, ax1 + 18, yy + 6, FS + 3)
+        pl.add(g)
     return pl
 
 
-# F10: a synthetic history of 30 commits. The last one is this PR, with the paired effect.
+# a synthetic history of 30 commits. The last one is this PR, with the paired effect.
 _HR = XorShift(1010)
 HIST: list[list[float]] = []
 _level = quant([p.base for p in PAIRS], 0.5)
@@ -1099,13 +1384,17 @@ for _k in range(30):
     HIST.append([_level * math.exp(0.05 * _HR.norm()) for _ in range(6)])
 HIST_MED = [quant(h, 0.5) for h in HIST]
 HIST_STEP = math.log(HIST_MED[-1] / HIST_MED[-2])
+# the commit noise: twice the spread of the median's step from one commit to the next
+HIST_NOISE = 2 * sd([math.log(HIST_MED[k + 1] / HIST_MED[k]) for k in range(28)])
 
 
-def plate_history(code: str, look: Look = DEFAULT) -> Plate:
-    kind = "improved" if HIST_STEP < -MARGIN else "unsure"
+def plate_history(code: str) -> Plate:
+    out_of_band = abs(HIST_STEP) > HIST_NOISE
+    kind = ("improved" if HIST_STEP < 0 else "regressed") if out_of_band else "unsure"
     desc = (
         "Synthetic history: planning_time on 30 commits, 6 runs each; the last commit is this "
-        f"PR. Its median steps {fmt(pct(HIST_STEP))} % from the commit before."
+        f"PR. Its median steps {fmt(pct(HIST_STEP))} % from the commit before, out of the "
+        f"±{pct(HIST_NOISE):.0f} % commit-noise band."
     )
     pl = Plate("This PR steps planning down", 420, desc, (kind, f"{fmt(pct(HIST_STEP))} %"), code)
     x0, x1, y0, y1 = 74, 780, 80, 350
@@ -1119,8 +1408,11 @@ def plate_history(code: str, look: Look = DEFAULT) -> Plate:
         return x0 + (k + 0.5) * step
 
     ref = HIST_MED[-2]
-    top, bot = ys(ref * math.exp(MARGIN)), ys(ref * math.exp(-MARGIN))
-    pl.add(rect(x0, top, x1 - x0, bot - top, "f-band s-bandEdge", stroke_width=1))
+    top, bot = ys(ref * math.exp(HIST_NOISE)), ys(ref * math.exp(-HIST_NOISE))
+    pl.add(
+        rect(x0, top, x1 - x0, bot - top, "f-band s-bandEdge bound", stroke_width=1),
+        text(x0 + 8, bot - 8, "commit noise", "f-muted"),
+    )
     for t in nice_ticks(lo, hi, 4):
         pl.add(
             line(x0, ys(t), x1, ys(t), "s-grid"),
@@ -1131,8 +1423,9 @@ def plate_history(code: str, look: Look = DEFAULT) -> Plate:
         d += f"{'L' if d else 'M'}{num(xc(k) - step / 2)} {num(ys(m))}H{num(xc(k) + step / 2)}"
     pl.add(el("path", d=d, cls="s-ink2", fill="none", stroke_width=2, stroke_opacity=0.7))
     xe = xc(len(HIST) - 1) - step / 2
-    pr = f"M{num(xe)} {num(ys(HIST_MED[-2]))}V{num(ys(HIST_MED[-1]))}H{num(xe + step)}"  # the PR step: the only line that flows
-    pl.add(el("path", d=pr, cls=f"s-better {pl.flow(look)}", fill="none", stroke_width=2.5))
+    mark = VERDICT[kind][0]
+    pr = f"M{num(xe)} {num(ys(HIST_MED[-2]))}V{num(ys(HIST_MED[-1]))}H{num(x1)}"
+    pl.add(el("path", d=pr, cls=f"s-{mark} ci", fill="none", stroke_width=2.5))
     for k, h in enumerate(HIST):
         tok = "cand" if k == len(HIST) - 1 else "base"
         py = [ys(v) for v in h]
@@ -1140,6 +1433,20 @@ def plate_history(code: str, look: Look = DEFAULT) -> Plate:
             *(
                 circle(xc(k) + o, y, 2.6, f"f-{tok} s-plate", stroke_width=0.8)
                 for y, o in zip(py, swarm(py, 2.6), strict=True)
+            )
+        )
+    if out_of_band:  # the band edge it leaves, to the PR's median
+        edge = bot if HIST_STEP < 0 else top
+        pl.add(
+            el(
+                "path",
+                d=f"M{num(x1)} {num(edge)}L{num(x1)} {num(ys(HIST_MED[-1]))}",
+                cls=f"s-{mark} lead {pl.flow(LEAD)}",
+                fill="none",
+                stroke_width=2.2,
+                stroke_opacity=LEAD.opacity,
+                data_role="band",
+                data_verdict=kind,
             )
         )
     for k in (0, 9, 19):
@@ -1151,39 +1458,37 @@ def plate_history(code: str, look: Look = DEFAULT) -> Plate:
     return pl
 
 
-# ---------------------------------------------------------------- section 2: how flow looks
+# ---------------------------------------------------------------- appendix: how flow looks
 
 
-def look_variants() -> list[list[tuple[str, Look, bool]]]:
-    """Return the grid rows: speed (with the size-speed variant), pattern, contrast."""
+def look_variants() -> list[list[tuple[str, Look]]]:
+    """Return the grid rows: speed, pattern, contrast. The others stay at S2 P2 C2."""
     _, s2 = SPEEDS["S2"]
     _, d2, g2 = PATTERNS["P2"]
     c2 = CONTRASTS["C2"]
-    speed = [(f"{k} {w}", Look(k, v, d2, g2, c2), False) for k, (w, v) in SPEEDS.items()]
-    speed.append(("E1 size → speed", Look("E1", s2, d2, g2, c2), True))
-    pattern = [(f"{k} {w}", Look(k, s2, d, g, c2), False) for k, (w, d, g) in PATTERNS.items()]
-    contrast = [(f"{k} {c:g}", Look(k, s2, d2, g2, c), False) for k, c in CONTRASTS.items()]
+    speed = [(f"{k} {w}", Look(k, v, d2, g2, c2)) for k, (w, v) in SPEEDS.items()]
+    pattern = [(f"{k} {w}", Look(k, s2, d, g, c2)) for k, (w, d, g) in PATTERNS.items()]
+    contrast = [(f"{k} {c:g}", Look(k, s2, d2, g2, c)) for k, c in CONTRASTS.items()]
     return [speed, pattern, contrast]
 
 
 def plate_looks(code: str) -> Plate:
     desc = (
-        "The F3 chart (pair lines and median connector flow) in ten looks. Speed S1-S3 is "
-        "4, 8 and 16 px/s; E1 scales each pair line's speed by its change. Pattern P1-P3 is "
-        "1-3, 4-4 and 8-6 px. Contrast C1-C3 is the pair lines' stroke opacity."
+        "The planning_time panel (leaders and median connector flow) in nine looks. Speed "
+        "S1-S3 is 4, 8 and 16 px/s. Pattern P1-P3 is 1-3, 4-4 and 8-6 px. Contrast C1-C3 is "
+        "the leaders' stroke opacity."
     )
     pl = Plate("Pick a speed, pattern, contrast", 676, desc, code=code)
-    kind = plan_kind()
     lo, hi = axis_range([p.base for p in PAIRS] + [p.cand for p in PAIRS])
     for r, row in enumerate(look_variants()):
-        for k, (label, look, by_size) in enumerate(row):
-            x0, y = 20 + k * 192, 62 + r * 204
+        for k, (label, look) in enumerate(row):
+            x0, y = 20 + k * 258, 62 + r * 204
             pl.add(
                 text(x0 + 4, y + 18, label, "mono f-ink2 b"),
                 dot_panel(
                     pl,
                     x0=x0,
-                    x1=x0 + 180,
+                    x1=x0 + 244,
                     y0=y + 32,
                     y1=y + 190,
                     base=[p.base for p in PAIRS],
@@ -1192,137 +1497,30 @@ def plate_looks(code: str) -> Plate:
                     hi=hi,
                     ci=C90,
                     est=EST,
-                    kind=kind,
                     tick_labels=False,
                     labels="none",
                     r=2.8,
-                    flows=("pairs", "connector"),
+                    connector=True,
                     look=look,
-                    size_speed=by_size,
                 ),
             )
     return pl
 
 
-# ---------------------------------------------------------------- section 3: the report set
-
-
-def _binary_panel(pl: Plate, look: Look, x0: float, x1: float, y0: float, y1: float) -> str:
-    """Draw task_success as one square per run, a cross for each failure."""
-    out = []
-    size, gap = 18, 5
-    px = x0 + 48
-    wid = x1 - px
-    for cx, n_fail, tok, name, count in (
-        (px + wid * 0.27, TS_N - TS_BASE, "base", "base", f"{TS_BASE}/{TS_N}"),
-        (px + wid * 0.6, TS_N - TS_CAND, "cand", "candidate", f"{TS_CAND}/{TS_N}"),
-    ):
-        left = cx - (3 * size + 2 * gap) / 2
-        for i in range(TS_N):
-            r, k = divmod(i, 3)
-            x, y = left + k * (size + gap), y0 + 40 + r * (size + gap)
-            if i >= TS_N - n_fail:
-                cross = f"M{num(x + 4.5)} {num(y + 4.5)}l9 9m0 -9l-9 9"
-                out += [
-                    rect(x, y, size, size, "f-plate s-worse", rx=3, stroke_width=2),
-                    el("path", d=cross, cls="s-worse", stroke_width=2),
-                ]
-                continue
-            out.append(rect(x, y, size, size, f"f-{tok}", rx=3))
-            if tok == "cand" and TS_BASE <= i < TS_CAND:  # passed here, failed on base
-                out.append(
-                    rect(
-                        x - 3.5,
-                        y - 3.5,
-                        size + 7,
-                        size + 7,
-                        f"s-better {pl.flow(look)}",
-                        rx=5,
-                        fill="none",
-                        stroke_width=2,
-                    )
-                )
-        out += [
-            text(cx, y1 + 26, name, "f-ink2", FS, "middle"),
-            text(cx, y1 + 45, count, "mono f-muted", FS, "middle"),
-        ]
-    return "".join(out)
-
-
-def plate_scorecard(code: str, look: Look = DEFAULT) -> Plate:
-    k_track = verdict(-TRACK_C90[1], -TRACK_C90[0], MARGIN)
-    desc = (
-        f"planning_time {fmt(pct(EST))} % (90 % CI {fmt(pct(C90[0]))} to {fmt(pct(C90[1]))}), "
-        f"improved; task_success {TS_BASE}/{TS_N} to {TS_CAND}/{TS_N}, {TS_TXT}, inconclusive; "
-        f"tracking_error_rms {fmt(pct(TRACK_EST))} %, no change. Paired ABBA, 20 pairs on 4 VMs."
-    )
-    pl = Plate(plan_title(), 536, desc, code=code)
-    panels = [
-        ("planning_time · s", f"{fmt(pct(EST))} %", plan_kind(), PAIRS, C90, EST),
-        ("task_success", TS_TXT, TS_KIND, None, None, None),
-        ("tracking_error · mm", f"{fmt(pct(TRACK_EST))} %", k_track, TRACK, TRACK_C90, TRACK_EST),
-    ]
-    for i, (name, big, kind, pairs, ci, est) in enumerate(panels):
-        x0 = 20 + i * 258
-        x1 = x0 + 244
-        g, _ = glyph(kind, x0 + len(big) * 15.5 + 8, 116, 26)
-        pl.add(text(x0, 80, name, "mono f-ink2"), text(x0, 116, big, "f-ink bb", 28), g)
-        y0, y1 = 140, 360
-        if pairs is None or ci is None or est is None:
-            pl.add(_binary_panel(pl, look, x0, x1, y0, y1))
-            continue
-        lo, hi = axis_range([p.base for p in pairs] + [p.cand for p in pairs])
-        pl.add(
-            dot_panel(
-                pl,
-                x0=x0,
-                x1=x1,
-                y0=y0,
-                y1=y1,
-                base=[p.base for p in pairs],
-                cand=[p.cand for p in pairs],
-                lo=lo,
-                hi=hi,
-                ci=ci,
-                est=est,
-                kind=kind,
-                ticks=nice_ticks(lo, hi),
-                tick_fmt=lambda t: f"{t:g}",
-                r=4,
-                flows=("pairs", "connector"),
-                look=look,
-            )
-        )
-    pl.add(
-        run_rows(Strip(20, 430), abba_rows(PAIRS)),
-        text(308, 442, "run order →", "f-muted"),
-    )
-    return pl
-
-
-RECOMMENDED = DEFAULT
+ESTIMATION = "d4_estimation.svg"
+PAIRS_FLOW_ON_ESTIMATION = False
 
 PLATES = {
-    "f01_pairs.svg": lambda: plate_est("F1 · pair lines flow", ("pairs",)),
-    "f02_connector.svg": lambda: plate_est("F2 · median connector flows", ("connector",)),
-    "f03_pairs_connector.svg": lambda: plate_est(
-        "F3 · pair lines + median connector flow", ("pairs", "connector")
-    ),
-    "f04_base_reference.svg": lambda: plate_est("F4 · base median carried across", ("ref",)),
-    "f05_margin_edges.svg": lambda: plate_est("F5 · ±Δ band edges flow inward", ("edges",)),
-    "f06_forest.svg": lambda: plate_forest("F6 · 0 → estimate flows on ▲▼ rows"),
-    "f07_sweep.svg": lambda: plate_sweep("F7 · gap flows where beyond ±Δ"),
-    "f08_waffle.svg": lambda: plate_waffle("F8 · outline flows on changed runs"),
-    "f09_design.svg": lambda: plate_design("F9 · pairs flow; block edge flows"),
-    "f10_history.svg": lambda: plate_history("F10 · only the PR step flows · synthetic"),
-    "l1_looks.svg": lambda: plate_looks("S speed · P pattern · C contrast · E1 size → speed"),
-    "r1_scorecard.svg": lambda: plate_scorecard("R1 · scorecard", RECOMMENDED),
-    "r2_forest.svg": lambda: plate_forest("R2 · forest", RECOMMENDED),
-    "r3_estimation.svg": lambda: plate_est("R3 · estimation", ("pairs", "connector"), RECOMMENDED),
-    "r4_waffle.svg": lambda: plate_waffle("R4 · waffle", RECOMMENDED),
-    "r5_design.svg": lambda: plate_design("R5 · design", RECOMMENDED),
+    "d1_verdicts.svg": lambda: plate_verdicts("D1 · one ▲, one ≈, one ?"),
+    "d2_scorecard.svg": lambda: plate_scorecard("D2 · scorecard · ≈ is still"),
+    "d3_forest.svg": lambda: plate_forest("D3 · forest · ≈ rows are still"),
+    ESTIMATION: lambda: plate_est("D4 · estimation", pairs_flow=PAIRS_FLOW_ON_ESTIMATION),
+    "d5_waffle.svg": lambda: plate_waffle("D5 · waffle"),
+    "d6_sweep.svg": lambda: plate_sweep("D6 · sweep · ≈ points are still"),
+    "d7_design.svg": lambda: plate_design("D7 · design"),
+    "d8_history.svg": lambda: plate_history("D8 · history · synthetic"),
+    "a1_looks.svg": lambda: plate_looks("A1 · S speed · P pattern · C contrast"),
 }
-
 
 # ---------------------------------------------------------------- the motion rule, checked
 
@@ -1401,29 +1599,156 @@ def check_motion(path: Path) -> tuple[int, list[str]]:
     return count, errs
 
 
+# The kinds of element that may flow, by class. Anything else that flows fails the check.
+SALIENT = ("lead", "medflow", "runflag", "pairflow")
+ROLES = {  # the leader roles each verdict allows
+    "improved": {"zero", "delta", "band", "bias"},
+    "regressed": {"zero", "delta", "band", "bias"},
+    "equiv": {"edge"},
+    "small": {"edge"},
+    "unsure": {"cross"},
+}
+TOL = 0.03  # px: the coordinates are written to 0.01 px
+
+
+def _polylines(e: ET.Element) -> list[list[tuple[float, float]]]:
+    """Return the vertices of a line, rect or absolute M/L/H/V/Q path."""
+    tag, a = _strip_ns(e.tag), e.attrib
+    if tag == "line":
+        return [[(float(a["x1"]), float(a["y1"])), (float(a["x2"]), float(a["y2"]))]]
+    if tag == "rect":
+        x, y, w, h = (float(a[k]) for k in ("x", "y", "width", "height"))
+        return [[(x, y), (x + w, y), (x + w, y + h), (x, y + h), (x, y)]]
+    if tag != "path":
+        return []
+    out: list[list[tuple[float, float]]] = []
+    toks = re.findall(r"[A-Za-z]|-?\d*\.?\d+", a.get("d", ""))
+    i, x, y, cmd = 0, 0.0, 0.0, ""
+    while i < len(toks):
+        if toks[i].isalpha():
+            cmd = toks[i]
+            i += 1
+            if cmd in "Zz":
+                if out and out[-1]:
+                    out[-1].append(out[-1][0])
+                continue
+        if cmd == "M":
+            x, y = float(toks[i]), float(toks[i + 1])
+            out.append([(x, y)])
+            i += 2
+        elif cmd == "L":
+            x, y = float(toks[i]), float(toks[i + 1])
+            i += 2
+        elif cmd == "H":
+            x = float(toks[i])
+            i += 1
+        elif cmd == "V":
+            y = float(toks[i])
+            i += 1
+        elif cmd == "Q":
+            x, y = float(toks[i + 2]), float(toks[i + 3])
+            i += 4
+        else:  # a relative command: the mark is not one the check reads
+            return []
+        if cmd != "M":
+            out[-1].append((x, y))
+    return out
+
+
+def _on_segment(p: tuple[float, float], a: tuple[float, float], b: tuple[float, float]) -> bool:
+    (px, py), (ax, ay), (bx, by) = p, a, b
+    dx, dy = bx - ax, by - ay
+    t = 0.0 if not dx and not dy else ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)
+    t = min(max(t, 0.0), 1.0)
+    return math.hypot(px - ax - t * dx, py - ay - t * dy) <= TOL
+
+
+def check_salience(path: Path) -> tuple[dict[str, int], list[str]]:
+    """Check that every flowing element is salient to the outcome.
+
+    Each .fl element must be a decision leader (.lead), the median connector of a moved
+    panel (.medflow) or the outline of the runs that drive a binary result (.runflag).
+    Pair lines (.pairflow) may flow only on the estimation plate. A leader must carry a
+    role its verdict allows, start on a boundary (.bound: the 0 line, a Δ edge, the noise
+    band) and end on a vertex of a decided mark (.ci: a CI end, or the PR's median). The
+    "bias" leader of the design plate marks the block boundary and has no CI end.
+    """
+    root = ET.parse(path).getroot()  # noqa: S314 - our own generated files
+    errs: list[str] = []
+    counts = dict.fromkeys(SALIENT, 0)
+    bounds, ends = [], []
+    for e in root.iter():
+        classes = set(e.attrib.get("class", "").split())
+        if "bound" in classes:
+            bounds += _polylines(e)
+        if "ci" in classes:
+            ends += [p for pl in _polylines(e) for p in pl]
+    for e in root.iter():
+        classes = set(e.attrib.get("class", "").split())
+        if "fl" not in classes:
+            continue
+        kinds = [k for k in SALIENT if k in classes]
+        if len(kinds) != 1:
+            errs.append(f"<{_strip_ns(e.tag)} class={e.attrib['class']!r}> flows, not salient")
+            continue
+        counts[kinds[0]] += 1
+        if kinds[0] == "pairflow" and path.name != "d4_estimation.svg":
+            errs.append("pair lines flow outside the estimation plate")
+        if kinds[0] != "lead":
+            continue
+        role, kind = e.attrib.get("data-role", ""), e.attrib.get("data-verdict", "")
+        if role not in ROLES.get(kind, set()):
+            errs.append(f"leader role {role!r} does not decide a {kind!r} verdict")
+        if role == "bias":
+            continue
+        pts = [p for pl in _polylines(e) for p in pl]
+        if not pts:
+            errs.append("a leader with no readable path")
+            continue
+        start, end = pts[0], pts[-1]
+        if not any(_on_segment(start, a, b) for pl in bounds for a, b in itertools.pairwise(pl)):
+            errs.append(f"leader {role} starts at {start}, not on a boundary")
+        if not any(math.dist(end, p) <= TOL for p in ends):
+            errs.append(f"leader {role} ends at {end}, not on a CI end")
+    return counts, errs
+
+
 def main() -> None:
     if "--check" in sys.argv:
         bad, total = 0, 0
         for path in sorted(OUT.glob("*.svg")):
             count, errs = check_motion(path)
+            counts, s_errs = check_salience(path)
+            errs += s_errs
             total += count
+            if sum(counts.values()) != count:
+                errs.append(f"{count} animated, {sum(counts.values())} salient")
             size = path.stat().st_size
             if size >= 150_000:
                 errs.append(f"{size} bytes, over 150 KB")
             bad += bool(errs)
             status = "ok" if not errs else "FAIL " + "; ".join(errs)
-            sys.stdout.write(f"{path.name}: {count} animated dashed strokes, {size} B, {status}\n")
-        sys.stdout.write(f"total {total} animated elements; {bad} files fail\n")
+            kinds = " ".join(f"{k}={v}" for k, v in counts.items() if v)
+            sys.stdout.write(
+                f"{path.name}: {count} flowing ({kinds or 'none'}), {size} B, {status}\n"
+            )
+        sys.stdout.write(f"total {total} flowing elements; {bad} files fail\n")
         sys.exit(1 if bad else 0)
     if "--facts" in sys.argv:
         rows = forest_metrics()
         sys.stdout.write(
             f"planning {fmt(pct(EST))} % CI [{fmt(pct(C90[0]))}, {fmt(pct(C90[1]))}]\n"
+            f"startup {fmt(pct(UNS_EST))} % CI [{fmt(pct(UNS_C90[0]))}, {fmt(pct(UNS_C90[1]))}]\n"
+            f"design paired {DES_PAIRED} blocked {DES_BLOCKED}\n"
+            f"task_success {TS_CI} sigkill {SK_CI}\n"
             f"forest {forest_title(rows)}: "
             + ", ".join(f"{r.name} {r.kind}" for r in rows)
-            + f"\nhistory step {fmt(pct(HIST_STEP))} %\n"
+            + f"\nhistory step {fmt(pct(HIST_STEP))} % noise {pct(HIST_NOISE):.1f} %\n"
         )
         return
+    for old in OUT.glob("*.svg"):
+        if old.name not in PLATES:
+            old.unlink()
     for name, make in PLATES.items():
         (OUT / name).write_text(make().render(), encoding="utf-8")
         sys.stdout.write(f"wrote {name}\n")
