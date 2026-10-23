@@ -172,6 +172,7 @@ Start from what your `benchmark()` method actually produces:
 | a fixed-size vector | `ResultVec` | [Result Vec: 1D input](reference/meta/result_types/result_vec/example_result_vec_1d) |
 | text | `ResultString` | [Result String: 1D input](reference/meta/result_types/result_string/example_result_string_1d) |
 | an image file path | `ResultImage` | [Result Image: 1D input](reference/meta/result_types/result_image/example_result_image_1d) |
+| an SVG file path (SMIL animations play) | `ResultSVG` | [Cartesian Animation gallery](reference/meta/cartesian_animation/index) |
 | a video file path | `ResultVideo` | [Result Video: 1D input](reference/meta/result_types/result_video/example_result_video_1d) |
 | any other file path | `ResultPath` | [Result Path: 1D input](reference/meta/result_types/result_path/example_result_path_1d) |
 | a table or array payload | `ResultDataSet` | [Result DataSet: 1D input](reference/meta/result_types/result_dataset/example_result_dataset_1d) |
@@ -193,6 +194,7 @@ The full table, with what to assign in `benchmark()`:
 | `bn.ResultBool()` | Success/failure, pass/fail, any binary outcome | `self.success = True` |
 | `bn.ResultString()` | Text outputs, labels, error messages | `self.error_msg = "timeout"` |
 | `bn.ResultImage()` | Images, GIFs | `self.img = "/path/to/output.png"` |
+| `bn.ResultSVG()` | SVG drawings and SMIL animations, kept out of the raster-only image paths | `self.drawing = "/path/to/output.svg"` |
 | `bn.ResultVideo()` | Videos | `self.vid = video_writer.write()` |
 | `bn.ResultPath()` | Downloadable file outputs | `self.artifact = "/path/to/file"` |
 | `bn.ResultContainer()` | Embeddable HTML/panel content | `self.widget = pane` |
@@ -481,6 +483,117 @@ Two things to know if you pick the merged viewer by hand instead:
   on the rerun backend, so `backend="rerun"` selects it.
 * Define the callback at module scope. The callback list is pickled into the result
   cache, so a closure fails with `AttributeError: Can't pickle local object`.
+
+## The svg Backend: Plots for a GitHub PR
+
+`backend="svg"` draws charts with matplotlib as self-contained SVGs. A GitHub `<img>`
+shows them: they hold no script, no font file and no external link. Chart types without
+an svg twin keep the panel pipeline.
+
+The backend is a run config setting, so any example or benchmark draws with it unchanged.
+To run an existing example with the svg backend, pass it the run config:
+
+```python
+example_sweep_1_float_2_cat_no_repeats(bn.BenchRunCfg(backend="svg"))
+```
+
+To write the charts as files:
+
+```python
+run_cfg = bn.BenchRunCfg(backend="svg")
+res = bench.plot_sweep("wave", input_vars=["x", "wave", "envelope"])
+res.to_svg_files("docs/my_plots")  # one <chart>_<result var>.svg per auto-selected chart
+res.to_svg_files("docs/my_plots", charts=["violin", "table"])  # named-only charts
+```
+
+A chart shows two or three dimensions: the x axis, the y axis of a heatmap, and a colour
+per level of a categorical input. Every other swept dimension, `over_time` included,
+becomes a grid of small panels: one panel per combination of values, all visible at
+once, titled with those values. The panels share their axes, their colour scale, the
+title and the legend. A soft highlight walks the panels in sweep order and loops: the
+current panel gets a border and the others dim a little. No mark moves, so every instant
+is the whole chart, and a reader who asks for reduced motion
+(`prefers-reduced-motion`) sees the grid with no animation. A chart with nothing left
+over is a static SVG, as before.
+
+Past `bn.MAX_SVG_PANELS` (12) panels the panels get too small, so the chart steps
+through the combinations as frames instead: one chart, one frame per combination, played
+in a loop with a label naming the current values and a progress bar, on fixed axes. Past
+`bn.MAX_SVG_FRAMES` (60) the rest are dropped, with a log warning and a note on the
+image. To choose the layout, set `svg_layout`:
+
+```python
+run_cfg = bn.BenchRunCfg(backend="svg", svg_layout="frames")  # "auto" (default), "grid"
+res.to_svg_files("docs/my_plots", svg_layout="grid")  # overrides the run config
+```
+
+The value charts reduce repeats by the mean; the curve draws one standard deviation as a
+band. The distribution charts draw every repeat as a dot, with a thick median line.
+
+seaborn is optional. With it installed (`pip install holobench[seaborn]`; the pixi dev
+environments have it) and a seaborn `svg_style` (below), the svg charts share one seaborn
+theme, and seaborn draws the panels of the value and distribution charts: a beeswarm of every repeat (the jitter
+strip when the dots do not fit side by side), seaborn's boxes, violins, bars and lines,
+a density curve over the histogram, and white gaps between heatmap cells, with each
+value written in a cell big enough to hold it. The `table`, `xy_*`, `volume` and
+`surface` charts keep their matplotlib drawing and take only the theme. In `"plain"`, or
+without seaborn, every chart draws as above with plain matplotlib. Either way the panels, frames, shared
+axes and the highlight are the same, and the theme applies to the svg charts only, not
+to the process's other matplotlib figures.
+
+To choose the look, set `svg_style` (one of `bn.SVG_STYLES`):
+
+```python
+run_cfg = bn.BenchRunCfg(backend="svg", svg_style="seaborn")
+res.to_svg_files("docs/my_plots", svg_style="plain")  # overrides the run config
+```
+
+- `"seaborn-ticks"` (default): seaborn's ticks style (white axes, outward ticks, no top
+  or right spine), its `deep` palette, and its `rocket` and `mako` colour maps. In a
+  grid, only the outer panels carry ticks; the inner edges are a plain line.
+- `"seaborn"`: seaborn's darkgrid style (grey axes, white grid, no spines) with the same
+  palette and colour maps.
+- `"plain"`: plain matplotlib, tab10 on white axes.
+
+Without seaborn every style draws `"plain"`, with one log warning.
+
+Each svg chart declares the sweep shapes it draws, the same as its holoviews twin.
+Named-only twins stay named-only: request them with `plot_list=[...]` or
+`to_svgs([...])`.
+
+| Chart | Auto | Shape | Shown | One panel (or frame) per |
+|---|---|---|---|---|
+| `line` | yes | 1 float, any cats, no repeats | x, first cat as colour | other cats, `over_time` |
+| `curve` | yes | 1 float, any cats, repeats | x, first cat as colour, ±1 std | other cats, `over_time` |
+| `heatmap` | yes | 2+ floats | first two floats | other inputs, `over_time` |
+| `bar` | yes | 0 floats, 1+ cats, no repeats | first cat, second cat as colour | other cats, `over_time` |
+| `box_whisker` | yes | 0 floats, any cats, repeats | box, dots, median per first cat; second cat as colour | other cats, `over_time` |
+| `histogram` | yes | no inputs | bins, dots, median of the repeats | `over_time` |
+| `violin` | no | as `box_whisker` | density, dots, median | other cats, `over_time` |
+| `scatter_jitter` | no | 0 floats, 0-1 cats, repeats | dots, median | `over_time` |
+| `scatter` | no | 0 floats, any cats, no repeats | one dot per first cat; second cat as colour | other cats, `over_time` |
+| `band` | no | any | 10-90% and 25-75% bands, median, every sample, over `over_time` or the first input | nothing: other dims are pooled |
+| `table` | no | any | one row per sample (first `bn.MAX_TABLE_ROWS`) | nothing |
+| `xy_scatter`, `xy_curve`, `xy_histogram`, `xy_hexbin` | no | a `ResultDataSet` | one sample's table | sample |
+| `volume` | yes | 3 floats, no cats | filled contour bands of the first two floats | value of the third float (not `over_time`) |
+| `surface` | no | 2 floats, any cats | a 3D surface of the mean from a fixed camera, every repeat as a dot | cat, `over_time` |
+
+The `xy_*` charts take their twin's options (`x=`, `y=`, `color=`, `column=`, `bins=`,
+`gridsize=`...) as keywords to `to_svgs` or `to_auto`, or from a `container=bn.xy_scatter(...)`
+spec declared on the result var.
+
+A sweep outside those shapes (a 0-D `over_time` line, a bool bar with repeats, a violin
+over a float) falls back to the holoviews (or, for `surface` and `volume`, plotly) chart,
+and so does a result var the svg chart cannot draw. `res.to_svgs()` returns the SVG strings instead of files.
+
+To link the files from a PR, commit them and use a URL pinned to the commit. This repo
+keeps `*.svg` in Git LFS, so use
+`https://media.githubusercontent.com/media/<owner>/<repo>/<sha>/<path>`;
+`raw.githubusercontent.com` serves the LFS pointer, not the image.
+
+[The svg backend gallery](reference/meta/svg_backend/index) runs existing examples with
+`backend="svg"` when the docs build. Each page names the example and the run config it
+uses.
 
 ## Running a Sweep
 

@@ -407,9 +407,31 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     backend = param.Selector(
         default="panel",
-        objects=["panel", "rerun"],
+        objects=["panel", "rerun", "svg"],
         doc="Visualization backend. 'panel' uses the default holoviews/panel plotting pipeline. "
-        "'rerun' renders N-dimensional benchmark data in the rerun viewer.",
+        "'rerun' renders N-dimensional benchmark data in the rerun viewer. "
+        "'svg' draws charts as self-contained SVGs that embed in a GitHub PR "
+        "(see BenchResult.to_svg_files); charts with no svg twin keep the panel pipeline.",
+    )
+
+    svg_layout = param.Selector(
+        default="auto",
+        objects=["auto", "grid", "frames"],
+        doc="How backend='svg' shows the dims a chart does not put on an axis. 'grid' draws "
+        "one small panel per combination of their values, all at once, with shared axes, "
+        "and a highlight that walks the panels. 'frames' steps one chart through them as "
+        "an animation. 'auto' draws a grid up to bn.MAX_SVG_PANELS panels and frames "
+        "past it.",
+    )
+
+    svg_style = param.Selector(
+        default="seaborn-ticks",
+        objects=["seaborn", "seaborn-ticks", "plain"],
+        doc="The look of backend='svg' charts. 'seaborn-ticks' (the default) draws with "
+        "seaborn's ticks style (white axes, outward ticks, no top or right spine) and its "
+        "deep palette; 'seaborn' with seaborn's darkgrid style (grey axes, white grid); "
+        "'plain' with plain matplotlib (tab10). The seaborn styles need the seaborn extra; without it every "
+        "style draws 'plain'.",
     )
 
     # ==================== TIME & HISTORY PARAMETERS ====================
@@ -1070,10 +1092,9 @@ class BenchCfg(BenchRunCfg):
     def to_cartesian_animation(self) -> str | None:
         """Render an animation of the Cartesian product data collection.
 
-        Delegates to :func:`bencher.results.manim_cartesian.render_animation`,
-        which currently uses a PIL-based renderer. Returns the filesystem path
-        to the generated animated PNG (or other format, depending on the
-        renderer), or ``None`` on failure so callers can degrade gracefully.
+        Delegates to :func:`bencher.results.manim_cartesian.render_animation`.
+        Returns the filesystem path to the generated animated SVG, or ``None``
+        on failure so callers can degrade gracefully.
 
         Returns:
             str | None: Path to the rendered animation file, or None on failure.
@@ -1118,7 +1139,9 @@ class BenchCfg(BenchRunCfg):
             from pathlib import Path
 
             abs_path = str(Path(animation_path).resolve())
-            parts.append(pn.pane.Image(abs_path, width=350))
+            # A base64 <img>, as for ResultSVG: SMIL still plays, and the raw page
+            # stays smaller than with Panel's HTML-escaped inline markup.
+            parts.append(pn.pane.SVG(abs_path, width=350, encode=True))
 
         parts.append(desc)
         return pn.Column(*parts)

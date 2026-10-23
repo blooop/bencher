@@ -10,7 +10,7 @@ import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import DEFAULT_PLOT_SIZE, HoloviewResult
-from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
+from bencher.variables.results import ResultFloat, ResultImage, ResultSVG, ResultVideo
 
 
 class TestHoloviewResult(unittest.TestCase):
@@ -146,6 +146,14 @@ class TestHoloviewResult(unittest.TestCase):
     def test_result_var_to_container_image(self):
         container = HoloviewResult.result_var_to_container(self.res_1d, ResultImage())
         assert container == pn.pane.PNG
+
+    def test_result_var_to_container_svg(self):
+        """A tap plot sets ``cont.object`` to the path, which a Column cannot take."""
+        container = HoloviewResult.result_var_to_container(self.res_1d, ResultSVG())
+        assert container == pn.pane.SVG
+        pane = container()
+        pane.object = '<svg xmlns="http://www.w3.org/2000/svg"/>'
+        assert pane.encode is True
 
     def test_result_var_to_container_video(self):
         container = HoloviewResult.result_var_to_container(self.res_1d, ResultVideo())

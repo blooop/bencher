@@ -1,7 +1,7 @@
 """Tests for the Cartesian product animation module.
 
 Tests that exercise the data model (no external dependencies required).
-Render tests are in test_cartesian_pil_renderer.py.
+Render tests are in test_cartesian_svg_renderer.py.
 """
 
 from __future__ import annotations
@@ -138,5 +138,5 @@ class TestCellIndexIteration:
 
 
 # ---------------------------------------------------------------------------
-# Render tests are in test_cartesian_pil_renderer.py
+# Render tests are in test_cartesian_svg_renderer.py
 # ---------------------------------------------------------------------------
