@@ -8,24 +8,24 @@ only the standard library:
 
 The style is the one of #1188: every sample is a dot, the margin is a grey band on the
 metric's own axis, and text is a short finding, one effect number with its verdict glyph,
-and axis labels. The uncertainty is a "likely range" band: the 90 % CI of the candidate
-median, drawn on the same axis as a soft band in the verdict colour with thin solid edges.
-The reader compares two bands and the base median line (0): the coloured band clear of 0
-and past a grey edge is ▲ or ▼, wholly inside the grey band is ≈, and across 0 and a grey
-edge is ?. There are no capped intervals and no leaders.
+and axis labels. The charts carry no interval mark: the glyph (▲ ▼ ≈ ?) gives the verdict of
+the CI test, the big number gives the effect, and the dots show the spread and n. The 90 %
+CI goes in the alt text and in the caption under each image.
 
 The motion rule: dots, bars, medians, bands, text and glyphs never move, resize, fade or
 glow. The only motion is dashes that flow along secondary lines, made with
 stroke-dashoffset on a dashed stroke. Every frame is the complete still chart, and
 ``prefers-reduced-motion`` stops all flow.
 
-The salience rule: only two kinds of line flow. The median connector of a ▲▼ panel (base
-median to candidate median: the size of the change) and the outline of the runs that
-failed or changed outcome. Pair lines and likely-range bands are still.
+The salience rule: only three kinds of line flow. The median connector of a ▲▼ panel (base
+median to candidate median: the size of the change), the forest connector of a ▲▼ row (0
+to the estimate), and the outline of the runs that failed or changed outcome. Pair lines
+are still.
 
 ``--check`` parses every SVG's CSS and fails if anything else animates, if an animated
-element is not one of those two kinds, or if a capped interval, a whisker or a leader is
-left in a plate.
+element is not one of those three kinds, or if a likely-range band, a CI bar, a capped
+interval, a whisker or a leader is left in a plate. ``--captions`` prints the CI line of
+each plate for the PR body.
 """
 
 # ruff: noqa: PLR2004, RUF001
@@ -509,12 +509,11 @@ class Plate:
         )
 
 
-# ---------------------------------------------------------------- likely-range bands
+# ---------------------------------------------------------------- change axes
 
 
 MOVED = {"improved", "regressed"}
 SAME = {"equiv", "small"}
-RANGE_OPACITY = 0.3  # the fill of a likely-range band; its edges are solid
 
 
 def kind_of(ci: tuple[float, float], *, lower_better: bool, d: float = MARGIN) -> str:
@@ -522,21 +521,9 @@ def kind_of(ci: tuple[float, float], *, lower_better: bool, d: float = MARGIN) -
     return verdict(-b, -a, d) if lower_better else verdict(a, b, d)
 
 
-def range_band(kind: str, x: float, y: float, w: float, h: float) -> str:
-    """Draw a likely-range band: a soft fill in the verdict colour, thin solid edges.
-
-    The edges run along the two ends of the range only (top and bottom of a vertical
-    band, left and right of a horizontal one), so the band reads as "from here to here".
-    """
-    mark = VERDICT[kind][0]
-    vertical = h > w
-    if vertical:
-        edges = f"M{num(x)} {num(y)}H{num(x + w)}M{num(x)} {num(y + h)}H{num(x + w)}"
-    else:
-        edges = f"M{num(x)} {num(y)}V{num(y + h)}M{num(x + w)} {num(y)}V{num(y + h)}"
-    return rect(x, y, w, h, f"f-{mark} range", fill_opacity=RANGE_OPACITY, data_verdict=kind) + el(
-        "path", d=edges, cls=f"s-{mark} range", fill="none", stroke_width=2
-    )
+def ci_pct(ci: tuple[float, float]) -> str:
+    """Return a log-ratio CI as a percent range for a caption."""
+    return f"[{fmt(pct(ci[0]))}, {fmt(pct(ci[1]))}] %"
 
 
 def h_axis(
@@ -557,23 +544,26 @@ def h_axis(
     return "".join(out)
 
 
-def h_row(
+def est_mark(
     xs: Callable[[float], float],
     y: float,
-    ci: tuple[float, float],
     est: float,
-    *,
-    lower_better: bool,
-    d: float = MARGIN,
-    h: float = 12,
+    kind: str,
+    pl: Plate | None = None,
 ) -> str:
-    """Draw one likely-range bar on a horizontal axis, with its estimate as a tick."""
-    kind = kind_of(ci, lower_better=lower_better, d=d)
+    """Draw an estimate on a horizontal change axis as a dot in the verdict colour.
+
+    With pl, a connector runs from 0 to the estimate: on a ▲▼ row it flows toward the
+    estimate, on a ? row it is drawn still and dashed, and a ≈ row has none.
+    """
     mark = VERDICT[kind][0]
-    x0, x1 = xs(ci[0]), xs(ci[1])
-    return range_band(kind, x0, y - h / 2, x1 - x0, h) + line(
-        xs(est), y - h / 2 - 3, xs(est), y + h / 2 + 3, f"s-{mark}", 3, stroke_linecap="round"
-    )
+    out = []
+    if pl is not None and kind in MOVED:
+        out.append(line(xs(0), y, xs(est), y, f"s-{mark} estflow {pl.flow(FLOW)}", 2.5))
+    elif pl is not None and kind == "unsure":
+        out.append(line(xs(0), y, xs(est), y, f"s-{mark} dash", 2, stroke_opacity=0.6))
+    out.append(circle(xs(est), y, 5, f"f-{mark} s-plate", stroke_width=1.5))
+    return "".join(out)
 
 
 # ---------------------------------------------------------------- shared marks
@@ -628,18 +618,17 @@ def dot_panel(
     tick_labels: bool = True,
     labels: str = "two",
     r: float = 4.5,
-    range_labels: bool = False,
+    margin_label: bool = False,
     connector: bool = False,
     look: Look = FLOW,
 ) -> str:
     """Draw base and candidate as beeswarm dot columns on the metric's own axis.
 
     The grey ±Δ band sits around the base median, and a thin line marks the base median:
-    the 0 of the shift. The coloured band across the candidate column is the likely range
-    of the candidate median: the CI of the shift, mapped to data units against the base
-    median. range_labels writes "±5 % margin" and "likely range" beside the bands.
-    connector draws the base median to candidate median line, which flows on a ▲▼ panel
-    and is still on ≈ and ?.
+    the 0 of the shift. There is no interval mark: ci only sets the verdict colour.
+    margin_label writes "±5 % margin" beside the grey band. connector draws an upright
+    line from the base median level to the candidate median level, in the gap between
+    the columns; it flows on a ▲▼ panel and is still on ≈ and ?.
     """
     out = []
 
@@ -649,7 +638,7 @@ def dot_panel(
     kind = kind_of(ci, lower_better=lower_better)
     px = x0 + (48 if tick_labels else 0)
     wid = x1 - px
-    cb, cc = (px + wid * 0.2, px + wid * 0.5) if range_labels else (px + wid * 0.27, px + wid * 0.6)
+    cb, cc = (px + wid * 0.2, px + wid * 0.5) if margin_label else (px + wid * 0.27, px + wid * 0.6)
     for t in ticks or []:
         out.append(line(px, ys(t), x1, ys(t), "s-grid"))
         if tick_labels and tick_fmt:
@@ -666,9 +655,6 @@ def dot_panel(
     mark, _, _ = VERDICT[kind]
     hws = [min(max(abs(o) for o in offs) + r + 5, wid * 0.15) for offs in (ob, oc)]
     out.append(line(cb + hws[0], yv(0), cc + hws[1] + 4, yv(0), "s-muted", 1.2))
-    y_lo, y_hi = sorted((yv(ci[0]), yv(ci[1])))
-    ext = 14  # the band runs past the column, so the median bar never hides it
-    out.append(range_band(kind, cc - hws[1] - 2, y_lo, 2 * hws[1] + 2 + ext, y_hi - y_lo))
     for i in range(len(base)):
         better = (cand[i] < base[i]) == lower_better
         tok = "cand" if better else "worse"
@@ -682,14 +668,15 @@ def dot_panel(
     out += [
         circle(cc + o, p, r, "f-cand s-plate", stroke_width=1) for o, p in zip(oc, pc, strict=True)
     ]
-    if connector:  # base median to candidate median: the size of the change
+    if connector:  # base median level to candidate median level: the size of the change
         moved = kind in MOVED
         cls = f"s-{mark} medflow {pl.flow(look)}" if moved else f"s-{mark} dash"
+        xm = (cb + hws[0] + cc - hws[1]) / 2  # upright, in the gap between the columns
         out.append(
             line(
-                cb + hws[0] + 4,
+                xm,
                 ys(bmed),
-                cc - hws[1] - 4,
+                xm,
                 ys(cmed),
                 cls,
                 2.5,
@@ -700,19 +687,15 @@ def dot_panel(
         bar = line(cx - hw, ys(med), cx + hw, ys(med), "s-plate", 9, stroke_linecap="round")
         bar += line(cx - hw, ys(med), cx + hw, ys(med), f"s-{tok}", 5, stroke_linecap="round")
         out.append(bar)
-    if range_labels:
-        lx = cc + hws[1] + ext + 6
-        # the margin label sits outside the grey band, on the side away from the range
-        mid = (y_lo + y_hi) / 2
-        m_lab = (bot, "below") if mid < (top + bot) / 2 else (top, "above")
+    if margin_label:
+        lx = cc + hws[1] + 12
+        # the label sits outside the grey band, on the side away from the candidate median
+        place = (bot, "below") if ys(cmed) < (top + bot) / 2 else (top, "above")
         out.append(
             _side_labels(
                 lx,
                 x1 - lx,
-                [
-                    (m_lab[0], f"±{pct(MARGIN):.0f} % margin", "f-muted", m_lab[1]),
-                    (mid, "likely range", f"f-{VERDICT[kind][1]}", "mid"),
-                ],
+                [(place[0], f"±{pct(MARGIN):.0f} % margin", "f-muted", place[1])],
                 y0,
                 y1,
             )
@@ -723,6 +706,9 @@ def dot_panel(
                 text(cx, y1 + 26, name, "f-ink2", FS, "middle"),
                 text(cx, y1 + 45, f"n={n}", "mono f-muted", FS, "middle"),
             ]
+    elif labels == "n":
+        for cx, n in ((cb, len(base)), (cc, len(cand))):
+            out.append(text(cx, y1 + 26, f"n={n}", "mono f-muted", FS, "middle"))
     elif labels == "one":
         for cx, name, n in ((cb, "base", len(base)), (cc, "candidate", len(cand))):
             out.append(text(cx, y1 + 28, f"{name} n={n}", "f-ink2", FS, "middle"))
@@ -805,6 +791,18 @@ UNS_LD = [math.log(p.cand / p.base) for p in UNS]
 UNS_EST = mean(UNS_LD)
 UNS_C90 = bca(UNS_LD, _boot(_UR, UNS_LD))
 
+# task_duration: a fourth paired metric on the same runs, 12 % slower on the candidate
+_TD = XorShift(113)
+DUR: list[Pair] = []
+for _s in range(4):
+    for _p in range(5):
+        _b = 48.0 * SHARD_SPEED[_s] * math.exp(0.06 * _TD.norm())
+        _c = _b * math.exp(math.log(1.12) + 0.05 * _TD.norm())
+        DUR.append(Pair(_s, _p, _b, _c, "BA" if _p % 2 else "AB"))
+DUR_LD = [math.log(p.cand / p.base) for p in DUR]
+DUR_EST = mean(DUR_LD)
+DUR_C90 = bca(DUR_LD, _boot(_TD, DUR_LD))
+
 # the design plate: a metric with no real change, on VMs that slow down run by run
 _DR = XorShift(77)
 DRIFT = 0.008  # log slowdown per run on a VM
@@ -845,7 +843,9 @@ def _metric_panel(
     ci: tuple[float, float],
     est: float,
     *,
-    range_labels: bool = False,
+    margin_label: bool = False,
+    width: float = 244,
+    labels: str = "two",
 ) -> None:
     """Draw one paired metric: its name, its effect and glyph, and its dot panel."""
     kind = kind_of(ci, lower_better=True)
@@ -857,7 +857,7 @@ def _metric_panel(
         dot_panel(
             pl,
             x0=x0,
-            x1=x0 + 244,
+            x1=x0 + width,
             y0=140,
             y1=360,
             base=[p.base for p in pairs],
@@ -868,29 +868,38 @@ def _metric_panel(
             ticks=nice_ticks(lo, hi),
             tick_fmt=lambda t: f"{t:g}",
             r=4,
-            range_labels=range_labels,
+            labels=labels,
+            margin_label=margin_label,
             connector=True,
         )
     )
 
 
+VERDICT_METRICS = (
+    ("planning_time · s", PAIRS, C90, EST),
+    ("task_duration · s", DUR, DUR_C90, DUR_EST),
+    ("tracking_error · mm", TRACK, TRACK_C90, TRACK_EST),
+    ("startup_time · s", UNS, UNS_C90, UNS_EST),
+)
+WORDS = {
+    "improved": "improved",
+    "regressed": "regressed",
+    "equiv": "no change",
+    "small": "no change",
+    "unsure": "inconclusive",
+}
+
+
 def plate_verdicts(code: str) -> Plate:
-    desc = (
-        f"Three paired metrics, one per verdict. planning_time {fmt(pct(EST))} %, improved: "
-        "the coloured likely-range band of the candidate median is below the grey "
-        f"±5 % margin band. tracking_error {fmt(pct(TRACK_EST))} %, equivalent: the "
-        f"likely-range band is wholly inside the margin band. startup_time "
-        f"{fmt(pct(UNS_EST))} %, inconclusive: the likely-range band crosses the +5 % edge."
+    desc = "Four paired metrics, one per verdict, against the grey ±5 % margin band. " + "; ".join(
+        f"{name.split(' ')[0]} {fmt(pct(est))} %, 90 % CI {ci_pct(ci)}, "
+        f"{WORDS[kind_of(ci, lower_better=True)]}"
+        for name, _, ci, est in VERDICT_METRICS
     )
-    pl = Plate("Better, same, unclear", 420, desc, code=code)
-    for i, (name, pairs, ci, est) in enumerate(
-        (
-            ("planning_time · s", PAIRS, C90, EST),
-            ("tracking_error · mm", TRACK, TRACK_C90, TRACK_EST),
-            ("startup_time · s", UNS, UNS_C90, UNS_EST),
-        )
-    ):
-        _metric_panel(pl, 20 + i * 258, name, pairs, ci, est, range_labels=True)
+    pl = Plate("Better, worse, same, unclear", 400, desc, code=code)
+    pl.add(legend(W - 20, 38, [*ARMS, ("f-band s-bandEdge", "±5 % margin")]))
+    for i, (name, pairs, ci, est) in enumerate(VERDICT_METRICS):
+        _metric_panel(pl, 20 + i * 192, name, pairs, ci, est, width=180, labels="n")
     return pl
 
 
@@ -946,15 +955,16 @@ def _run_squares(
 
 
 def plate_scorecard(code: str) -> Plate:
-    k_track = kind_of(TRACK_C90, lower_better=True)
+    k_dur = kind_of(DUR_C90, lower_better=True)
     desc = (
-        f"planning_time {fmt(pct(EST))} % (90 % CI {fmt(pct(C90[0]))} to {fmt(pct(C90[1]))}), "
-        f"improved; task_success {TS_BASE}/{TS_N} to {TS_CAND}/{TS_N}, {TS_TXT}, 90 % CI "
-        f"{TS_CI_TXT}, inconclusive; tracking_error_rms {fmt(pct(TRACK_EST))} %, "
-        f"{k_track}, still. Paired ABBA, 20 pairs on 4 VMs."
+        f"planning_time {fmt(pct(EST))} % (90 % CI {ci_pct(C90)}), {WORDS[plan_kind()]}; "
+        f"task_success {TS_BASE}/{TS_N} to {TS_CAND}/{TS_N}, {TS_TXT} (90 % CI {TS_CI_TXT}), "
+        f"{WORDS[TS_KIND]}; task_duration {fmt(pct(DUR_EST))} % (90 % CI {ci_pct(DUR_C90)}), "
+        f"{WORDS[k_dur]}. Paired ABBA, 20 pairs on 4 VMs."
     )
-    pl = Plate(plan_title(), 536, desc, code=code)
-    _metric_panel(pl, 20, "planning_time · s", PAIRS, C90, EST, range_labels=True)
+    title = f"Planning {abs(pct(EST)):.0f} % faster, tasks {abs(pct(DUR_EST)):.0f} % slower"
+    pl = Plate(title, 536, desc, code=code)
+    _metric_panel(pl, 20, "planning_time · s", PAIRS, C90, EST, margin_label=True)
     x0 = 278
     g, _ = glyph(TS_KIND, x0 + len(TS_TXT) * 15.5 + 8, 116, 26)
     pl.add(text(x0, 80, "task_success", "mono f-ink2"), text(x0, 116, TS_TXT, "f-ink bb", 28), g)
@@ -974,9 +984,9 @@ def plate_scorecard(code: str) -> Plate:
 
     pl.add(
         h_axis(xs, 306, 334, 0.05, [(0, "0")], 352),
-        h_row(xs, 320, TS_CI, TS_DIFF, lower_better=False, d=0.05),
+        est_mark(xs, 320, TS_DIFF, TS_KIND),
     )
-    _metric_panel(pl, 536, "tracking_error · mm", TRACK, TRACK_C90, TRACK_EST)
+    _metric_panel(pl, 536, "task_duration · s", DUR, DUR_C90, DUR_EST)
     pl.add(
         run_rows(Strip(20, 430), abba_rows(PAIRS)),
         text(308, 442, "run order →", "f-muted"),
@@ -997,7 +1007,11 @@ class Metric(NamedTuple):
 
 
 def forest_metrics() -> list[Metric]:
-    """Return #1188's 12 metrics, sorted by effect. The draws match its G2 stream."""
+    """Return #1188's 12 metrics, sorted by effect. The draws match its G2 stream.
+
+    Two rows regress: pos_error (its effect is +8 % here, not +2 %) and task_duration
+    (drawn from DUR in place of shutdown_time).
+    """
     lg = math.log
     spec = [
         ("time_to_simulating", "min", lg(0.93), (lg(0.905), lg(0.957))),
@@ -1007,7 +1021,7 @@ def forest_metrics() -> list[Metric]:
         ("smoothness", "max", lg(1.003), (lg(0.988), lg(1.019))),
         ("startup_time", "min", lg(1.01), (lg(0.97), lg(1.045))),
         ("shutdown_time", "min", lg(1.0), (lg(0.965), lg(1.04))),
-        ("pos_error", "min", lg(1.02), (lg(0.99), lg(1.048))),
+        ("pos_error", "min", lg(1.08), (lg(1.055), lg(1.105))),
         ("yaw_error", "min", lg(0.99), (lg(0.968), lg(1.012))),
         ("plan_path_stretch", "min", lg(1.0), (lg(0.982), lg(1.018))),
         ("tracking_error_max", "min", lg(1.03), (lg(0.97), lg(1.10))),
@@ -1016,6 +1030,7 @@ def forest_metrics() -> list[Metric]:
     rows = [
         Metric("planning_time", "min", LOG_DIFF, EST, C90),
         Metric("tracking_error_rms", "min", TRACK_LD, TRACK_EST, TRACK_C90),
+        Metric("task_duration", "min", DUR_LD, DUR_EST, DUR_C90),
     ]
     for name, d, e, (a0, a1) in spec:
         s = (a1 - a0) / 2 / 1.729 * math.sqrt(20)
@@ -1023,8 +1038,8 @@ def forest_metrics() -> list[Metric]:
         cand = [b * math.exp(e + s * rng.norm()) for b in base]
         diffs = [math.log(c / b) for b, c in zip(base, cand, strict=True)]
         m, lo_ci, hi_ci = t_ci(diffs, 1.729)
-        if name == "tracking_error_rms":
-            continue  # drawn from TRACK, as in G1; the draws keep the other rows' streams
+        if name in {"tracking_error_rms", "shutdown_time"}:
+            continue  # drawn from TRACK and DUR; the draws keep the other rows' streams
         rows.append(Metric(name, d, diffs, m, (lo_ci, hi_ci)))
     rows.sort(key=lambda r: r.est)
     return rows
@@ -1032,16 +1047,15 @@ def forest_metrics() -> list[Metric]:
 
 def forest_title(rows: list[Metric]) -> str:
     kinds = [r.kind for r in rows]
-    n_imp = kinds.count("improved")
-    n_un = kinds.count("unsure") + kinds.count("regressed")
+    n_imp, n_reg, n_un = (kinds.count(k) for k in ("improved", "regressed", "unsure"))
     n_eq = kinds.count("equiv") + kinds.count("small")
-    return f"{n_imp} better, {n_un} unclear, {n_eq} same"
+    return f"{n_imp} better, {n_reg} worse, {n_un} unclear, {n_eq} same"
 
 
 def plate_forest(code: str) -> Plate:
     rows = forest_metrics()
-    desc = "12 metrics, change vs base, likely range (90 % CI) against the ±5 % band: " + "; ".join(
-        f"{r.name} {fmt(pct(r.est))} % {r.kind}" for r in rows
+    desc = "12 metrics, change vs base against the ±5 % margin band: " + "; ".join(
+        f"{r.name} {fmt(pct(r.est))} % (90 % CI {ci_pct(r.ci)}), {WORDS[r.kind]}" for r in rows
     )
     pitch, top = 38, 92
     bottom = top + pitch * (len(rows) - 1)
@@ -1063,11 +1077,9 @@ def plate_forest(code: str) -> Plate:
                 for x, o in zip(dx, swarm(dx, 2.2, one_sided=True), strict=True)
             )
         )
-        pl.add(h_row(xs, y - 6, r.ci, r.est, lower_better=r.direction == "min", h=10))
+        pl.add(est_mark(xs, y - 6, r.est, r.kind, pl))
         g, _ = glyph(r.kind, ax1 + 22, y + 5, FS + 3)
         pl.add(g)
-        if not i:  # name the bar once, above the first row
-            pl.add(text(xs(r.ci[0]), y - 16, "likely range", f"f-{VERDICT[r.kind][1]}", FS))
     pl.add(
         text((ax0 + ax1) / 2, bottom + 70, "change vs base", "f-ink2", FS, "middle"),
         legend(W - 20, 66, [("f-cand", "one pair"), ("f-band", "±5 % margin")]),
@@ -1076,12 +1088,12 @@ def plate_forest(code: str) -> Plate:
 
 
 def plate_est(code: str) -> Plate:
-    """Draw planning_time as two dot columns, with the likely-range band."""
+    """Draw planning_time as two dot columns."""
     kind = plan_kind()
     desc = (
         f"planning_time, 20 ABBA pairs on 4 VMs: {sum(p.cand < p.base for p in PAIRS)} of 20 "
-        f"pairs faster. Effect {fmt(pct(EST))} %, 90 % CI [{fmt(pct(C90[0]))}, "
-        f"{fmt(pct(C90[1]))}] %, below the -5 % edge."
+        f"pairs faster. Effect {fmt(pct(EST))} %, 90 % CI {ci_pct(C90)}, "
+        f"{WORDS[kind]}."
     )
     pl = Plate(plan_title(), 480, desc, (kind, f"{fmt(pct(EST))} %"), code)
     lo, hi = axis_range([p.base for p in PAIRS] + [p.cand for p in PAIRS])
@@ -1101,7 +1113,7 @@ def plate_est(code: str) -> Plate:
             tick_fmt=lambda t: f"{t:.1f} s",
             labels="one",
             r=5.5,
-            range_labels=True,
+            margin_label=True,
             connector=True,
         ),
         run_rows(Strip(540, 120, cell=14, pair_gap=5, pitch=24, label_w=54), abba_rows(PAIRS)),
@@ -1118,9 +1130,9 @@ def plate_waffle(code: str) -> Plate:
     sk_kind = kind_of(SK_CI, lower_better=True, d=0.05)
     desc = (
         f"task_success {TS_BASE}/{TS_N} to {TS_CAND}/{TS_N}: {TS_TXT}, 90 % CI {TS_CI_TXT}, "
-        f"past the +5 pp edge and across 0: inconclusive. required_sigkill: base "
-        f"{SK_BASE}/{SK_N} killed, candidate {SK_CAND}/{SK_N}, 90 % CI "
-        f"[{fmt(SK_CI[0] * 100)}, {fmt(SK_CI[1] * 100)}] pp: {sk_kind}."
+        f"{WORDS[TS_KIND]}. required_sigkill: base {SK_BASE}/{SK_N} killed, candidate "
+        f"{SK_CAND}/{SK_N}, {fmt(SK_DIFF * 100)} pp, 90 % CI "
+        f"[{fmt(SK_CI[0] * 100)}, {fmt(SK_CI[1] * 100)}] pp, {WORDS[sk_kind]}."
     )
     pl = Plate("Flake fixed; success still unclear", 340, desc, code=code)
     g, _ = glyph(TS_KIND, 138, 120, 26)
@@ -1146,7 +1158,7 @@ def plate_waffle(code: str) -> Plate:
     pl.add(
         text(20, 277, "change"),
         h_axis(sc, 257, 285, 0.05, pp, 310),
-        h_row(sc, 271, TS_CI, TS_DIFF, lower_better=False, d=0.05),
+        est_mark(sc, 271, TS_DIFF, TS_KIND),
     )
     fx = 420
     g, _ = glyph(sk_kind, fx + 226, 120, 26)
@@ -1169,7 +1181,7 @@ def plate_waffle(code: str) -> Plate:
     pl.add(
         text(fx, 277, "change"),
         h_axis(rs, 257, 285, 0.05, pp, 310),
-        h_row(rs, 271, SK_CI, SK_DIFF, lower_better=True, d=0.05),
+        est_mark(rs, 271, SK_DIFF, sk_kind),
     )
     return pl
 
@@ -1188,8 +1200,8 @@ def plate_sweep(code: str) -> Plate:
             (v, base, cand, m, (lo_ci, hi_ci), kind_of((lo_ci, hi_ci), lower_better=True))
         )
     last = groups[-1]
-    desc = "task_duration, 8 speeds x 6 paired repeats: " + "; ".join(
-        f"{g[0]} m/s {fmt(pct(g[3]))} % {g[5]}" for g in groups
+    desc = "drive_time, 8 speeds x 6 paired repeats: " + "; ".join(
+        f"{g[0]} m/s {fmt(pct(g[3]))} % (90 % CI {ci_pct(g[4])}), {WORDS[g[5]]}" for g in groups
     )
     first = next(g[0] for g in groups if g[5] in MOVED)
     pl = Plate(f"Faster from {first:.1f} m/s", 460, desc, (last[5], f"{fmt(pct(last[3]))} %"), code)
@@ -1251,9 +1263,9 @@ def plate_design(code: str) -> Plate:
     p_kind, b_kind = kind_of(p_ci, lower_better=True), kind_of(b_ci, lower_better=True)
     desc = (
         f"A metric with no real change on VMs that slow down {DRIFT * 100:.1f} % per run. "
-        f"Paired ABBA on 4 VMs: {fmt(pct(p_est))} %, 90 % CI [{fmt(pct(p_ci[0]))}, "
-        f"{fmt(pct(p_ci[1]))}] %, {p_kind}. Blocked, all base then all candidate on one VM: "
-        f"{fmt(pct(b_est))} %, CI [{fmt(pct(b_ci[0]))}, {fmt(pct(b_ci[1]))}] %, {b_kind}: "
+        f"Paired ABBA on 4 VMs: {fmt(pct(p_est))} %, 90 % CI {ci_pct(p_ci)}, "
+        f"{WORDS[p_kind]}. Blocked, all base then all candidate on one VM: "
+        f"{fmt(pct(b_est))} %, 90 % CI {ci_pct(b_ci)}, {WORDS[b_kind]}: "
         "the drift lands on the one boundary between the blocks."
     )
     pl = Plate("Blocked runs fake a slowdown", 300, desc, code=code)
@@ -1295,8 +1307,8 @@ def plate_design(code: str) -> Plate:
     yp, yk = st.y(1) + st.h + 5, blk.y(0) + blk.h / 2
     pl.add(
         h_axis(xs, 70, 240, MARGIN, pct_ticks(lo, hi, 3), 262),
-        h_row(xs, yp, p_ci, p_est, lower_better=True),
-        h_row(xs, yk, b_ci, b_est, lower_better=True),
+        est_mark(xs, yp, p_est, p_kind),
+        est_mark(xs, yk, b_est, b_kind),
         text((ax0 + ax1) / 2, 284, "change", "f-ink2", FS, "middle"),
     )
     for yy, kind in ((yp, p_kind), (yk, b_kind)):
@@ -1428,9 +1440,9 @@ def plate_looks(code: str) -> Plate:
 
 
 PLATES = {
-    "d1_verdicts.svg": lambda: plate_verdicts("D1 · one ▲, one ≈, one ?"),
-    "d2_scorecard.svg": lambda: plate_scorecard("D2 · scorecard · ≈ is still"),
-    "d3_forest.svg": lambda: plate_forest("D3 · forest"),
+    "d1_verdicts.svg": lambda: plate_verdicts("D1 · ▲ ▼ ≈ ?"),
+    "d2_scorecard.svg": lambda: plate_scorecard("D2 · scorecard · one ▼"),
+    "d3_forest.svg": lambda: plate_forest("D3 · forest · 0 → estimate flows on ▲▼ rows"),
     "d4_estimation.svg": lambda: plate_est("D4 · estimation"),
     "d5_waffle.svg": lambda: plate_waffle("D5 · waffle"),
     "d6_sweep.svg": lambda: plate_sweep("D6 · sweep · ≈ points are still"),
@@ -1516,20 +1528,33 @@ def check_motion(path: Path) -> tuple[int, list[str]]:
     return count, errs
 
 
-# The kinds of element that may flow, by class. Anything else that flows fails the check.
-SALIENT = ("medflow", "runflag")
-# Classes of the marks this demo dropped: capped CI intervals, whiskers, decision leaders
-# and flowing pair lines. A plate that still has one fails the check.
-GONE = {"ci", "cap", "caps", "whisker", "whiskers", "lead", "pairflow"}
+# The kinds of element that may flow, by class: the median connector, the forest
+# connector from 0 to the estimate, and the outline of failed or changed runs. Anything
+# else that flows fails the check.
+SALIENT = ("medflow", "estflow", "runflag")
+# Classes of the marks this demo dropped: likely-range bands, CI bars, capped intervals,
+# whiskers, decision leaders and flowing pair lines. A plate that still has one fails.
+GONE = {
+    "range",
+    "likely",
+    "ci",
+    "cap",
+    "caps",
+    "whisker",
+    "whiskers",
+    "lead",
+    "pairflow",
+}
+GONE_WORDS = ("likely range", "likely-range", "whisker")
 
 
 def check_salience(path: Path) -> tuple[dict[str, int], list[str]]:
-    """Check that only the median connector and the run outline flow, and nothing is left
-    of the capped CI marker.
+    """Check that only the salient lines flow, and that no interval mark is left.
 
-    Each .fl element must be a median connector (.medflow) or the outline of the runs that
-    failed or changed outcome (.runflag). No element may carry a GONE class, and every
-    likely-range band (.range) must be still and solid.
+    Each .fl element must be a median connector (.medflow), a forest connector
+    (.estflow) or the outline of the runs that failed or changed outcome (.runflag). No
+    element may carry a GONE class or a data-verdict band, and no text may name a likely
+    range or a whisker.
     """
     root = ET.parse(path).getroot()  # noqa: S314 - our own generated files
     errs: list[str] = []
@@ -1540,8 +1565,10 @@ def check_salience(path: Path) -> tuple[dict[str, int], list[str]]:
         left = classes & GONE
         if left:
             errs.append(f"<{tag}> has a dropped mark class {sorted(left)}")
-        if "range" in classes and ("fl" in classes or "dash" in classes):
-            errs.append(f"<{tag}> likely-range band is dashed or flows")
+        if "data-verdict" in e.attrib:
+            errs.append(f"<{tag}> is a verdict band")
+        if tag in {"text", "title"} and any(w in (e.text or "").lower() for w in GONE_WORDS):
+            errs.append(f"<{tag}> names a dropped mark: {e.text!r}")
         if "fl" not in classes:
             continue
         kinds = [k for k in SALIENT if k in classes]
@@ -1573,6 +1600,10 @@ def main() -> None:
             )
         sys.stdout.write(f"total {total} flowing elements; {bad} files fail\n")
         sys.exit(1 if bad else 0)
+    if "--captions" in sys.argv:
+        for name, make in PLATES.items():
+            sys.stdout.write(f"{name}: {make().desc}\n")
+        return
     if "--facts" in sys.argv:
         rows = forest_metrics()
         sys.stdout.write(
