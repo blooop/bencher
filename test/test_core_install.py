@@ -304,6 +304,40 @@ def test_the_cli_still_writes_json_without_the_plotting_stack(tmp_path, core_env
     assert "schema_version" in json.loads(json_path.read_text(encoding="utf-8"))
 
 
+def test_evidence_rows_report_works_without_scipy_or_the_plotting_stack(tmp_path, core_env):
+    """The statistical evidence report needs numpy and matplotlib only; scipy is optional."""
+    rows = {
+        name: [
+            {"metric": "planning_time", "units": "s", "repeat": i, "value": 1.0 + 0.01 * i + shift}
+            for i in range(12)
+        ]
+        + [
+            {
+                "metric": "task_success",
+                "direction": "maximize",
+                "repeat": i,
+                "value": float(i != 3 or shift == 0),
+            }
+            for i in range(12)
+        ]
+        for name, shift in (("base", 0.0), ("cand", -0.2))
+    }
+    for name, data in rows.items():
+        (tmp_path / f"{name}.json").write_text(json.dumps(data), encoding="utf-8")
+    out = tmp_path / "report"
+    proc = _run(
+        [*BENCHER_CLI, "evidence-rows", "base.json", "cand.json", "--report", str(out)],
+        tmp_path,
+        core_env,
+    )
+    assert proc.returncode == 0, proc.stderr
+    evidence = (out / "evidence.md").read_text(encoding="utf-8")
+    assert "<picture>" in evidence
+    # Without scipy the exact two-proportion test falls back to Fisher's, and says so.
+    assert "Fisher exact (Barnard needs scipy)" in evidence
+    assert (out / "scorecard-dark.png").exists()
+
+
 def test_a_sweep_that_asks_for_plots_warns_once_and_still_collects(tmp_path, core_env):
     probe = HEAVY_FEATURE_PROBE.replace("res = bench.collect(", "res = bench.plot_sweep(").format(
         call="bench.plot_sweep(input_vars=['x'], result_vars=['y']); print(res.to_dataset()['y'].size)"
