@@ -6,6 +6,15 @@ RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix
     && chmod +x /usr/local/bin/pixi \
     && pixi info
 
+# The base image ships a CA bundle that still trusts emSign ECC Root CA - G3,
+# whose intermediates had their keys cracked in October 2026
+# (CVE-2026-111943). Ubuntu removed it in ca-certificates 20260816ubuntu0.24.04.1;
+# the test fails the build if the apt mirror has not caught up.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && test ! -e /etc/ssl/certs/emSign_ECC_Root_CA_-_G3.pem
+
 # set some user and workdir settings to work nicely with vscode
 USER vscode
 WORKDIR /home/vscode
