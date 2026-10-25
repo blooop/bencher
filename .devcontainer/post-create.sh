@@ -35,8 +35,15 @@ if [ -n "${host:-}" ]; then
     fi
 fi
 
-# 3. The environment itself.
-pixi install
+# 3. The environment itself, installed from the committed lock as it stands.
+#
+# --frozen, because a plain `pixi install` lets the image's pixi rewrite
+# pixi.lock -- pixi 0.83 turns a version-6 lock into version 7 -- and a clone
+# that is dirty before anyone has touched it makes `dl rm` refuse it as
+# unsaved work. --locked is not the answer either: it fails container creation
+# whenever the lock's format is older than this pixi writes. To change
+# dependencies, run `pixi install` (or `pixi add`) yourself and commit the lock.
+pixi install --frozen
 
 # 4. Optional tasks. A descendant that does not define one simply skips it --
 # hardcoding `pixi run prek-install` here fails container creation outright with
@@ -53,7 +60,7 @@ tasks=$(pixi task list --summary 2>&1 | tr ' ,' '\n' || true)
 for task in "${optional_tasks[@]}"; do
     if grep -qx "$task" <<<"$tasks"; then
         echo "post-create: running '$task'"
-        pixi run "$task"
+        pixi run --frozen "$task"
     else
         echo "post-create: no '$task' task in this repo, skipping"
     fi
