@@ -4,7 +4,8 @@ Each ``draw_*`` function takes the :class:`~bencher.evidence_stats.MetricEvidenc
 records it shows and a :class:`Theme` and returns a ``matplotlib.figure.Figure``
 built without pyplot (no global backend state, safe in any process).
 :func:`save_both` draws one graphic in the light and the dark theme and writes
-each as a PNG at 2× (1344 px wide, shown at 672) and as an SVG. In the SVG a few
+each as a PNG at 2× and as an SVG. Each graphic is as wide as its content: 408 px
+for one metric, 540 px for several metrics or points (:data:`ONE_PX`, :data:`MULTI_PX`). In the SVG a few
 dashed lines flow (CSS on ``stroke-dashoffset`` only; ``prefers-reduced-motion`` stops
 it); the PNG is the same chart, still.
 
@@ -21,8 +22,8 @@ The rules every graphic keeps:
   (base median to candidate median), the forest connector (0 to the estimate), and
   the outline of the runs whose outcome changed. A ? connector is still.
 * Little text: a title that states the finding, one big effect number with the
-  verdict glyph, tick labels and column labels; nothing under 10.5 pt (12 px at the
-  672 px display width). Everything else goes in the Markdown and the alt text.
+  verdict glyph, tick labels and column labels; nothing under 10 pt (1 pt is 1 px on
+  screen). Everything else goes in the Markdown and the alt text.
 * The run order shows as one row of small squares per shard under the panels
   (grey base, blue candidate, in execution order); no row when it was not recorded.
 * Okabe–Ito colours, each backed by a glyph (▲ ▼ ≈ ?); text wears the theme's
@@ -56,11 +57,22 @@ if TYPE_CHECKING:
     from matplotlib.axes import Axes
     from matplotlib.figure import Figure
 
-WIDTH_IN = 8.0
-# The <img> width in the Markdown: narrower than GitHub's ~880 px body column.
-DISPLAY_PX = 672
-# 8 in at 168 dpi is 1344 px: a 2× image for the 672 px display width.
-DPI = 2 * DISPLAY_PX / WIDTH_IN
+# Each graphic is sized for what it holds, not for the page. A figure is laid out in
+# inches at 72 display px per inch, so 1 pt of type is 1 px on screen; the PNG is saved at
+# 144 dpi, a 2× image. The <img> width in the Markdown is the figure's width in px.
+PX_PER_IN = 72
+DPI = 2 * PX_PER_IN
+# One metric (estimation, shift, waffle, power, diagnostics, a one-panel scorecard): the
+# width is what the two arm columns need, not the page: the y-tick gutter, the arms panel
+# (two swarm columns of at most 2 × 0.58 in, 1.9 in apart) and the right margin.
+_Y_GUTTER_IN = 0.85
+_ARMS_W_IN = 4.6
+_SIDE_IN = 0.22  # left and right page margin
+ONE_PX = round((_Y_GUTTER_IN + _ARMS_W_IN + _SIDE_IN) * PX_PER_IN)  # 408
+ONE_IN = ONE_PX / PX_PER_IN  # a whole number of px, so the 2× PNG is exactly 2 × ONE_PX
+# Several metrics or points (a scorecard of several panels, the forest, sweeps, heatmap).
+MULTI_PX = 540
+MULTI_IN = MULTI_PX / PX_PER_IN
 # Open Sans where it is installed; DejaVu Sans (always there) supplies ▲ ▼ ≈ and the fallback.
 FONT = ("Open Sans", "DejaVu Sans")
 
@@ -122,18 +134,17 @@ DARK = Theme(
 )
 THEMES = (LIGHT, DARK)
 
-# Type scale (pt). The figure is 8 in shown 672 px wide: 1 pt is ~1.17 px on screen, so
-# 10.5 pt is the 12 px floor.
-_TITLE = 18
-_HERO = 26
-_HERO_SMALL = 21  # the scorecard's hero when it has three or more columns
-_LABEL = 12
+# Type scale (pt). At 72 display px per inch 1 pt is 1 px on screen: 10 pt is the 10 px floor.
+_TITLE = 14
+_HERO = 18
+_HERO_SMALL = 15  # the scorecard's hero when it has three columns
+_HERO_TINY = 13  # the scorecard's hero when it has four columns
+_LABEL = 11.5
 _TICK = 11
-_MIN_PT = 10.5
+_MIN_PT = 10
 
 _ZERO = 1e-9
-_SIDE_IN = 0.32  # left and right page margin
-_HEAD_IN = 0.85  # title row height
+_HEAD_IN = 0.52  # title row height
 _FOOT_IN = 0.18  # bottom margin
 
 
@@ -476,19 +487,20 @@ def design_facts(cells: Sequence[MetricEvidence], *, points: int = 1) -> list[tu
 
 
 class _Page:
-    """A figure of fixed width whose axes are placed in inches from the top-left."""
+    """A figure *width_in* wide whose axes are placed in inches from the top-left."""
 
-    def __init__(self, height_in: float, theme: Theme) -> None:
+    def __init__(self, height_in: float, theme: Theme, width_in: float = ONE_IN) -> None:
         from matplotlib.figure import Figure
 
+        self.w = width_in
         self.h = height_in
         self.theme = theme
-        self.fig = Figure(figsize=(WIDTH_IN, height_in), dpi=DPI, facecolor=theme.surface)
+        self.fig = Figure(figsize=(width_in, height_in), dpi=DPI, facecolor=theme.surface)
         self.fig.set_layout_engine("none")
 
     def axes(self, x: float, top: float, w: float, h: float) -> Axes:
         """An axes at *x* in from the left, *top* in from the top, *w* × *h* inches."""
-        ax = self.fig.add_axes((x / WIDTH_IN, 1 - (top + h) / self.h, w / WIDTH_IN, h / self.h))
+        ax = self.fig.add_axes((x / self.w, 1 - (top + h) / self.h, w / self.w, h / self.h))
         ax.set_facecolor(self.theme.surface)
         for side in ax.spines.values():
             side.set_visible(False)
@@ -505,12 +517,12 @@ class _Page:
         return ax
 
     def text(self, x: float, top: float, s: str, **kw: Any) -> Any:
-        return self.fig.text(x / WIDTH_IN, 1 - top / self.h, s, **kw)
+        return self.fig.text(x / self.w, 1 - top / self.h, s, **kw)
 
     def header(self, title: str, hero: MetricEvidence | None = None) -> None:
         """The title at the left; the big effect number with its glyph at the right."""
         t = self.theme
-        room = WIDTH_IN - 2 * _SIDE_IN - 0.3
+        room = self.w - 2 * _SIDE_IN - 0.25
         if hero is not None:
             room -= _text_w_in(hero.verdict.glyph + " " + fmt_change(hero), _HERO)
         size = _TITLE
@@ -518,7 +530,7 @@ class _Page:
             size -= 1
         self.text(
             _SIDE_IN,
-            0.22,
+            0.17,
             title,
             ha="left",
             va="top",
@@ -527,7 +539,7 @@ class _Page:
             color=t.ink,
         )
         if hero is not None:
-            _hero(self, WIDTH_IN - _SIDE_IN, 0.16, hero, ha="right")
+            _hero(self, self.w - _SIDE_IN, 0.12, hero, ha="right")
 
 
 def _text_w_in(text: str, size: float) -> float:
@@ -663,7 +675,7 @@ def _to_data(m: MetricEvidence, anchor: float, value: float) -> float:
 # Flow: the only motion. A few dashed strokes carry a gid; the saved SVG gets a class on
 # each and a <style> that moves only their stroke-dashoffset. The PNG is the still frame.
 
-_PT_PER_PX = WIDTH_IN * 72.0 / DISPLAY_PX  # the figure is 8 in (576 pt) shown 672 px wide
+_PT_PER_PX = 72.0 / PX_PER_IN  # 1: a figure inch is 72 pt and 72 display px
 FLOW_DASH_PX = 4.0
 FLOW_TRAVEL_PX = 24.0  # three whole 4-4 cycles: the loop has no seam
 FLOW_SPEED_PX = 8.0  # px per second
@@ -1277,19 +1289,20 @@ def draw_scorecard(
         n = len(metrics)
         cols = max(1, min(per_row, n))
         rows = math.ceil(n / cols)
-        usable = WIDTH_IN - 2 * _SIDE_IN
-        gutter = 0.3
-        panel_w = min(5.0 if cols == 1 else 3.7, (usable - gutter * (cols - 1)) / cols)
-        x_start = (WIDTH_IN - (cols * panel_w + gutter * (cols - 1))) / 2
+        width = ONE_IN if cols == 1 else MULTI_IN
+        usable = width - 2 * _SIDE_IN
+        gutter = 0.22
+        panel_w = (usable - gutter * (cols - 1)) / cols
+        x_start = _SIDE_IN
         binary_only = all(isinstance(m.effect, ProportionEffect) for m in metrics)
-        name_h = 0.34 if n > 1 else 0.0
-        hero_h, label_h = 0.62, 0.62
-        plot_h = 1.0 if binary_only else 2.5 if cols < 4 else 2.2  # noqa: PLR2004
-        row_h = name_h + hero_h + plot_h + label_h + 0.2
+        name_h = 0.26 if n > 1 else 0.0
+        hero_size = {1: _HERO, 2: _HERO, 3: _HERO_SMALL}.get(cols, _HERO_TINY)
+        hero_h, label_h = hero_size / 72 + 0.18, 0.5
+        plot_h = 0.9 if binary_only else 2.0 if cols < 4 else 1.7  # noqa: PLR2004
+        row_h = name_h + hero_h + plot_h + label_h + 0.12
         order_h = _order_height(metrics[:1], usable, order)
-        page = _Page(_HEAD_IN + rows * row_h + order_h + _FOOT_IN, theme)
+        page = _Page(_HEAD_IN + rows * row_h + order_h + _FOOT_IN, theme, width)
         page.header(title or short_summary(metrics))
-        hero_size = _HERO if cols <= 2 else _HERO_SMALL  # noqa: PLR2004
         for i, m in enumerate(metrics):
             r, c = divmod(i, cols)
             px = x_start + c * (panel_w + gutter)
@@ -1310,7 +1323,7 @@ def draw_scorecard(
                 ax = page.canvas(px, ptop, panel_w, plot_h + label_h)
                 _mini_waffles(ax, m, theme, panel_w, plot_h + label_h)
             else:
-                tick_w = 0.72
+                tick_w = 0.62
                 ax = page.axes(px + tick_w, ptop, panel_w - tick_w, plot_h)
                 _arms(ax, m, theme, panel_w - tick_w, plot_h)
         _draw_order(page, metrics[:1], _HEAD_IN + rows * row_h, _SIDE_IN, usable, order)
@@ -1344,10 +1357,11 @@ def draw_forest(
         names = list(labels) if labels is not None else [humanize(m.name) for m in metrics]
         by_effect = sorted(range(len(metrics)), key=lambda i: metrics[i].effect.estimate)
         n = len(metrics)
-        row_h = 0.56
-        axis_h = 0.5
-        order_h = _order_height(metrics[:1], WIDTH_IN - 2 * _SIDE_IN, order)
-        page = _Page(_HEAD_IN + n * row_h + axis_h + order_h + _FOOT_IN, theme)
+        width = MULTI_IN
+        row_h = 0.36
+        axis_h = 0.38
+        order_h = _order_height(metrics[:1], width - 2 * _SIDE_IN, order)
+        page = _Page(_HEAD_IN + n * row_h + axis_h + order_h + _FOOT_IN, theme, width)
         if title is None:
             moved = sum(
                 m.verdict.kind in (VerdictKind.IMPROVED, VerdictKind.REGRESSED) for m in metrics
@@ -1355,7 +1369,9 @@ def draw_forest(
             same = sum(m.verdict.kind == VerdictKind.EQUIVALENT for m in metrics)
             title = f"All {n} unchanged" if same == n else f"{moved} of {n} moved"
         page.header(title)
-        name_w, strip_x, strip_w, ax_x, ax_w = 2.15, 2.6, 1.55, 4.45, 2.75
+        glyph_w = 0.4
+        name_w, strip_x, strip_w, ax_x = 1.72, 2.06, 1.5, 3.82
+        ax_w = width - _SIDE_IN - glyph_w - ax_x
         ax = page.axes(ax_x, _HEAD_IN, ax_w, n * row_h)
         ax.set_ylim(-0.5, n - 0.5)
         ax.set_yticks([])
@@ -1366,7 +1382,7 @@ def draw_forest(
             colour = t.verdict_colour(m.verdict.kind)
             est = m.effect.estimate
             _connector(ax, [0.0, est], [y, y], m, t, "estflow", lw=2.0, still=False)
-            _estimate_dot(ax, est, y, m, t)
+            _estimate_dot(ax, est, y, m, t, size=9.0)
             top = _HEAD_IN + row * row_h
             page.text(
                 _SIDE_IN + name_w,
@@ -1379,29 +1395,29 @@ def draw_forest(
                 weight="bold" if m.primary else "normal",
             )
             page.text(
-                ax_x + ax_w + 0.25,
+                ax_x + ax_w + 0.18,
                 top + row_h / 2,
                 m.verdict.glyph,
                 ha="left",
                 va="center",
-                fontsize=_LABEL + 3,
+                fontsize=_LABEL + 2,
                 color=colour,
                 weight="bold",
             )
             if isinstance(m.effect, Effect):
                 _dot_strip(
-                    page.canvas(strip_x, top + 0.06, strip_w, row_h - 0.12),
+                    page.canvas(strip_x, top + 0.04, strip_w, row_h - 0.08),
                     m,
                     t,
                     strip_w,
-                    row_h - 0.12,
+                    row_h - 0.08,
                 )
         _draw_order(
             page,
             metrics[:1],
             _HEAD_IN + n * row_h + axis_h,
             _SIDE_IN,
-            WIDTH_IN - 2 * _SIDE_IN,
+            width - 2 * _SIDE_IN,
             order,
         )
         return page.fig
@@ -1424,12 +1440,12 @@ def _dot_strip(ax: Axes, m: MetricEvidence, theme: Theme, w_in: float, h_in: flo
             np.full(len(vals), y),
             "o",
             color=colour,
-            markersize=5.0,
+            markersize=4.0,
             alpha=0.75,
             markeredgewidth=0,
         )
         med = float(np.median(vals))
-        ax.plot([x_of(np.array([med]))[0]] * 2, [y - 0.1, y + 0.1], color=theme.ink, lw=2.4)
+        ax.plot([x_of(np.array([med]))[0]] * 2, [y - 0.065, y + 0.065], color=theme.ink, lw=2.0)
 
 
 # --------------------------------------------------------------------------------------
@@ -1449,14 +1465,16 @@ def draw_estimation(
     if not isinstance(m.effect, Effect):
         raise TypeError("draw_estimation needs a continuous metric")
     with mpl.rc_context(_rc()):
-        plot_h = 3.0
-        order_h = _order_height([m], WIDTH_IN - 2 * _SIDE_IN, order)
-        page = _Page(_HEAD_IN + plot_h + 0.7 + order_h + _FOOT_IN, theme)
+        width = ONE_IN
+        plot_h = 2.5
+        order_h = _order_height([m], width - 2 * _SIDE_IN, order)
+        page = _Page(_HEAD_IN + plot_h + 0.6 + order_h + _FOOT_IN, theme, width)
         page.header(title or chart_title(m), m)
-        x, w = 1.05, WIDTH_IN - _SIDE_IN - 1.05
+        x = _Y_GUTTER_IN
+        w = width - _SIDE_IN - x  # _ARMS_W_IN, to the px
         ax = page.axes(x, _HEAD_IN + 0.1, w, plot_h)
         _arms(ax, m, theme, w, plot_h)
-        _draw_order(page, [m], _HEAD_IN + plot_h + 0.7, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN, order)
+        _draw_order(page, [m], _HEAD_IN + plot_h + 0.6, _SIDE_IN, width - 2 * _SIDE_IN, order)
         return page.fig
 
 
@@ -1474,10 +1492,12 @@ def draw_raincloud_shift(
     sf = shift_function(m.base, m.cand, scale=scale, paired=m.paired)
     with mpl.rc_context(_rc()):
         t = theme
-        page = _Page(6.4, theme)
+        width = ONE_IN
+        cloud_x, cloud_h, shift_h = 1.25, 2.1, 1.45
+        cloud_w = width - _SIDE_IN - cloud_x
+        page = _Page(_HEAD_IN + 0.1 + cloud_h + 0.55 + shift_h + 0.4, theme, width)
         page.header(title or _shift_title(sf, m), m)
-        cloud_w, cloud_h = 5.95, 2.6
-        ax = page.axes(1.7, _HEAD_IN + 0.1, cloud_w, cloud_h)
+        ax = page.axes(cloud_x, _HEAD_IN + 0.1, cloud_w, cloud_h)
         ax.set_yticks([])
         b, c = m.base[np.isfinite(m.base)], m.cand[np.isfinite(m.cand)]
         both = np.concatenate([b, c])
@@ -1521,7 +1541,7 @@ def draw_raincloud_shift(
                 **_ring(t, size),
             )
             page.text(
-                1.55,
+                cloud_x - 0.12,
                 _HEAD_IN + 0.1 + (1.72 - (y0 + 0.05)) * cloud_h / 2.14,
                 f"{name}\nn={len(vals)}",
                 ha="right",
@@ -1532,7 +1552,7 @@ def draw_raincloud_shift(
             )
         _value_ticks(ax, m.units, axis="x", nbins=5)
         # Shift function.
-        sx = page.axes(1.7, _HEAD_IN + cloud_h + 0.7, cloud_w, 1.9)
+        sx = page.axes(cloud_x, _HEAD_IN + 0.1 + cloud_h + 0.55, cloud_w, shift_h)
         sx.grid(axis="y", color=t.grid, linewidth=0.8)
         x = np.arange(len(sf.probs))
         lim = (min(sf.diff.min(), -_delta(m)) * 1.3, max(sf.diff.max(), _delta(m)) * 1.3)
@@ -1547,13 +1567,13 @@ def draw_raincloud_shift(
                 [sf.diff[i]],
                 "o",
                 color=colour,
-                markersize=10,
+                markersize=9,
                 markeredgecolor=t.surface,
-                markeredgewidth=1.8,
+                markeredgewidth=1.6,
                 zorder=4,
             )
         sx.set_xticks(x, [f"q{i + 1}" for i in range(len(x))])
-        sx.tick_params(axis="x", labelsize=_LABEL, colors=t.ink)
+        sx.tick_params(axis="x", labelsize=_TICK, colors=t.ink)
         sx.set_xlim(-0.5, len(x) - 0.5)
         return page.fig
 
@@ -1624,20 +1644,21 @@ def draw_waffle(
         t = theme
         nmax = max(e.n_base, e.n_cand)
         cols = _waffle_columns(nmax)
-        grid_x = 1.75
-        cell = min(0.32, (WIDTH_IN - _SIDE_IN - grid_x) / cols)
+        width = ONE_IN
+        grid_x = 1.25
+        cell = min(0.26, (width - _SIDE_IN - grid_x) / cols)
         blocks = [
             ("base", e.k_base, e.n_base, t.base),
             ("candidate", e.k_cand, e.n_cand, t.cand),
         ]
         heights = [math.ceil(n / cols) * cell + 0.25 for _, _, n, _ in blocks]
-        diff_h = 0.75
-        order_h = _order_height([m], WIDTH_IN - 2 * _SIDE_IN, order)
+        diff_h = 0.6
+        order_h = _order_height([m], width - 2 * _SIDE_IN, order)
         page = _Page(
-            _HEAD_IN + 0.15 + sum(heights) + 0.15 + diff_h + 0.6 + order_h + _FOOT_IN, theme
+            _HEAD_IN + 0.1 + sum(heights) + 0.15 + diff_h + 0.5 + order_h + _FOOT_IN, theme, width
         )
         page.header(title or chart_title(m), m)
-        top = _HEAD_IN + 0.15
+        top = _HEAD_IN + 0.1
         good_is_one = m.direction == "maximize"
         for (arm, k, n, colour), bh in zip(blocks, heights, strict=True):
             ax = page.canvas(grid_x, top, cols * cell + 0.05, bh)
@@ -1656,7 +1677,7 @@ def draw_waffle(
             )
             rows = math.ceil(n / cols)
             page.text(
-                grid_x - 0.2,
+                grid_x - 0.14,
                 top + 0.05 + rows * cell / 2,
                 f"{arm}\nn={n}",
                 ha="right",
@@ -1667,7 +1688,7 @@ def draw_waffle(
             )
             top += bh
         # The difference: one bar over the ±Δ band, with the zero-failure bound as a tick.
-        dx = page.axes(grid_x, top + 0.15, WIDTH_IN - _SIDE_IN - grid_x - 0.1, diff_h)
+        dx = page.axes(grid_x, top + 0.15, width - _SIDE_IN - grid_x - 0.1, diff_h)
         dx.set_yticks([])
         dx.set_ylim(-1, 1)
         lim = effect_limits([m], pad=0.2)
@@ -1676,12 +1697,12 @@ def draw_waffle(
             reach = max(abs(lim[0]), abs(bound) * 1.15)
             lim = (-reach, reach)
         _effect_axis(dx, m, lim, t, vertical=False)
-        _estimate_dot(dx, e.estimate, 0, m, t, size=13.0)
+        _estimate_dot(dx, e.estimate, 0, m, t, size=11.0)
         if bound is not None:
             dx.plot(
                 [bound, bound], [-0.75, 0.75], color=t.ink, lw=2.6, zorder=8, solid_capstyle="butt"
             )
-        _draw_order(page, [m], top + 0.15 + diff_h + 0.6, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN, order)
+        _draw_order(page, [m], top + 0.15 + diff_h + 0.5, _SIDE_IN, width - 2 * _SIDE_IN, order)
         return page.fig
 
 
@@ -1707,13 +1728,15 @@ def draw_sweep(
     with mpl.rc_context(_rc()):
         t = theme
         m0 = cells[0]
-        top_h, eff_h = 2.7, 1.75
-        order_h = _order_height(cells, WIDTH_IN - 2 * _SIDE_IN, order)
-        page = _Page(_HEAD_IN + 0.1 + top_h + 0.25 + eff_h + 0.55 + order_h + _FOOT_IN, theme)
+        width = MULTI_IN
+        top_h, eff_h = 2.2, 1.4
+        order_h = _order_height(cells, width - 2 * _SIDE_IN, order)
+        page = _Page(_HEAD_IN + 0.1 + top_h + 0.25 + eff_h + 0.5 + order_h + _FOOT_IN, theme, width)
         moved = sum(m.verdict.kind in (VerdictKind.IMPROVED, VerdictKind.REGRESSED) for m in cells)
         page.header(title or f"{moved} of {len(cells)} {x_name} points moved")
         x = np.arange(len(cells), dtype=float)
-        plot_x, plot_w = 1.2, WIDTH_IN - 1.2 - 1.3
+        plot_x = 0.95
+        plot_w = width - plot_x - 1.05
         ax = page.axes(plot_x, _HEAD_IN + 0.1, plot_w, top_h)
         xlim = (-0.6, len(cells) - 0.4)
         ax.set_xlim(*xlim)
@@ -1775,20 +1798,20 @@ def draw_sweep(
                 m.verdict.glyph,
                 ha="center",
                 va="bottom",
-                fontsize=_LABEL + 1,
+                fontsize=_LABEL,
                 color=colour,
                 weight="bold",
                 zorder=8,
             )
         ex.set_xlim(*xlim)
         ex.set_xticks(x, [f"{v:g}" for v in xs])
-        ex.tick_params(axis="x", labelsize=_LABEL, colors=t.ink)
+        ex.tick_params(axis="x", labelsize=_TICK, colors=t.ink)
         _draw_order(
             page,
             cells,
-            _HEAD_IN + 0.1 + top_h + 0.25 + eff_h + 0.55,
+            _HEAD_IN + 0.1 + top_h + 0.25 + eff_h + 0.5,
             _SIDE_IN,
-            WIDTH_IN - 2 * _SIDE_IN,
+            width - 2 * _SIDE_IN,
             order,
         )
         return page.fig
@@ -1822,12 +1845,14 @@ def draw_heatmap(
     with mpl.rc_context(_rc()):
         t = theme
         ny, nx = len(ys), len(xs)
-        cell_w = min(1.25, 4.9 / nx)
-        cell_h = min(0.8, cell_w * 0.75)
+        width = MULTI_IN
+        gx = 1.2
+        cell_w = min(1.0, (width - gx - 1.45) / nx)
+        cell_h = min(0.6, cell_w * 0.7)
         flat = [m for row in cells for m in row]
-        order_h = _order_height(flat, WIDTH_IN - 2 * _SIDE_IN, order)
+        order_h = _order_height(flat, width - 2 * _SIDE_IN, order)
         grid_h = ny * cell_h
-        page = _Page(_HEAD_IN + 0.15 + grid_h + 0.85 + order_h + _FOOT_IN, theme)
+        page = _Page(_HEAD_IN + 0.15 + grid_h + 0.75 + order_h + _FOOT_IN, theme, width)
         m0 = flat[0]
         n_better = sum(m.verdict.kind == VerdictKind.IMPROVED for m in flat)
         n_worse = sum(m.verdict.kind == VerdictKind.REGRESSED for m in flat)
@@ -1835,7 +1860,6 @@ def draw_heatmap(
         oriented = np.array([[m.sign * m.effect.estimate for m in row] for row in cells])
         reach = max(float(np.abs(oriented).max()), _delta(m0)) or 1.0
         cmap = LinearSegmentedColormap.from_list("bo", [t.worse, t.mid, t.cand])
-        gx = 1.55
         ax = page.axes(gx, _HEAD_IN + 0.15, nx * cell_w, grid_h)
         ax.tick_params(colors=t.ink, labelsize=_LABEL, length=0)
         for j, row in enumerate(cells):
@@ -1876,7 +1900,7 @@ def draw_heatmap(
         ax.set_xlabel(x_name, fontsize=_LABEL, color=t.ink2)
         ax.set_ylabel(y_name, fontsize=_LABEL, color=t.ink2)
         # The key: the ramp (▲ at the better end) and one hatched swatch for "?".
-        kx_x = gx + nx * cell_w + 0.45
+        kx_x = gx + nx * cell_w + 0.3
         kx = page.axes(kx_x, _HEAD_IN + 0.15, 0.22, grid_h * 0.72)
         kx.imshow(
             np.linspace(1, 0, 256)[:, None], aspect="auto", cmap=cmap, extent=(0, 1, -reach, reach)
@@ -1913,7 +1937,7 @@ def draw_heatmap(
             weight="bold",
         )
         _draw_order(
-            page, flat, _HEAD_IN + 0.15 + grid_h + 0.85, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN, order
+            page, flat, _HEAD_IN + 0.15 + grid_h + 0.75, _SIDE_IN, width - 2 * _SIDE_IN, order
         )
         return page.fig
 
@@ -1931,7 +1955,8 @@ def draw_power(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = N
         raise ValueError("draw_power needs a verdict with an MDE")
     with mpl.rc_context(_rc()):
         t = theme
-        page = _Page(2.6, theme)
+        width = ONE_IN
+        page = _Page(_HEAD_IN + 0.4 + 0.5 + 0.5, theme, width)
         mde_d = abs(display(m, v.mde))
         delta_d = abs(display(m, v.margin))
         unit = unit_suffix(m)
@@ -1941,8 +1966,8 @@ def draw_power(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = N
         page.header(title)
         if v.runs_needed:
             page.text(
-                WIDTH_IN - _SIDE_IN,
-                0.16,
+                width - _SIDE_IN,
+                0.12,
                 f"n {v.n} → {v.runs_needed}",
                 ha="right",
                 va="top",
@@ -1950,7 +1975,7 @@ def draw_power(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = N
                 weight="bold",
                 color=t.ink,
             )
-        ax = page.axes(_SIDE_IN + 0.75, _HEAD_IN + 0.45, 5.6, 0.55)
+        ax = page.axes(_SIDE_IN + 0.6, _HEAD_IN + 0.4, width - 2 * _SIDE_IN - 0.75, 0.5)
         ax.set_yticks([])
         reach = max(mde_d, delta_d) * 1.3
         ax.set_xlim(0, reach)
@@ -1968,8 +1993,8 @@ def draw_power(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = N
             weight="bold",
         )
         page.text(
-            _SIDE_IN + 0.65,
-            _HEAD_IN + 0.45 + 0.275,
+            _SIDE_IN + 0.5,
+            _HEAD_IN + 0.4 + 0.25,
             "MDE",
             ha="right",
             va="center",
@@ -2007,7 +2032,8 @@ def draw_diagnostics(
     shard_markers = ("o", "s", "D", "^", "v", "P", "X")
     with mpl.rc_context(_rc()):
         t = theme
-        page = _Page(3.9, theme)
+        width = ONE_IN
+        page = _Page(_HEAD_IN + 0.1 + 2.1 + 0.45, theme, width)
         slopes = _arm_trends(m, order_base, order_cand)
         drift = [s[3] for s in slopes if s is not None]
         if title is None:
@@ -2018,7 +2044,7 @@ def draw_diagnostics(
                 else "No drift within either arm"
             )
         page.header(title)
-        ax = page.axes(1.15, _HEAD_IN + 0.1, 5.4, 2.5)
+        ax = page.axes(0.9, _HEAD_IN + 0.1, width - 0.9 - 0.95, 2.1)
         ax.grid(axis="y", color=t.grid, linewidth=0.8)
         ax.set_axisbelow(True)
         if aa_band is not None and np.isfinite(b).any():
@@ -2090,6 +2116,15 @@ def draw_diagnostics(
 
 # --------------------------------------------------------------------------------------
 # Saving.
+
+
+def display_px(png: str | Path) -> int:
+    """The display width (the ``<img width>``) of a 2× PNG that :func:`save_both` wrote."""
+    with Path(png).open("rb") as f:
+        head = f.read(24)
+    if head[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"{png} is not a PNG")
+    return round(int.from_bytes(head[16:20], "big") * PX_PER_IN / DPI)
 
 
 def save_both(draw: Callable[[Theme], Figure], out_dir: str | Path, stem: str) -> dict[str, Path]:

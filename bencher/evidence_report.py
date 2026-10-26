@@ -392,7 +392,7 @@ def _url_for(url_base: UrlBase) -> Callable[[str], str]:
     return url_base
 
 
-def picture(light: str, dark: str, alt: str, width: int = ig.DISPLAY_PX) -> str:
+def picture(light: str, dark: str, alt: str, width: int = ig.ONE_PX) -> str:
     """A GitHub ``<picture>`` with a dark-mode source and the light image as fallback."""
     alt_attr = alt.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
     return (
@@ -418,7 +418,8 @@ class _Images:
         for path in paths.values():
             self.files[path.name] = path
         light, dark = paths["light"].name, paths["dark"].name
-        return lambda url_for: picture(url_for(light), url_for(dark), alt)
+        width = ig.display_px(paths["light"])
+        return lambda url_for: picture(url_for(light), url_for(dark), alt, width)
 
 
 def _slug(text: str) -> str:

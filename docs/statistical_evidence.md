@@ -161,8 +161,9 @@ Common rules:
 * **A small text budget.** Each graphic carries a title that states the finding in at
   most six words, one big effect number with the verdict glyph, tick labels and column
   labels. Nothing else: no chips, subtitles, footers, method lines, or legends that a
-  direct label can replace. No text is under 12 px at the 672 px display width (10.5 pt
-  in the 8 in figure, 24 px in the 1344 px PNG). What the graphic leaves out is in the
+  direct label can replace. The figure is laid out at 72 display px per inch, so 1 pt is
+  1 px on screen: labels are 11.5 px, ticks 11 px, the title 14 px, the big number 18 px, and no
+  text is under 10 px (20 px in the 2× PNG). What the graphic leaves out is in the
   Markdown caption, the alt text, or the `<details>` method block: the CIs, the test,
   n, the MDE, the seeds, the run-order pattern and the shard names.
 * **The design is shown, not written.** Pairing shows as the pair lines. The run order
@@ -192,7 +193,14 @@ Common rules:
   `#E69F00`. Dark theme: candidate `#3D9BD6`, better `#1FA07C`, worse `#E0662A`,
   inconclusive `#BE8714`. A glyph (▲ ▼ ≈ ?) always backs the colour, and text wears the
   theme's ink, never a data colour.
-* Every image ships in light and dark, as PNG at 2× (1344 px wide, shown at 672), plus
+* **Each graphic is as wide as its content.** A graphic of one metric (the estimation
+  plot, the shift plot, the waffle, the power bar, the diagnostics, a one-panel
+  scorecard) is 408 px wide, like a figure in a paper: the width is what the two
+  arm columns and the tick gutter need, so a single metric never stretches to fill. A graphic of several metrics or
+  points (a scorecard of several panels, the forest, the sweep, the heatmap) is 540 px
+  wide. The forest adds one compact row of about 26 px per metric. The `<img width>` in
+  the Markdown is the graphic's own width.
+* Every image ships in light and dark, as PNG at 2× (816 or 1080 px wide), plus
   the animated SVG. The Markdown uses `<picture>` with `prefers-color-scheme`; the
   `#gh-dark-mode-only` fragment is deprecated. It links the SVG by default (GitHub
   serves a blob's `?raw=true` SVG as `image/svg+xml`, so a PR page draws it) and the
