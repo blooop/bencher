@@ -392,7 +392,7 @@ def _url_for(url_base: UrlBase) -> Callable[[str], str]:
     return url_base
 
 
-def picture(light: str, dark: str, alt: str, width: int = 800) -> str:
+def picture(light: str, dark: str, alt: str, width: int = ig.ONE_PX) -> str:
     """A GitHub ``<picture>`` with a dark-mode source and the light image as fallback."""
     alt_attr = alt.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
     return (
@@ -418,7 +418,8 @@ class _Images:
         for path in paths.values():
             self.files[path.name] = path
         light, dark = paths["light"].name, paths["dark"].name
-        return lambda url_for: picture(url_for(light), url_for(dark), alt)
+        width = ig.display_px(paths["light"])
+        return lambda url_for: picture(url_for(light), url_for(dark), alt, width)
 
 
 def _slug(text: str) -> str:
@@ -445,12 +446,20 @@ def _forest_key(rows: Sequence[MetricEvidence]) -> str:
     return key
 
 
-def _ci_line(cells: Sequence[MetricEvidence], labels: Sequence[str] | None = None) -> str:
-    """The CIs the graphic does not draw, exact: ``90 % CI: `a` −17.8 … −13.1 %; …``."""
+def _ci_line(
+    cells: Sequence[MetricEvidence], labels: Sequence[str] | None = None, *, units: bool = False
+) -> str:
+    """The CIs the graphic does not draw, exact: ``90 % CI: `a` −17.8 … −13.1 %; …``.
+
+    With *units* (the views of one metric each), a metric shown in its units gets the CI
+    in units first and the % CI after it: ``−0.13 … −0.10 s (−17.8 … −13.1 %)``.
+    """
     names = labels if labels is not None else [f"`{m.name}`" for m in cells]
     parts = []
     for name, m in zip(names, cells, strict=True):
         level, _, rest = ig.fmt_ci(m).partition(" CI ")
+        if units and ig.in_units(m):
+            rest = f"{ig.fmt_change_ci(m).partition(' CI ')[2]} ({rest})"
         parts.append((level, f"{name} {rest}"))
     levels = sorted({lv for lv, _ in parts})
     if len(levels) == 1:
@@ -490,10 +499,20 @@ def _vm_names(cells: Sequence[MetricEvidence]) -> str:
     return ", ".join(f"VM {k + 1} = `{s}`" for k, s in enumerate(names))
 
 
-def _order_note(cells: Sequence[MetricEvidence], *, where: str = "under the panels") -> str:
-    """What the run-order rows show, or why the graphic has none."""
+def _order_note(
+    cells: Sequence[MetricEvidence],
+    *,
+    where: str = "under the panels",
+    order: ig.OrderMode = "auto",
+) -> str:
+    """What the run-order rows show, or the design in one line when the graphic has none."""
     if not ig.order_recorded(cells):
-        return "The run order was not recorded, so the graphic has no run-order row."
+        return (
+            "The run order was not recorded, so the graphic has no run-order row "
+            f"(design: {ig.design_sentence(cells)})."
+        )
+    if not ig.show_order(cells, order):
+        return f"Design: {ig.design_sentence(cells)}."
     vms = _vm_names(cells)
     rows = f", one row per VM ({vms})" if vms else ""
     return (
@@ -564,11 +583,24 @@ def _effect_sentence(m: MetricEvidence) -> str:
     cis = ig.fmt_ci(m)
     if e.ci95.level > e.ci.level:
         cis += f"; {ig.fmt_ci(m, level95=True)}"
-    text = f"`{m.name}`{point} {ig.fmt_effect(m)} [{cis}], {e.method}, n={e.n_base}"
+    text = f"`{m.name}`{point} {ig.fmt_effect(m)} [{cis}]"
+    if ig.in_units(m):
+        unit_cis = ig.fmt_change_ci(m)
+        if e.ci95.level > e.ci.level:
+            unit_cis += f"; {ig.fmt_change_ci(m, level95=True)}"
+        text = (
+            f"`{m.name}`{point} {ig.fmt_change(m)} [{unit_cis}], that is {ig.fmt_effect(m)} [{cis}]"
+        )
+    text += f", {e.method}, n={e.n_base}"
     text += " pairs" if e.paired else f"/{e.n_cand}"
     if e.n_clusters:
         text += f" in {e.n_clusters} shards"
     text += "."
+    if ig.in_units(m):
+        text += (
+            f" The test is on the ratio; the change in {m.units.strip()} is that ratio and its CI "
+            f"at the base median {ig.fmt_base_median(m)}: base median × (ratio − 1)."
+        )
     if m.verdict.mde is not None:
         text += f" MDE {ig.fmt_mde(m)} at 80 % power."
     if e.robust is not None:
@@ -644,8 +676,16 @@ def write_report(
     skipped: Sequence[str] = (),
     diagnostics: bool = True,
     svg: bool = True,
+    order: ig.OrderMode = "auto",
 ) -> Report:
-    """Draw every graphic into *out_dir* and write ``evidence.md`` there (spec §6)."""
+    """Draw every graphic into *out_dir* and write ``evidence.md`` there (spec §6).
+
+    *order* says when a graphic draws the run-order strip: ``"auto"`` (only when the
+    design is not simple, see :func:`bencher.infographic.simple_design`), ``"always"``
+    or ``"never"``. Without the strip the caption states the design in one line.
+    """
+    if order not in ig.ORDER_MODES:
+        raise ValueError(f"order must be one of {ig.ORDER_MODES}, not {order!r}")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     img = _Images(out)
@@ -664,17 +704,21 @@ def write_report(
     tiles = _tile_metrics(singles)
     if tiles:
         alt = "Scorecard. " + " ".join(ig.alt_text(m) for m in tiles)
-        sections.append(img.add("scorecard", lambda t: ig.draw_scorecard(tiles, t), alt))
+        sections.append(
+            img.add("scorecard", lambda t: ig.draw_scorecard(tiles, t, order=order), alt)
+        )
     if tiles:
-        text(_ci_line(tiles))
+        text(_ci_line(tiles, units=True))
     text(f"**{summary}** — {_design(cells, n_primary)}.\n")
     if tiles:
-        text(f"*{_arms_key(tiles)} {_order_note(tiles[:1])}*\n")
+        text(f"*{_arms_key(tiles)} {_order_note(tiles[:1], order=order)}*\n")
     for kinds, stem in ((("positive",), "forest"), (("binary", "fraction"), "forest-rates")):
         rows = [m for m in singles if m.kind in kinds]
         if len(rows) > MAX_FOREST_ROWS:
             alt = "Forest plot. " + " ".join(ig.alt_text(m) for m in rows)
-            sections.append(img.add(stem, lambda t, rows=rows: ig.draw_forest(rows, t), alt))
+            sections.append(
+                img.add(stem, lambda t, rows=rows: ig.draw_forest(rows, t, order=order), alt)
+            )
             text(_ci_line(rows))
             text(f"*{_forest_key(rows)}*\n")
     # One section per primary metric, and per secondary metric that did not stay equivalent.
@@ -685,15 +729,22 @@ def write_report(
         text(f"### {ig.headline(m)} {m.verdict.glyph}\n")
         if isinstance(m.effect, ProportionEffect):
             sections.append(
-                img.add(f"{stem}-waffle", lambda t, m=m: ig.draw_waffle(m, t), ig.alt_text(m))
+                img.add(
+                    f"{stem}-waffle",
+                    lambda t, m=m: ig.draw_waffle(m, t, order=order),
+                    ig.alt_text(m),
+                )
             )
         else:
             sections.append(
                 img.add(
-                    f"{stem}-estimation", lambda t, m=m: ig.draw_estimation(m, t), ig.alt_text(m)
+                    f"{stem}-estimation",
+                    lambda t, m=m: ig.draw_estimation(m, t, order=order),
+                    ig.alt_text(m),
                 )
             )
-        text(_effect_sentence(m) + "\n")
+        design = "" if ig.show_order([m], order) else f" Design: {ig.design_sentence([m])}."
+        text(_effect_sentence(m) + design + "\n")
         if _needs_shift(m):
             sections.append(
                 img.add(
@@ -745,7 +796,9 @@ def write_report(
             sections.append(
                 img.add(
                     f"{stem}-sweep",
-                    lambda t, c=cells_g, xs=xs, k=key: ig.draw_sweep(c, xs, t, x_name=k),
+                    lambda t, c=cells_g, xs=xs, k=key: ig.draw_sweep(
+                        c, xs, t, x_name=k, order=order
+                    ),
                     alt,
                 )
             )
@@ -755,7 +808,7 @@ def write_report(
                 "the medians, and a dashed line runs from the base to the candidate median; the "
                 "points sit at even steps in sweep order. Bottom: the change at each point over "
                 f"the margin {ig.fmt_margin(cells_g[0])}. "
-                f"{_order_note(cells_g, where='under the graphic')}*\n"
+                f"{_order_note(cells_g, where='under the graphic', order=order)}*\n"
             )
         elif len(varying) == 2:  # noqa: PLR2004
             kx, ky = varying
@@ -768,7 +821,7 @@ def write_report(
                     img.add(
                         f"{stem}-heatmap",
                         lambda t, gr=grid, xs=xs, ys=ys, kx=kx, ky=ky: ig.draw_heatmap(
-                            gr, xs, ys, t, x_name=kx, y_name=ky
+                            gr, xs, ys, t, x_name=kx, y_name=ky, order=order
                         ),
                         alt,
                     )
@@ -776,14 +829,14 @@ def write_report(
                 text(
                     "*Each cell is the change at that point, rounded to a whole number: blue "
                     f"better, orange worse; hatched (?): the CI crosses {ig.fmt_margin(cells_g[0])}. "
-                    f"{_order_note(cells_g, where='under the graphic')}*\n"
+                    f"{_order_note(cells_g, where='under the graphic', order=order)}*\n"
                 )
         elif cells_g[0].kind == "positive" or all(m.kind == cells_g[0].kind for m in cells_g):
             labels = [_point_label(m.point) for m in cells_g]
             sections.append(
                 img.add(
                     f"{stem}-forest",
-                    lambda t, c=cells_g, lab=labels: ig.draw_forest(c, t, labels=lab),
+                    lambda t, c=cells_g, lab=labels: ig.draw_forest(c, t, labels=lab, order=order),
                     alt,
                 )
             )
@@ -807,9 +860,7 @@ def write_report(
         "bootstrap (10 000 resamples, fixed seed) from 10 units per arm, Welch t below that. "
         "Holm over the primary metrics (their CIs widened to α/m), Benjamini–Hochberg over the "
         "rest. n was fixed before the run; no peeking correction is applied. "
-        "In each estimation plot the right panel is the bootstrap distribution of the change, "
-        "with the estimate as a dot, on the % axis; in each waffle the dot under the squares "
-        "is the difference over the shaded margin.\n\n"
+        "In each waffle the dot under the squares is the difference over the shaded margin.\n\n"
         + (_design_line(singles[:1]) + "\n\n" if singles else "")
         + _verdict_table(cells)
     )
@@ -862,12 +913,13 @@ def report_from_rows(
     paired: bool = False,
     url_base: UrlBase = None,
     svg: bool = True,
+    order: ig.OrderMode = "auto",
 ) -> Report:
-    """The report for two kbench row lists."""
+    """The report for two kbench row lists (*order*: see :func:`write_report`)."""
     groups, skipped = analyse_data(
         data_from_rows(base_rows, cand_rows), primary=primary, margin=margin, paired=paired
     )
-    return write_report(groups, out_dir, url_base=url_base, skipped=skipped, svg=svg)
+    return write_report(groups, out_dir, url_base=url_base, skipped=skipped, svg=svg, order=order)
 
 
 def report_from_results(
@@ -880,12 +932,13 @@ def report_from_results(
     paired: bool = False,
     url_base: UrlBase = None,
     svg: bool = True,
+    order: ig.OrderMode = "auto",
 ) -> Report:
-    """The report for two bencher recordings."""
+    """The report for two bencher recordings (*order*: see :func:`write_report`)."""
     groups, skipped = analyse_data(
         data_from_results(baseline, candidate), primary=primary, margin=margin, paired=paired
     )
-    return write_report(groups, out_dir, url_base=url_base, skipped=skipped, svg=svg)
+    return write_report(groups, out_dir, url_base=url_base, skipped=skipped, svg=svg, order=order)
 
 
 def main_rows(argv: Sequence[str]) -> int:
@@ -918,6 +971,7 @@ def main_rows(argv: Sequence[str]) -> int:
             paired=args.paired,
             url_base=args.url_base,
             svg=not args.still_png,
+            order=args.order,
         )
     except (ValueError, KeyError) as exc:
         print(f"evidence-rows failed: {exc}", file=sys.stderr)  # noqa: T201 - CLI error output
@@ -949,4 +1003,10 @@ def add_report_options(parser: Any) -> None:
         dest="still_png",
         action="store_true",
         help="link the still PNGs, not the animated SVGs (for a host that does not serve SVG as an image)",
+    )
+    parser.add_argument(
+        "--order",
+        choices=ig.ORDER_MODES,
+        default="auto",
+        help="draw the run-order strip: auto (only when the design is not simple), always or never",
     )

@@ -410,6 +410,7 @@ def _run_report(args: argparse.Namespace, baseline: BenchResult, candidate: Benc
             paired=args.paired,
             url_base=args.url_base,
             svg=not args.still_png,
+            order=args.order,
         )
     except ValueError as exc:
         print(f"compare --report failed: {exc}", file=sys.stderr)  # noqa: T201 - CLI error output

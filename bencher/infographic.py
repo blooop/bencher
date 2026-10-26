@@ -4,7 +4,8 @@ Each ``draw_*`` function takes the :class:`~bencher.evidence_stats.MetricEvidenc
 records it shows and a :class:`Theme` and returns a ``matplotlib.figure.Figure``
 built without pyplot (no global backend state, safe in any process).
 :func:`save_both` draws one graphic in the light and the dark theme and writes
-each as a PNG at 2× (1600 px wide, shown at 800) and as an SVG. In the SVG a few
+each as a PNG at 2× and as an SVG. Each graphic is as wide as its content: 490 px
+for one metric, 648 px for several metrics or points (:data:`ONE_PX`, :data:`MULTI_PX`). In the SVG a few
 dashed lines flow (CSS on ``stroke-dashoffset`` only; ``prefers-reduced-motion`` stops
 it); the PNG is the same chart, still.
 
@@ -21,8 +22,9 @@ The rules every graphic keeps:
   (base median to candidate median), the forest connector (0 to the estimate), and
   the outline of the runs whose outcome changed. A ? connector is still.
 * Little text: a title that states the finding, one big effect number with the
-  verdict glyph, tick labels and column labels; nothing under 11 pt (15 px at the
-  800 px display width). Everything else goes in the Markdown and the alt text.
+  verdict glyph, tick labels, column labels and the value of each summary mark beside
+  it (each arm's median, each forest row's change, each arm's rate); nothing under
+  10 pt (1 pt is 1.2 px on screen). Everything else goes in the Markdown and the alt text.
 * The run order shows as one row of small squares per shard under the panels
   (grey base, blue candidate, in execution order); no row when it was not recorded.
 * Okabe–Ito colours, each backed by a glyph (▲ ▼ ≈ ?); text wears the theme's
@@ -37,7 +39,7 @@ import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
@@ -56,9 +58,24 @@ if TYPE_CHECKING:
     from matplotlib.axes import Axes
     from matplotlib.figure import Figure
 
-WIDTH_IN = 8.0
-# 8 in at 200 dpi is 1600 px: a 2× image for an 800 px wide PR body.
-DPI = 200
+# Each graphic is sized for what it holds, not for the page. A figure is laid out in
+# inches and shown at 86.4 display px per inch (1.2 px per pt), so 11 pt tick labels are
+# about 13 px on screen, close to GitHub's 14 px body text. The PNG is saved at 2 × that,
+# a 2× image. The <img> width in the Markdown is the figure's width in display px.
+ZOOM = 1.2
+PX_PER_IN = 72 * ZOOM
+DPI = 2 * PX_PER_IN
+# One metric (estimation, shift, waffle, power, diagnostics, a one-panel scorecard): the
+# width is what the two arm columns need, not the page: the y-tick gutter, the arms panel
+# (two swarm columns of at most 2 × 0.58 in, 1.9 in apart) and the right margin.
+_Y_GUTTER_IN = 0.85
+_ARMS_W_IN = 4.6
+_SIDE_IN = 0.22  # left and right page margin
+ONE_PX = round((_Y_GUTTER_IN + _ARMS_W_IN + _SIDE_IN) * PX_PER_IN)  # 490
+ONE_IN = ONE_PX / PX_PER_IN  # a whole number of px, so the 2× PNG is exactly 2 × ONE_PX
+# Several metrics or points (a scorecard of several panels, the forest, sweeps, heatmap).
+MULTI_PX = 648
+MULTI_IN = MULTI_PX / PX_PER_IN
 # Open Sans where it is installed; DejaVu Sans (always there) supplies ▲ ▼ ≈ and the fallback.
 FONT = ("Open Sans", "DejaVu Sans")
 
@@ -120,18 +137,19 @@ DARK = Theme(
 )
 THEMES = (LIGHT, DARK)
 
-# Type scale (pt). The figure is 8 in shown 800 px wide: 1 pt is ~1.39 px on screen, so
-# 11 pt is the 15 px floor.
-_TITLE = 19
-_HERO = 28
-_LABEL = 13
-_TICK = 11.5
-_MIN_PT = 11
+# Type scale (pt). On screen 1 pt is ZOOM = 1.2 px: title 16 px, hero 20 px, labels 14 px,
+# ticks 13 px, and the 10 pt floor (value labels too) is 12 px.
+_TITLE = 13.5
+_HERO = 17
+_HERO_SMALL = 15  # the scorecard's hero when it has three columns
+_HERO_TINY = 13  # the scorecard's hero when it has four columns
+_LABEL = 11.5
+_TICK = 11
+_MIN_PT = 10
+_VALUE = _MIN_PT  # the value labels beside the marks they summarise
 
 _ZERO = 1e-9
-_DENSITY_FLOOR = 0.01  # below this the KDE outline is not drawn (no hairline at 0)
-_SIDE_IN = 0.32  # left and right page margin
-_HEAD_IN = 0.85  # title row height
+_HEAD_IN = 0.52  # title row height
 _FOOT_IN = 0.18  # bottom margin
 
 
@@ -176,6 +194,80 @@ def fmt_signed(value: float, digits: int = 1) -> str:
 def fmt_effect(m: MetricEvidence) -> str:
     """The headline number: ``−18.4 %``, ``+5.6 pp`` or ``+0.12 m``."""
     return fmt_signed(display(m, m.effect.estimate), _digits(m)) + unit_suffix(m)
+
+
+def in_units(m: MetricEvidence) -> bool:
+    """Whether a view of *m* alone shows its change in the metric's units, not as a ratio.
+
+    A positive metric is analysed as a log ratio; when it has a unit, the change is
+    shown in that unit at the base median (:func:`unit_change`). A positive metric
+    with no unit (a ratio-type quantity) stays in %; a signed metric is already in its
+    units, and a binary or fraction metric in pp.
+    """
+    return m.kind == "positive" and bool(m.units.strip())
+
+
+def _base_median(m: MetricEvidence) -> float:
+    b = m.base[np.isfinite(m.base)]
+    return float(np.median(b)) if len(b) else 0.0
+
+
+def unit_change(m: MetricEvidence, value: float) -> float:
+    """A log-ratio *value* of positive *m* in its units: base median × (ratio − 1)."""
+    return _base_median(m) * math.expm1(value)
+
+
+def _unit_digits(m: MetricEvidence) -> int:
+    """Decimals that give the 95 % CI's width in units two significant figures."""
+    ci = m.effect.ci95
+    span = abs(unit_change(m, ci.high) - unit_change(m, ci.low))
+    return max(0, min(4, 1 - math.floor(math.log10(span)))) if span > 0 else 2
+
+
+def fmt_change(m: MetricEvidence) -> str:
+    """The big number of a view of *m* alone: ``+1.84 s`` in units, else :func:`fmt_effect`."""
+    if not in_units(m):
+        return fmt_effect(m)
+    return f"{fmt_signed(unit_change(m, m.effect.estimate), _unit_digits(m))} {m.units.strip()}"
+
+
+def fmt_change_ci(m: MetricEvidence, *, level95: bool = False) -> str:
+    """The CI in units, from the ratio's CI at the base median: ``90 % CI +1.2 … +2.5 s``."""
+    if not in_units(m):
+        return fmt_ci(m, level95=level95)
+    ci = m.effect.ci95 if level95 else m.effect.ci
+    d = _unit_digits(m)
+    lo, hi = fmt_signed(unit_change(m, ci.low), d), fmt_signed(unit_change(m, ci.high), d)
+    return f"{round(ci.level * 100):d} % CI {lo} … {hi} {m.units.strip()}"
+
+
+def fmt_base_median(m: MetricEvidence) -> str:
+    """``11.6 s``: the base median the unit change is taken at."""
+    return f"{_base_median(m):.3g} {m.units.strip()}"
+
+
+def fmt_value(value: float, units: str = "", digits: int = 3) -> str:
+    """A metric value for a label beside its mark: ``0.738 s``, ``31.6 s``, ``1250 ms``."""
+    text = f"{value:.0f}" if abs(value) >= 10**digits else f"{value:.{digits}g}"
+    if "e" in text:
+        text = f"{value:.{digits - 1}e}"
+    text = text.replace("-", "−")
+    return f"{text} {units.strip()}" if units.strip() else text
+
+
+def fmt_values(values: Sequence[float], units: str = "") -> list[str]:
+    """Each value at three significant figures, or more until values that differ read different."""
+    for digits in range(3, 7):
+        texts = [fmt_value(v, units, digits) for v in values]
+        distinct = len({round(v, 12) for v in values})
+        if len(set(texts)) == distinct:
+            return texts
+    return texts
+
+
+def fmt_rate(k: int, n: int) -> str:
+    """``18/20 · 90 %``: an arm's count and rate."""
+    return f"{k}/{n} · {100 * k / n:.0f} %" if n else f"{k}/{n}"
 
 
 def fmt_ci(m: MetricEvidence, *, level95: bool = False) -> str:
@@ -291,6 +383,8 @@ def alt_text(m: MetricEvidence) -> str:
     """One sentence a screen reader (or a broken image) still gets the result from."""
     if isinstance(m.effect, ProportionEffect):
         nums = f"{fmt_counts(m.effect)}, difference {fmt_effect(m)} ({fmt_ci(m)})"
+    elif in_units(m):
+        nums = f"{fmt_change(m)} ({fmt_change_ci(m)}), {fmt_effect(m)} ({fmt_ci(m)})"
     else:
         nums = f"{fmt_effect(m)} ({fmt_ci(m)})"
     extra = " Underpowered." if m.verdict.underpowered else ""
@@ -422,19 +516,20 @@ def design_facts(cells: Sequence[MetricEvidence], *, points: int = 1) -> list[tu
 
 
 class _Page:
-    """A figure of fixed width whose axes are placed in inches from the top-left."""
+    """A figure *width_in* wide whose axes are placed in inches from the top-left."""
 
-    def __init__(self, height_in: float, theme: Theme) -> None:
+    def __init__(self, height_in: float, theme: Theme, width_in: float = ONE_IN) -> None:
         from matplotlib.figure import Figure
 
+        self.w = width_in
         self.h = height_in
         self.theme = theme
-        self.fig = Figure(figsize=(WIDTH_IN, height_in), dpi=DPI, facecolor=theme.surface)
+        self.fig = Figure(figsize=(width_in, height_in), dpi=DPI, facecolor=theme.surface)
         self.fig.set_layout_engine("none")
 
     def axes(self, x: float, top: float, w: float, h: float) -> Axes:
         """An axes at *x* in from the left, *top* in from the top, *w* × *h* inches."""
-        ax = self.fig.add_axes((x / WIDTH_IN, 1 - (top + h) / self.h, w / WIDTH_IN, h / self.h))
+        ax = self.fig.add_axes((x / self.w, 1 - (top + h) / self.h, w / self.w, h / self.h))
         ax.set_facecolor(self.theme.surface)
         for side in ax.spines.values():
             side.set_visible(False)
@@ -451,20 +546,20 @@ class _Page:
         return ax
 
     def text(self, x: float, top: float, s: str, **kw: Any) -> Any:
-        return self.fig.text(x / WIDTH_IN, 1 - top / self.h, s, **kw)
+        return self.fig.text(x / self.w, 1 - top / self.h, s, **kw)
 
     def header(self, title: str, hero: MetricEvidence | None = None) -> None:
         """The title at the left; the big effect number with its glyph at the right."""
         t = self.theme
-        room = WIDTH_IN - 2 * _SIDE_IN - 0.3
+        room = self.w - 2 * _SIDE_IN - 0.25
         if hero is not None:
-            room -= _text_w_in(hero.verdict.glyph + " " + fmt_effect(hero), _HERO)
+            room -= _text_w_in(hero.verdict.glyph + " " + fmt_change(hero), _HERO)
         size = _TITLE
         while size > _MIN_PT + 3 and _text_w_in(title, size) > room:
             size -= 1
         self.text(
             _SIDE_IN,
-            0.22,
+            0.17,
             title,
             ha="left",
             va="top",
@@ -473,12 +568,55 @@ class _Page:
             color=t.ink,
         )
         if hero is not None:
-            _hero(self, WIDTH_IN - _SIDE_IN, 0.16, hero, ha="right")
+            _hero(self, self.w - _SIDE_IN, 0.12, hero, ha="right")
 
 
 def _text_w_in(text: str, size: float) -> float:
     """A bold DejaVu/Open Sans line's width in inches, without a renderer (~0.66 em a glyph)."""
     return len(text) * size * 0.66 / 72.0
+
+
+def _plain_w_in(text: str, size: float) -> float:
+    """A regular-weight line's width in inches, without a renderer (~0.6 em a glyph)."""
+    return max((len(line) for line in text.split("\n")), default=0) * size * 0.6 / 72.0
+
+
+VALUE_GID = "bnvalue-"  # the SVG <g id> of each value label (tests count them)
+
+
+def _value_text(ax: Axes, x: float, y: float, text: str, theme: Theme, **kw: Any) -> Any:
+    """A summary value beside its mark: small, in the theme's ink (never a data colour)."""
+    style: dict[str, Any] = {
+        "fontsize": _VALUE,
+        "color": theme.ink,
+        "va": "center",
+        "zorder": 9,
+    }
+    style.update(kw)
+    txt = ax.text(x, y, text, **style)
+    fig = ax.figure
+    n = getattr(fig, "_bn_values", 0)
+    fig._bn_values = n + 1  # noqa: SLF001
+    txt.set_gid(f"{VALUE_GID}{n}")
+    return txt
+
+
+def _outer_reach(
+    points: Sequence[tuple[float, str]], lim: tuple[float, float], w_in: float, gap_in: float
+) -> tuple[float, float]:
+    """Symmetric limits wide enough that each label sits outside its point (away from 0).
+
+    *points* are (data x, label); a label goes right of a point >= 0 and left of one < 0,
+    *gap_in* from it, and must end inside the axes *w_in* inches wide.
+    """
+    reach = max(abs(lim[0]), abs(lim[1]))
+    for x, label in points:
+        need = gap_in + _plain_w_in(label, _VALUE) + 0.04
+        if 2 * need >= w_in:
+            continue
+        # (reach - |x|) / (2 reach) * w_in >= need  <=>  reach >= |x| w_in / (w_in - 2 need)
+        reach = max(reach, abs(x) * w_in / (w_in - 2 * need))
+    return -reach, reach
 
 
 def _rc() -> dict:
@@ -493,14 +631,14 @@ def _rc() -> dict:
 def _hero(
     page: _Page, x: float, top: float, m: MetricEvidence, *, ha: str, size: float = _HERO
 ) -> None:
-    """The verdict glyph (in the verdict colour) and the effect (in ink), as one big line."""
+    """The verdict glyph (in the verdict colour) and the change (in ink, in units), as one big line."""
     from matplotlib.text import Annotation
 
     t = page.theme
     colour = t.verdict_colour(m.verdict.kind)
     style = {"fontsize": size, "weight": "bold"}
     if ha == "right":
-        anchor = page.text(x, top, fmt_effect(m), ha="right", va="top", color=t.ink, **style)
+        anchor = page.text(x, top, fmt_change(m), ha="right", va="top", color=t.ink, **style)
         tail = Annotation(
             m.verdict.glyph + " ",
             xy=(0, 0),
@@ -515,7 +653,7 @@ def _hero(
             x, top, m.verdict.glyph + " ", ha="left", va="top", color=colour, **style
         )
         tail = Annotation(
-            fmt_effect(m), xy=(1, 0), xycoords=anchor, ha="left", va="bottom", color=t.ink, **style
+            fmt_change(m), xy=(1, 0), xycoords=anchor, ha="left", va="bottom", color=t.ink, **style
         )
     page.fig.add_artist(tail)
 
@@ -609,7 +747,7 @@ def _to_data(m: MetricEvidence, anchor: float, value: float) -> float:
 # Flow: the only motion. A few dashed strokes carry a gid; the saved SVG gets a class on
 # each and a <style> that moves only their stroke-dashoffset. The PNG is the still frame.
 
-_PT_PER_PX = WIDTH_IN * 72.0 / 800.0  # the figure is 8 in (576 pt) shown 800 px wide
+_PT_PER_PX = 72.0 / PX_PER_IN  # 1 / ZOOM: a figure inch is 72 pt and PX_PER_IN display px
 FLOW_DASH_PX = 4.0
 FLOW_TRAVEL_PX = 24.0  # three whole 4-4 cycles: the loop has no seam
 FLOW_SPEED_PX = 8.0  # px per second
@@ -808,6 +946,49 @@ def _median_bar(ax: Axes, x: float, med: float, colour: str, theme: Theme, half:
         ax.plot([x - half, x + half], [med, med], color=c, lw=lw, solid_capstyle="round", zorder=5)
 
 
+_COL_HALF_IN = 0.58
+_LAB_GAP_IN = 0.1  # between a median bar's end and its value label
+_MIN_COL_GAP_IN = 0.8  # below this distance between the columns the values go under them
+
+
+@dataclass(frozen=True)
+class _ArmsLayout:
+    """Where the two columns of an arms panel go, and where their median values go."""
+
+    xlim: tuple[float, float]
+    half: float  # a column's half width, in data units (the columns sit at x = 0 and 1)
+    outer: bool  # True: each value is beside its median bar, outside; False: under the column
+    values: tuple[str, str]  # the base and candidate medians, formatted
+
+
+def _finite_median(vals: np.ndarray) -> float:
+    ok = vals[np.isfinite(vals)]
+    return float(np.median(ok)) if len(ok) else float("nan")
+
+
+def arms_layout(m: MetricEvidence, w_in: float) -> _ArmsLayout:
+    """Lay out an arms panel *w_in* inches wide: column width and room for the median labels.
+
+    The base median's value goes left of the base column and the candidate's right of
+    the candidate column. When that leaves the columns less than 0.8 in apart, the
+    values go under the columns, in the column labels, instead.
+    """
+    base_text, cand_text = fmt_values([_finite_median(m.base), _finite_median(m.cand)], m.units)
+    values = (base_text, cand_text)
+    side = _LAB_GAP_IN + max(_plain_w_in(v, _VALUE) for v in values) + 0.04
+    # w_in = x_scale + 2 (col_half + side), col_half = min(0.58 in, 0.3 x_scale).
+    x_scale = w_in - 2 * (_COL_HALF_IN + side)
+    if 0.3 * x_scale < _COL_HALF_IN:
+        x_scale = (w_in - 2 * side) / 1.6
+    if x_scale < _MIN_COL_GAP_IN:
+        x_scale = w_in / 2.2
+        half = min(0.3, _COL_HALF_IN / x_scale)
+        return _ArmsLayout((-0.6, 1.6), half, outer=False, values=values)
+    col_half = min(_COL_HALF_IN, 0.3 * x_scale)
+    margin = (col_half + side) / x_scale
+    return _ArmsLayout((-margin, 1 + margin), col_half / x_scale, outer=True, values=values)
+
+
 def _arms(
     ax: Axes,
     m: MetricEvidence,
@@ -827,18 +1008,20 @@ def _arms(
     t = theme
     b, c = m.base, m.cand
     lo, hi, anchor = _arm_limits(m)
-    xlim = (-0.6, 1.6)
+    lay = arms_layout(m, w_in)
+    xlim, half = lay.xlim, lay.half
     ax.set_xlim(*xlim)
     ax.set_ylim(lo, hi)
     x_scale = w_in / (xlim[1] - xlim[0])
     y_scale = h_in / (hi - lo)
     n = max(np.isfinite(b).sum(), np.isfinite(c).sum())
-    size, offsets = _swarm_columns((b, c), _dot_size(int(n)), y_scale, 0.3 * x_scale)
+    size, offsets = _swarm_columns((b, c), _dot_size(int(n)), y_scale, half * x_scale)
     offsets = [off / x_scale for off in offsets]
     # The margin: ±Δ around the base median, under both columns.
     band_lo, band_hi = _to_data(m, anchor, -_delta(m)), _to_data(m, anchor, _delta(m))
-    ax.fill_between([-0.5, xlim[1] - 0.06], band_lo, band_hi, color=t.band, lw=0, zorder=0)
-    ax.plot([0.3, 1.45], [anchor, anchor], color=t.muted, lw=0.9, zorder=1)
+    pad = 0.08 / x_scale
+    ax.fill_between([-half - pad, 1 + half + pad], band_lo, band_hi, color=t.band, lw=0, zorder=0)
+    ax.plot([half, 1 + half], [anchor, anchor], color=t.muted, lw=0.9, zorder=1)
     ax.grid(axis="y", color=t.grid, linewidth=0.8, zorder=-1)
     ax.set_axisbelow(True)
     if m.paired and len(b) == len(c):
@@ -875,12 +1058,16 @@ def _arms(
             **_ring(t, size),
         )
         meds.append(float(np.median(vals[ok])))
-        _median_bar(ax, x, meds[-1], colour, t, 0.3)
+        _median_bar(ax, x, meds[-1], colour, t, half)
     _connector(ax, [0.5, 0.5], meds, m, t, "medflow", lw=2.0)
-    ax.set_xticks(
-        [0, 1],
-        [f"base\nn={int(np.isfinite(b).sum())}", f"candidate\nn={int(np.isfinite(c).sum())}"],
-    )
+    ticks = [f"base\nn={int(np.isfinite(b).sum())}", f"candidate\nn={int(np.isfinite(c).sum())}"]
+    if lay.outer:
+        gap = _LAB_GAP_IN / x_scale
+        _value_text(ax, -half - gap, meds[0], lay.values[0], t, ha="right")
+        _value_text(ax, 1 + half + gap, meds[1], lay.values[1], t, ha="left")
+    else:
+        ticks = [f"{tick}\n{value}" for tick, value in zip(ticks, lay.values, strict=True)]
+    ax.set_xticks([0, 1], ticks)
     ax.tick_params(axis="x", labelsize=label_size, colors=t.ink, pad=6)
     _value_ticks(ax, m.units)
 
@@ -933,15 +1120,28 @@ def _mini_waffles(ax: Axes, m: MetricEvidence, theme: Theme, w_in: float, h_in: 
             good_is_one=good_is_one,
             changed=changed if arm == 1 else None,
         )
+        name = "base" if arm == 0 else "candidate"
         ax.text(
             arm * half + half / 2,
             y_top - rows * cell - 0.1,
-            f"{'base' if arm == 0 else 'candidate'}\nn={n}",
+            name,
             ha="center",
             va="top",
             fontsize=_LABEL,
             color=theme.ink,
-            linespacing=1.15,
+        )
+        rate = fmt_rate(k, n)
+        if _plain_w_in(rate, _VALUE) > half - 0.05:
+            rate = rate.replace(" · ", "\n")
+        _value_text(
+            ax,
+            arm * half + half / 2,
+            y_top - rows * cell - 0.1 - _LABEL * 1.3 / 72,
+            rate,
+            theme,
+            ha="center",
+            va="top",
+            linespacing=1.1,
         )
 
 
@@ -1026,6 +1226,100 @@ _SQ_MIN = 0.045
 _VM_LABEL_IN = 0.62
 
 
+OrderMode = Literal["auto", "always", "never"]
+ORDER_MODES: tuple[OrderMode, ...] = ("auto", "always", "never")
+
+
+def _default_order(m: MetricEvidence) -> tuple[list[int], list[int]]:
+    """Each arm's run positions when none were recorded: interleaved when paired, else blocked."""
+    nb, nc = len(m.base), len(m.cand)
+    if m.paired:
+        return list(range(0, 2 * nb, 2)), list(range(1, 2 * nc, 2))
+    return list(range(nb)), list(range(nb, nb + nc))
+
+
+def _arm_trends(
+    m: MetricEvidence, order_base: Sequence[float], order_cand: Sequence[float]
+) -> list[tuple[float, float, np.ndarray, float] | None]:
+    """Per arm the least-squares line on run order: slope, intercept, x, and drift in %."""
+    slopes: list[tuple[float, float, np.ndarray, float] | None] = []
+    for vals, order in ((m.base, order_base), (m.cand, order_cand)):
+        ok = np.isfinite(vals)
+        xo = np.asarray(order, dtype=float)[ok]
+        if ok.sum() > 2 and np.ptp(xo) > 0:  # noqa: PLR2004
+            slope, icpt = np.polyfit(xo, vals[ok], 1)
+            level = np.nanmedian(vals) or 1.0
+            slopes.append((slope, icpt, xo, 100 * slope * np.ptp(xo) / abs(level)))
+        else:
+            slopes.append(None)
+    return slopes
+
+
+def _drifts(m: MetricEvidence, worst_pct: float) -> bool:
+    """The G9 rule: a within-arm drift at least the margin is a drift."""
+    return abs(worst_pct) >= 100 * m.margin
+
+
+def drift_flagged(m: MetricEvidence) -> bool:
+    """Whether either arm of continuous *m* drifts over its runs (recorded order, else G9's)."""
+    if not isinstance(m.effect, Effect):
+        return False
+    ob, oc = m.order
+    order = (ob, oc) if ob is not None and oc is not None else _default_order(m)
+    drift = [s[3] for s in _arm_trends(m, *order) if s is not None]
+    return bool(drift) and _drifts(m, max(drift, key=abs))
+
+
+def simple_design(cells: Sequence[MetricEvidence]) -> bool:
+    """One shard, unpaired, one seed, base runs then candidate runs (or no order), no drift."""
+    m = cells[0]
+    runs = _runs([m])
+    if m.paired or len({r.shard for r in runs if r.shard is not None}) > 1:
+        return False
+    if order_recorded([m]) and _order_pattern(runs) != "blocked":
+        return False
+    seeds = re.match(r"(\d+) seeds recorded", m.seed_policy or "")
+    if seeds is not None and int(seeds.group(1)) > 1:
+        return False
+    return not any(drift_flagged(c) for c in cells)
+
+
+def show_order(cells: Sequence[MetricEvidence], mode: OrderMode = "auto") -> bool:
+    """Whether a graphic of *cells* draws the run-order strip.
+
+    ``"never"`` hides it, ``"always"`` draws it whenever the order was recorded, and
+    ``"auto"`` draws it only when the design is not simple (:func:`simple_design`).
+    """
+    if mode not in ORDER_MODES:
+        raise ValueError(f"order must be one of {ORDER_MODES}, not {mode!r}")
+    if mode == "never" or not cells or not order_recorded(cells):
+        return False
+    return mode == "always" or not simple_design(cells)
+
+
+def design_sentence(cells: Sequence[MetricEvidence]) -> str:
+    """The design in one plain line: ``20 base runs, then 20 candidate runs, one machine``."""
+    m = cells[0]
+    runs = _runs([m])
+    nb, nc = sum(r.arm == 0 for r in runs), sum(r.arm == 1 for r in runs)
+    shards = {r.shard for r in runs if r.shard is not None}
+    if m.paired:
+        arms = f"{nb} pairs of base and candidate runs"
+    elif order_recorded([m]) and _order_pattern(runs) == "blocked":
+        first = min(runs, key=lambda r: r.order or 0.0).arm
+        arms = (
+            f"{nb} base runs, then {nc} candidate runs"
+            if first == 0
+            else f"{nc} candidate runs, then {nb} base runs"
+        )
+    elif order_recorded([m]):
+        arms = f"{nb} base and {nc} candidate runs, {_order_pattern(runs)}"
+    else:
+        arms = f"{nb} base and {nc} candidate runs, run order not recorded"
+    where = f"{len(shards)} machines" if len(shards) > 1 else "one machine"
+    return f"{arms}, {where}"
+
+
 def _order_lines(runs: Sequence[_Run], width_in: float) -> list[tuple[int | None, list[_Run]]]:
     shards = sorted({r.shard for r in runs}, key=str) if any(r.shard for r in runs) else [None]
     label_w = _VM_LABEL_IN if shards != [None] else 0.0
@@ -1040,8 +1334,10 @@ def _order_lines(runs: Sequence[_Run], width_in: float) -> list[tuple[int | None
     return lines
 
 
-def _order_height(cells: Sequence[MetricEvidence], width_in: float) -> float:
-    if not order_recorded(cells):
+def _order_height(
+    cells: Sequence[MetricEvidence], width_in: float, mode: OrderMode = "auto"
+) -> float:
+    if not show_order(cells, mode):
         return 0.0
     lines = _order_lines(_runs(cells), width_in)
     labelled = any(s is not None for s, _ in lines)
@@ -1053,10 +1349,15 @@ def _order_height(cells: Sequence[MetricEvidence], width_in: float) -> float:
 
 
 def _draw_order(
-    page: _Page, cells: Sequence[MetricEvidence], top: float, x0: float, width_in: float
+    page: _Page,
+    cells: Sequence[MetricEvidence],
+    top: float,
+    x0: float,
+    width_in: float,
+    mode: OrderMode = "auto",
 ) -> None:
     """The run-order rows at *top*: grey base, blue candidate squares; "VM k" per shard."""
-    height = _order_height(cells, width_in)
+    height = _order_height(cells, width_in, mode)
     if height <= 0:
         return
     t = page.theme
@@ -1108,27 +1409,44 @@ def draw_scorecard(
     *,
     title: str | None = None,
     per_row: int = 4,
+    order: OrderMode = "auto",
 ) -> Figure:
-    """G1: one panel per metric: name, big effect + glyph, every sample, Δ band, median connector."""
+    """G1: one panel per metric: name, big effect + glyph, every sample, Δ band, median connector.
+
+    Up to *per_row* panels a row, at most 3 when a panel shows samples; the rows are
+    balanced (4 panels are 2 × 2).
+    """
     import matplotlib as mpl
 
     with mpl.rc_context(_rc()):
         n = len(metrics)
+        if not all(isinstance(m.effect, ProportionEffect) for m in metrics):
+            # Arms panels need room for their median values: at most 3 a row.
+            per_row = min(per_row, 3)
         cols = max(1, min(per_row, n))
         rows = math.ceil(n / cols)
-        usable = WIDTH_IN - 2 * _SIDE_IN
-        gutter = 0.3
-        panel_w = min(5.0 if cols == 1 else 3.7, (usable - gutter * (cols - 1)) / cols)
-        x_start = (WIDTH_IN - (cols * panel_w + gutter * (cols - 1))) / 2
+        cols = math.ceil(n / rows)  # balanced rows: 4 panels are 2 × 2, not 3 + 1
+        width = ONE_IN if cols == 1 else MULTI_IN
+        usable = width - 2 * _SIDE_IN
+        gutter = 0.22
+        panel_w = (usable - gutter * (cols - 1)) / cols
+        x_start = _SIDE_IN
         binary_only = all(isinstance(m.effect, ProportionEffect) for m in metrics)
-        name_h = 0.34 if n > 1 else 0.0
-        hero_h, label_h = 0.62, 0.62
-        plot_h = 1.0 if binary_only else 2.5 if cols < 4 else 2.2  # noqa: PLR2004
-        row_h = name_h + hero_h + plot_h + label_h + 0.2
-        order_h = _order_height(metrics[:1], usable)
-        page = _Page(_HEAD_IN + rows * row_h + order_h + _FOOT_IN, theme)
+        name_h = 0.26 if n > 1 else 0.0
+        hero_size = {1: _HERO, 2: _HERO, 3: _HERO_SMALL}.get(cols, _HERO_TINY)
+        tick_w = 0.62
+        narrow = any(
+            not isinstance(m.effect, ProportionEffect)
+            and not arms_layout(m, panel_w - tick_w).outer
+            for m in metrics
+        )
+        # Two label lines (name, n), or three when a value sits under a column too.
+        hero_h, label_h = hero_size / 72 + 0.18, 0.7 if narrow else 0.5
+        plot_h = 0.9 if binary_only else 2.0 if cols < 4 else 1.7  # noqa: PLR2004
+        row_h = name_h + hero_h + plot_h + label_h + 0.12
+        order_h = _order_height(metrics[:1], usable, order)
+        page = _Page(_HEAD_IN + rows * row_h + order_h + _FOOT_IN, theme, width)
         page.header(title or short_summary(metrics))
-        hero_size = _HERO if cols <= 2 else 23  # noqa: PLR2004
         for i, m in enumerate(metrics):
             r, c = divmod(i, cols)
             px = x_start + c * (panel_w + gutter)
@@ -1149,10 +1467,9 @@ def draw_scorecard(
                 ax = page.canvas(px, ptop, panel_w, plot_h + label_h)
                 _mini_waffles(ax, m, theme, panel_w, plot_h + label_h)
             else:
-                tick_w = 0.72
                 ax = page.axes(px + tick_w, ptop, panel_w - tick_w, plot_h)
                 _arms(ax, m, theme, panel_w - tick_w, plot_h)
-        _draw_order(page, metrics[:1], _HEAD_IN + rows * row_h, _SIDE_IN, usable)
+        _draw_order(page, metrics[:1], _HEAD_IN + rows * row_h, _SIDE_IN, usable, order)
         return page.fig
 
 
@@ -1166,11 +1483,12 @@ def draw_forest(
     *,
     title: str | None = None,
     labels: Sequence[str] | None = None,
+    order: OrderMode = "auto",
 ) -> Figure:
     """G2: one row per metric or sweep point, sorted by effect, on the shared axis.
 
     Each row: the name, a dot strip of both arms' samples (on the row's own scale), the
-    estimate as a dot over the ±Δ band, and the verdict glyph. A ▲/▼ row has a dashed
+    estimate as a dot over the ±Δ band with its value beside it, and the verdict glyph. A ▲/▼ row has a dashed
     connector from 0 that flows toward its estimate; a ? row's connector is still; a ≈
     row has only its dot. No interval is drawn (the caption gives the CI). A row that
     fails the FDR check is hollow; a primary metric is bold.
@@ -1180,12 +1498,13 @@ def draw_forest(
     with mpl.rc_context(_rc()):
         t = theme
         names = list(labels) if labels is not None else [humanize(m.name) for m in metrics]
-        order = sorted(range(len(metrics)), key=lambda i: metrics[i].effect.estimate)
+        by_effect = sorted(range(len(metrics)), key=lambda i: metrics[i].effect.estimate)
         n = len(metrics)
-        row_h = 0.56
-        axis_h = 0.5
-        order_h = _order_height(metrics[:1], WIDTH_IN - 2 * _SIDE_IN)
-        page = _Page(_HEAD_IN + n * row_h + axis_h + order_h + _FOOT_IN, theme)
+        width = MULTI_IN
+        row_h = 0.36
+        axis_h = 0.38
+        order_h = _order_height(metrics[:1], width - 2 * _SIDE_IN, order)
+        page = _Page(_HEAD_IN + n * row_h + axis_h + order_h + _FOOT_IN, theme, width)
         if title is None:
             moved = sum(
                 m.verdict.kind in (VerdictKind.IMPROVED, VerdictKind.REGRESSED) for m in metrics
@@ -1193,18 +1512,37 @@ def draw_forest(
             same = sum(m.verdict.kind == VerdictKind.EQUIVALENT for m in metrics)
             title = f"All {n} unchanged" if same == n else f"{moved} of {n} moved"
         page.header(title)
-        name_w, strip_x, strip_w, ax_x, ax_w = 2.15, 2.6, 1.55, 4.45, 2.75
+        glyph_w = 0.4
+        name_w, strip_x, strip_w, ax_x = 1.72, 2.06, 1.5, 3.82
+        ax_w = width - _SIDE_IN - glyph_w - ax_x
         ax = page.axes(ax_x, _HEAD_IN, ax_w, n * row_h)
         ax.set_ylim(-0.5, n - 0.5)
         ax.set_yticks([])
-        _effect_axis(ax, metrics[0], effect_limits(metrics), t, vertical=False)
-        for row, i in enumerate(reversed(order)):
+        value_gap = 0.12
+        lim = _outer_reach(
+            [(m.effect.estimate, fmt_effect(m)) for m in metrics],
+            effect_limits(metrics),
+            ax_w,
+            value_gap,
+        )
+        _effect_axis(ax, metrics[0], lim, t, vertical=False)
+        x_per_in = (lim[1] - lim[0]) / ax_w
+        for row, i in enumerate(reversed(by_effect)):
             m = metrics[i]
             y = n - 1 - row
             colour = t.verdict_colour(m.verdict.kind)
             est = m.effect.estimate
             _connector(ax, [0.0, est], [y, y], m, t, "estflow", lw=2.0, still=False)
-            _estimate_dot(ax, est, y, m, t)
+            _estimate_dot(ax, est, y, m, t, size=9.0)
+            right = est >= 0
+            _value_text(
+                ax,
+                est + (value_gap if right else -value_gap) * x_per_in,
+                y,
+                fmt_effect(m),
+                t,
+                ha="left" if right else "right",
+            )
             top = _HEAD_IN + row * row_h
             page.text(
                 _SIDE_IN + name_w,
@@ -1217,25 +1555,30 @@ def draw_forest(
                 weight="bold" if m.primary else "normal",
             )
             page.text(
-                ax_x + ax_w + 0.25,
+                ax_x + ax_w + 0.18,
                 top + row_h / 2,
                 m.verdict.glyph,
                 ha="left",
                 va="center",
-                fontsize=_LABEL + 3,
+                fontsize=_LABEL + 2,
                 color=colour,
                 weight="bold",
             )
             if isinstance(m.effect, Effect):
                 _dot_strip(
-                    page.canvas(strip_x, top + 0.06, strip_w, row_h - 0.12),
+                    page.canvas(strip_x, top + 0.04, strip_w, row_h - 0.08),
                     m,
                     t,
                     strip_w,
-                    row_h - 0.12,
+                    row_h - 0.08,
                 )
         _draw_order(
-            page, metrics[:1], _HEAD_IN + n * row_h + axis_h, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN
+            page,
+            metrics[:1],
+            _HEAD_IN + n * row_h + axis_h,
+            _SIDE_IN,
+            width - 2 * _SIDE_IN,
+            order,
         )
         return page.fig
 
@@ -1257,53 +1600,41 @@ def _dot_strip(ax: Axes, m: MetricEvidence, theme: Theme, w_in: float, h_in: flo
             np.full(len(vals), y),
             "o",
             color=colour,
-            markersize=5.0,
+            markersize=4.0,
             alpha=0.75,
             markeredgewidth=0,
         )
         med = float(np.median(vals))
-        ax.plot([x_of(np.array([med]))[0]] * 2, [y - 0.1, y + 0.1], color=theme.ink, lw=2.4)
+        ax.plot([x_of(np.array([med]))[0]] * 2, [y - 0.065, y + 0.065], color=theme.ink, lw=2.0)
 
 
 # --------------------------------------------------------------------------------------
 # G3 Estimation plot.
 
 
-def draw_estimation(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = None) -> Figure:
-    """G3: both arms (every sample, Δ band, median connector) and the bootstrap distribution of the effect."""
+def draw_estimation(
+    m: MetricEvidence,
+    theme: Theme = LIGHT,
+    *,
+    title: str | None = None,
+    order: OrderMode = "auto",
+) -> Figure:
+    """G3: both arms at full width: every sample, the ±Δ band and the median connector."""
     import matplotlib as mpl
 
     if not isinstance(m.effect, Effect):
         raise TypeError("draw_estimation needs a continuous metric")
-    e = m.effect
     with mpl.rc_context(_rc()):
-        t = theme
-        plot_h = 3.3
-        order_h = _order_height([m], WIDTH_IN - 2 * _SIDE_IN)
-        page = _Page(_HEAD_IN + plot_h + 0.75 + order_h + _FOOT_IN, theme)
+        width = ONE_IN
+        plot_h = 2.5
+        order_h = _order_height([m], width - 2 * _SIDE_IN, order)
+        page = _Page(_HEAD_IN + plot_h + 0.6 + order_h + _FOOT_IN, theme, width)
         page.header(title or chart_title(m), m)
-        ax = page.axes(1.05, _HEAD_IN + 0.1, 4.25, plot_h)
-        _arms(ax, m, t, 4.25, plot_h)
-        # The effect's bootstrap distribution, on the effect axis.
-        ex = page.axes(5.85, _HEAD_IN + 0.1, 1.15, plot_h)
-        lim = effect_limits([m], pad=0.25)
-        if e.bootstrap is not None:
-            lo, hi = np.percentile(e.bootstrap, [0.1, 99.9])
-            lim = (min(lim[0], lo), max(lim[1], hi))
-        _effect_axis(ex, m, lim, t, vertical=True)
-        ex.yaxis.tick_right()
-        ex.set_xlim(-0.35, 1.1)
-        ex.set_xticks([])
-        colour = t.verdict_colour(m.verdict.kind)
-        if e.bootstrap is not None:
-            grid = np.linspace(lim[0], lim[1], 300)
-            dens = _kde(e.bootstrap, grid)
-            dens = dens / dens.max() * 0.85
-            ex.fill_betweenx(grid, 0.12, 0.12 + dens, color=colour, alpha=0.22, lw=0, zorder=2)
-            outline = np.where(dens > _DENSITY_FLOOR, 0.12 + dens, np.nan)
-            ex.plot(outline, grid, color=colour, lw=1.2, alpha=0.8, zorder=2)
-        _estimate_dot(ex, 0.0, e.estimate, m, t, size=9.0)
-        _draw_order(page, [m], _HEAD_IN + plot_h + 0.75, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN)
+        x = _Y_GUTTER_IN
+        w = width - _SIDE_IN - x  # _ARMS_W_IN, to the px
+        ax = page.axes(x, _HEAD_IN + 0.1, w, plot_h)
+        _arms(ax, m, theme, w, plot_h)
+        _draw_order(page, [m], _HEAD_IN + plot_h + 0.6, _SIDE_IN, width - 2 * _SIDE_IN, order)
         return page.fig
 
 
@@ -1321,10 +1652,12 @@ def draw_raincloud_shift(
     sf = shift_function(m.base, m.cand, scale=scale, paired=m.paired)
     with mpl.rc_context(_rc()):
         t = theme
-        page = _Page(6.4, theme)
+        width = ONE_IN
+        cloud_x, cloud_h, shift_h = 1.25, 2.1, 1.45
+        cloud_w = width - _SIDE_IN - cloud_x - 0.15  # room for the last tick label
+        page = _Page(_HEAD_IN + 0.1 + cloud_h + 0.55 + shift_h + 0.4, theme, width)
         page.header(title or _shift_title(sf, m), m)
-        cloud_w, cloud_h = 5.95, 2.6
-        ax = page.axes(1.7, _HEAD_IN + 0.1, cloud_w, cloud_h)
+        ax = page.axes(cloud_x, _HEAD_IN + 0.1, cloud_w, cloud_h)
         ax.set_yticks([])
         b, c = m.base[np.isfinite(m.base)], m.cand[np.isfinite(m.cand)]
         both = np.concatenate([b, c])
@@ -1338,6 +1671,7 @@ def draw_raincloud_shift(
         size = min(_dot_size(max(len(b), len(c))), 7.5)
         ax.grid(axis="x", color=t.grid, linewidth=0.8)
         ax.set_axisbelow(True)
+        med_labels = fmt_values([float(np.median(c)), float(np.median(b))], m.units)
         for row, (vals, colour, name) in enumerate(((c, t.cand, "candidate"), (b, t.base, "base"))):
             y0 = row * 1.0
             dens = _kde(vals, grid)
@@ -1356,6 +1690,13 @@ def draw_raincloud_shift(
                 markeredgewidth=2.0,
                 zorder=5,
             )
+            # The median's value beside the box: right of it, or left when the edge is near.
+            label = med_labels[row]
+            room = _plain_w_in(label, _VALUE) + 0.12
+            if (grid[-1] - q3) * x_scale >= room:
+                _value_text(ax, q3 + 0.08 / x_scale, y0, label, t, ha="left")
+            else:
+                _value_text(ax, q1 - 0.08 / x_scale, y0, label, t, ha="right")
             off = _beeswarm(vals * x_scale, size / 72 * 1.05, 0.13 * y_scale) / y_scale
             ax.plot(
                 vals,
@@ -1368,7 +1709,7 @@ def draw_raincloud_shift(
                 **_ring(t, size),
             )
             page.text(
-                1.55,
+                cloud_x - 0.12,
                 _HEAD_IN + 0.1 + (1.72 - (y0 + 0.05)) * cloud_h / 2.14,
                 f"{name}\nn={len(vals)}",
                 ha="right",
@@ -1379,10 +1720,13 @@ def draw_raincloud_shift(
             )
         _value_ticks(ax, m.units, axis="x", nbins=5)
         # Shift function.
-        sx = page.axes(1.7, _HEAD_IN + cloud_h + 0.7, cloud_w, 1.9)
+        sx = page.axes(cloud_x, _HEAD_IN + 0.1 + cloud_h + 0.55, cloud_w, shift_h)
         sx.grid(axis="y", color=t.grid, linewidth=0.8)
         x = np.arange(len(sf.probs))
         lim = (min(sf.diff.min(), -_delta(m)) * 1.3, max(sf.diff.max(), _delta(m)) * 1.3)
+        # Room for a value label (about 0.3 in) above the highest and below the lowest dot.
+        span = lim[1] - lim[0]
+        lim = (lim[0] - 0.3 * span / shift_h, lim[1] + 0.3 * span / shift_h)
         _effect_axis(sx, m, lim, t, vertical=True)
         sx.plot(x, sf.diff, color=t.muted, lw=1.2, zorder=2)
         for i in range(len(x)):
@@ -1394,13 +1738,27 @@ def draw_raincloud_shift(
                 [sf.diff[i]],
                 "o",
                 color=colour,
-                markersize=10,
+                markersize=9,
                 markeredgecolor=t.surface,
-                markeredgewidth=1.8,
+                markeredgewidth=1.6,
                 zorder=4,
             )
+        # The two deciles the title names: the median and the top decile, with their values.
+        y_per_in = (lim[1] - lim[0]) / shift_h
+        unit = unit_suffix(m)
+        for i in (sf.probs.index(0.5), len(x) - 1):
+            up = sf.diff[i] >= 0
+            _value_text(
+                sx,
+                x[i],
+                sf.diff[i] + (0.11 if up else -0.11) * y_per_in,
+                fmt_signed(display(m, sf.diff[i]), 0) + unit,
+                t,
+                ha="center",
+                va="bottom" if up else "top",
+            )
         sx.set_xticks(x, [f"q{i + 1}" for i in range(len(x))])
-        sx.tick_params(axis="x", labelsize=_LABEL, colors=t.ink)
+        sx.tick_params(axis="x", labelsize=_TICK, colors=t.ink)
         sx.set_xlim(-0.5, len(x) - 0.5)
         return page.fig
 
@@ -1451,7 +1809,13 @@ def worst_plausible(m: MetricEvidence) -> float | None:
     return (1 - e.bad_upper) - e.p_base if good_is_one else e.bad_upper - e.p_base
 
 
-def draw_waffle(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = None) -> Figure:
+def draw_waffle(
+    m: MetricEvidence,
+    theme: Theme = LIGHT,
+    *,
+    title: str | None = None,
+    order: OrderMode = "auto",
+) -> Figure:
     """G5: one square per run per arm; the difference over the ±Δ band; the zero-failure bound.
 
     The candidate runs whose outcome differs from base get a flowing dashed outline.
@@ -1465,20 +1829,25 @@ def draw_waffle(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = 
         t = theme
         nmax = max(e.n_base, e.n_cand)
         cols = _waffle_columns(nmax)
-        grid_x = 1.75
-        cell = min(0.32, (WIDTH_IN - _SIDE_IN - grid_x) / cols)
+        width = ONE_IN
+        rate_w = max(
+            _plain_w_in(fmt_rate(e.k_base, e.n_base), _VALUE),
+            _plain_w_in(fmt_rate(e.k_cand, e.n_cand), _VALUE),
+        )
+        grid_x = max(1.25, _SIDE_IN + 0.14 + rate_w)
+        cell = min(0.26, (width - _SIDE_IN - grid_x) / cols)
         blocks = [
             ("base", e.k_base, e.n_base, t.base),
             ("candidate", e.k_cand, e.n_cand, t.cand),
         ]
         heights = [math.ceil(n / cols) * cell + 0.25 for _, _, n, _ in blocks]
-        diff_h = 0.75
-        order_h = _order_height([m], WIDTH_IN - 2 * _SIDE_IN)
+        diff_h = 0.6
+        order_h = _order_height([m], width - 2 * _SIDE_IN, order)
         page = _Page(
-            _HEAD_IN + 0.15 + sum(heights) + 0.15 + diff_h + 0.6 + order_h + _FOOT_IN, theme
+            _HEAD_IN + 0.1 + sum(heights) + 0.15 + diff_h + 0.5 + order_h + _FOOT_IN, theme, width
         )
         page.header(title or chart_title(m), m)
-        top = _HEAD_IN + 0.15
+        top = _HEAD_IN + 0.1
         good_is_one = m.direction == "maximize"
         for (arm, k, n, colour), bh in zip(blocks, heights, strict=True):
             ax = page.canvas(grid_x, top, cols * cell + 0.05, bh)
@@ -1496,19 +1865,12 @@ def draw_waffle(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = 
                 changed=_changed(e, good_is_one) if arm == "candidate" else None,
             )
             rows = math.ceil(n / cols)
-            page.text(
-                grid_x - 0.2,
-                top + 0.05 + rows * cell / 2,
-                f"{arm}\nn={n}",
-                ha="right",
-                va="center",
-                fontsize=_LABEL,
-                color=t.ink,
-                linespacing=1.15,
-            )
+            mid = bh - 0.05 - rows * cell / 2
+            ax.text(-0.14, mid + 0.01, arm, ha="right", va="bottom", fontsize=_LABEL, color=t.ink)
+            _value_text(ax, -0.14, mid - 0.01, fmt_rate(k, n), t, ha="right", va="top")
             top += bh
         # The difference: one bar over the ±Δ band, with the zero-failure bound as a tick.
-        dx = page.axes(grid_x, top + 0.15, WIDTH_IN - _SIDE_IN - grid_x - 0.1, diff_h)
+        dx = page.axes(grid_x, top + 0.15, width - _SIDE_IN - grid_x - 0.1, diff_h)
         dx.set_yticks([])
         dx.set_ylim(-1, 1)
         lim = effect_limits([m], pad=0.2)
@@ -1516,13 +1878,25 @@ def draw_waffle(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = 
         if bound is not None:
             reach = max(abs(lim[0]), abs(bound) * 1.15)
             lim = (-reach, reach)
+        dx_w = width - _SIDE_IN - grid_x - 0.1
+        lim = _outer_reach([(e.estimate, fmt_effect(m))], lim, dx_w, 0.13)
         _effect_axis(dx, m, lim, t, vertical=False)
-        _estimate_dot(dx, e.estimate, 0, m, t, size=13.0)
+        _estimate_dot(dx, e.estimate, 0, m, t, size=11.0)
+        right = e.estimate >= 0
+        step = 0.13 * (lim[1] - lim[0]) / dx_w
+        _value_text(
+            dx,
+            e.estimate + (step if right else -step),
+            0,
+            fmt_effect(m),
+            t,
+            ha="left" if right else "right",
+        )
         if bound is not None:
             dx.plot(
                 [bound, bound], [-0.75, 0.75], color=t.ink, lw=2.6, zorder=8, solid_capstyle="butt"
             )
-        _draw_order(page, [m], top + 0.15 + diff_h + 0.6, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN)
+        _draw_order(page, [m], top + 0.15 + diff_h + 0.5, _SIDE_IN, width - 2 * _SIDE_IN, order)
         return page.fig
 
 
@@ -1537,6 +1911,7 @@ def draw_sweep(
     *,
     x_name: str = "x",
     title: str | None = None,
+    order: OrderMode = "auto",
 ) -> Figure:
     """G6: top, both arms' samples at each point with lines joining the medians; bottom, the effect.
 
@@ -1547,13 +1922,15 @@ def draw_sweep(
     with mpl.rc_context(_rc()):
         t = theme
         m0 = cells[0]
-        top_h, eff_h = 2.7, 1.75
-        order_h = _order_height(cells, WIDTH_IN - 2 * _SIDE_IN)
-        page = _Page(_HEAD_IN + 0.1 + top_h + 0.25 + eff_h + 0.55 + order_h + _FOOT_IN, theme)
+        width = MULTI_IN
+        top_h, eff_h = 2.2, 1.4
+        order_h = _order_height(cells, width - 2 * _SIDE_IN, order)
+        page = _Page(_HEAD_IN + 0.1 + top_h + 0.25 + eff_h + 0.5 + order_h + _FOOT_IN, theme, width)
         moved = sum(m.verdict.kind in (VerdictKind.IMPROVED, VerdictKind.REGRESSED) for m in cells)
         page.header(title or f"{moved} of {len(cells)} {x_name} points moved")
         x = np.arange(len(cells), dtype=float)
-        plot_x, plot_w = 1.2, WIDTH_IN - 1.2 - 1.3
+        plot_x = 0.95
+        plot_w = width - plot_x - 1.05
         ax = page.axes(plot_x, _HEAD_IN + 0.1, plot_w, top_h)
         xlim = (-0.6, len(cells) - 0.4)
         ax.set_xlim(*xlim)
@@ -1603,7 +1980,8 @@ def draw_sweep(
         ax.set_xticks(x, [])
         _value_ticks(ax, m0.units)
         ex = page.axes(plot_x, _HEAD_IN + 0.1 + top_h + 0.25, plot_w, eff_h)
-        lim = effect_limits(cells, pad=0.3)
+        # Room for the glyph above each dot and its value below.
+        lim = effect_limits(cells, pad=0.7)
         _effect_axis(ex, m0, lim, t, vertical=True)
         ex.grid(axis="y", color=t.grid, linewidth=0.6)
         for xi, m in zip(x, cells, strict=True):
@@ -1615,20 +1993,30 @@ def draw_sweep(
                 m.verdict.glyph,
                 ha="center",
                 va="bottom",
-                fontsize=_LABEL + 1,
+                fontsize=_LABEL,
                 color=colour,
                 weight="bold",
                 zorder=8,
             )
+            _value_text(
+                ex,
+                xi,
+                m.effect.estimate - 0.07 * (lim[1] - lim[0]),
+                fmt_effect(m),
+                t,
+                ha="center",
+                va="top",
+            )
         ex.set_xlim(*xlim)
         ex.set_xticks(x, [f"{v:g}" for v in xs])
-        ex.tick_params(axis="x", labelsize=_LABEL, colors=t.ink)
+        ex.tick_params(axis="x", labelsize=_TICK, colors=t.ink)
         _draw_order(
             page,
             cells,
-            _HEAD_IN + 0.1 + top_h + 0.25 + eff_h + 0.55,
+            _HEAD_IN + 0.1 + top_h + 0.25 + eff_h + 0.5,
             _SIDE_IN,
-            WIDTH_IN - 2 * _SIDE_IN,
+            width - 2 * _SIDE_IN,
+            order,
         )
         return page.fig
 
@@ -1646,6 +2034,7 @@ def draw_heatmap(
     x_name: str = "x",
     y_name: str = "y",
     title: str | None = None,
+    order: OrderMode = "auto",
 ) -> Figure:
     """G7: effect per (y, x) cell, diverging blue (better) – orange (worse) centred on 0.
 
@@ -1660,12 +2049,14 @@ def draw_heatmap(
     with mpl.rc_context(_rc()):
         t = theme
         ny, nx = len(ys), len(xs)
-        cell_w = min(1.25, 4.9 / nx)
-        cell_h = min(0.8, cell_w * 0.75)
+        width = MULTI_IN
+        gx = 1.2
+        cell_w = min(1.0, (width - gx - 1.45) / nx)
+        cell_h = min(0.6, cell_w * 0.7)
         flat = [m for row in cells for m in row]
-        order_h = _order_height(flat, WIDTH_IN - 2 * _SIDE_IN)
+        order_h = _order_height(flat, width - 2 * _SIDE_IN, order)
         grid_h = ny * cell_h
-        page = _Page(_HEAD_IN + 0.15 + grid_h + 0.85 + order_h + _FOOT_IN, theme)
+        page = _Page(_HEAD_IN + 0.15 + grid_h + 0.75 + order_h + _FOOT_IN, theme, width)
         m0 = flat[0]
         n_better = sum(m.verdict.kind == VerdictKind.IMPROVED for m in flat)
         n_worse = sum(m.verdict.kind == VerdictKind.REGRESSED for m in flat)
@@ -1673,7 +2064,6 @@ def draw_heatmap(
         oriented = np.array([[m.sign * m.effect.estimate for m in row] for row in cells])
         reach = max(float(np.abs(oriented).max()), _delta(m0)) or 1.0
         cmap = LinearSegmentedColormap.from_list("bo", [t.worse, t.mid, t.cand])
-        gx = 1.55
         ax = page.axes(gx, _HEAD_IN + 0.15, nx * cell_w, grid_h)
         ax.tick_params(colors=t.ink, labelsize=_LABEL, length=0)
         for j, row in enumerate(cells):
@@ -1714,7 +2104,7 @@ def draw_heatmap(
         ax.set_xlabel(x_name, fontsize=_LABEL, color=t.ink2)
         ax.set_ylabel(y_name, fontsize=_LABEL, color=t.ink2)
         # The key: the ramp (▲ at the better end) and one hatched swatch for "?".
-        kx_x = gx + nx * cell_w + 0.45
+        kx_x = gx + nx * cell_w + 0.3
         kx = page.axes(kx_x, _HEAD_IN + 0.15, 0.22, grid_h * 0.72)
         kx.imshow(
             np.linspace(1, 0, 256)[:, None], aspect="auto", cmap=cmap, extent=(0, 1, -reach, reach)
@@ -1750,7 +2140,9 @@ def draw_heatmap(
             color=t.unsure,
             weight="bold",
         )
-        _draw_order(page, flat, _HEAD_IN + 0.15 + grid_h + 0.85, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN)
+        _draw_order(
+            page, flat, _HEAD_IN + 0.15 + grid_h + 0.75, _SIDE_IN, width - 2 * _SIDE_IN, order
+        )
         return page.fig
 
 
@@ -1767,7 +2159,8 @@ def draw_power(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = N
         raise ValueError("draw_power needs a verdict with an MDE")
     with mpl.rc_context(_rc()):
         t = theme
-        page = _Page(2.6, theme)
+        width = ONE_IN
+        page = _Page(_HEAD_IN + 0.4 + 0.5 + 0.5, theme, width)
         mde_d = abs(display(m, v.mde))
         delta_d = abs(display(m, v.margin))
         unit = unit_suffix(m)
@@ -1777,8 +2170,8 @@ def draw_power(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = N
         page.header(title)
         if v.runs_needed:
             page.text(
-                WIDTH_IN - _SIDE_IN,
-                0.16,
+                width - _SIDE_IN,
+                0.12,
                 f"n {v.n} → {v.runs_needed}",
                 ha="right",
                 va="top",
@@ -1786,17 +2179,29 @@ def draw_power(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = N
                 weight="bold",
                 color=t.ink,
             )
-        ax = page.axes(_SIDE_IN + 0.75, _HEAD_IN + 0.45, 5.6, 0.55)
+        ax_w = width - 2 * _SIDE_IN - 0.75
+        ax = page.axes(_SIDE_IN + 0.6, _HEAD_IN + 0.4, ax_w, 0.5)
         ax.set_yticks([])
         reach = max(mde_d, delta_d) * 1.3
         ax.set_xlim(0, reach)
         ax.set_ylim(-1, 1)
         ax.barh([0], [mde_d], height=1.2, color=t.unsure if v.underpowered else t.better)
         ax.plot([delta_d, delta_d], [-1.15, 1.15], color=t.ink, lw=2.4, clip_on=False)
+        # The MDE's value at the bar's end: outside it when there is room before Δ (or the
+        # bar passes Δ), else inside it in the dark one of ink and surface.
+        mde_label = f"{mde_d:.3g}{unit}"
+        per_in = reach / ax_w
+        need = _plain_w_in(mde_label, _VALUE) + 0.2
+        outside = mde_d >= delta_d or (delta_d - mde_d) / per_in > need
+        if outside or mde_d / per_in < need:
+            _value_text(ax, mde_d + 0.07 * per_in, 0, mde_label, t, ha="left")
+        else:
+            dark = t.ink if t.name == "light" else t.surface
+            _value_text(ax, mde_d - 0.07 * per_in, 0, mde_label, t, ha="right", color=dark)
         ax.text(
             delta_d,
             1.3,
-            "Δ",
+            f"Δ {delta_d:.3g}{unit}",
             ha="center",
             va="bottom",
             fontsize=_LABEL + 2,
@@ -1804,8 +2209,8 @@ def draw_power(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = N
             weight="bold",
         )
         page.text(
-            _SIDE_IN + 0.65,
-            _HEAD_IN + 0.45 + 0.275,
+            _SIDE_IN + 0.5,
+            _HEAD_IN + 0.4 + 0.25,
             "MDE",
             ha="right",
             va="center",
@@ -1839,34 +2244,25 @@ def draw_diagnostics(
 
     b, c = m.base, m.cand
     if order_base is None or order_cand is None:
-        if m.paired:
-            order_base, order_cand = list(range(0, 2 * len(b), 2)), list(range(1, 2 * len(c), 2))
-        else:
-            order_base, order_cand = list(range(len(b))), list(range(len(b), len(b) + len(c)))
+        order_base, order_cand = _default_order(m)
     shard_markers = ("o", "s", "D", "^", "v", "P", "X")
     with mpl.rc_context(_rc()):
         t = theme
-        page = _Page(3.9, theme)
-        slopes = []
-        for vals, order in ((b, order_base), (c, order_cand)):
-            ok = np.isfinite(vals)
-            xo = np.asarray(order, dtype=float)[ok]
-            if ok.sum() > 2 and np.ptp(xo) > 0:  # noqa: PLR2004
-                slope, icpt = np.polyfit(xo, vals[ok], 1)
-                level = np.nanmedian(vals) or 1.0
-                slopes.append((slope, icpt, xo, 100 * slope * np.ptp(xo) / abs(level)))
-            else:
-                slopes.append(None)
+        width = ONE_IN
+        plot_h = 2.1
+        page = _Page(_HEAD_IN + 0.1 + plot_h + 0.45, theme, width)
+        slopes = _arm_trends(m, order_base, order_cand)
+        ends: list[tuple[float, float, str, float]] = []
         drift = [s[3] for s in slopes if s is not None]
         if title is None:
             worst = max(drift, key=abs) if drift else 0.0
             title = (
-                "No drift within either arm"
-                if abs(worst) < 100 * m.margin
-                else f"Drift of {fmt_signed(worst, 0)} % in one arm"
+                f"Drift of {fmt_signed(worst, 0)} % in one arm"
+                if _drifts(m, worst)
+                else "No drift within either arm"
             )
         page.header(title)
-        ax = page.axes(1.15, _HEAD_IN + 0.1, 5.4, 2.5)
+        ax = page.axes(0.9, _HEAD_IN + 0.1, width - 0.9 - 0.95, plot_h)
         ax.grid(axis="y", color=t.grid, linewidth=0.8)
         ax.set_axisbelow(True)
         if aa_band is not None and np.isfinite(b).any():
@@ -1912,7 +2308,7 @@ def draw_diagnostics(
                     **_ring(t, 7),
                 )
             if sl is not None:
-                slope, icpt, xs_, _ = sl
+                slope, icpt, xs_, pct = sl
                 ax.plot(
                     [xs_.min(), xs_.max()],
                     [icpt + slope * xs_.min(), icpt + slope * xs_.max()],
@@ -1920,14 +2316,38 @@ def draw_diagnostics(
                     lw=2.4,
                     zorder=4,
                 )
+                ends.append((float(xs_.max()), float(icpt + slope * xs_.max()), name, pct))
+        # Each trend's end: the arm's name and, under it, its drift over the run.
+        if ends:
+            y0, y1 = ax.get_ylim()
+            per_in = (y1 - y0) / plot_h
+            ys = [y for _, y, _, _ in ends]
+            block = 0.4 * per_in
+            if len(ys) == 2 and abs(ys[0] - ys[1]) < block:  # noqa: PLR2004
+                mid, sign = (ys[0] + ys[1]) / 2, 1 if ys[1] >= ys[0] else -1
+                ys = [mid - sign * block / 2, mid + sign * block / 2]
+            # In the right margin, clear of the other arm's samples.
+            margin = ax.get_yaxis_transform()
+            for (_, _, name, pct), y in zip(ends, ys, strict=True):
                 ax.text(
-                    xs_.max(),
-                    icpt + slope * xs_.max(),
-                    f"  {name}",
+                    1.03,
+                    y + 0.01 * per_in,
+                    name,
+                    transform=margin,
                     ha="left",
-                    va="center",
+                    va="bottom",
                     fontsize=_LABEL,
                     color=t.ink,
+                )
+                _value_text(
+                    ax,
+                    1.03,
+                    y - 0.01 * per_in,
+                    f"{fmt_signed(pct, 0)} %",
+                    t,
+                    transform=margin,
+                    ha="left",
+                    va="top",
                 )
         _value_ticks(ax, m.units)
         from matplotlib.ticker import MaxNLocator
@@ -1938,6 +2358,15 @@ def draw_diagnostics(
 
 # --------------------------------------------------------------------------------------
 # Saving.
+
+
+def display_px(png: str | Path) -> int:
+    """The display width (the ``<img width>``) of a 2× PNG that :func:`save_both` wrote."""
+    with Path(png).open("rb") as f:
+        head = f.read(24)
+    if head[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"{png} is not a PNG")
+    return round(int.from_bytes(head[16:20], "big") * PX_PER_IN / DPI)
 
 
 def save_both(draw: Callable[[Theme], Figure], out_dir: str | Path, stem: str) -> dict[str, Path]:

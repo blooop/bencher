@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 
 import numpy as np
 import pytest
@@ -452,7 +453,7 @@ def _drawn_texts(fig):
 
 
 def test_text_is_large_and_inside_the_figure(groups):
-    """No text under 11 pt (15 px at the 800 px display width), none clipped at the edge."""
+    """No text under 10 pt (10 px on screen: 1 pt is 1 display px), none clipped at the edge."""
     from matplotlib.backends.backend_agg import FigureCanvasAgg
 
     for fig in _all_figures(groups, ig.LIGHT):
@@ -491,8 +492,137 @@ def test_save_both_writes_png_at_2x_and_svg(groups, tmp_path):
         lambda t: ig.draw_estimation(groups["planning_time"].cells[0], t), tmp_path, "est"
     )
     assert set(paths) == {"light", "dark", "light_svg", "dark_svg"}
-    assert imread(paths["light"]).shape[1] == 1600
+    assert imread(paths["light"]).shape[1] == 2 * ig.ONE_PX
+    assert ig.display_px(paths["light"]) == ig.ONE_PX
     assert paths["dark_svg"].read_text(encoding="utf-8").lstrip().startswith("<?xml")
+
+
+def test_estimation_plot_is_the_arms_panel_only(groups):
+    """G3 has no effect panel: one data axes that runs to the right margin, no % ticks."""
+    fig = ig.draw_estimation(groups["planning_time"].cells[0], ig.LIGHT)
+    data_axes = [ax for ax in fig.axes if ax.axison]
+    assert len(data_axes) == 1
+    width = fig.get_figwidth()
+    right = data_axes[0].get_position().x1 * width
+    assert right == pytest.approx(width - ig._SIDE_IN)
+    labels = [lab.get_text() for lab in data_axes[0].get_yticklabels()]
+    assert not any("%" in lab for lab in labels)
+
+
+def test_picture_is_shown_at_the_display_width():
+    assert f'width="{ig.ONE_PX}"' in evidence_report.picture("l.png", "d.png", "alt")
+    assert 'width="648"' in evidence_report.picture("l.png", "d.png", "alt", 648)
+    assert round(ig.ONE_IN * ig.DPI) == ig.ONE_PX * 2
+    assert round(ig.MULTI_IN * ig.DPI) == ig.MULTI_PX * 2
+
+
+def test_each_graphic_is_as_wide_as_its_content(groups):
+    """One metric: a paper-figure width; several metrics or points: a little wider."""
+    cont = groups["planning_time"].cells[0]
+    binary = groups["task_success"].cells[0]
+    sweep = sorted(groups["line_time"].cells, key=lambda m: m.point["x"])
+    one = [
+        ig.draw_scorecard([cont], ig.LIGHT),
+        ig.draw_estimation(cont, ig.LIGHT),
+        ig.draw_raincloud_shift(cont, ig.LIGHT),
+        ig.draw_waffle(binary, ig.LIGHT),
+        ig.draw_power(cont, ig.LIGHT),
+        ig.draw_diagnostics(cont, ig.LIGHT),
+    ]
+    multi = [
+        ig.draw_scorecard([cont, binary], ig.LIGHT),
+        ig.draw_forest(sweep, ig.LIGHT),
+        ig.draw_sweep(sweep, [1, 2, 3], ig.LIGHT, x_name="x"),
+    ]
+    assert 480 <= ig.ONE_PX <= 500
+    assert 640 <= ig.MULTI_PX <= 660
+    for fig in one:
+        assert fig.get_figwidth() * ig.PX_PER_IN == pytest.approx(ig.ONE_PX)
+    for fig in multi:
+        assert fig.get_figwidth() * ig.PX_PER_IN == pytest.approx(ig.MULTI_PX)
+
+
+def test_forest_rows_are_compact(groups):
+    """The forest grows by one compact row (about 31 px) per metric."""
+    sweep = sorted(groups["line_time"].cells, key=lambda m: m.point["x"])
+    two = ig.draw_forest(sweep[:2], ig.LIGHT, order="never").get_figheight()
+    three = ig.draw_forest(sweep, ig.LIGHT, order="never").get_figheight()
+    assert (three - two) * ig.PX_PER_IN == pytest.approx(31, abs=4)
+
+
+def test_chart_text_is_about_github_body_size():
+    """On screen (1 pt = ZOOM px): ticks and labels near GitHub's 14 px, the floor 12 px."""
+    on_screen = {k: v * ig.ZOOM for k, v in {"tick": ig._TICK, "label": ig._LABEL}.items()}
+    assert all(13 <= px <= 14.5 for px in on_screen.values())
+    assert pytest.approx(12) == ig._MIN_PT * ig.ZOOM
+    assert pytest.approx(16, abs=0.5) == ig._TITLE * ig.ZOOM
+    assert pytest.approx(20, abs=0.5) == ig._HERO * ig.ZOOM
+
+
+def _value_labels(fig):
+    return [t.get_text() for t in fig.findobj(lambda a: str(a.get_gid()).startswith(ig.VALUE_GID))]
+
+
+def test_arms_label_each_median_with_its_value(groups):
+    m = groups["planning_time"].cells[0]
+    want = {
+        ig.fmt_value(float(np.median(m.base)), m.units),
+        ig.fmt_value(float(np.median(m.cand)), m.units),
+    }
+    for fig in (ig.draw_estimation(m, ig.LIGHT), ig.draw_scorecard([m], ig.LIGHT)):
+        assert set(_value_labels(fig)) == want
+
+
+def test_median_values_get_digits_until_they_differ():
+    assert ig.fmt_values([2.1261, 2.1289], "s") == ["2.126 s", "2.129 s"]
+    assert ig.fmt_values([0.738, 0.62], "s") == ["0.738 s", "0.62 s"]
+    assert ig.fmt_values([1.0, 1.0]) == ["1", "1"]
+
+
+def test_forest_prints_each_rows_change(groups):
+    sweep = sorted(groups["line_time"].cells, key=lambda m: m.point["x"])
+    fig = ig.draw_forest(sweep, ig.LIGHT)
+    assert sorted(_value_labels(fig)) == sorted(ig.fmt_effect(m) for m in sweep)
+    # Each label is inside the figure.
+    fig.canvas.draw()
+    box = fig.bbox
+    for t in fig.findobj(lambda a: str(a.get_gid()).startswith(ig.VALUE_GID)):
+        ext = t.get_window_extent()
+        assert box.x0 - 1 <= ext.x0, t.get_text()
+        assert ext.x1 <= box.x1 + 1, t.get_text()
+
+
+def test_waffle_gives_each_arms_rate(groups):
+    m = groups["task_success"].cells[0]
+    e = m.effect
+    labels = _value_labels(ig.draw_waffle(m, ig.LIGHT))
+    assert ig.fmt_rate(e.k_base, e.n_base) in labels
+    assert ig.fmt_rate(e.k_cand, e.n_cand) in labels
+    assert ig.fmt_effect(m) in labels
+    assert ig.fmt_rate(18, 20) == "18/20 · 90 %"
+
+
+def test_other_views_label_their_summary_values(groups):
+    cont = groups["planning_time"].cells[0]
+    sweep = sorted(groups["line_time"].cells, key=lambda m: m.point["x"])
+    assert len(_value_labels(ig.draw_sweep(sweep, [1, 2, 3], ig.LIGHT))) == len(sweep)
+    assert len(_value_labels(ig.draw_raincloud_shift(cont, ig.LIGHT))) == 4
+    assert len(_value_labels(ig.draw_power(cont, ig.LIGHT))) == 1
+    assert all("%" in t for t in _value_labels(ig.draw_diagnostics(cont, ig.LIGHT)))
+
+
+def test_value_labels_are_in_the_svg(groups, tmp_path):
+    m = groups["planning_time"].cells[0]
+    paths = ig.save_both(lambda t: ig.draw_estimation(m, t), tmp_path, "est")
+    svg = paths["light_svg"].read_text(encoding="utf-8")
+    assert svg.count(f'id="{ig.VALUE_GID}') == 2
+
+
+def test_report_img_width_matches_each_graphic(tmp_path):
+    base, cand = _evidence()
+    md = report_from_rows(base, cand, tmp_path, primary=["planning_time", "task_success"]).render()
+    widths = {int(w) for w in re.findall(r'<img [^>]*width="(\d+)"', md)}
+    assert widths == {ig.ONE_PX, ig.MULTI_PX}
 
 
 def test_design_strip_facts(groups):
@@ -667,3 +797,157 @@ def test_paired_rows_reject_a_repeated_key() -> None:
     ((base, cand),) = data_from_rows(rows, _shard_rows(0.9))[0].points.values()
     with pytest.raises(ValueError, match="cannot pair"):
         evidence_report._align(base, cand, paired=True)
+
+
+# --------------------------------------------------------------------------------------
+# One metric in its units; the run-order strip only when the design needs it.
+
+
+def test_header_number_is_in_the_metrics_units(groups):
+    m = groups["planning_time"].cells[0]
+    base_median = float(np.median(m.base))
+    expected = base_median * math.expm1(m.effect.estimate)
+    text = ig.fmt_change(m)
+    assert text.endswith(" s")
+    assert text.startswith("−" if expected < 0 else "+")
+    assert float(text[1:-2]) == pytest.approx(abs(expected), abs=0.01)
+    # Several metrics on one axis keep the percent.
+    assert ig.fmt_effect(m).endswith(" %")
+
+
+def test_header_number_falls_back_to_percent_without_a_unit(groups):
+    from dataclasses import replace
+
+    m = replace(groups["planning_time"].cells[0], units="")
+    assert not ig.in_units(m)
+    assert ig.fmt_change(m) == ig.fmt_effect(m)
+    binary = groups["task_success"].cells[0]
+    assert ig.fmt_change(binary).endswith(" pp")
+
+
+def test_unit_ci_is_the_ratio_ci_at_the_base_median(groups):
+    m = groups["planning_time"].cells[0]
+    ci = m.effect.ci
+    lo, hi = ig.unit_change(m, ci.low), ig.unit_change(m, ci.high)
+    assert lo <= ig.unit_change(m, m.effect.estimate) <= hi
+    # The same sign pattern as the ratio CI: the unit CI agrees with the verdict.
+    assert (lo > 0) == (ci.low > 0)
+    assert (hi > 0) == (ci.high > 0)
+    assert ig.fmt_change_ci(m).startswith(f"{round(100 * ci.level)} % CI ")
+    alt = ig.alt_text(m)
+    assert ig.fmt_change(m) in alt
+    assert ig.fmt_effect(m) in alt
+
+
+def test_unit_header_is_drawn_on_the_views_of_one_metric(groups):
+    from matplotlib.text import Text
+
+    m = groups["planning_time"].cells[0]
+    for fig in (ig.draw_estimation(m), ig.draw_scorecard([m]), ig.draw_raincloud_shift(m)):
+        texts = [t.get_text() for t in fig.texts] + [
+            a.get_text() for a in fig.artists if isinstance(a, Text)
+        ]
+        assert ig.fmt_change(m) in texts
+
+
+def _simple(m):
+    """*m* as one machine, unpaired, base runs then candidate runs, one seed, no drift."""
+    from dataclasses import replace
+
+    rng = np.random.default_rng(5)
+    n = len(m.base)
+    base = rng.lognormal(0, 0.02, n)
+    cand = rng.lognormal(-0.2, 0.02, n)
+    return replace(
+        m,
+        base=base,
+        cand=cand,
+        paired=False,
+        clusters=(None, None),
+        order=(np.arange(n), np.arange(n, 2 * n)),
+        seed_policy=None,
+    )
+
+
+def test_auto_hides_the_strip_for_a_simple_design(groups):
+    m = _simple(groups["planning_time"].cells[0])
+    assert ig.simple_design([m])
+    assert not ig.show_order([m], "auto")
+    assert ig.show_order([m], "always")
+    assert ig.design_sentence([m]) == "12 base runs, then 12 candidate runs, one machine"
+    short = ig.draw_estimation(m, order="auto").get_size_inches()[1]
+    tall = ig.draw_estimation(m, order="always").get_size_inches()[1]
+    assert short < tall
+
+
+def test_auto_shows_the_strip_for_interleaved_sharded_or_drifting_runs(groups):
+    from dataclasses import replace
+
+    interleaved = groups["planning_time"].cells[0]
+    assert ig.show_order([interleaved], "auto")
+    assert not ig.show_order([interleaved], "never")
+    sharded = groups["sweep_time"].cells[0]
+    assert ig.show_order([sharded], "auto")
+    simple = _simple(interleaved)
+    drifting = replace(simple, base=np.linspace(1.0, 2.0, len(simple.base)))
+    assert ig.drift_flagged(drifting)
+    assert ig.show_order([drifting], "auto")
+
+
+def test_order_mode_is_checked():
+    with pytest.raises(ValueError, match="order must be one of"):
+        ig.show_order([], "sometimes")  # type: ignore[arg-type]
+
+
+def test_report_states_the_design_when_the_strip_is_hidden(tmp_path):
+    rng = np.random.default_rng(2)
+    base = [
+        {
+            "metric": "t",
+            "units": "s",
+            "direction": "minimize",
+            "repeat": i,
+            "value": float(v),
+            "order": i,
+        }
+        for i, v in enumerate(rng.lognormal(0, 0.02, 12))
+    ]
+    cand = [
+        {
+            "metric": "t",
+            "units": "s",
+            "direction": "minimize",
+            "repeat": i,
+            "value": float(v),
+            "order": 12 + i,
+        }
+        for i, v in enumerate(rng.lognormal(-0.2, 0.02, 12))
+    ]
+    md = evidence_report.report_from_rows(base, cand, tmp_path / "auto", primary=["t"]).render()
+    assert "Design: 12 base runs, then 12 candidate runs, one machine." in md
+    md = evidence_report.report_from_rows(
+        base, cand, tmp_path / "always", primary=["t"], order="always"
+    ).render()
+    assert "The squares under the panels are the runs in execution order (blocked)" in md
+
+
+def test_order_cli_option():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    evidence_report.add_report_options(parser)
+    assert parser.parse_args([]).order == "auto"
+    assert parser.parse_args(["--order", "never"]).order == "never"
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--order", "sometimes"])
+
+
+def test_scorecard_of_four_arms_is_two_by_two(groups):
+    """Four arms panels go 2 × 2, so each median keeps its value beside its bar."""
+    cont = groups["planning_time"].cells[0]
+    fig = ig.draw_scorecard([cont] * 4, ig.LIGHT, order="never")
+    data_axes = [ax for ax in fig.axes if ax.axison]
+    lefts = {round(ax.get_position().x0, 3) for ax in data_axes}
+    assert len(data_axes) == 4
+    assert len(lefts) == 2
+    assert len(_value_labels(fig)) == 8
