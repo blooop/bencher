@@ -57,13 +57,18 @@ python = "3.13.*"
 [tool.pixi.feature.py314.dependencies]
 python = "3.14.*"
 
-# The floor of the window the `rerun` extra declares. The default environment
-# resolves the newest release in that window, so without this feature the older
-# minor would be supported on paper only — and bencher's rerun surface includes
-# `rerun.chunk` (RrdReader, Chunk), which is where an alpha API moves.
+# The minors below the top of the window the `rerun` extra declares, one feature
+# each. The default environment resolves the newest release in that window, so
+# without these features the older minors would be supported on paper only — and
+# bencher's rerun surface includes `rerun.chunk` (RrdReader, Chunk), which is where
+# an alpha API moves.
 [tool.pixi.feature.rerun-floor.pypi-dependencies]
 rerun-sdk = ">=0.38.0,<0.39"
 rerun-notebook = ">=0.38.0,<0.39"
+
+[tool.pixi.feature.rerun-mid.pypi-dependencies]
+rerun-sdk = ">=0.39.0,<0.40"
+rerun-notebook = ">=0.39.0,<0.40"
 
 [tool.pixi.pypi-dependencies]
 holobench = { path = ".", editable = true }
@@ -103,9 +108,10 @@ docs = [
 ]
 
 #adds support for embedding rerun windows (alpha)
-#every minor named here is resolved by an environment and tested: the floor by
-#`rerun-floor`, the ceiling by the default env. Widen this only with a job to match.
-rerun = ["rerun-sdk>=0.38.0,<0.40", "rerun-notebook>=0.38.0,<0.40"]
+#at most three minors; every one is resolved by an environment and tested: the floor
+#by `rerun-floor`, the middle by `rerun-mid`, the ceiling by the default env. Widen
+#this only with a job to match.
+rerun = ["rerun-sdk>=0.38.0,<0.41", "rerun-notebook>=0.38.0,<0.41"]
 
 #draws the svg backend's panels with seaborn (beeswarms, boxes, violins, densities);
 #without it the svg backend draws the same charts with plain matplotlib
@@ -130,6 +136,7 @@ py312 = ["py312", "test", "rerun", "seaborn"]
 py313 = ["py313", "test", "rerun", "seaborn"]
 py314 = ["py314", "test", "rerun", "seaborn"]
 rerun-floor = ["py313", "test", "rerun-floor"]
+rerun-mid = ["py313", "test", "rerun-mid"]
 
 [tool.pixi.tasks]
 #AI AGENT TASKS
