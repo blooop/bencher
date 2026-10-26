@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.148.0] - 2026-10-26
+
+### Changed
+- **Every part of a view of one metric is in the metric's unit**, not only the big
+  number: the chart title (`Task duration 1.9 s slower`), the shift plot's decile axis
+  and its value labels, and the sweep's effect row and the change under each point. The
+  shift function of a metric with a unit is the direct difference of the deciles in that
+  unit, with its own bootstrap CI; the sweep's ±Δ band steps with each point's base
+  median. The sweep's alt text and CI line give the change in units and in %. A unitless
+  positive metric stays in %, a binary one in pp, and the forest, heatmap and summary
+  table keep %.
+
+### Fixed
+- **The verdict glyphs ▲ ▼ no longer draw as empty boxes where Open Sans is installed.**
+  The charts named their fonts through the generic `sans-serif` family, so matplotlib
+  kept only Open Sans, which has no ▲ ▼, and had no fallback. The fonts now go in
+  `font.family` by name, and DejaVu Sans (shipped with matplotlib) supplies any glyph
+  Open Sans lacks.
+
 ## [1.147.0] - 2026-10-26
 
 ### Added
