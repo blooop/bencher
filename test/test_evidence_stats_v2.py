@@ -850,6 +850,148 @@ def test_unit_header_is_drawn_on_the_views_of_one_metric(groups):
         assert ig.fmt_change(m) in texts
 
 
+def _fig_texts(fig) -> list[str]:
+    """Every string a figure draws: figure texts, axes texts and tick labels."""
+    from matplotlib.text import Text
+
+    out = [t.get_text() for t in fig.texts]
+    out += [a.get_text() for a in fig.artists if isinstance(a, Text)]
+    for ax in fig.axes:
+        out += [t.get_text() for t in ax.texts]
+        out += [t.get_text() for t in ax.get_xticklabels() + ax.get_yticklabels()]
+    return [t for t in out if t]
+
+
+def test_chart_title_is_in_the_metrics_units(groups):
+    from dataclasses import replace
+
+    m = groups["planning_time"].cells[0]
+    assert m.verdict.kind == VerdictKind.IMPROVED
+    size = ig.fmt_change(m).lstrip("+−")
+    assert ig.chart_title(m) == f"Planning time {size} faster"
+    # No unit: the title keeps the percent, as the big number does.
+    no_unit = replace(m, units="")
+    assert ig.chart_title(no_unit).endswith(" % faster")
+
+
+def test_shift_plot_is_the_direct_decile_difference_in_units(groups):
+    m = groups["planning_time"].cells[0]
+    fig = ig.draw_raincloud_shift(m)
+    texts = _fig_texts(fig)
+    assert not [t for t in texts if "%" in t]
+    shift_ax = fig.axes[1]
+    ticks = [t.get_text() for t in shift_ax.get_yticklabels() if t.get_text()]
+    assert all(t == "0" or t.endswith(" s") for t in ticks)
+    sf = es.shift_function(m.base, m.cand, scale="diff", paired=m.paired)
+    summary = ig.shift_summary(m)
+    assert summary.endswith(" s")
+    q9 = re.search(r"q9 ([+−]?[\d.]+) \[", summary)
+    assert q9 is not None
+    assert float(q9.group(1).replace("−", "-")) == pytest.approx(sf.diff[-1], abs=0.01)
+    # The dots sit at the decile differences in units.
+    ys = [ln.get_ydata()[0] for ln in shift_ax.lines if ln.get_marker() == "o"]
+    assert np.allclose(ys, sf.diff)
+    title = texts[0]
+    assert title.startswith("Median ")
+    assert title.endswith(" s")
+
+
+def test_shift_plot_keeps_percent_without_a_unit(groups):
+    from dataclasses import replace
+
+    m = replace(groups["planning_time"].cells[0], units="")
+    assert ig.shift_summary(m).endswith(" %")
+    assert any(t.endswith(" %") for t in _fig_texts(ig.draw_raincloud_shift(m)))
+
+
+def test_sweep_effect_row_is_in_units(groups):
+    cells = sorted(groups["line_time"].cells, key=lambda m: m.point["x"])
+    fig = ig.draw_sweep(cells, [float(m.point["x"]) for m in cells], x_name="x")
+    texts = _fig_texts(fig)
+    assert not [t for t in texts if "%" in t]
+    effect_ax = fig.axes[1]
+    values = [t.get_text() for t in effect_ax.texts if (t.get_gid() or "").startswith(ig.VALUE_GID)]
+    assert len(values) == len(cells)
+    assert all(v.endswith(" s") for v in values)
+    ys = [ln.get_ydata()[0] for ln in effect_ax.lines if ln.get_marker() == "o"]
+    assert np.allclose(ys, [ig.unit_change(m, m.effect.estimate) for m in cells])
+
+
+def test_sweep_effect_row_keeps_percent_without_a_unit(groups):
+    from dataclasses import replace
+
+    cells = [
+        replace(m, units="") for m in sorted(groups["line_time"].cells, key=lambda m: m.point["x"])
+    ]
+    fig = ig.draw_sweep(cells, [float(m.point["x"]) for m in cells], x_name="x")
+    values = [
+        t.get_text() for t in fig.axes[1].texts if (t.get_gid() or "").startswith(ig.VALUE_GID)
+    ]
+    assert values == [ig.fmt_effect(m) for m in cells]
+
+
+def test_sweep_caption_gives_units_and_percent(groups, tmp_path):
+    evidence_report.write_report(list(groups.values()), tmp_path, svg=False, diagnostics=False)
+    report = (tmp_path / "evidence.md").read_text()
+    alt = re.search(r'alt="(Line time sweep\.[^"]*)"', report)
+    assert alt is not None
+    m = min(groups["line_time"].cells, key=lambda m: m.point["x"])
+    assert f"{ig.fmt_change(m)} ({ig.fmt_effect(m)})" in alt.group(1)
+
+
+@pytest.fixture
+def open_sans_without_triangles(tmp_path):
+    """A font named "Open Sans" with no ▲ ▼, as the real one: DejaVu Sans with them cut out."""
+    from fontTools import subset
+    from fontTools.ttLib import TTFont
+    from matplotlib import font_manager
+
+    src = font_manager.findfont("DejaVu Sans")
+    font = TTFont(src)
+    cmap = font.getBestCmap()
+    assert cmap is not None
+    keep = [c for c in cmap if c not in (0x25B2, 0x25BC)]
+    options = subset.Options()
+    options.name_IDs = ["*"]
+    sub = subset.Subsetter(options)
+    sub.populate(unicodes=keep)
+    sub.subset(font)
+    for rec in font["name"].names:
+        if rec.nameID in (1, 4, 16):
+            rec.string = "Open Sans"
+    path = tmp_path / "FakeOpenSans.ttf"
+    font.save(path)
+    before = list(font_manager.fontManager.ttflist)
+    font_manager.fontManager.addfont(str(path))
+    font_manager.fontManager._findfont_cached.cache_clear()
+    try:
+        assert "Open Sans" in ig.font_families()
+        yield
+    finally:
+        font_manager.fontManager.ttflist[:] = before
+        font_manager.fontManager._findfont_cached.cache_clear()
+
+
+def test_verdict_glyph_draws_without_the_glyph_in_open_sans(
+    groups, open_sans_without_triangles, tmp_path
+):
+    """▲ ▼ come from DejaVu Sans when Open Sans lacks them: no "Glyph missing" warning."""
+    import warnings
+    from dataclasses import replace
+
+    improved = groups["planning_time"].cells[0]
+    regressed = replace(improved, verdict=replace(improved.verdict, kind=VerdictKind.REGRESSED))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        for m in (improved, regressed):
+            assert m.verdict.glyph in "▲▼"
+            # The report's own path: both themes, PNG and SVG, inside the charts' rc.
+            ig.save_both(lambda t, m=m: ig.draw_estimation(m, t), tmp_path, f"est-{m.verdict.kind}")
+            ig.save_both(lambda t, m=m: ig.draw_scorecard([m], t), tmp_path, f"sc-{m.verdict.kind}")
+    missing = [str(w.message) for w in caught if "missing from font" in str(w.message)]
+    assert not missing
+
+
 def _simple(m):
     """*m* as one machine, unpaired, base runs then candidate runs, one seed, no drift."""
     from dataclasses import replace

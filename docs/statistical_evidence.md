@@ -180,15 +180,23 @@ Common rules:
   whenever the order was recorded; `order="never"` leaves it out. Without the strip the
   caption states the design in one line, for example "20 base runs, then 20 candidate
   runs, one machine". The CLIs take `--order auto|always|never`.
-* **One metric in its units, several in %.** A view of one metric (the scorecard panel,
-  the estimation plot, the waffle, the shift plot) shows the big number in the metric's
-  own unit: `▼ +1.9 s`. A positive metric is tested on the log ratio, so its change in
-  units is the ratio at the base median, base median × (ratio − 1), and its CI is the
-  ratio's CI converted the same way; the verdict does not change. A positive metric with
-  no unit (a ratio-type quantity) stays in %, a binary metric is in pp. Views that put
-  several metrics or points on one axis (the forest, the sweep's effect row, the heatmap,
-  the summary table) keep the % change. The caption and the alt text give both: the
-  change in units with its CI, then the % change with its CI.
+* **One metric in its units, several in %.** Every part of a view of one metric is in
+  the metric's own unit: the title (`Task duration 1.9 s slower`), the big number
+  (`▼ +1.9 s`), the shift plot's decile axis and its value labels, and the sweep's effect
+  row and the change under each sweep point. A positive metric is tested on the log
+  ratio, so its change in units is the ratio at the base median, base median ×
+  (ratio − 1), and its CI is the ratio's CI converted the same way; the verdict does not
+  change. In a sweep each point uses its own base median, so the ±Δ band is a step at
+  each point. The shift plot is the direct difference of the deciles in units, candidate
+  − base, with its own bootstrap CI. A positive metric with no unit (a ratio-type
+  quantity) stays in %, a binary metric is in pp. Views that put several metrics on one
+  axis (the forest, the heatmap, the summary table) keep the % change. The caption and
+  the alt text give both: the change in units with its CI, then the % change with its CI.
+* **The glyphs do not depend on the installed fonts.** The charts ask for Open Sans, then
+  DejaVu Sans, by name in `font.family`, so matplotlib takes each glyph that Open Sans
+  does not have (▲ ▼) from DejaVu Sans, which ships with matplotlib. Through the generic
+  `sans-serif` family matplotlib keeps only the first font it finds, and a ▲ then draws
+  as an empty box.
 * Okabe–Ito colours. Base is grey `#8C8C8C`; candidate is blue `#0072B2`. Better is
   bluish green `#009E73`, worse is vermilion `#D55E00`, inconclusive is amber
   `#E69F00`. Dark theme: candidate `#3D9BD6`, better `#1FA07C`, worse `#E0662A`,

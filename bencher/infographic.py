@@ -76,7 +76,9 @@ ONE_IN = ONE_PX / PX_PER_IN  # a whole number of px, so the 2× PNG is exactly 2
 # Several metrics or points (a scorecard of several panels, the forest, sweeps, heatmap).
 MULTI_PX = 648
 MULTI_IN = MULTI_PX / PX_PER_IN
-# Open Sans where it is installed; DejaVu Sans (always there) supplies ▲ ▼ ≈ and the fallback.
+# Open Sans where it is installed; DejaVu Sans (it ships with matplotlib) supplies ▲ ▼ ≈
+# and every other glyph Open Sans lacks. The names go in ``font.family`` itself: through the
+# generic ``sans-serif`` matplotlib keeps only the first font it finds, and has no fallback.
 FONT = ("Open Sans", "DejaVu Sans")
 
 
@@ -220,15 +222,25 @@ def unit_change(m: MetricEvidence, value: float) -> float:
 def _unit_digits(m: MetricEvidence) -> int:
     """Decimals that give the 95 % CI's width in units two significant figures."""
     ci = m.effect.ci95
-    span = abs(unit_change(m, ci.high) - unit_change(m, ci.low))
+    return span_digits(abs(unit_change(m, ci.high) - unit_change(m, ci.low)))
+
+
+def span_digits(span: float) -> int:
+    """Decimals that give a *span* of values in units two significant figures."""
     return max(0, min(4, 1 - math.floor(math.log10(span)))) if span > 0 else 2
 
 
-def fmt_change(m: MetricEvidence) -> str:
+def fmt_units(value: float, units: str, digits: int) -> str:
+    """``+1.84 s``: a signed change in the metric's units."""
+    return f"{fmt_signed(value, digits)} {units.strip()}"
+
+
+def fmt_change(m: MetricEvidence, digits: int | None = None) -> str:
     """The big number of a view of *m* alone: ``+1.84 s`` in units, else :func:`fmt_effect`."""
     if not in_units(m):
         return fmt_effect(m)
-    return f"{fmt_signed(unit_change(m, m.effect.estimate), _unit_digits(m))} {m.units.strip()}"
+    d = _unit_digits(m) if digits is None else digits
+    return fmt_units(unit_change(m, m.effect.estimate), m.units, d)
 
 
 def fmt_change_ci(m: MetricEvidence, *, level95: bool = False) -> str:
@@ -302,7 +314,10 @@ def _direction_word(m: MetricEvidence, raised: bool) -> str:
     return "higher" if raised else "lower"
 
 
-def _amount(m: MetricEvidence) -> str:
+def _amount(m: MetricEvidence, *, units: bool = False) -> str:
+    """The size of the change, no sign; in the metric's units when *units* and :func:`in_units`."""
+    if units and in_units(m):
+        return f"{abs(unit_change(m, m.effect.estimate)):.{_unit_digits(m)}f} {m.units.strip()}"
     size = display(m, m.effect.estimate)
     if m.kind == "positive":
         return f"{abs(size):.0f} %" if abs(size) >= 10 else f"{abs(size):.1f} %"  # noqa: PLR2004
@@ -333,7 +348,11 @@ def headline(m: MetricEvidence) -> str:
 
 
 def chart_title(m: MetricEvidence) -> str:
-    """The finding in at most six words, for a chart: "Planning time 18 % faster"."""
+    """The finding in at most six words, for a chart: "Planning time 1.9 s faster".
+
+    A chart of one metric gives the change in the metric's units, as its big number
+    does; a metric with no unit gives % (pp for a rate).
+    """
     name = humanize(m.name)
     v = m.verdict
     if v.kind == VerdictKind.INCONCLUSIVE:
@@ -342,7 +361,7 @@ def chart_title(m: MetricEvidence) -> str:
         return f"{name} unchanged" if v.detail == "no change" else f"{name}: {v.word}"
     if isinstance(m.effect, ProportionEffect):
         return f"{name} {v.word}"
-    return f"{name} {_amount(m)} {_direction_word(m, m.effect.estimate > 0)}"
+    return f"{name} {_amount(m, units=True)} {_direction_word(m, m.effect.estimate > 0)}"
 
 
 def method_line(m: MetricEvidence, *, with_test: bool = True) -> str:
@@ -619,10 +638,19 @@ def _outer_reach(
     return -reach, reach
 
 
+def font_families() -> list[str]:
+    """The :data:`FONT` families that are installed, in order (DejaVu Sans always is)."""
+    from matplotlib import font_manager
+
+    names = {f.name for f in font_manager.fontManager.ttflist}
+    return [f for f in FONT if f in names] or ["DejaVu Sans"]
+
+
 def _rc() -> dict:
+    families = font_families()
     return {
-        "font.family": "sans-serif",
-        "font.sans-serif": list(FONT),
+        "font.family": families,
+        "font.sans-serif": families,
         "svg.fonttype": "path",
         "axes.unicode_minus": True,
     }
@@ -895,14 +923,40 @@ def effect_limits(metrics: Sequence[MetricEvidence], pad: float = 0.12) -> tuple
     return -reach, reach
 
 
-def _effect_axis(
-    ax: Axes, m: MetricEvidence, lim: tuple[float, float], theme: Theme, *, vertical: bool
-) -> None:
-    """The effect axis: limits, % (or pp) ticks, the 0 line and the ±Δ band."""
+def unit_band(m: MetricEvidence) -> tuple[float, float]:
+    """The ±Δ band of positive *m* in its units, at the base median (slightly asymmetric)."""
     delta = _delta(m)
-    (ax.axhspan if vertical else ax.axvspan)(-delta, delta, color=theme.band, zorder=0, lw=0)
+    return unit_change(m, -delta), unit_change(m, delta)
+
+
+def _effect_axis(
+    ax: Axes,
+    m: MetricEvidence,
+    lim: tuple[float, float],
+    theme: Theme,
+    *,
+    vertical: bool,
+    units: bool = False,
+    band: bool = True,
+) -> None:
+    """The effect axis: limits, % (or pp) ticks, the 0 line and the ±Δ band.
+
+    With *units* the axis is in the metric's units: *lim* are unit changes and the band
+    is :func:`unit_band`. Without *band* the caller draws the band itself.
+    """
+    delta = _delta(m)
+    lo_b, hi_b = unit_band(m) if units else (-delta, delta)
+    if band:
+        (ax.axhspan if vertical else ax.axvspan)(lo_b, hi_b, color=theme.band, zorder=0, lw=0)
     (ax.axhline if vertical else ax.axvline)(0, color=theme.muted, linewidth=1.0, zorder=1)
     (ax.set_ylim if vertical else ax.set_xlim)(*lim)
+    if units:
+        step = _nice_step(lim[1] - lim[0])
+        vals = np.arange(math.ceil(lim[0] / step) * step, lim[1] + 1e-12, step)
+        unit = f" {m.units.strip()}"
+        labels = [_tick(v, step) + ("" if abs(v) < step * 1e-6 else unit) for v in vals]
+        (ax.set_yticks if vertical else ax.set_xticks)(vals, labels)
+        return
     if m.kind == "positive":
         lo_p, hi_p = 100 * math.expm1(lim[0]), 100 * math.expm1(lim[1])
     else:
@@ -917,7 +971,9 @@ def _effect_axis(
 
 def _tick(value: float, step: float) -> str:
     digits = 0 if step >= 1 else max(0, -math.floor(math.log10(step)))
-    if abs(value) < _ZERO:
+    if step == 2.5 * 10 ** math.floor(math.log10(step)) and step < 10:  # noqa: PLR2004
+        digits += 1  # 0.25, 2.5: one more decimal
+    if abs(value) < _ZERO or abs(value) < step * 1e-6:
         return "0"
     return fmt_signed(value, digits)
 
@@ -1648,8 +1704,8 @@ def draw_raincloud_shift(
     """G4: per arm a half-violin, a box and every sample; under it the decile shift function."""
     import matplotlib as mpl
 
-    scale = "log" if m.kind == "positive" else "diff"
-    sf = shift_function(m.base, m.cand, scale=scale, paired=m.paired)
+    sf = _shift(m)
+    units = in_units(m)
     with mpl.rc_context(_rc()):
         t = theme
         width = ONE_IN
@@ -1723,11 +1779,12 @@ def draw_raincloud_shift(
         sx = page.axes(cloud_x, _HEAD_IN + 0.1 + cloud_h + 0.55, cloud_w, shift_h)
         sx.grid(axis="y", color=t.grid, linewidth=0.8)
         x = np.arange(len(sf.probs))
-        lim = (min(sf.diff.min(), -_delta(m)) * 1.3, max(sf.diff.max(), _delta(m)) * 1.3)
+        lo_b, hi_b = unit_band(m) if units else (-_delta(m), _delta(m))
+        lim = (min(sf.diff.min(), lo_b) * 1.3, max(sf.diff.max(), hi_b) * 1.3)
         # Room for a value label (about 0.3 in) above the highest and below the lowest dot.
         span = lim[1] - lim[0]
         lim = (lim[0] - 0.3 * span / shift_h, lim[1] + 0.3 * span / shift_h)
-        _effect_axis(sx, m, lim, t, vertical=True)
+        _effect_axis(sx, m, lim, t, vertical=True, units=units)
         sx.plot(x, sf.diff, color=t.muted, lw=1.2, zorder=2)
         for i in range(len(x)):
             excl = sf.low[i] > 0 or sf.high[i] < 0
@@ -1745,14 +1802,13 @@ def draw_raincloud_shift(
             )
         # The two deciles the title names: the median and the top decile, with their values.
         y_per_in = (lim[1] - lim[0]) / shift_h
-        unit = unit_suffix(m)
         for i in (sf.probs.index(0.5), len(x) - 1):
             up = sf.diff[i] >= 0
             _value_text(
                 sx,
                 x[i],
                 sf.diff[i] + (0.11 if up else -0.11) * y_per_in,
-                fmt_signed(display(m, sf.diff[i]), 0) + unit,
+                _fmt_decile(sf, m, sf.diff[i]),
                 t,
                 ha="center",
                 va="bottom" if up else "top",
@@ -1763,23 +1819,57 @@ def draw_raincloud_shift(
         return page.fig
 
 
+def _shift(m: MetricEvidence) -> ShiftFunction:
+    """The decile shift function of *m*: in its units when :func:`in_units`, else as log ratios.
+
+    In units it is the direct difference of the deciles, candidate − base, with its own
+    bootstrap CI: no conversion through the base median.
+    """
+    scale = "log" if m.kind == "positive" and not in_units(m) else "diff"
+    return shift_function(m.base, m.cand, scale=scale, paired=m.paired)
+
+
+def _decile_digits(sf: ShiftFunction) -> int:
+    """Decimals that give a typical decile's 95 % CI width two significant figures."""
+    return span_digits(float(np.median(sf.high - sf.low)))
+
+
+def _fmt_decile(sf: ShiftFunction, m: MetricEvidence, value: float) -> str:
+    """One decile's change: ``+0.21 s`` in units, else ``+99 %``."""
+    if in_units(m):
+        return fmt_units(value, m.units, _decile_digits(sf))
+    return fmt_signed(display(m, value), 0) + unit_suffix(m)
+
+
 def _shift_title(sf: ShiftFunction, m: MetricEvidence) -> str:
-    """``Median +1 %, q9 +52 %``."""
+    """``Median +0.01 s, q9 +0.21 s`` (``Median +1 %, q9 +52 %`` with no unit)."""
     i_med = sf.probs.index(0.5)
     tail = len(sf.probs) - 1
-    unit = unit_suffix(m)
-    med, top = display(m, sf.diff[i_med]), display(m, sf.diff[tail])
-    return f"Median {fmt_signed(med, 0)}{unit}, q{tail + 1} {fmt_signed(top, 0)}{unit}"
+    med, top = _fmt_decile(sf, m, sf.diff[i_med]), _fmt_decile(sf, m, sf.diff[tail])
+    return f"Median {med}, q{tail + 1} {top}"
 
 
 def shift_summary(m: MetricEvidence) -> str:
-    """The shift function in words for the Markdown: every decile's change and 95 % CI."""
-    scale = "log" if m.kind == "positive" else "diff"
-    sf = shift_function(m.base, m.cand, scale=scale, paired=m.paired)
-    unit = unit_suffix(m)
+    """The shift function in words for the Markdown: every decile's change and 95 % CI.
+
+    In the plot's unit: the metric's units when :func:`in_units`, else % (or pp).
+    """
+    sf = _shift(m)
+    if in_units(m):
+        d = _decile_digits(sf)
+        unit = f" {m.units.strip()}"
+
+        def num(v: float) -> str:
+            return fmt_signed(v, d)
+    else:
+        unit = unit_suffix(m)
+
+        def num(v: float) -> str:
+            return fmt_signed(display(m, v), 0)
+
     parts = [
-        f"q{i + 1} {fmt_signed(display(m, d), 0)} [{fmt_signed(display(m, lo), 0)} … {fmt_signed(display(m, hi), 0)}]"
-        for i, (d, lo, hi) in enumerate(zip(sf.diff, sf.low, sf.high, strict=True))
+        f"q{i + 1} {num(d_)} [{num(lo)} … {num(hi)}]"
+        for i, (d_, lo, hi) in enumerate(zip(sf.diff, sf.low, sf.high, strict=True))
     ]
     return ", ".join(parts) + unit
 
@@ -1980,16 +2070,36 @@ def draw_sweep(
         ax.set_xticks(x, [])
         _value_ticks(ax, m0.units)
         ex = page.axes(plot_x, _HEAD_IN + 0.1 + top_h + 0.25, plot_w, eff_h)
+        units = all(in_units(m) for m in cells)
         # Room for the glyph above each dot and its value below.
-        lim = effect_limits(cells, pad=0.7)
-        _effect_axis(ex, m0, lim, t, vertical=True)
+        if units:
+            # In units each point has its own base median, so its own change and ±Δ band.
+            ys = [unit_change(m, m.effect.estimate) for m in cells]
+            bands = [unit_band(m) for m in cells]
+            reach = max(
+                max(abs(unit_change(m, m.effect.ci.low)), abs(unit_change(m, m.effect.ci.high)))
+                for m in cells
+            )
+            reach = max(reach, *(max(abs(lo), abs(hi)) for lo, hi in bands)) * 1.7 or 0.1
+            lim = (-reach, reach)
+            _effect_axis(ex, m0, lim, t, vertical=True, units=True, band=False)
+            edges = np.concatenate([[xlim[0]], (x[:-1] + x[1:]) / 2, [xlim[1]]])
+            for i, (lo, hi) in enumerate(bands):
+                ex.fill_between(edges[i : i + 2], lo, hi, color=t.band, lw=0, zorder=0)
+            digits = max(_unit_digits(m) for m in cells)
+            labels = [fmt_change(m, digits) for m in cells]
+        else:
+            ys = [m.effect.estimate for m in cells]
+            lim = effect_limits(cells, pad=0.7)
+            _effect_axis(ex, m0, lim, t, vertical=True)
+            labels = [fmt_effect(m) for m in cells]
         ex.grid(axis="y", color=t.grid, linewidth=0.6)
-        for xi, m in zip(x, cells, strict=True):
+        for xi, m, y, label in zip(x, cells, ys, labels, strict=True):
             colour = t.verdict_colour(m.verdict.kind)
-            _estimate_dot(ex, xi, m.effect.estimate, m, t, size=9.0)
+            _estimate_dot(ex, xi, y, m, t, size=9.0)
             ex.text(
                 xi,
-                m.effect.estimate + 0.07 * (lim[1] - lim[0]),
+                y + 0.07 * (lim[1] - lim[0]),
                 m.verdict.glyph,
                 ha="center",
                 va="bottom",
@@ -2001,8 +2111,8 @@ def draw_sweep(
             _value_text(
                 ex,
                 xi,
-                m.effect.estimate - 0.07 * (lim[1] - lim[0]),
-                fmt_effect(m),
+                y - 0.07 * (lim[1] - lim[0]),
+                label,
                 t,
                 ha="center",
                 va="top",

@@ -753,10 +753,13 @@ def write_report(
                     "Raincloud and shift function. " + ig.alt_text(m),
                 )
             )
+            per = (
+                f" in {m.units.strip()} (candidate decile − base decile)" if ig.in_units(m) else ""
+            )
             text(
                 "The rank check or a tail decile disagrees with the mean: read the shift function above, not one number. "
                 "Top: each arm's density, box (quartiles, median ring) and every run. Bottom: the change "
-                "at each decile q1…q9, coloured where its 95 % bootstrap CI excludes 0: "
+                f"at each decile q1…q9{per}, coloured where its 95 % bootstrap CI excludes 0: "
                 f"{ig.shift_summary(m)}.\n"
             )
         if m.verdict.underpowered and m.verdict.kind not in {
@@ -793,6 +796,14 @@ def write_report(
             key = varying[0]
             cells_g.sort(key=lambda m: m.point[key])
             xs = [float(m.point[key]) for m in cells_g]
+            units = all(ig.in_units(m) for m in cells_g)
+            if units:
+                # The effect row is in units (a sweep is one metric): the alt gives both.
+                alt = f"{ig.humanize(g.name)} sweep. " + " ".join(
+                    f"{_point_label(m.point)}: {m.verdict.word} {ig.fmt_change(m)} "
+                    f"({ig.fmt_effect(m)})."
+                    for m in cells_g
+                )
             sections.append(
                 img.add(
                     f"{stem}-sweep",
@@ -802,12 +813,18 @@ def write_report(
                     alt,
                 )
             )
-            text(_ci_line(cells_g, [f"`{key}`={m.point[key]:g}" for m in cells_g]))
+            text(_ci_line(cells_g, [f"`{key}`={m.point[key]:g}" for m in cells_g], units=units))
+            change = (
+                f"the change in {cells_g[0].units.strip()} at each point (the ratio at that "
+                "point's base median), over the margin "
+                if units
+                else "the change at each point over the margin "
+            )
             text(
                 f"*Top: every run at each `{key}` point (grey base, blue candidate), lines join "
                 "the medians, and a dashed line runs from the base to the candidate median; the "
-                "points sit at even steps in sweep order. Bottom: the change at each point over "
-                f"the margin {ig.fmt_margin(cells_g[0])}. "
+                f"points sit at even steps in sweep order. Bottom: {change}"
+                f"{ig.fmt_margin(cells_g[0])}. "
                 f"{_order_note(cells_g, where='under the graphic', order=order)}*\n"
             )
         elif len(varying) == 2:  # noqa: PLR2004
