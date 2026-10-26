@@ -1411,13 +1411,21 @@ def draw_scorecard(
     per_row: int = 4,
     order: OrderMode = "auto",
 ) -> Figure:
-    """G1: one panel per metric: name, big effect + glyph, every sample, Δ band, median connector."""
+    """G1: one panel per metric: name, big effect + glyph, every sample, Δ band, median connector.
+
+    Up to *per_row* panels a row, at most 3 when a panel shows samples; the rows are
+    balanced (4 panels are 2 × 2).
+    """
     import matplotlib as mpl
 
     with mpl.rc_context(_rc()):
         n = len(metrics)
+        if not all(isinstance(m.effect, ProportionEffect) for m in metrics):
+            # Arms panels need room for their median values: at most 3 a row.
+            per_row = min(per_row, 3)
         cols = max(1, min(per_row, n))
         rows = math.ceil(n / cols)
+        cols = math.ceil(n / rows)  # balanced rows: 4 panels are 2 × 2, not 3 + 1
         width = ONE_IN if cols == 1 else MULTI_IN
         usable = width - 2 * _SIDE_IN
         gutter = 0.22

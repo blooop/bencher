@@ -940,3 +940,14 @@ def test_order_cli_option():
     assert parser.parse_args(["--order", "never"]).order == "never"
     with pytest.raises(SystemExit):
         parser.parse_args(["--order", "sometimes"])
+
+
+def test_scorecard_of_four_arms_is_two_by_two(groups):
+    """Four arms panels go 2 × 2, so each median keeps its value beside its bar."""
+    cont = groups["planning_time"].cells[0]
+    fig = ig.draw_scorecard([cont] * 4, ig.LIGHT, order="never")
+    data_axes = [ax for ax in fig.axes if ax.axison]
+    lefts = {round(ax.get_position().x0, 3) for ax in data_axes}
+    assert len(data_axes) == 4
+    assert len(lefts) == 2
+    assert len(_value_labels(fig)) == 8

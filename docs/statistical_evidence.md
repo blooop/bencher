@@ -224,7 +224,7 @@ The catalogue:
 
 | # | Graphic | Use | Content |
 |---|---|---|---|
-| G1 | Scorecard | top of every report, the headline image | small multiples, up to 4 panels a row, one per primary metric: the metric name, the big effect + glyph, both beeswarm columns on the metric's own axis, the ±Δ band and the CI bar; a binary metric shows one small waffle per arm |
+| G1 | Scorecard | top of every report, the headline image | small multiples, one per primary metric, up to 4 panels a row (3 when a panel shows samples, so each median has room for its value; rows balanced, 4 panels are 2 × 2): the metric name, the big effect + glyph, both beeswarm columns on the metric's own axis, the ±Δ band and the CI bar; a binary metric shows one small waffle per arm |
 | G2 | Forest plot | more than 4 metrics, or a categorical sweep | one row per metric, sorted by effect: the name, a small dot strip of both arms' samples, point + CI on the shared % axis over the ±Δ band, the glyph; the numbers are in the alt text and the Markdown table |
 | G3 | Estimation plot | each primary continuous metric | the G1 panel at the full page width: every sample of both arms, the ±Δ band and the median connector; the caption gives the CI |
 | G4 | Raincloud + shift | tails, bimodal data | half-violin, box and every sample per arm; under it the decile shift function (dots + 95 % CI bars, labelled q1…q9) |
