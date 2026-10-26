@@ -452,7 +452,7 @@ def _drawn_texts(fig):
 
 
 def test_text_is_large_and_inside_the_figure(groups):
-    """No text under 11 pt (15 px at the 800 px display width), none clipped at the edge."""
+    """No text under 10.5 pt (12 px at the 672 px display width), none clipped at the edge."""
     from matplotlib.backends.backend_agg import FigureCanvasAgg
 
     for fig in _all_figures(groups, ig.LIGHT):
@@ -491,8 +491,25 @@ def test_save_both_writes_png_at_2x_and_svg(groups, tmp_path):
         lambda t: ig.draw_estimation(groups["planning_time"].cells[0], t), tmp_path, "est"
     )
     assert set(paths) == {"light", "dark", "light_svg", "dark_svg"}
-    assert imread(paths["light"]).shape[1] == 1600
+    assert imread(paths["light"]).shape[1] == 2 * ig.DISPLAY_PX
     assert paths["dark_svg"].read_text(encoding="utf-8").lstrip().startswith("<?xml")
+
+
+def test_estimation_plot_is_the_arms_panel_only(groups):
+    """G3 has no effect panel: one data axes that runs to the right margin, no % ticks."""
+    fig = ig.draw_estimation(groups["planning_time"].cells[0], ig.LIGHT)
+    data_axes = [ax for ax in fig.axes if ax.axison]
+    assert len(data_axes) == 1
+    right = data_axes[0].get_position().x1 * ig.WIDTH_IN
+    assert right == pytest.approx(ig.WIDTH_IN - ig._SIDE_IN)
+    labels = [lab.get_text() for lab in data_axes[0].get_yticklabels()]
+    assert not any("%" in lab for lab in labels)
+
+
+def test_picture_is_shown_at_the_display_width():
+    html = evidence_report.picture("l.png", "d.png", "alt")
+    assert f'width="{ig.DISPLAY_PX}"' in html
+    assert ig.DISPLAY_PX * 2 == round(ig.WIDTH_IN * ig.DPI)
 
 
 def test_design_strip_facts(groups):

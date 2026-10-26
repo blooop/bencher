@@ -392,7 +392,7 @@ def _url_for(url_base: UrlBase) -> Callable[[str], str]:
     return url_base
 
 
-def picture(light: str, dark: str, alt: str, width: int = 800) -> str:
+def picture(light: str, dark: str, alt: str, width: int = ig.DISPLAY_PX) -> str:
     """A GitHub ``<picture>`` with a dark-mode source and the light image as fallback."""
     alt_attr = alt.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
     return (
@@ -807,9 +807,7 @@ def write_report(
         "bootstrap (10 000 resamples, fixed seed) from 10 units per arm, Welch t below that. "
         "Holm over the primary metrics (their CIs widened to α/m), Benjamini–Hochberg over the "
         "rest. n was fixed before the run; no peeking correction is applied. "
-        "In each estimation plot the right panel is the bootstrap distribution of the change, "
-        "with the estimate as a dot, on the % axis; in each waffle the dot under the squares "
-        "is the difference over the shaded margin.\n\n"
+        "In each waffle the dot under the squares is the difference over the shaded margin.\n\n"
         + (_design_line(singles[:1]) + "\n\n" if singles else "")
         + _verdict_table(cells)
     )

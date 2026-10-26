@@ -4,7 +4,7 @@ Each ``draw_*`` function takes the :class:`~bencher.evidence_stats.MetricEvidenc
 records it shows and a :class:`Theme` and returns a ``matplotlib.figure.Figure``
 built without pyplot (no global backend state, safe in any process).
 :func:`save_both` draws one graphic in the light and the dark theme and writes
-each as a PNG at 2× (1600 px wide, shown at 800) and as an SVG. In the SVG a few
+each as a PNG at 2× (1344 px wide, shown at 672) and as an SVG. In the SVG a few
 dashed lines flow (CSS on ``stroke-dashoffset`` only; ``prefers-reduced-motion`` stops
 it); the PNG is the same chart, still.
 
@@ -21,8 +21,8 @@ The rules every graphic keeps:
   (base median to candidate median), the forest connector (0 to the estimate), and
   the outline of the runs whose outcome changed. A ? connector is still.
 * Little text: a title that states the finding, one big effect number with the
-  verdict glyph, tick labels and column labels; nothing under 11 pt (15 px at the
-  800 px display width). Everything else goes in the Markdown and the alt text.
+  verdict glyph, tick labels and column labels; nothing under 10.5 pt (12 px at the
+  672 px display width). Everything else goes in the Markdown and the alt text.
 * The run order shows as one row of small squares per shard under the panels
   (grey base, blue candidate, in execution order); no row when it was not recorded.
 * Okabe–Ito colours, each backed by a glyph (▲ ▼ ≈ ?); text wears the theme's
@@ -57,8 +57,10 @@ if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
 WIDTH_IN = 8.0
-# 8 in at 200 dpi is 1600 px: a 2× image for an 800 px wide PR body.
-DPI = 200
+# The <img> width in the Markdown: narrower than GitHub's ~880 px body column.
+DISPLAY_PX = 672
+# 8 in at 168 dpi is 1344 px: a 2× image for the 672 px display width.
+DPI = 2 * DISPLAY_PX / WIDTH_IN
 # Open Sans where it is installed; DejaVu Sans (always there) supplies ▲ ▼ ≈ and the fallback.
 FONT = ("Open Sans", "DejaVu Sans")
 
@@ -120,16 +122,16 @@ DARK = Theme(
 )
 THEMES = (LIGHT, DARK)
 
-# Type scale (pt). The figure is 8 in shown 800 px wide: 1 pt is ~1.39 px on screen, so
-# 11 pt is the 15 px floor.
-_TITLE = 19
-_HERO = 28
-_LABEL = 13
-_TICK = 11.5
-_MIN_PT = 11
+# Type scale (pt). The figure is 8 in shown 672 px wide: 1 pt is ~1.17 px on screen, so
+# 10.5 pt is the 12 px floor.
+_TITLE = 18
+_HERO = 26
+_HERO_SMALL = 21  # the scorecard's hero when it has three or more columns
+_LABEL = 12
+_TICK = 11
+_MIN_PT = 10.5
 
 _ZERO = 1e-9
-_DENSITY_FLOOR = 0.01  # below this the KDE outline is not drawn (no hairline at 0)
 _SIDE_IN = 0.32  # left and right page margin
 _HEAD_IN = 0.85  # title row height
 _FOOT_IN = 0.18  # bottom margin
@@ -609,7 +611,7 @@ def _to_data(m: MetricEvidence, anchor: float, value: float) -> float:
 # Flow: the only motion. A few dashed strokes carry a gid; the saved SVG gets a class on
 # each and a <style> that moves only their stroke-dashoffset. The PNG is the still frame.
 
-_PT_PER_PX = WIDTH_IN * 72.0 / 800.0  # the figure is 8 in (576 pt) shown 800 px wide
+_PT_PER_PX = WIDTH_IN * 72.0 / DISPLAY_PX  # the figure is 8 in (576 pt) shown 672 px wide
 FLOW_DASH_PX = 4.0
 FLOW_TRAVEL_PX = 24.0  # three whole 4-4 cycles: the loop has no seam
 FLOW_SPEED_PX = 8.0  # px per second
@@ -808,6 +810,9 @@ def _median_bar(ax: Axes, x: float, med: float, colour: str, theme: Theme, half:
         ax.plot([x - half, x + half], [med, med], color=c, lw=lw, solid_capstyle="round", zorder=5)
 
 
+_COL_HALF_IN = 0.58
+
+
 def _arms(
     ax: Axes,
     m: MetricEvidence,
@@ -833,7 +838,9 @@ def _arms(
     x_scale = w_in / (xlim[1] - xlim[0])
     y_scale = h_in / (hi - lo)
     n = max(np.isfinite(b).sum(), np.isfinite(c).sum())
-    size, offsets = _swarm_columns((b, c), _dot_size(int(n)), y_scale, 0.3 * x_scale)
+    # A column is at most 0.3 data units (and 0.58 in) wide each side of its centre.
+    half = min(0.3, _COL_HALF_IN / x_scale)
+    size, offsets = _swarm_columns((b, c), _dot_size(int(n)), y_scale, half * x_scale)
     offsets = [off / x_scale for off in offsets]
     # The margin: ±Δ around the base median, under both columns.
     band_lo, band_hi = _to_data(m, anchor, -_delta(m)), _to_data(m, anchor, _delta(m))
@@ -875,7 +882,7 @@ def _arms(
             **_ring(t, size),
         )
         meds.append(float(np.median(vals[ok])))
-        _median_bar(ax, x, meds[-1], colour, t, 0.3)
+        _median_bar(ax, x, meds[-1], colour, t, half)
     _connector(ax, [0.5, 0.5], meds, m, t, "medflow", lw=2.0)
     ax.set_xticks(
         [0, 1],
@@ -1128,7 +1135,7 @@ def draw_scorecard(
         order_h = _order_height(metrics[:1], usable)
         page = _Page(_HEAD_IN + rows * row_h + order_h + _FOOT_IN, theme)
         page.header(title or short_summary(metrics))
-        hero_size = _HERO if cols <= 2 else 23  # noqa: PLR2004
+        hero_size = _HERO if cols <= 2 else _HERO_SMALL  # noqa: PLR2004
         for i, m in enumerate(metrics):
             r, c = divmod(i, cols)
             px = x_start + c * (panel_w + gutter)
@@ -1270,40 +1277,20 @@ def _dot_strip(ax: Axes, m: MetricEvidence, theme: Theme, w_in: float, h_in: flo
 
 
 def draw_estimation(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = None) -> Figure:
-    """G3: both arms (every sample, Δ band, median connector) and the bootstrap distribution of the effect."""
+    """G3: both arms at full width: every sample, the ±Δ band and the median connector."""
     import matplotlib as mpl
 
     if not isinstance(m.effect, Effect):
         raise TypeError("draw_estimation needs a continuous metric")
-    e = m.effect
     with mpl.rc_context(_rc()):
-        t = theme
-        plot_h = 3.3
+        plot_h = 3.0
         order_h = _order_height([m], WIDTH_IN - 2 * _SIDE_IN)
-        page = _Page(_HEAD_IN + plot_h + 0.75 + order_h + _FOOT_IN, theme)
+        page = _Page(_HEAD_IN + plot_h + 0.7 + order_h + _FOOT_IN, theme)
         page.header(title or chart_title(m), m)
-        ax = page.axes(1.05, _HEAD_IN + 0.1, 4.25, plot_h)
-        _arms(ax, m, t, 4.25, plot_h)
-        # The effect's bootstrap distribution, on the effect axis.
-        ex = page.axes(5.85, _HEAD_IN + 0.1, 1.15, plot_h)
-        lim = effect_limits([m], pad=0.25)
-        if e.bootstrap is not None:
-            lo, hi = np.percentile(e.bootstrap, [0.1, 99.9])
-            lim = (min(lim[0], lo), max(lim[1], hi))
-        _effect_axis(ex, m, lim, t, vertical=True)
-        ex.yaxis.tick_right()
-        ex.set_xlim(-0.35, 1.1)
-        ex.set_xticks([])
-        colour = t.verdict_colour(m.verdict.kind)
-        if e.bootstrap is not None:
-            grid = np.linspace(lim[0], lim[1], 300)
-            dens = _kde(e.bootstrap, grid)
-            dens = dens / dens.max() * 0.85
-            ex.fill_betweenx(grid, 0.12, 0.12 + dens, color=colour, alpha=0.22, lw=0, zorder=2)
-            outline = np.where(dens > _DENSITY_FLOOR, 0.12 + dens, np.nan)
-            ex.plot(outline, grid, color=colour, lw=1.2, alpha=0.8, zorder=2)
-        _estimate_dot(ex, 0.0, e.estimate, m, t, size=9.0)
-        _draw_order(page, [m], _HEAD_IN + plot_h + 0.75, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN)
+        x, w = 1.05, WIDTH_IN - _SIDE_IN - 1.05
+        ax = page.axes(x, _HEAD_IN + 0.1, w, plot_h)
+        _arms(ax, m, theme, w, plot_h)
+        _draw_order(page, [m], _HEAD_IN + plot_h + 0.7, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN)
         return page.fig
 
 

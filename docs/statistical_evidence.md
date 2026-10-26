@@ -161,8 +161,8 @@ Common rules:
 * **A small text budget.** Each graphic carries a title that states the finding in at
   most six words, one big effect number with the verdict glyph, tick labels and column
   labels. Nothing else: no chips, subtitles, footers, method lines, or legends that a
-  direct label can replace. No text is under 15 px at the 800 px display width (11 pt
-  in the 8 in figure, 30 px in the 1600 px PNG). What the graphic leaves out is in the
+  direct label can replace. No text is under 12 px at the 672 px display width (10.5 pt
+  in the 8 in figure, 24 px in the 1344 px PNG). What the graphic leaves out is in the
   Markdown caption, the alt text, or the `<details>` method block: the CIs, the test,
   n, the MDE, the seeds, the run-order pattern and the shard names.
 * **The design is shown, not written.** Pairing shows as the pair lines. The run order
@@ -175,7 +175,7 @@ Common rules:
   `#E69F00`. Dark theme: candidate `#3D9BD6`, better `#1FA07C`, worse `#E0662A`,
   inconclusive `#BE8714`. A glyph (▲ ▼ ≈ ?) always backs the colour, and text wears the
   theme's ink, never a data colour.
-* Every image ships in light and dark, as PNG at 2× (1600 px wide, shown at 800), plus
+* Every image ships in light and dark, as PNG at 2× (1344 px wide, shown at 672), plus
   the animated SVG. The Markdown uses `<picture>` with `prefers-color-scheme`; the
   `#gh-dark-mode-only` fragment is deprecated. It links the SVG by default (GitHub
   serves a blob's `?raw=true` SVG as `image/svg+xml`, so a PR page draws it) and the
@@ -189,7 +189,7 @@ The catalogue:
 |---|---|---|---|
 | G1 | Scorecard | top of every report, the headline image | small multiples, up to 4 panels a row, one per primary metric: the metric name, the big effect + glyph, both beeswarm columns on the metric's own axis, the ±Δ band and the CI bar; a binary metric shows one small waffle per arm |
 | G2 | Forest plot | more than 4 metrics, or a categorical sweep | one row per metric, sorted by effect: the name, a small dot strip of both arms' samples, point + CI on the shared % axis over the ±Δ band, the glyph; the numbers are in the alt text and the Markdown table |
-| G3 | Estimation plot | each primary continuous metric | left: the G1 panel at full size; right: the bootstrap distribution of the effect with its CI on the % axis and the ±Δ band |
+| G3 | Estimation plot | each primary continuous metric | the G1 panel at the full page width: every sample of both arms, the ±Δ band and the median connector; the caption gives the CI |
 | G4 | Raincloud + shift | tails, bimodal data | half-violin, box and every sample per arm; under it the decile shift function (dots + 95 % CI bars, labelled q1…q9) |
 | G5 | Waffle | binary metrics | one large square per run per arm, a bad outcome crossed; the difference CI as one bar over the ±Δ band; at 0 failures a tick on that bar marks the difference at the exact 95 % bound (the numbers are in the caption) |
 | G6 | Sweep panel | one swept input | top: both arms' samples as small dot columns at each point, lines joining the medians; bottom: the effect per point with its CI, the ±Δ band and a glyph |
