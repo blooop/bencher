@@ -159,11 +159,12 @@ Common rules:
   CSS; nothing else moves, `prefers-reduced-motion` stops it, and the PNG is the
   still chart.
 * **A small text budget.** Each graphic carries a title that states the finding in at
-  most six words, one big effect number with the verdict glyph, tick labels and column
-  labels. Nothing else: no chips, subtitles, footers, method lines, or legends that a
-  direct label can replace. The figure is laid out at 72 display px per inch, so 1 pt is
-  1 px on screen: labels are 11.5 px, ticks 11 px, the title 14 px, the big number 18 px, and no
-  text is under 10 px (20 px in the 2× PNG). What the graphic leaves out is in the
+  most six words, one big effect number with the verdict glyph, tick labels, column
+  labels and the value of each summary mark. Nothing else: no chips, subtitles, footers,
+  method lines, or legends that a direct label can replace. The figure is shown at
+  86.4 display px per inch, so 1 pt is 1.2 px on screen: labels are 14 px, ticks 13 px,
+  the title 16 px, the big number 20 px, and no text is under 12 px (24 px in the 2×
+  PNG). What the graphic leaves out is in the
   Markdown caption, the alt text, or the `<details>` method block: the CIs, the test,
   n, the MDE, the seeds, the run-order pattern and the shard names.
 * **The design is shown, not written.** Pairing shows as the pair lines. The run order
@@ -195,12 +196,23 @@ Common rules:
   theme's ink, never a data colour.
 * **Each graphic is as wide as its content.** A graphic of one metric (the estimation
   plot, the shift plot, the waffle, the power bar, the diagnostics, a one-panel
-  scorecard) is 408 px wide, like a figure in a paper: the width is what the two
-  arm columns and the tick gutter need, so a single metric never stretches to fill. A graphic of several metrics or
-  points (a scorecard of several panels, the forest, the sweep, the heatmap) is 540 px
-  wide. The forest adds one compact row of about 26 px per metric. The `<img width>` in
-  the Markdown is the graphic's own width.
-* Every image ships in light and dark, as PNG at 2× (816 or 1080 px wide), plus
+  scorecard) is 490 px wide, like a figure in a paper: the width is what the two
+  arm columns, their median labels and the tick gutter need, so a single metric never
+  stretches to fill. A graphic of several metrics or points (a scorecard of several
+  panels, the forest, the sweep, the heatmap) is 648 px wide. The forest adds one
+  compact row of about 31 px per metric. The `<img width>` in the Markdown is the
+  graphic's own width.
+* **Chart text is about the size of GitHub's body text** (14 px in a PR or comment).
+  The figure is laid out in inches and shown at 1.2 px per pt: ticks 13 px, labels
+  14 px, title 16 px, the big number 20 px, and nothing under 12 px.
+* **Each summary mark carries its value, in text ink, beside it:** each arm's median
+  bar (`0.738 s`; more digits when two medians would read the same), each forest row's
+  change (`+13.5 %`), each waffle arm's rate (`18/20 · 90 %`) and the difference, the
+  sweep's change per point, the shift plot's two arm medians and the two deciles the
+  title names, the power bar's MDE and Δ, and each diagnostics trend's drift. The
+  heatmap cells already carry theirs. No interval is drawn: the CI stays in the caption
+  and the alt text.
+* Every image ships in light and dark, as PNG at 2× (980 or 1296 px wide), plus
   the animated SVG. The Markdown uses `<picture>` with `prefers-color-scheme`; the
   `#gh-dark-mode-only` fragment is deprecated. It links the SVG by default (GitHub
   serves a blob's `?raw=true` SVG as `image/svg+xml`, so a PR page draws it) and the

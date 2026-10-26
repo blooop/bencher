@@ -4,8 +4,8 @@ Each ``draw_*`` function takes the :class:`~bencher.evidence_stats.MetricEvidenc
 records it shows and a :class:`Theme` and returns a ``matplotlib.figure.Figure``
 built without pyplot (no global backend state, safe in any process).
 :func:`save_both` draws one graphic in the light and the dark theme and writes
-each as a PNG at 2× and as an SVG. Each graphic is as wide as its content: 408 px
-for one metric, 540 px for several metrics or points (:data:`ONE_PX`, :data:`MULTI_PX`). In the SVG a few
+each as a PNG at 2× and as an SVG. Each graphic is as wide as its content: 490 px
+for one metric, 648 px for several metrics or points (:data:`ONE_PX`, :data:`MULTI_PX`). In the SVG a few
 dashed lines flow (CSS on ``stroke-dashoffset`` only; ``prefers-reduced-motion`` stops
 it); the PNG is the same chart, still.
 
@@ -22,8 +22,9 @@ The rules every graphic keeps:
   (base median to candidate median), the forest connector (0 to the estimate), and
   the outline of the runs whose outcome changed. A ? connector is still.
 * Little text: a title that states the finding, one big effect number with the
-  verdict glyph, tick labels and column labels; nothing under 10 pt (1 pt is 1 px on
-  screen). Everything else goes in the Markdown and the alt text.
+  verdict glyph, tick labels, column labels and the value of each summary mark beside
+  it (each arm's median, each forest row's change, each arm's rate); nothing under
+  10 pt (1 pt is 1.2 px on screen). Everything else goes in the Markdown and the alt text.
 * The run order shows as one row of small squares per shard under the panels
   (grey base, blue candidate, in execution order); no row when it was not recorded.
 * Okabe–Ito colours, each backed by a glyph (▲ ▼ ≈ ?); text wears the theme's
@@ -58,9 +59,11 @@ if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
 # Each graphic is sized for what it holds, not for the page. A figure is laid out in
-# inches at 72 display px per inch, so 1 pt of type is 1 px on screen; the PNG is saved at
-# 144 dpi, a 2× image. The <img> width in the Markdown is the figure's width in px.
-PX_PER_IN = 72
+# inches and shown at 86.4 display px per inch (1.2 px per pt), so 11 pt tick labels are
+# about 13 px on screen, close to GitHub's 14 px body text. The PNG is saved at 2 × that,
+# a 2× image. The <img> width in the Markdown is the figure's width in display px.
+ZOOM = 1.2
+PX_PER_IN = 72 * ZOOM
 DPI = 2 * PX_PER_IN
 # One metric (estimation, shift, waffle, power, diagnostics, a one-panel scorecard): the
 # width is what the two arm columns need, not the page: the y-tick gutter, the arms panel
@@ -68,10 +71,10 @@ DPI = 2 * PX_PER_IN
 _Y_GUTTER_IN = 0.85
 _ARMS_W_IN = 4.6
 _SIDE_IN = 0.22  # left and right page margin
-ONE_PX = round((_Y_GUTTER_IN + _ARMS_W_IN + _SIDE_IN) * PX_PER_IN)  # 408
+ONE_PX = round((_Y_GUTTER_IN + _ARMS_W_IN + _SIDE_IN) * PX_PER_IN)  # 490
 ONE_IN = ONE_PX / PX_PER_IN  # a whole number of px, so the 2× PNG is exactly 2 × ONE_PX
 # Several metrics or points (a scorecard of several panels, the forest, sweeps, heatmap).
-MULTI_PX = 540
+MULTI_PX = 648
 MULTI_IN = MULTI_PX / PX_PER_IN
 # Open Sans where it is installed; DejaVu Sans (always there) supplies ▲ ▼ ≈ and the fallback.
 FONT = ("Open Sans", "DejaVu Sans")
@@ -134,14 +137,16 @@ DARK = Theme(
 )
 THEMES = (LIGHT, DARK)
 
-# Type scale (pt). At 72 display px per inch 1 pt is 1 px on screen: 10 pt is the 10 px floor.
-_TITLE = 14
-_HERO = 18
+# Type scale (pt). On screen 1 pt is ZOOM = 1.2 px: title 16 px, hero 20 px, labels 14 px,
+# ticks 13 px, and the 10 pt floor (value labels too) is 12 px.
+_TITLE = 13.5
+_HERO = 17
 _HERO_SMALL = 15  # the scorecard's hero when it has three columns
 _HERO_TINY = 13  # the scorecard's hero when it has four columns
 _LABEL = 11.5
 _TICK = 11
 _MIN_PT = 10
+_VALUE = _MIN_PT  # the value labels beside the marks they summarise
 
 _ZERO = 1e-9
 _HEAD_IN = 0.52  # title row height
@@ -239,6 +244,30 @@ def fmt_change_ci(m: MetricEvidence, *, level95: bool = False) -> str:
 def fmt_base_median(m: MetricEvidence) -> str:
     """``11.6 s``: the base median the unit change is taken at."""
     return f"{_base_median(m):.3g} {m.units.strip()}"
+
+
+def fmt_value(value: float, units: str = "", digits: int = 3) -> str:
+    """A metric value for a label beside its mark: ``0.738 s``, ``31.6 s``, ``1250 ms``."""
+    text = f"{value:.0f}" if abs(value) >= 10**digits else f"{value:.{digits}g}"
+    if "e" in text:
+        text = f"{value:.{digits - 1}e}"
+    text = text.replace("-", "−")
+    return f"{text} {units.strip()}" if units.strip() else text
+
+
+def fmt_values(values: Sequence[float], units: str = "") -> list[str]:
+    """Each value at three significant figures, or more until values that differ read different."""
+    for digits in range(3, 7):
+        texts = [fmt_value(v, units, digits) for v in values]
+        distinct = len({round(v, 12) for v in values})
+        if len(set(texts)) == distinct:
+            return texts
+    return texts
+
+
+def fmt_rate(k: int, n: int) -> str:
+    """``18/20 · 90 %``: an arm's count and rate."""
+    return f"{k}/{n} · {100 * k / n:.0f} %" if n else f"{k}/{n}"
 
 
 def fmt_ci(m: MetricEvidence, *, level95: bool = False) -> str:
@@ -547,6 +576,49 @@ def _text_w_in(text: str, size: float) -> float:
     return len(text) * size * 0.66 / 72.0
 
 
+def _plain_w_in(text: str, size: float) -> float:
+    """A regular-weight line's width in inches, without a renderer (~0.6 em a glyph)."""
+    return max((len(line) for line in text.split("\n")), default=0) * size * 0.6 / 72.0
+
+
+VALUE_GID = "bnvalue-"  # the SVG <g id> of each value label (tests count them)
+
+
+def _value_text(ax: Axes, x: float, y: float, text: str, theme: Theme, **kw: Any) -> Any:
+    """A summary value beside its mark: small, in the theme's ink (never a data colour)."""
+    style: dict[str, Any] = {
+        "fontsize": _VALUE,
+        "color": theme.ink,
+        "va": "center",
+        "zorder": 9,
+    }
+    style.update(kw)
+    txt = ax.text(x, y, text, **style)
+    fig = ax.figure
+    n = getattr(fig, "_bn_values", 0)
+    fig._bn_values = n + 1  # noqa: SLF001
+    txt.set_gid(f"{VALUE_GID}{n}")
+    return txt
+
+
+def _outer_reach(
+    points: Sequence[tuple[float, str]], lim: tuple[float, float], w_in: float, gap_in: float
+) -> tuple[float, float]:
+    """Symmetric limits wide enough that each label sits outside its point (away from 0).
+
+    *points* are (data x, label); a label goes right of a point >= 0 and left of one < 0,
+    *gap_in* from it, and must end inside the axes *w_in* inches wide.
+    """
+    reach = max(abs(lim[0]), abs(lim[1]))
+    for x, label in points:
+        need = gap_in + _plain_w_in(label, _VALUE) + 0.04
+        if 2 * need >= w_in:
+            continue
+        # (reach - |x|) / (2 reach) * w_in >= need  <=>  reach >= |x| w_in / (w_in - 2 need)
+        reach = max(reach, abs(x) * w_in / (w_in - 2 * need))
+    return -reach, reach
+
+
 def _rc() -> dict:
     return {
         "font.family": "sans-serif",
@@ -675,7 +747,7 @@ def _to_data(m: MetricEvidence, anchor: float, value: float) -> float:
 # Flow: the only motion. A few dashed strokes carry a gid; the saved SVG gets a class on
 # each and a <style> that moves only their stroke-dashoffset. The PNG is the still frame.
 
-_PT_PER_PX = 72.0 / PX_PER_IN  # 1: a figure inch is 72 pt and 72 display px
+_PT_PER_PX = 72.0 / PX_PER_IN  # 1 / ZOOM: a figure inch is 72 pt and PX_PER_IN display px
 FLOW_DASH_PX = 4.0
 FLOW_TRAVEL_PX = 24.0  # three whole 4-4 cycles: the loop has no seam
 FLOW_SPEED_PX = 8.0  # px per second
@@ -875,6 +947,46 @@ def _median_bar(ax: Axes, x: float, med: float, colour: str, theme: Theme, half:
 
 
 _COL_HALF_IN = 0.58
+_LAB_GAP_IN = 0.1  # between a median bar's end and its value label
+_MIN_COL_GAP_IN = 0.8  # below this distance between the columns the values go under them
+
+
+@dataclass(frozen=True)
+class _ArmsLayout:
+    """Where the two columns of an arms panel go, and where their median values go."""
+
+    xlim: tuple[float, float]
+    half: float  # a column's half width, in data units (the columns sit at x = 0 and 1)
+    outer: bool  # True: each value is beside its median bar, outside; False: under the column
+    values: tuple[str, str]  # the base and candidate medians, formatted
+
+
+def _finite_median(vals: np.ndarray) -> float:
+    ok = vals[np.isfinite(vals)]
+    return float(np.median(ok)) if len(ok) else float("nan")
+
+
+def arms_layout(m: MetricEvidence, w_in: float) -> _ArmsLayout:
+    """Lay out an arms panel *w_in* inches wide: column width and room for the median labels.
+
+    The base median's value goes left of the base column and the candidate's right of
+    the candidate column. When that leaves the columns less than 0.8 in apart, the
+    values go under the columns, in the column labels, instead.
+    """
+    base_text, cand_text = fmt_values([_finite_median(m.base), _finite_median(m.cand)], m.units)
+    values = (base_text, cand_text)
+    side = _LAB_GAP_IN + max(_plain_w_in(v, _VALUE) for v in values) + 0.04
+    # w_in = x_scale + 2 (col_half + side), col_half = min(0.58 in, 0.3 x_scale).
+    x_scale = w_in - 2 * (_COL_HALF_IN + side)
+    if 0.3 * x_scale < _COL_HALF_IN:
+        x_scale = (w_in - 2 * side) / 1.6
+    if x_scale < _MIN_COL_GAP_IN:
+        x_scale = w_in / 2.2
+        half = min(0.3, _COL_HALF_IN / x_scale)
+        return _ArmsLayout((-0.6, 1.6), half, outer=False, values=values)
+    col_half = min(_COL_HALF_IN, 0.3 * x_scale)
+    margin = (col_half + side) / x_scale
+    return _ArmsLayout((-margin, 1 + margin), col_half / x_scale, outer=True, values=values)
 
 
 def _arms(
@@ -896,20 +1008,20 @@ def _arms(
     t = theme
     b, c = m.base, m.cand
     lo, hi, anchor = _arm_limits(m)
-    xlim = (-0.6, 1.6)
+    lay = arms_layout(m, w_in)
+    xlim, half = lay.xlim, lay.half
     ax.set_xlim(*xlim)
     ax.set_ylim(lo, hi)
     x_scale = w_in / (xlim[1] - xlim[0])
     y_scale = h_in / (hi - lo)
     n = max(np.isfinite(b).sum(), np.isfinite(c).sum())
-    # A column is at most 0.3 data units (and 0.58 in) wide each side of its centre.
-    half = min(0.3, _COL_HALF_IN / x_scale)
     size, offsets = _swarm_columns((b, c), _dot_size(int(n)), y_scale, half * x_scale)
     offsets = [off / x_scale for off in offsets]
     # The margin: ±Δ around the base median, under both columns.
     band_lo, band_hi = _to_data(m, anchor, -_delta(m)), _to_data(m, anchor, _delta(m))
-    ax.fill_between([-0.5, xlim[1] - 0.06], band_lo, band_hi, color=t.band, lw=0, zorder=0)
-    ax.plot([0.3, 1.45], [anchor, anchor], color=t.muted, lw=0.9, zorder=1)
+    pad = 0.08 / x_scale
+    ax.fill_between([-half - pad, 1 + half + pad], band_lo, band_hi, color=t.band, lw=0, zorder=0)
+    ax.plot([half, 1 + half], [anchor, anchor], color=t.muted, lw=0.9, zorder=1)
     ax.grid(axis="y", color=t.grid, linewidth=0.8, zorder=-1)
     ax.set_axisbelow(True)
     if m.paired and len(b) == len(c):
@@ -948,10 +1060,14 @@ def _arms(
         meds.append(float(np.median(vals[ok])))
         _median_bar(ax, x, meds[-1], colour, t, half)
     _connector(ax, [0.5, 0.5], meds, m, t, "medflow", lw=2.0)
-    ax.set_xticks(
-        [0, 1],
-        [f"base\nn={int(np.isfinite(b).sum())}", f"candidate\nn={int(np.isfinite(c).sum())}"],
-    )
+    ticks = [f"base\nn={int(np.isfinite(b).sum())}", f"candidate\nn={int(np.isfinite(c).sum())}"]
+    if lay.outer:
+        gap = _LAB_GAP_IN / x_scale
+        _value_text(ax, -half - gap, meds[0], lay.values[0], t, ha="right")
+        _value_text(ax, 1 + half + gap, meds[1], lay.values[1], t, ha="left")
+    else:
+        ticks = [f"{tick}\n{value}" for tick, value in zip(ticks, lay.values, strict=True)]
+    ax.set_xticks([0, 1], ticks)
     ax.tick_params(axis="x", labelsize=label_size, colors=t.ink, pad=6)
     _value_ticks(ax, m.units)
 
@@ -1004,15 +1120,28 @@ def _mini_waffles(ax: Axes, m: MetricEvidence, theme: Theme, w_in: float, h_in: 
             good_is_one=good_is_one,
             changed=changed if arm == 1 else None,
         )
+        name = "base" if arm == 0 else "candidate"
         ax.text(
             arm * half + half / 2,
             y_top - rows * cell - 0.1,
-            f"{'base' if arm == 0 else 'candidate'}\nn={n}",
+            name,
             ha="center",
             va="top",
             fontsize=_LABEL,
             color=theme.ink,
-            linespacing=1.15,
+        )
+        rate = fmt_rate(k, n)
+        if _plain_w_in(rate, _VALUE) > half - 0.05:
+            rate = rate.replace(" · ", "\n")
+        _value_text(
+            ax,
+            arm * half + half / 2,
+            y_top - rows * cell - 0.1 - _LABEL * 1.3 / 72,
+            rate,
+            theme,
+            ha="center",
+            va="top",
+            linespacing=1.1,
         )
 
 
@@ -1297,7 +1426,14 @@ def draw_scorecard(
         binary_only = all(isinstance(m.effect, ProportionEffect) for m in metrics)
         name_h = 0.26 if n > 1 else 0.0
         hero_size = {1: _HERO, 2: _HERO, 3: _HERO_SMALL}.get(cols, _HERO_TINY)
-        hero_h, label_h = hero_size / 72 + 0.18, 0.5
+        tick_w = 0.62
+        narrow = any(
+            not isinstance(m.effect, ProportionEffect)
+            and not arms_layout(m, panel_w - tick_w).outer
+            for m in metrics
+        )
+        # Two label lines (name, n), or three when a value sits under a column too.
+        hero_h, label_h = hero_size / 72 + 0.18, 0.7 if narrow else 0.5
         plot_h = 0.9 if binary_only else 2.0 if cols < 4 else 1.7  # noqa: PLR2004
         row_h = name_h + hero_h + plot_h + label_h + 0.12
         order_h = _order_height(metrics[:1], usable, order)
@@ -1323,7 +1459,6 @@ def draw_scorecard(
                 ax = page.canvas(px, ptop, panel_w, plot_h + label_h)
                 _mini_waffles(ax, m, theme, panel_w, plot_h + label_h)
             else:
-                tick_w = 0.62
                 ax = page.axes(px + tick_w, ptop, panel_w - tick_w, plot_h)
                 _arms(ax, m, theme, panel_w - tick_w, plot_h)
         _draw_order(page, metrics[:1], _HEAD_IN + rows * row_h, _SIDE_IN, usable, order)
@@ -1345,7 +1480,7 @@ def draw_forest(
     """G2: one row per metric or sweep point, sorted by effect, on the shared axis.
 
     Each row: the name, a dot strip of both arms' samples (on the row's own scale), the
-    estimate as a dot over the ±Δ band, and the verdict glyph. A ▲/▼ row has a dashed
+    estimate as a dot over the ±Δ band with its value beside it, and the verdict glyph. A ▲/▼ row has a dashed
     connector from 0 that flows toward its estimate; a ? row's connector is still; a ≈
     row has only its dot. No interval is drawn (the caption gives the CI). A row that
     fails the FDR check is hollow; a primary metric is bold.
@@ -1375,7 +1510,15 @@ def draw_forest(
         ax = page.axes(ax_x, _HEAD_IN, ax_w, n * row_h)
         ax.set_ylim(-0.5, n - 0.5)
         ax.set_yticks([])
-        _effect_axis(ax, metrics[0], effect_limits(metrics), t, vertical=False)
+        value_gap = 0.12
+        lim = _outer_reach(
+            [(m.effect.estimate, fmt_effect(m)) for m in metrics],
+            effect_limits(metrics),
+            ax_w,
+            value_gap,
+        )
+        _effect_axis(ax, metrics[0], lim, t, vertical=False)
+        x_per_in = (lim[1] - lim[0]) / ax_w
         for row, i in enumerate(reversed(by_effect)):
             m = metrics[i]
             y = n - 1 - row
@@ -1383,6 +1526,15 @@ def draw_forest(
             est = m.effect.estimate
             _connector(ax, [0.0, est], [y, y], m, t, "estflow", lw=2.0, still=False)
             _estimate_dot(ax, est, y, m, t, size=9.0)
+            right = est >= 0
+            _value_text(
+                ax,
+                est + (value_gap if right else -value_gap) * x_per_in,
+                y,
+                fmt_effect(m),
+                t,
+                ha="left" if right else "right",
+            )
             top = _HEAD_IN + row * row_h
             page.text(
                 _SIDE_IN + name_w,
@@ -1494,7 +1646,7 @@ def draw_raincloud_shift(
         t = theme
         width = ONE_IN
         cloud_x, cloud_h, shift_h = 1.25, 2.1, 1.45
-        cloud_w = width - _SIDE_IN - cloud_x
+        cloud_w = width - _SIDE_IN - cloud_x - 0.15  # room for the last tick label
         page = _Page(_HEAD_IN + 0.1 + cloud_h + 0.55 + shift_h + 0.4, theme, width)
         page.header(title or _shift_title(sf, m), m)
         ax = page.axes(cloud_x, _HEAD_IN + 0.1, cloud_w, cloud_h)
@@ -1511,6 +1663,7 @@ def draw_raincloud_shift(
         size = min(_dot_size(max(len(b), len(c))), 7.5)
         ax.grid(axis="x", color=t.grid, linewidth=0.8)
         ax.set_axisbelow(True)
+        med_labels = fmt_values([float(np.median(c)), float(np.median(b))], m.units)
         for row, (vals, colour, name) in enumerate(((c, t.cand, "candidate"), (b, t.base, "base"))):
             y0 = row * 1.0
             dens = _kde(vals, grid)
@@ -1529,6 +1682,13 @@ def draw_raincloud_shift(
                 markeredgewidth=2.0,
                 zorder=5,
             )
+            # The median's value beside the box: right of it, or left when the edge is near.
+            label = med_labels[row]
+            room = _plain_w_in(label, _VALUE) + 0.12
+            if (grid[-1] - q3) * x_scale >= room:
+                _value_text(ax, q3 + 0.08 / x_scale, y0, label, t, ha="left")
+            else:
+                _value_text(ax, q1 - 0.08 / x_scale, y0, label, t, ha="right")
             off = _beeswarm(vals * x_scale, size / 72 * 1.05, 0.13 * y_scale) / y_scale
             ax.plot(
                 vals,
@@ -1556,6 +1716,9 @@ def draw_raincloud_shift(
         sx.grid(axis="y", color=t.grid, linewidth=0.8)
         x = np.arange(len(sf.probs))
         lim = (min(sf.diff.min(), -_delta(m)) * 1.3, max(sf.diff.max(), _delta(m)) * 1.3)
+        # Room for a value label (about 0.3 in) above the highest and below the lowest dot.
+        span = lim[1] - lim[0]
+        lim = (lim[0] - 0.3 * span / shift_h, lim[1] + 0.3 * span / shift_h)
         _effect_axis(sx, m, lim, t, vertical=True)
         sx.plot(x, sf.diff, color=t.muted, lw=1.2, zorder=2)
         for i in range(len(x)):
@@ -1571,6 +1734,20 @@ def draw_raincloud_shift(
                 markeredgecolor=t.surface,
                 markeredgewidth=1.6,
                 zorder=4,
+            )
+        # The two deciles the title names: the median and the top decile, with their values.
+        y_per_in = (lim[1] - lim[0]) / shift_h
+        unit = unit_suffix(m)
+        for i in (sf.probs.index(0.5), len(x) - 1):
+            up = sf.diff[i] >= 0
+            _value_text(
+                sx,
+                x[i],
+                sf.diff[i] + (0.11 if up else -0.11) * y_per_in,
+                fmt_signed(display(m, sf.diff[i]), 0) + unit,
+                t,
+                ha="center",
+                va="bottom" if up else "top",
             )
         sx.set_xticks(x, [f"q{i + 1}" for i in range(len(x))])
         sx.tick_params(axis="x", labelsize=_TICK, colors=t.ink)
@@ -1645,7 +1822,11 @@ def draw_waffle(
         nmax = max(e.n_base, e.n_cand)
         cols = _waffle_columns(nmax)
         width = ONE_IN
-        grid_x = 1.25
+        rate_w = max(
+            _plain_w_in(fmt_rate(e.k_base, e.n_base), _VALUE),
+            _plain_w_in(fmt_rate(e.k_cand, e.n_cand), _VALUE),
+        )
+        grid_x = max(1.25, _SIDE_IN + 0.14 + rate_w)
         cell = min(0.26, (width - _SIDE_IN - grid_x) / cols)
         blocks = [
             ("base", e.k_base, e.n_base, t.base),
@@ -1676,16 +1857,9 @@ def draw_waffle(
                 changed=_changed(e, good_is_one) if arm == "candidate" else None,
             )
             rows = math.ceil(n / cols)
-            page.text(
-                grid_x - 0.14,
-                top + 0.05 + rows * cell / 2,
-                f"{arm}\nn={n}",
-                ha="right",
-                va="center",
-                fontsize=_LABEL,
-                color=t.ink,
-                linespacing=1.15,
-            )
+            mid = bh - 0.05 - rows * cell / 2
+            ax.text(-0.14, mid + 0.01, arm, ha="right", va="bottom", fontsize=_LABEL, color=t.ink)
+            _value_text(ax, -0.14, mid - 0.01, fmt_rate(k, n), t, ha="right", va="top")
             top += bh
         # The difference: one bar over the ±Δ band, with the zero-failure bound as a tick.
         dx = page.axes(grid_x, top + 0.15, width - _SIDE_IN - grid_x - 0.1, diff_h)
@@ -1696,8 +1870,20 @@ def draw_waffle(
         if bound is not None:
             reach = max(abs(lim[0]), abs(bound) * 1.15)
             lim = (-reach, reach)
+        dx_w = width - _SIDE_IN - grid_x - 0.1
+        lim = _outer_reach([(e.estimate, fmt_effect(m))], lim, dx_w, 0.13)
         _effect_axis(dx, m, lim, t, vertical=False)
         _estimate_dot(dx, e.estimate, 0, m, t, size=11.0)
+        right = e.estimate >= 0
+        step = 0.13 * (lim[1] - lim[0]) / dx_w
+        _value_text(
+            dx,
+            e.estimate + (step if right else -step),
+            0,
+            fmt_effect(m),
+            t,
+            ha="left" if right else "right",
+        )
         if bound is not None:
             dx.plot(
                 [bound, bound], [-0.75, 0.75], color=t.ink, lw=2.6, zorder=8, solid_capstyle="butt"
@@ -1786,7 +1972,8 @@ def draw_sweep(
         ax.set_xticks(x, [])
         _value_ticks(ax, m0.units)
         ex = page.axes(plot_x, _HEAD_IN + 0.1 + top_h + 0.25, plot_w, eff_h)
-        lim = effect_limits(cells, pad=0.3)
+        # Room for the glyph above each dot and its value below.
+        lim = effect_limits(cells, pad=0.7)
         _effect_axis(ex, m0, lim, t, vertical=True)
         ex.grid(axis="y", color=t.grid, linewidth=0.6)
         for xi, m in zip(x, cells, strict=True):
@@ -1802,6 +1989,15 @@ def draw_sweep(
                 color=colour,
                 weight="bold",
                 zorder=8,
+            )
+            _value_text(
+                ex,
+                xi,
+                m.effect.estimate - 0.07 * (lim[1] - lim[0]),
+                fmt_effect(m),
+                t,
+                ha="center",
+                va="top",
             )
         ex.set_xlim(*xlim)
         ex.set_xticks(x, [f"{v:g}" for v in xs])
@@ -1975,17 +2171,29 @@ def draw_power(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = N
                 weight="bold",
                 color=t.ink,
             )
-        ax = page.axes(_SIDE_IN + 0.6, _HEAD_IN + 0.4, width - 2 * _SIDE_IN - 0.75, 0.5)
+        ax_w = width - 2 * _SIDE_IN - 0.75
+        ax = page.axes(_SIDE_IN + 0.6, _HEAD_IN + 0.4, ax_w, 0.5)
         ax.set_yticks([])
         reach = max(mde_d, delta_d) * 1.3
         ax.set_xlim(0, reach)
         ax.set_ylim(-1, 1)
         ax.barh([0], [mde_d], height=1.2, color=t.unsure if v.underpowered else t.better)
         ax.plot([delta_d, delta_d], [-1.15, 1.15], color=t.ink, lw=2.4, clip_on=False)
+        # The MDE's value at the bar's end: outside it when there is room before Δ (or the
+        # bar passes Δ), else inside it in the dark one of ink and surface.
+        mde_label = f"{mde_d:.3g}{unit}"
+        per_in = reach / ax_w
+        need = _plain_w_in(mde_label, _VALUE) + 0.2
+        outside = mde_d >= delta_d or (delta_d - mde_d) / per_in > need
+        if outside or mde_d / per_in < need:
+            _value_text(ax, mde_d + 0.07 * per_in, 0, mde_label, t, ha="left")
+        else:
+            dark = t.ink if t.name == "light" else t.surface
+            _value_text(ax, mde_d - 0.07 * per_in, 0, mde_label, t, ha="right", color=dark)
         ax.text(
             delta_d,
             1.3,
-            "Δ",
+            f"Δ {delta_d:.3g}{unit}",
             ha="center",
             va="bottom",
             fontsize=_LABEL + 2,
@@ -2033,8 +2241,10 @@ def draw_diagnostics(
     with mpl.rc_context(_rc()):
         t = theme
         width = ONE_IN
-        page = _Page(_HEAD_IN + 0.1 + 2.1 + 0.45, theme, width)
+        plot_h = 2.1
+        page = _Page(_HEAD_IN + 0.1 + plot_h + 0.45, theme, width)
         slopes = _arm_trends(m, order_base, order_cand)
+        ends: list[tuple[float, float, str, float]] = []
         drift = [s[3] for s in slopes if s is not None]
         if title is None:
             worst = max(drift, key=abs) if drift else 0.0
@@ -2044,7 +2254,7 @@ def draw_diagnostics(
                 else "No drift within either arm"
             )
         page.header(title)
-        ax = page.axes(0.9, _HEAD_IN + 0.1, width - 0.9 - 0.95, 2.1)
+        ax = page.axes(0.9, _HEAD_IN + 0.1, width - 0.9 - 0.95, plot_h)
         ax.grid(axis="y", color=t.grid, linewidth=0.8)
         ax.set_axisbelow(True)
         if aa_band is not None and np.isfinite(b).any():
@@ -2090,7 +2300,7 @@ def draw_diagnostics(
                     **_ring(t, 7),
                 )
             if sl is not None:
-                slope, icpt, xs_, _ = sl
+                slope, icpt, xs_, pct = sl
                 ax.plot(
                     [xs_.min(), xs_.max()],
                     [icpt + slope * xs_.min(), icpt + slope * xs_.max()],
@@ -2098,14 +2308,38 @@ def draw_diagnostics(
                     lw=2.4,
                     zorder=4,
                 )
+                ends.append((float(xs_.max()), float(icpt + slope * xs_.max()), name, pct))
+        # Each trend's end: the arm's name and, under it, its drift over the run.
+        if ends:
+            y0, y1 = ax.get_ylim()
+            per_in = (y1 - y0) / plot_h
+            ys = [y for _, y, _, _ in ends]
+            block = 0.4 * per_in
+            if len(ys) == 2 and abs(ys[0] - ys[1]) < block:  # noqa: PLR2004
+                mid, sign = (ys[0] + ys[1]) / 2, 1 if ys[1] >= ys[0] else -1
+                ys = [mid - sign * block / 2, mid + sign * block / 2]
+            # In the right margin, clear of the other arm's samples.
+            margin = ax.get_yaxis_transform()
+            for (_, _, name, pct), y in zip(ends, ys, strict=True):
                 ax.text(
-                    xs_.max(),
-                    icpt + slope * xs_.max(),
-                    f"  {name}",
+                    1.03,
+                    y + 0.01 * per_in,
+                    name,
+                    transform=margin,
                     ha="left",
-                    va="center",
+                    va="bottom",
                     fontsize=_LABEL,
                     color=t.ink,
+                )
+                _value_text(
+                    ax,
+                    1.03,
+                    y - 0.01 * per_in,
+                    f"{fmt_signed(pct, 0)} %",
+                    t,
+                    transform=margin,
+                    ha="left",
+                    va="top",
                 )
         _value_ticks(ax, m.units)
         from matplotlib.ticker import MaxNLocator

@@ -511,7 +511,7 @@ def test_estimation_plot_is_the_arms_panel_only(groups):
 
 def test_picture_is_shown_at_the_display_width():
     assert f'width="{ig.ONE_PX}"' in evidence_report.picture("l.png", "d.png", "alt")
-    assert 'width="540"' in evidence_report.picture("l.png", "d.png", "alt", 540)
+    assert 'width="648"' in evidence_report.picture("l.png", "d.png", "alt", 648)
     assert round(ig.ONE_IN * ig.DPI) == ig.ONE_PX * 2
     assert round(ig.MULTI_IN * ig.DPI) == ig.MULTI_PX * 2
 
@@ -534,8 +534,8 @@ def test_each_graphic_is_as_wide_as_its_content(groups):
         ig.draw_forest(sweep, ig.LIGHT),
         ig.draw_sweep(sweep, [1, 2, 3], ig.LIGHT, x_name="x"),
     ]
-    assert 400 <= ig.ONE_PX <= 440
-    assert 520 <= ig.MULTI_PX <= 560
+    assert 480 <= ig.ONE_PX <= 500
+    assert 640 <= ig.MULTI_PX <= 660
     for fig in one:
         assert fig.get_figwidth() * ig.PX_PER_IN == pytest.approx(ig.ONE_PX)
     for fig in multi:
@@ -543,11 +543,79 @@ def test_each_graphic_is_as_wide_as_its_content(groups):
 
 
 def test_forest_rows_are_compact(groups):
-    """The forest grows by one compact row (about 26 px) per metric."""
+    """The forest grows by one compact row (about 31 px) per metric."""
     sweep = sorted(groups["line_time"].cells, key=lambda m: m.point["x"])
     two = ig.draw_forest(sweep[:2], ig.LIGHT, order="never").get_figheight()
     three = ig.draw_forest(sweep, ig.LIGHT, order="never").get_figheight()
-    assert (three - two) * ig.PX_PER_IN == pytest.approx(26, abs=4)
+    assert (three - two) * ig.PX_PER_IN == pytest.approx(31, abs=4)
+
+
+def test_chart_text_is_about_github_body_size():
+    """On screen (1 pt = ZOOM px): ticks and labels near GitHub's 14 px, the floor 12 px."""
+    on_screen = {k: v * ig.ZOOM for k, v in {"tick": ig._TICK, "label": ig._LABEL}.items()}
+    assert all(13 <= px <= 14.5 for px in on_screen.values())
+    assert pytest.approx(12) == ig._MIN_PT * ig.ZOOM
+    assert pytest.approx(16, abs=0.5) == ig._TITLE * ig.ZOOM
+    assert pytest.approx(20, abs=0.5) == ig._HERO * ig.ZOOM
+
+
+def _value_labels(fig):
+    return [t.get_text() for t in fig.findobj(lambda a: str(a.get_gid()).startswith(ig.VALUE_GID))]
+
+
+def test_arms_label_each_median_with_its_value(groups):
+    m = groups["planning_time"].cells[0]
+    want = {
+        ig.fmt_value(float(np.median(m.base)), m.units),
+        ig.fmt_value(float(np.median(m.cand)), m.units),
+    }
+    for fig in (ig.draw_estimation(m, ig.LIGHT), ig.draw_scorecard([m], ig.LIGHT)):
+        assert set(_value_labels(fig)) == want
+
+
+def test_median_values_get_digits_until_they_differ():
+    assert ig.fmt_values([2.1261, 2.1289], "s") == ["2.126 s", "2.129 s"]
+    assert ig.fmt_values([0.738, 0.62], "s") == ["0.738 s", "0.62 s"]
+    assert ig.fmt_values([1.0, 1.0]) == ["1", "1"]
+
+
+def test_forest_prints_each_rows_change(groups):
+    sweep = sorted(groups["line_time"].cells, key=lambda m: m.point["x"])
+    fig = ig.draw_forest(sweep, ig.LIGHT)
+    assert sorted(_value_labels(fig)) == sorted(ig.fmt_effect(m) for m in sweep)
+    # Each label is inside the figure.
+    fig.canvas.draw()
+    box = fig.bbox
+    for t in fig.findobj(lambda a: str(a.get_gid()).startswith(ig.VALUE_GID)):
+        ext = t.get_window_extent()
+        assert box.x0 - 1 <= ext.x0, t.get_text()
+        assert ext.x1 <= box.x1 + 1, t.get_text()
+
+
+def test_waffle_gives_each_arms_rate(groups):
+    m = groups["task_success"].cells[0]
+    e = m.effect
+    labels = _value_labels(ig.draw_waffle(m, ig.LIGHT))
+    assert ig.fmt_rate(e.k_base, e.n_base) in labels
+    assert ig.fmt_rate(e.k_cand, e.n_cand) in labels
+    assert ig.fmt_effect(m) in labels
+    assert ig.fmt_rate(18, 20) == "18/20 · 90 %"
+
+
+def test_other_views_label_their_summary_values(groups):
+    cont = groups["planning_time"].cells[0]
+    sweep = sorted(groups["line_time"].cells, key=lambda m: m.point["x"])
+    assert len(_value_labels(ig.draw_sweep(sweep, [1, 2, 3], ig.LIGHT))) == len(sweep)
+    assert len(_value_labels(ig.draw_raincloud_shift(cont, ig.LIGHT))) == 4
+    assert len(_value_labels(ig.draw_power(cont, ig.LIGHT))) == 1
+    assert all("%" in t for t in _value_labels(ig.draw_diagnostics(cont, ig.LIGHT)))
+
+
+def test_value_labels_are_in_the_svg(groups, tmp_path):
+    m = groups["planning_time"].cells[0]
+    paths = ig.save_both(lambda t: ig.draw_estimation(m, t), tmp_path, "est")
+    svg = paths["light_svg"].read_text(encoding="utf-8")
+    assert svg.count(f'id="{ig.VALUE_GID}') == 2
 
 
 def test_report_img_width_matches_each_graphic(tmp_path):
