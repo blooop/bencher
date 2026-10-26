@@ -246,7 +246,7 @@ class Effect:
     ratio of geometric means); on ``"diff"`` they are differences in the metric's
     units. *ci* is the decision CI (90 % unless widened for Holm), *ci95* the
     report's 95 % CI. *bootstrap* holds the resampled effects when the CI came from
-    a bootstrap, for the estimation plot.
+    a bootstrap.
     """
 
     scale: Scale

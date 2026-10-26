@@ -509,7 +509,7 @@ def test_estimation_plot_is_the_arms_panel_only(groups):
 def test_picture_is_shown_at_the_display_width():
     html = evidence_report.picture("l.png", "d.png", "alt")
     assert f'width="{ig.DISPLAY_PX}"' in html
-    assert ig.DISPLAY_PX * 2 == round(ig.WIDTH_IN * ig.DPI)
+    assert round(ig.WIDTH_IN * ig.DPI) == ig.DISPLAY_PX * 2
 
 
 def test_design_strip_facts(groups):
@@ -684,3 +684,146 @@ def test_paired_rows_reject_a_repeated_key() -> None:
     ((base, cand),) = data_from_rows(rows, _shard_rows(0.9))[0].points.values()
     with pytest.raises(ValueError, match="cannot pair"):
         evidence_report._align(base, cand, paired=True)
+
+
+# --------------------------------------------------------------------------------------
+# One metric in its units; the run-order strip only when the design needs it.
+
+
+def test_header_number_is_in_the_metrics_units(groups):
+    m = groups["planning_time"].cells[0]
+    base_median = float(np.median(m.base))
+    expected = base_median * math.expm1(m.effect.estimate)
+    text = ig.fmt_change(m)
+    assert text.endswith(" s")
+    assert text.startswith("−" if expected < 0 else "+")
+    assert float(text[1:-2]) == pytest.approx(abs(expected), abs=0.01)
+    # Several metrics on one axis keep the percent.
+    assert ig.fmt_effect(m).endswith(" %")
+
+
+def test_header_number_falls_back_to_percent_without_a_unit(groups):
+    from dataclasses import replace
+
+    m = replace(groups["planning_time"].cells[0], units="")
+    assert not ig.in_units(m)
+    assert ig.fmt_change(m) == ig.fmt_effect(m)
+    binary = groups["task_success"].cells[0]
+    assert ig.fmt_change(binary).endswith(" pp")
+
+
+def test_unit_ci_is_the_ratio_ci_at_the_base_median(groups):
+    m = groups["planning_time"].cells[0]
+    ci = m.effect.ci
+    lo, hi = ig.unit_change(m, ci.low), ig.unit_change(m, ci.high)
+    assert lo <= ig.unit_change(m, m.effect.estimate) <= hi
+    # The same sign pattern as the ratio CI: the unit CI agrees with the verdict.
+    assert (lo > 0) == (ci.low > 0)
+    assert (hi > 0) == (ci.high > 0)
+    assert ig.fmt_change_ci(m).startswith(f"{round(100 * ci.level)} % CI ")
+    alt = ig.alt_text(m)
+    assert ig.fmt_change(m) in alt
+    assert ig.fmt_effect(m) in alt
+
+
+def test_unit_header_is_drawn_on_the_views_of_one_metric(groups):
+    from matplotlib.text import Text
+
+    m = groups["planning_time"].cells[0]
+    for fig in (ig.draw_estimation(m), ig.draw_scorecard([m]), ig.draw_raincloud_shift(m)):
+        texts = [t.get_text() for t in fig.texts] + [
+            a.get_text() for a in fig.artists if isinstance(a, Text)
+        ]
+        assert ig.fmt_change(m) in texts
+
+
+def _simple(m):
+    """*m* as one machine, unpaired, base runs then candidate runs, one seed, no drift."""
+    from dataclasses import replace
+
+    rng = np.random.default_rng(5)
+    n = len(m.base)
+    base = rng.lognormal(0, 0.02, n)
+    cand = rng.lognormal(-0.2, 0.02, n)
+    return replace(
+        m,
+        base=base,
+        cand=cand,
+        paired=False,
+        clusters=(None, None),
+        order=(np.arange(n), np.arange(n, 2 * n)),
+        seed_policy=None,
+    )
+
+
+def test_auto_hides_the_strip_for_a_simple_design(groups):
+    m = _simple(groups["planning_time"].cells[0])
+    assert ig.simple_design([m])
+    assert not ig.show_order([m], "auto")
+    assert ig.show_order([m], "always")
+    assert ig.design_sentence([m]) == "12 base runs, then 12 candidate runs, one machine"
+    short = ig.draw_estimation(m, order="auto").get_size_inches()[1]
+    tall = ig.draw_estimation(m, order="always").get_size_inches()[1]
+    assert short < tall
+
+
+def test_auto_shows_the_strip_for_interleaved_sharded_or_drifting_runs(groups):
+    from dataclasses import replace
+
+    interleaved = groups["planning_time"].cells[0]
+    assert ig.show_order([interleaved], "auto")
+    assert not ig.show_order([interleaved], "never")
+    sharded = groups["sweep_time"].cells[0]
+    assert ig.show_order([sharded], "auto")
+    simple = _simple(interleaved)
+    drifting = replace(simple, base=np.linspace(1.0, 2.0, len(simple.base)))
+    assert ig.drift_flagged(drifting)
+    assert ig.show_order([drifting], "auto")
+
+
+def test_order_mode_is_checked():
+    with pytest.raises(ValueError, match="order must be one of"):
+        ig.show_order([], "sometimes")  # type: ignore[arg-type]
+
+
+def test_report_states_the_design_when_the_strip_is_hidden(tmp_path):
+    rng = np.random.default_rng(2)
+    base = [
+        {
+            "metric": "t",
+            "units": "s",
+            "direction": "minimize",
+            "repeat": i,
+            "value": float(v),
+            "order": i,
+        }
+        for i, v in enumerate(rng.lognormal(0, 0.02, 12))
+    ]
+    cand = [
+        {
+            "metric": "t",
+            "units": "s",
+            "direction": "minimize",
+            "repeat": i,
+            "value": float(v),
+            "order": 12 + i,
+        }
+        for i, v in enumerate(rng.lognormal(-0.2, 0.02, 12))
+    ]
+    md = evidence_report.report_from_rows(base, cand, tmp_path / "auto", primary=["t"]).render()
+    assert "Design: 12 base runs, then 12 candidate runs, one machine." in md
+    md = evidence_report.report_from_rows(
+        base, cand, tmp_path / "always", primary=["t"], order="always"
+    ).render()
+    assert "The squares under the panels are the runs in execution order (blocked)" in md
+
+
+def test_order_cli_option():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    evidence_report.add_report_options(parser)
+    assert parser.parse_args([]).order == "auto"
+    assert parser.parse_args(["--order", "never"]).order == "never"
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--order", "sometimes"])

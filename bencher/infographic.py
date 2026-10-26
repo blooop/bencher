@@ -37,7 +37,7 @@ import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
@@ -180,6 +180,56 @@ def fmt_effect(m: MetricEvidence) -> str:
     return fmt_signed(display(m, m.effect.estimate), _digits(m)) + unit_suffix(m)
 
 
+def in_units(m: MetricEvidence) -> bool:
+    """Whether a view of *m* alone shows its change in the metric's units, not as a ratio.
+
+    A positive metric is analysed as a log ratio; when it has a unit, the change is
+    shown in that unit at the base median (:func:`unit_change`). A positive metric
+    with no unit (a ratio-type quantity) stays in %; a signed metric is already in its
+    units, and a binary or fraction metric in pp.
+    """
+    return m.kind == "positive" and bool(m.units.strip())
+
+
+def _base_median(m: MetricEvidence) -> float:
+    b = m.base[np.isfinite(m.base)]
+    return float(np.median(b)) if len(b) else 0.0
+
+
+def unit_change(m: MetricEvidence, value: float) -> float:
+    """A log-ratio *value* of positive *m* in its units: base median × (ratio − 1)."""
+    return _base_median(m) * math.expm1(value)
+
+
+def _unit_digits(m: MetricEvidence) -> int:
+    """Decimals that give the 95 % CI's width in units two significant figures."""
+    ci = m.effect.ci95
+    span = abs(unit_change(m, ci.high) - unit_change(m, ci.low))
+    return max(0, min(4, 1 - math.floor(math.log10(span)))) if span > 0 else 2
+
+
+def fmt_change(m: MetricEvidence) -> str:
+    """The big number of a view of *m* alone: ``+1.84 s`` in units, else :func:`fmt_effect`."""
+    if not in_units(m):
+        return fmt_effect(m)
+    return f"{fmt_signed(unit_change(m, m.effect.estimate), _unit_digits(m))} {m.units.strip()}"
+
+
+def fmt_change_ci(m: MetricEvidence, *, level95: bool = False) -> str:
+    """The CI in units, from the ratio's CI at the base median: ``90 % CI +1.2 … +2.5 s``."""
+    if not in_units(m):
+        return fmt_ci(m, level95=level95)
+    ci = m.effect.ci95 if level95 else m.effect.ci
+    d = _unit_digits(m)
+    lo, hi = fmt_signed(unit_change(m, ci.low), d), fmt_signed(unit_change(m, ci.high), d)
+    return f"{round(ci.level * 100):d} % CI {lo} … {hi} {m.units.strip()}"
+
+
+def fmt_base_median(m: MetricEvidence) -> str:
+    """``11.6 s``: the base median the unit change is taken at."""
+    return f"{_base_median(m):.3g} {m.units.strip()}"
+
+
 def fmt_ci(m: MetricEvidence, *, level95: bool = False) -> str:
     ci = m.effect.ci95 if level95 else m.effect.ci
     d = _digits(m)
@@ -293,6 +343,8 @@ def alt_text(m: MetricEvidence) -> str:
     """One sentence a screen reader (or a broken image) still gets the result from."""
     if isinstance(m.effect, ProportionEffect):
         nums = f"{fmt_counts(m.effect)}, difference {fmt_effect(m)} ({fmt_ci(m)})"
+    elif in_units(m):
+        nums = f"{fmt_change(m)} ({fmt_change_ci(m)}), {fmt_effect(m)} ({fmt_ci(m)})"
     else:
         nums = f"{fmt_effect(m)} ({fmt_ci(m)})"
     extra = " Underpowered." if m.verdict.underpowered else ""
@@ -460,7 +512,7 @@ class _Page:
         t = self.theme
         room = WIDTH_IN - 2 * _SIDE_IN - 0.3
         if hero is not None:
-            room -= _text_w_in(hero.verdict.glyph + " " + fmt_effect(hero), _HERO)
+            room -= _text_w_in(hero.verdict.glyph + " " + fmt_change(hero), _HERO)
         size = _TITLE
         while size > _MIN_PT + 3 and _text_w_in(title, size) > room:
             size -= 1
@@ -495,14 +547,14 @@ def _rc() -> dict:
 def _hero(
     page: _Page, x: float, top: float, m: MetricEvidence, *, ha: str, size: float = _HERO
 ) -> None:
-    """The verdict glyph (in the verdict colour) and the effect (in ink), as one big line."""
+    """The verdict glyph (in the verdict colour) and the change (in ink, in units), as one big line."""
     from matplotlib.text import Annotation
 
     t = page.theme
     colour = t.verdict_colour(m.verdict.kind)
     style = {"fontsize": size, "weight": "bold"}
     if ha == "right":
-        anchor = page.text(x, top, fmt_effect(m), ha="right", va="top", color=t.ink, **style)
+        anchor = page.text(x, top, fmt_change(m), ha="right", va="top", color=t.ink, **style)
         tail = Annotation(
             m.verdict.glyph + " ",
             xy=(0, 0),
@@ -517,7 +569,7 @@ def _hero(
             x, top, m.verdict.glyph + " ", ha="left", va="top", color=colour, **style
         )
         tail = Annotation(
-            fmt_effect(m), xy=(1, 0), xycoords=anchor, ha="left", va="bottom", color=t.ink, **style
+            fmt_change(m), xy=(1, 0), xycoords=anchor, ha="left", va="bottom", color=t.ink, **style
         )
     page.fig.add_artist(tail)
 
@@ -1033,6 +1085,100 @@ _SQ_MIN = 0.045
 _VM_LABEL_IN = 0.62
 
 
+OrderMode = Literal["auto", "always", "never"]
+ORDER_MODES: tuple[OrderMode, ...] = ("auto", "always", "never")
+
+
+def _default_order(m: MetricEvidence) -> tuple[list[int], list[int]]:
+    """Each arm's run positions when none were recorded: interleaved when paired, else blocked."""
+    nb, nc = len(m.base), len(m.cand)
+    if m.paired:
+        return list(range(0, 2 * nb, 2)), list(range(1, 2 * nc, 2))
+    return list(range(nb)), list(range(nb, nb + nc))
+
+
+def _arm_trends(
+    m: MetricEvidence, order_base: Sequence[float], order_cand: Sequence[float]
+) -> list[tuple[float, float, np.ndarray, float] | None]:
+    """Per arm the least-squares line on run order: slope, intercept, x, and drift in %."""
+    slopes: list[tuple[float, float, np.ndarray, float] | None] = []
+    for vals, order in ((m.base, order_base), (m.cand, order_cand)):
+        ok = np.isfinite(vals)
+        xo = np.asarray(order, dtype=float)[ok]
+        if ok.sum() > 2 and np.ptp(xo) > 0:  # noqa: PLR2004
+            slope, icpt = np.polyfit(xo, vals[ok], 1)
+            level = np.nanmedian(vals) or 1.0
+            slopes.append((slope, icpt, xo, 100 * slope * np.ptp(xo) / abs(level)))
+        else:
+            slopes.append(None)
+    return slopes
+
+
+def _drifts(m: MetricEvidence, worst_pct: float) -> bool:
+    """The G9 rule: a within-arm drift at least the margin is a drift."""
+    return abs(worst_pct) >= 100 * m.margin
+
+
+def drift_flagged(m: MetricEvidence) -> bool:
+    """Whether either arm of continuous *m* drifts over its runs (recorded order, else G9's)."""
+    if not isinstance(m.effect, Effect):
+        return False
+    ob, oc = m.order
+    order = (ob, oc) if ob is not None and oc is not None else _default_order(m)
+    drift = [s[3] for s in _arm_trends(m, *order) if s is not None]
+    return bool(drift) and _drifts(m, max(drift, key=abs))
+
+
+def simple_design(cells: Sequence[MetricEvidence]) -> bool:
+    """One shard, unpaired, one seed, base runs then candidate runs (or no order), no drift."""
+    m = cells[0]
+    runs = _runs([m])
+    if m.paired or len({r.shard for r in runs if r.shard is not None}) > 1:
+        return False
+    if order_recorded([m]) and _order_pattern(runs) != "blocked":
+        return False
+    seeds = re.match(r"(\d+) seeds recorded", m.seed_policy or "")
+    if seeds is not None and int(seeds.group(1)) > 1:
+        return False
+    return not any(drift_flagged(c) for c in cells)
+
+
+def show_order(cells: Sequence[MetricEvidence], mode: OrderMode = "auto") -> bool:
+    """Whether a graphic of *cells* draws the run-order strip.
+
+    ``"never"`` hides it, ``"always"`` draws it whenever the order was recorded, and
+    ``"auto"`` draws it only when the design is not simple (:func:`simple_design`).
+    """
+    if mode not in ORDER_MODES:
+        raise ValueError(f"order must be one of {ORDER_MODES}, not {mode!r}")
+    if mode == "never" or not cells or not order_recorded(cells):
+        return False
+    return mode == "always" or not simple_design(cells)
+
+
+def design_sentence(cells: Sequence[MetricEvidence]) -> str:
+    """The design in one plain line: ``20 base runs, then 20 candidate runs, one machine``."""
+    m = cells[0]
+    runs = _runs([m])
+    nb, nc = sum(r.arm == 0 for r in runs), sum(r.arm == 1 for r in runs)
+    shards = {r.shard for r in runs if r.shard is not None}
+    if m.paired:
+        arms = f"{nb} pairs of base and candidate runs"
+    elif order_recorded([m]) and _order_pattern(runs) == "blocked":
+        first = min(runs, key=lambda r: r.order or 0.0).arm
+        arms = (
+            f"{nb} base runs, then {nc} candidate runs"
+            if first == 0
+            else f"{nc} candidate runs, then {nb} base runs"
+        )
+    elif order_recorded([m]):
+        arms = f"{nb} base and {nc} candidate runs, {_order_pattern(runs)}"
+    else:
+        arms = f"{nb} base and {nc} candidate runs, run order not recorded"
+    where = f"{len(shards)} machines" if len(shards) > 1 else "one machine"
+    return f"{arms}, {where}"
+
+
 def _order_lines(runs: Sequence[_Run], width_in: float) -> list[tuple[int | None, list[_Run]]]:
     shards = sorted({r.shard for r in runs}, key=str) if any(r.shard for r in runs) else [None]
     label_w = _VM_LABEL_IN if shards != [None] else 0.0
@@ -1047,8 +1193,10 @@ def _order_lines(runs: Sequence[_Run], width_in: float) -> list[tuple[int | None
     return lines
 
 
-def _order_height(cells: Sequence[MetricEvidence], width_in: float) -> float:
-    if not order_recorded(cells):
+def _order_height(
+    cells: Sequence[MetricEvidence], width_in: float, mode: OrderMode = "auto"
+) -> float:
+    if not show_order(cells, mode):
         return 0.0
     lines = _order_lines(_runs(cells), width_in)
     labelled = any(s is not None for s, _ in lines)
@@ -1060,10 +1208,15 @@ def _order_height(cells: Sequence[MetricEvidence], width_in: float) -> float:
 
 
 def _draw_order(
-    page: _Page, cells: Sequence[MetricEvidence], top: float, x0: float, width_in: float
+    page: _Page,
+    cells: Sequence[MetricEvidence],
+    top: float,
+    x0: float,
+    width_in: float,
+    mode: OrderMode = "auto",
 ) -> None:
     """The run-order rows at *top*: grey base, blue candidate squares; "VM k" per shard."""
-    height = _order_height(cells, width_in)
+    height = _order_height(cells, width_in, mode)
     if height <= 0:
         return
     t = page.theme
@@ -1115,6 +1268,7 @@ def draw_scorecard(
     *,
     title: str | None = None,
     per_row: int = 4,
+    order: OrderMode = "auto",
 ) -> Figure:
     """G1: one panel per metric: name, big effect + glyph, every sample, Δ band, median connector."""
     import matplotlib as mpl
@@ -1132,7 +1286,7 @@ def draw_scorecard(
         hero_h, label_h = 0.62, 0.62
         plot_h = 1.0 if binary_only else 2.5 if cols < 4 else 2.2  # noqa: PLR2004
         row_h = name_h + hero_h + plot_h + label_h + 0.2
-        order_h = _order_height(metrics[:1], usable)
+        order_h = _order_height(metrics[:1], usable, order)
         page = _Page(_HEAD_IN + rows * row_h + order_h + _FOOT_IN, theme)
         page.header(title or short_summary(metrics))
         hero_size = _HERO if cols <= 2 else _HERO_SMALL  # noqa: PLR2004
@@ -1159,7 +1313,7 @@ def draw_scorecard(
                 tick_w = 0.72
                 ax = page.axes(px + tick_w, ptop, panel_w - tick_w, plot_h)
                 _arms(ax, m, theme, panel_w - tick_w, plot_h)
-        _draw_order(page, metrics[:1], _HEAD_IN + rows * row_h, _SIDE_IN, usable)
+        _draw_order(page, metrics[:1], _HEAD_IN + rows * row_h, _SIDE_IN, usable, order)
         return page.fig
 
 
@@ -1173,6 +1327,7 @@ def draw_forest(
     *,
     title: str | None = None,
     labels: Sequence[str] | None = None,
+    order: OrderMode = "auto",
 ) -> Figure:
     """G2: one row per metric or sweep point, sorted by effect, on the shared axis.
 
@@ -1187,11 +1342,11 @@ def draw_forest(
     with mpl.rc_context(_rc()):
         t = theme
         names = list(labels) if labels is not None else [humanize(m.name) for m in metrics]
-        order = sorted(range(len(metrics)), key=lambda i: metrics[i].effect.estimate)
+        by_effect = sorted(range(len(metrics)), key=lambda i: metrics[i].effect.estimate)
         n = len(metrics)
         row_h = 0.56
         axis_h = 0.5
-        order_h = _order_height(metrics[:1], WIDTH_IN - 2 * _SIDE_IN)
+        order_h = _order_height(metrics[:1], WIDTH_IN - 2 * _SIDE_IN, order)
         page = _Page(_HEAD_IN + n * row_h + axis_h + order_h + _FOOT_IN, theme)
         if title is None:
             moved = sum(
@@ -1205,7 +1360,7 @@ def draw_forest(
         ax.set_ylim(-0.5, n - 0.5)
         ax.set_yticks([])
         _effect_axis(ax, metrics[0], effect_limits(metrics), t, vertical=False)
-        for row, i in enumerate(reversed(order)):
+        for row, i in enumerate(reversed(by_effect)):
             m = metrics[i]
             y = n - 1 - row
             colour = t.verdict_colour(m.verdict.kind)
@@ -1242,7 +1397,12 @@ def draw_forest(
                     row_h - 0.12,
                 )
         _draw_order(
-            page, metrics[:1], _HEAD_IN + n * row_h + axis_h, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN
+            page,
+            metrics[:1],
+            _HEAD_IN + n * row_h + axis_h,
+            _SIDE_IN,
+            WIDTH_IN - 2 * _SIDE_IN,
+            order,
         )
         return page.fig
 
@@ -1276,7 +1436,13 @@ def _dot_strip(ax: Axes, m: MetricEvidence, theme: Theme, w_in: float, h_in: flo
 # G3 Estimation plot.
 
 
-def draw_estimation(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = None) -> Figure:
+def draw_estimation(
+    m: MetricEvidence,
+    theme: Theme = LIGHT,
+    *,
+    title: str | None = None,
+    order: OrderMode = "auto",
+) -> Figure:
     """G3: both arms at full width: every sample, the ±Δ band and the median connector."""
     import matplotlib as mpl
 
@@ -1284,13 +1450,13 @@ def draw_estimation(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | Non
         raise TypeError("draw_estimation needs a continuous metric")
     with mpl.rc_context(_rc()):
         plot_h = 3.0
-        order_h = _order_height([m], WIDTH_IN - 2 * _SIDE_IN)
+        order_h = _order_height([m], WIDTH_IN - 2 * _SIDE_IN, order)
         page = _Page(_HEAD_IN + plot_h + 0.7 + order_h + _FOOT_IN, theme)
         page.header(title or chart_title(m), m)
         x, w = 1.05, WIDTH_IN - _SIDE_IN - 1.05
         ax = page.axes(x, _HEAD_IN + 0.1, w, plot_h)
         _arms(ax, m, theme, w, plot_h)
-        _draw_order(page, [m], _HEAD_IN + plot_h + 0.7, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN)
+        _draw_order(page, [m], _HEAD_IN + plot_h + 0.7, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN, order)
         return page.fig
 
 
@@ -1438,7 +1604,13 @@ def worst_plausible(m: MetricEvidence) -> float | None:
     return (1 - e.bad_upper) - e.p_base if good_is_one else e.bad_upper - e.p_base
 
 
-def draw_waffle(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = None) -> Figure:
+def draw_waffle(
+    m: MetricEvidence,
+    theme: Theme = LIGHT,
+    *,
+    title: str | None = None,
+    order: OrderMode = "auto",
+) -> Figure:
     """G5: one square per run per arm; the difference over the ±Δ band; the zero-failure bound.
 
     The candidate runs whose outcome differs from base get a flowing dashed outline.
@@ -1460,7 +1632,7 @@ def draw_waffle(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = 
         ]
         heights = [math.ceil(n / cols) * cell + 0.25 for _, _, n, _ in blocks]
         diff_h = 0.75
-        order_h = _order_height([m], WIDTH_IN - 2 * _SIDE_IN)
+        order_h = _order_height([m], WIDTH_IN - 2 * _SIDE_IN, order)
         page = _Page(
             _HEAD_IN + 0.15 + sum(heights) + 0.15 + diff_h + 0.6 + order_h + _FOOT_IN, theme
         )
@@ -1509,7 +1681,7 @@ def draw_waffle(m: MetricEvidence, theme: Theme = LIGHT, *, title: str | None = 
             dx.plot(
                 [bound, bound], [-0.75, 0.75], color=t.ink, lw=2.6, zorder=8, solid_capstyle="butt"
             )
-        _draw_order(page, [m], top + 0.15 + diff_h + 0.6, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN)
+        _draw_order(page, [m], top + 0.15 + diff_h + 0.6, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN, order)
         return page.fig
 
 
@@ -1524,6 +1696,7 @@ def draw_sweep(
     *,
     x_name: str = "x",
     title: str | None = None,
+    order: OrderMode = "auto",
 ) -> Figure:
     """G6: top, both arms' samples at each point with lines joining the medians; bottom, the effect.
 
@@ -1535,7 +1708,7 @@ def draw_sweep(
         t = theme
         m0 = cells[0]
         top_h, eff_h = 2.7, 1.75
-        order_h = _order_height(cells, WIDTH_IN - 2 * _SIDE_IN)
+        order_h = _order_height(cells, WIDTH_IN - 2 * _SIDE_IN, order)
         page = _Page(_HEAD_IN + 0.1 + top_h + 0.25 + eff_h + 0.55 + order_h + _FOOT_IN, theme)
         moved = sum(m.verdict.kind in (VerdictKind.IMPROVED, VerdictKind.REGRESSED) for m in cells)
         page.header(title or f"{moved} of {len(cells)} {x_name} points moved")
@@ -1616,6 +1789,7 @@ def draw_sweep(
             _HEAD_IN + 0.1 + top_h + 0.25 + eff_h + 0.55,
             _SIDE_IN,
             WIDTH_IN - 2 * _SIDE_IN,
+            order,
         )
         return page.fig
 
@@ -1633,6 +1807,7 @@ def draw_heatmap(
     x_name: str = "x",
     y_name: str = "y",
     title: str | None = None,
+    order: OrderMode = "auto",
 ) -> Figure:
     """G7: effect per (y, x) cell, diverging blue (better) – orange (worse) centred on 0.
 
@@ -1650,7 +1825,7 @@ def draw_heatmap(
         cell_w = min(1.25, 4.9 / nx)
         cell_h = min(0.8, cell_w * 0.75)
         flat = [m for row in cells for m in row]
-        order_h = _order_height(flat, WIDTH_IN - 2 * _SIDE_IN)
+        order_h = _order_height(flat, WIDTH_IN - 2 * _SIDE_IN, order)
         grid_h = ny * cell_h
         page = _Page(_HEAD_IN + 0.15 + grid_h + 0.85 + order_h + _FOOT_IN, theme)
         m0 = flat[0]
@@ -1737,7 +1912,9 @@ def draw_heatmap(
             color=t.unsure,
             weight="bold",
         )
-        _draw_order(page, flat, _HEAD_IN + 0.15 + grid_h + 0.85, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN)
+        _draw_order(
+            page, flat, _HEAD_IN + 0.15 + grid_h + 0.85, _SIDE_IN, WIDTH_IN - 2 * _SIDE_IN, order
+        )
         return page.fig
 
 
@@ -1826,31 +2003,19 @@ def draw_diagnostics(
 
     b, c = m.base, m.cand
     if order_base is None or order_cand is None:
-        if m.paired:
-            order_base, order_cand = list(range(0, 2 * len(b), 2)), list(range(1, 2 * len(c), 2))
-        else:
-            order_base, order_cand = list(range(len(b))), list(range(len(b), len(b) + len(c)))
+        order_base, order_cand = _default_order(m)
     shard_markers = ("o", "s", "D", "^", "v", "P", "X")
     with mpl.rc_context(_rc()):
         t = theme
         page = _Page(3.9, theme)
-        slopes = []
-        for vals, order in ((b, order_base), (c, order_cand)):
-            ok = np.isfinite(vals)
-            xo = np.asarray(order, dtype=float)[ok]
-            if ok.sum() > 2 and np.ptp(xo) > 0:  # noqa: PLR2004
-                slope, icpt = np.polyfit(xo, vals[ok], 1)
-                level = np.nanmedian(vals) or 1.0
-                slopes.append((slope, icpt, xo, 100 * slope * np.ptp(xo) / abs(level)))
-            else:
-                slopes.append(None)
+        slopes = _arm_trends(m, order_base, order_cand)
         drift = [s[3] for s in slopes if s is not None]
         if title is None:
             worst = max(drift, key=abs) if drift else 0.0
             title = (
-                "No drift within either arm"
-                if abs(worst) < 100 * m.margin
-                else f"Drift of {fmt_signed(worst, 0)} % in one arm"
+                f"Drift of {fmt_signed(worst, 0)} % in one arm"
+                if _drifts(m, worst)
+                else "No drift within either arm"
             )
         page.header(title)
         ax = page.axes(1.15, _HEAD_IN + 0.1, 5.4, 2.5)

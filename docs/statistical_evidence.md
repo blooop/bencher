@@ -170,6 +170,23 @@ Common rules:
   blue candidate, in execution order), labelled only "VM 1", "VM 2" …; the Markdown maps
   each VM to its shard name. When the order is not recorded, the row is left out and the
   Markdown says so. For a sweep, the swept grid is the panel layout itself.
+* **The run-order strip is optional.** `order="auto"` (the default) draws it only when the
+  design is not simple: more than one shard, paired runs, an interleaved, ABBA or mixed
+  order, more than one seed, or a within-arm drift of at least the margin (the G9 rule).
+  A simple design (one machine, unpaired, base runs then candidate runs or no recorded
+  order, no drift) gets no strip, and the figure is shorter. `order="always"` draws it
+  whenever the order was recorded; `order="never"` leaves it out. Without the strip the
+  caption states the design in one line, for example "20 base runs, then 20 candidate
+  runs, one machine". The CLIs take `--order auto|always|never`.
+* **One metric in its units, several in %.** A view of one metric (the scorecard panel,
+  the estimation plot, the waffle, the shift plot) shows the big number in the metric's
+  own unit: `▼ +1.9 s`. A positive metric is tested on the log ratio, so its change in
+  units is the ratio at the base median, base median × (ratio − 1), and its CI is the
+  ratio's CI converted the same way; the verdict does not change. A positive metric with
+  no unit (a ratio-type quantity) stays in %, a binary metric is in pp. Views that put
+  several metrics or points on one axis (the forest, the sweep's effect row, the heatmap,
+  the summary table) keep the % change. The caption and the alt text give both: the
+  change in units with its CI, then the % change with its CI.
 * Okabe–Ito colours. Base is grey `#8C8C8C`; candidate is blue `#0072B2`. Better is
   bluish green `#009E73`, worse is vermilion `#D55E00`, inconclusive is amber
   `#E69F00`. Dark theme: candidate `#3D9BD6`, better `#1FA07C`, worse `#E0662A`,
@@ -240,4 +257,5 @@ The text-only charts of `evidence.py` stay as the fallback when images are off.
 * `bencher/evidence_report.py` — turns two recordings (or two kbench `repeats.json`
   row files) into the Markdown above plus the image files.
 * CLI: `bencher compare BASE CAND --report DIR`, and `bencher evidence-rows BASE.json
-  CAND.json --report DIR` for the kbench row format.
+  CAND.json --report DIR` for the kbench row format. Both take `--order
+  auto|always|never` for the run-order strip.
