@@ -62,7 +62,10 @@ def _cors_static_handler() -> type[StaticFileHandler]:
             self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
             self.set_header("Access-Control-Allow-Headers", "*")
 
-        def options(self, *_args: str, **_kwargs: str) -> None:
+        # tornado 6.6 types RequestHandler.options as an assignable Callable attribute
+        # (default _unimplemented_method), so ty reads a method override as narrowing
+        # what may be written to it. Tornado dispatches to it as a method either way.
+        def options(self, *_args: str, **_kwargs: str) -> None:  # ty: ignore[invalid-mutable-override]
             self.set_status(204)
             self.finish()
 
