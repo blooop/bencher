@@ -20,7 +20,9 @@ class ComposableContainerPanel(ComposableContainerBase):
     # This backend stores a live Panel layout rather than the base's plain list, so
     # children can be appended straight into the rendered tree.  Declared here for the
     # same reason ComposableContainerRerun narrows the field to its own element type.
-    container: pn.layout.ListLike | list[Any] = field(default_factory=list)
+    # ty (0.0.91) rejects widening the base's list[Any]; append() and render() below
+    # only use the operations both types share.
+    container: pn.layout.ListLike | list[Any] = field(default_factory=list)  # ty: ignore[invalid-attribute-override]
     # Set only by the ComposeType.sequence arm below, None on every other method.  It is
     # declared here (rather than assigned on one arm of the match) so that append() and
     # render() read one field instead of each re-deriving "am I a tab strip?" from
