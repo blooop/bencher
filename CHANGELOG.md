@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.147.0] - 2026-10-26
+
+### Added
+- **The run-order strip is optional.** `order="auto" | "always" | "never"` on
+  `write_report`, `report_from_rows`, `report_from_results` and every `draw_*` that draws
+  the strip, and `--order` on `bencher compare --report` and `bencher evidence-rows`. With
+  `auto` (the default) the strip shows only for a design that is not simple (several
+  shards, paired runs, an interleaved, ABBA or mixed order, several seeds, or a within-arm
+  drift of at least the margin); otherwise the caption states the design in one line.
+- **Each summary mark in an evidence graphic shows its value beside it**, in text ink:
+  each arm's median bar (more digits when two medians would read the same), each forest
+  row's change, each waffle arm's rate (`18/20 · 90 %`) and the difference, the sweep's
+  change per point, the shift plot's medians and named deciles, the power bar's MDE and
+  Δ, and each diagnostics trend's drift. No interval is drawn; the CI stays in the
+  caption and the alt text.
+
+### Changed
+- **A view of one metric gives its change in the metric's unit** (scorecard panels,
+  estimation, shift and power plots): base median × (ratio − 1), with the ratio CI
+  converted the same way. A unitless positive metric stays in %, a binary one in pp, and
+  views that share one axis across metrics (forest, sweep effect row, heatmap, table) keep %.
+- **The estimation plot (G3) has no effect panel**: both arms, the ±Δ band and the median
+  connector only.
+- **Each evidence graphic is as wide as its content and its text matches GitHub's body
+  text.** One metric is 490 px wide, several metrics or points 648 px (before: 800 px for
+  all); the figure shows at 1.2 px per pt (ticks 13 px, labels 14 px, title 16 px, the big
+  number 20 px, nothing under 12 px). A scorecard puts at most 3 arms panels in a row, in
+  balanced rows.
+
 ## [1.146.0] - 2026-10-23
 
 ### Added
