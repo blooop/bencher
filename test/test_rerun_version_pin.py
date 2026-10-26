@@ -8,10 +8,10 @@ this still-alpha API reshapes archetypes, blueprint types and ``rerun.chunk``.
 Patches inside a minor are fixes to a format bencher already round-trips, so the
 window floats across them.
 
-A window may span more than one minor, but only a minor some environment actually
+A window may span up to three minors, but only a minor some environment actually
 resolves: the newest is what the default environment installs, and every older one
 needs a pixi feature pinning it, so the support claim is exercised rather than
-asserted.  These tests hold the window to contiguous minors, keep both rerun
+asserted.  These tests hold the window to at most three contiguous minors, keep both rerun
 distributions on the same window, require an environment per minor below the top,
 and keep the no-metadata viewer fallback inside the window — so a version bump
 cannot land half-done.
@@ -30,6 +30,7 @@ from packaging.version import Version
 from bencher.utils_rrd import _get_rerun_version
 
 RERUN_PACKAGES = ("rerun-sdk", "rerun-notebook")
+MAX_RERUN_MINORS = 3
 PYPROJECT = Path(__file__).resolve().parents[1] / "pyproject.toml"
 
 
@@ -118,6 +119,14 @@ class TestDeclaredRerunPin(unittest.TestCase):
                     assert not specifier.contains(outside), (
                         f"{name} {specifier} reaches outside its minors to {outside}"
                     )
+
+    def test_window_spans_at_most_three_minors(self):
+        """Each minor in the window costs a CI job, so the window stays small."""
+        minors = declared_minors(self.specifiers["rerun-sdk"])
+        assert len(minors) <= MAX_RERUN_MINORS, (
+            f"the rerun window spans {len(minors)} minors {sorted(minors)}, "
+            f"more than {MAX_RERUN_MINORS}; raise the floor"
+        )
 
     def test_both_rerun_packages_declare_the_same_window(self):
         """``rerun-notebook`` ships the viewer assets for its matching ``rerun-sdk``."""

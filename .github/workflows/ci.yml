@@ -33,12 +33,15 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  # The rerun extra supports more than one rerun minor; the default environment
-  # resolves the newest of them. This job runs the rerun tests against the floor
-  # of that window, so the older minor is supported in fact and not just on paper
+  # The rerun extra supports up to three rerun minors; the default environment
+  # resolves the newest of them. This job runs the rerun tests against each older
+  # minor in that window, so each is supported in fact and not just on paper
   # (bencher calls rerun.chunk, which is where an alpha API moves).
-  ci-rerun-floor:
+  ci-rerun-older:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [rerun-floor, rerun-mid]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -46,14 +49,14 @@ jobs:
         with:
           cache: true
           frozen: true
-          environments: rerun-floor
-      - name: Rerun tests on the oldest supported rerun
+          environments: ${{ matrix.environment }}
+      - name: Rerun tests on an older supported rerun
         run: |
           pixi update
-          pixi run -e rerun-floor test-rerun
+          pixi run -e ${{ matrix.environment }} test-rerun
       - name: Svg tests without seaborn
         run: |
-          pixi run -e rerun-floor pytest test/test_svg_backend.py
+          pixi run -e ${{ matrix.environment }} pytest test/test_svg_backend.py
 
   # Re-run the suite with the collect/render split forced on, so every report
   # build goes through save_result -> load_result -> render. Catches any divergence
