@@ -764,14 +764,16 @@ class _ReadoutScatter:
         axes: Two or more per-sample variable names, in plotting order. The arity is
             checked once, in :meth:`resolve`.
         title: What the set is, or None to label the plot by its axes.
-        maximize: For each axis, whether larger is better, or None when nothing says.
-            Travels with the axes like the title does: it is a fact about the
-            variables the producer named, not about any the caller asked for.
+        maximize: For each axis, whether larger is better, or None on an axis whose
+            direction nothing says; None as a whole when no axis has one. A
+            direction is a fact about one variable, so it is looked up by name and
+            holds for any axes a caller asks for, unlike the title, which names the
+            producer's set.
     """
 
     axes: tuple[str, ...]
     title: str | None = None
-    maximize: tuple[bool, ...] | None = None
+    maximize: tuple[bool | None, ...] | None = None
 
     @property
     def spatial(self) -> bool:
@@ -798,13 +800,14 @@ class _ReadoutScatter:
                 dataset gives a different number of directions than axes.
         """
         title = None
-        directions = None
-        if requested is None:
-            requested = dataset.attrs.get(READOUT_SCATTER_ATTR)
+        stored = dataset.attrs.get(READOUT_SCATTER_ATTR)
+        directions = dataset.attrs.get(READOUT_SCATTER_DIRECTIONS_ATTR)
+        own_request = requested is None
+        if own_request:
+            requested = stored
             if requested is None:
                 return None
             title = dataset.attrs.get(READOUT_SCATTER_TITLE_ATTR)
-            directions = dataset.attrs.get(READOUT_SCATTER_DIRECTIONS_ATTR)
         if isinstance(requested, str):
             # tuple("xy") is ('x', 'y'), which passes the arity check below and then
             # suppresses the dataset's own request -- the failure the empty request
@@ -820,14 +823,45 @@ class _ReadoutScatter:
                 f"each other, got {list(axes)}"
             )
         maximize = None
-        if directions is not None:
-            if len(directions) != len(axes):
-                raise ValueError(
-                    f"{READOUT_SCATTER_DIRECTIONS_ATTR} gives {len(directions)} "
-                    f"directions for {len(axes)} axes {list(axes)}"
+        if directions is not None and stored is not None:
+            if len(directions) != len(stored):
+                if own_request:
+                    raise ValueError(
+                        f"{READOUT_SCATTER_DIRECTIONS_ATTR} gives {len(directions)} "
+                        f"directions for {len(stored)} axes {list(stored)}"
+                    )
+                # The caller's axes are not the ones that are wrong, so they still draw.
+                logger.warning(
+                    "%s gives %d directions for %d axes; drawing without them",
+                    READOUT_SCATTER_DIRECTIONS_ATTR,
+                    len(directions),
+                    len(stored),
                 )
-            maximize = tuple(OptDir(direction) == OptDir.maximize for direction in directions)
+            else:
+                by_name = dict(zip(stored, directions, strict=True))
+                maximize = tuple(_larger_is_better(by_name.get(axis)) for axis in axes)
+                if all(better is None for better in maximize):
+                    maximize = None
         return cls(axes, title, maximize)
+
+
+def _larger_is_better(direction: object) -> bool | None:
+    """Whether *direction* says larger is better, or None when it says nothing.
+
+    ``OptDir.none`` says nothing, and so does a direction that is not an
+    :class:`OptDir` at all: that is one axis drawn without a direction, never a
+    timeline that does not draw.
+    """
+    if direction is None:
+        return None
+    try:
+        direction = OptDir(direction)
+    except ValueError:
+        logger.warning("not an optimisation direction: %r; drawing its axis without one", direction)
+        return None
+    if direction == OptDir.none:
+        return None
+    return direction == OptDir.maximize
 
 
 def _front_entity(dim: str) -> str:
@@ -1144,9 +1178,11 @@ class _ParallelFrame:
     spacing = 50.0
     height = 100.0
 
-    def __init__(self, series: list[np.ndarray], maximize: Sequence[bool] | None) -> None:
+    def __init__(self, series: list[np.ndarray], maximize: Sequence[bool | None] | None) -> None:
         self.ranges = [_padded_range(values) for values in series]
-        self.maximize: tuple[bool, ...] | None = tuple(maximize) if maximize is not None else None
+        self.maximize: tuple[bool | None, ...] | None = (
+            tuple(maximize) if maximize is not None else None
+        )
 
     @property
     def width(self) -> float:
@@ -1159,7 +1195,7 @@ class _ParallelFrame:
         low, high = self.ranges[index]
         unit = (np.asarray(values, dtype=float) - low) / (high - low)
         # Rerun puts +y downward: the better end is the larger y.
-        maximized = self.maximize is not None and self.maximize[index]
+        maximized = self.maximize is not None and self.maximize[index] is True
         return unit * self.height if maximized else (1.0 - unit) * self.height
 
     def project(self, series: list[np.ndarray]) -> np.ndarray:
@@ -1223,7 +1259,7 @@ def _log_parallel_frame(
         list(names)
         if frame.maximize is None
         else [
-            f"{name} ({'max' if better else 'min'})"
+            name if better is None else f"{name} ({'max' if better else 'min'})"
             for name, better in zip(names, frame.maximize, strict=True)
         ]
     )
@@ -1239,7 +1275,8 @@ def _log_parallel_frame(
         static=True,
     )
     if title is not None:
-        if frame.maximize is not None:
+        # An axis with no direction has larger upward, which is not "better".
+        if frame.maximize is not None and None not in frame.maximize:
             title = f"{title} (better is down)"
         staging.log(
             f"{origin}/title",

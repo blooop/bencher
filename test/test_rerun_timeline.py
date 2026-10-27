@@ -1266,6 +1266,46 @@ class TestParallelCoordinates:
         with pytest.raises(ValueError, match="2 directions for 4 axes"):
             res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
 
+    def _stored_directions_path(self, directions, requested=None, title=None):
+        """A timeline whose dataset names its own axes and *directions*."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = list(self._AXES)
+        dataset.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] = directions
+        if title is not None:
+            dataset.attrs[READOUT_SCATTER_TITLE_ATTR] = title
+        return res.to_rerun_timeline_path(
+            dataset, res.bench_cfg.result_vars, readout_scatter=requested
+        )
+
+    def test_axes_a_caller_names_keep_the_datasets_directions(self):
+        """A direction belongs to its variable, whichever axes are drawn."""
+        path = self._stored_directions_path(
+            ["minimize", "minimize", "minimize", "maximize"],
+            requested=("speed", "mass", "cost", "risk"),
+        )
+        labels = self._labels(path, "/front/size/axis_names")
+        assert labels == ["speed (max)", "mass (min)", "cost (min)", "risk (min)"]
+
+    def test_an_unknown_direction_leaves_its_axis_bare_and_still_draws(self):
+        path = self._stored_directions_path(["minimize", "sideways", "minimize", "maximize"])
+        labels = self._labels(path, "/front/size/axis_names")
+        assert labels == ["cost (min)", "risk", "mass (min)", "speed (max)"]
+        assert len(_strips2d(path, "/front/size/all")[0]) == 4
+
+    def test_a_none_direction_is_not_drawn_as_minimised(self):
+        path = self._stored_directions_path(
+            ["minimize", "none", "minimize", "maximize"], title="Pareto front"
+        )
+        labels = self._labels(path, "/front/size/axis_names")
+        assert labels == ["cost (min)", "risk", "mass (min)", "speed (max)"]
+        # risk is drawn larger-up, so "better is down" would be false for it.
+        assert self._labels(path, "/front/size/title") == ["Pareto front"]
+
+    def test_no_known_direction_is_the_same_as_none_given(self):
+        path = self._stored_directions_path(["none", "none", "none", "bogus"])
+        assert self._labels(path, "/front/size/axis_names") == list(self._AXES)
+
     def test_the_cursors_line_is_the_sample_it_is_on(self):
         path = self._path()
         every = _strips2d(path, "/front/size/all")[0]
