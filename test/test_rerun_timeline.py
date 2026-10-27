@@ -1349,6 +1349,11 @@ class TestParallelCoordinates:
         with pytest.raises(ValueError, match="repeats"):
             self._resolve(["a", "a", "b", "c"], ["minimize", "maximize", "minimize", "minimize"])
 
+    @pytest.mark.parametrize("requested", [None, ("d", "c", "b", "a")])
+    def test_directions_given_as_one_string_are_refused(self, requested):
+        with pytest.raises(TypeError, match="one string"):
+            self._resolve(["a", "b", "c", "d"], "mini", requested)
+
     def test_the_cursors_line_is_the_sample_it_is_on(self):
         path = self._path()
         every = _strips2d(path, "/front/size/all")[0]

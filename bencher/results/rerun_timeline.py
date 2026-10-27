@@ -792,8 +792,9 @@ class _ReadoutScatter:
         """*requested* if a caller named the axes, else the dataset's own request.
 
         Raises:
-            TypeError: if *requested* is one string. A string is a sequence of its
-                own characters, so it would otherwise be read as those.
+            TypeError: if *requested* or the dataset's directions are one string. A
+                string is a sequence of its own characters, so it would otherwise be
+                read as those.
             ValueError: if axes were asked for that are fewer than two variables,
                 an empty request included -- that used to be falsy all the way down
                 and so silently suppressed the dataset's request instead -- or the
@@ -815,6 +816,11 @@ class _ReadoutScatter:
             raise TypeError(
                 "a tracking scatter is named by a sequence of variable names, not by "
                 f"one string: {requested!r} would be read as its characters"
+            )
+        if isinstance(directions, str):
+            raise TypeError(
+                f"{READOUT_SCATTER_DIRECTIONS_ATTR} is a sequence with one direction per "
+                f"axis, not one string: {directions!r} would be read as its characters"
             )
         axes = tuple(requested)
         if len(axes) < _MIN_SCATTER_AXES:
