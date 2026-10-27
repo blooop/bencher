@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import math
 import random
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -211,3 +214,27 @@ class TestErrorRates:
     def test_expected_runs_always_failing_is_flaky_bound_over_fail_step(self):
         cfg = SprtCfg(p0=0.001, p1=0.01)
         assert cfg.expected_runs(1.0) == pytest.approx(cfg.flaky_bound / cfg.fail_step)
+
+
+# Loads sprt.py by path with site-packages off (-S), as a caller with only the
+# standard library does: kbench merges CI shards on a bare runner.
+_LOAD_ALONE = """
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("sprt", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+sys.modules["sprt"] = module
+spec.loader.exec_module(module)
+print(module.SprtCfg(p0=0.001, p1=0.01).runs_to_pass(0))
+"""
+
+
+def test_sprt_module_needs_only_the_standard_library():
+    path = Path(bn.__file__).parent / "sprt.py"
+    out = subprocess.run(
+        [sys.executable, "-S", "-c", _LOAD_ALONE, str(path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "249"

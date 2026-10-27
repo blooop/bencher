@@ -31,15 +31,17 @@ Example::
 
     result = bn.sprt(lambda: run_my_test() == 0, bn.SprtCfg(p0=0.001, p1=0.01))
     print(result.verdict, result.runs, result.failure_runs)
+
+This module imports only the standard library, so a caller without bencher's
+dependencies can load the file by path.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import TYPE_CHECKING
-
-from strenum import StrEnum
 
 if TYPE_CHECKING:
     from collections.abc import Callable
