@@ -1034,8 +1034,10 @@ result.failure_runs  # 1-based index of each failure, to spot clustering
 ```
 
 `p0` is an acceptable failure rate, `p1` an unacceptable one, `alpha` the risk of
-calling a good test flaky and `beta` the risk of passing a flaky one. With the values
-above a test with no failures passes after `cfg.runs_to_pass()` = 249 runs, one failure
+calling a good test flaky and `beta` the risk of passing a flaky one. They are Wald's
+targets, not hard limits: the real rates stay at or below `alpha/(1-beta)` and
+`beta/(1-alpha)` (5.6 % and 10.5 % here). To hold a hard limit, pass a slightly smaller
+`alpha` and `beta`. With the values above a test with no failures passes after `cfg.runs_to_pass()` = 249 runs, one failure
 pushes that to `cfg.runs_to_pass(1)` = 505, and a fresh test whose first two failures
 have at most `cfg.flaky_window()` = 189 passes between them is marked flaky. Passes before
 the first failure shrink that window (after 100 passes it is 89). When one failure alone
