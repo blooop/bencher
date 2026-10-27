@@ -39,7 +39,7 @@ dependencies can load the file by path.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -190,15 +190,26 @@ class SprtResult:
         return len(self.failure_runs)
 
 
-@dataclass
+@dataclass(init=False)
 class Sprt:
     """An SPRT fed one run at a time, for callers that own the run loop."""
 
-    cfg: SprtCfg
-    _runs: int = field(default=0, init=False)
-    _llr: float = field(default=0.0, init=False)
-    _failure_runs: list[int] = field(default_factory=list, init=False)
-    _verdict: SprtVerdict | None = field(default=None, init=False)
+    _cfg: SprtCfg
+    _runs: int
+    _llr: float
+    _failure_runs: list[int]
+    _verdict: SprtVerdict | None
+
+    def __init__(self, cfg: SprtCfg) -> None:
+        self._cfg = cfg
+        self._runs = 0
+        self._llr = 0.0
+        self._failure_runs = []
+        self._verdict = None
+
+    @property
+    def cfg(self) -> SprtCfg:
+        return self._cfg
 
     @property
     def runs(self) -> int:
@@ -222,15 +233,15 @@ class Sprt:
             raise RuntimeError(f"SPRT already decided {self._verdict} after {self._runs} runs")
         self._runs += 1
         if passed:
-            self._llr += self.cfg.pass_step
+            self._llr += self._cfg.pass_step
         else:
-            self._llr += self.cfg.fail_step
+            self._llr += self._cfg.fail_step
             self._failure_runs.append(self._runs)
-        if self._llr >= self.cfg.flaky_bound:
+        if self._llr >= self._cfg.flaky_bound:
             self._verdict = SprtVerdict.FLAKY
-        elif self._llr <= self.cfg.pass_bound:
+        elif self._llr <= self._cfg.pass_bound:
             self._verdict = SprtVerdict.PASS
-        elif self._runs >= self.cfg.max_runs:
+        elif self._runs >= self._cfg.max_runs:
             self._verdict = SprtVerdict.INCONCLUSIVE
         return self._verdict
 

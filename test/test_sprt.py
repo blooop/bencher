@@ -128,6 +128,20 @@ class TestCap:
         assert test.verdict is SprtVerdict.PASS
         assert test.runs == 249
 
+    def test_the_cfg_cannot_be_swapped_mid_run(self):
+        test = Sprt(CFG)
+        test.record(False)
+        with pytest.raises(AttributeError):
+            test.cfg = SprtCfg(p0=0.2, p1=0.5, max_runs=3)
+        assert test.cfg is CFG
+        assert test.runs == 1
+        assert test.llr == pytest.approx(CFG.fail_step)
+        assert test.failure_runs == (1,)
+        assert test.verdict is None
+
+    def test_cfg_is_accepted_by_keyword(self):
+        assert Sprt(cfg=CFG).cfg is CFG
+
 
 class TestDriver:
     def test_sprt_calls_run_test_until_a_verdict(self):
