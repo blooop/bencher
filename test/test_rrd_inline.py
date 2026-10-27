@@ -8,24 +8,67 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 from bencher.utils_rrd import (
     _CDN_VIEWER_INLINE_TEMPLATE,
     _CDN_VIEWER_TEMPLATE,
     _RRD_URL_RE,
+    _get_cdn_viewer_html,
+    _viewer_js_list,
+    _viewer_js_urls,
     _wrap_viewer_controls,
     inline_rrd_iframes,
 )
 
 
 class TestCdnViewerSource(unittest.TestCase):
-    """The viewer pages import the web viewer from a CDN that serves its .wasm."""
+    """The viewer pages import the web viewer from a host that serves its .wasm."""
 
-    def test_viewer_pages_import_from_unpkg(self):
+    UNPKG = "https://unpkg.com/@rerun-io/web-viewer@0.40.0/index.js"
+
+    def _page(self, template=_CDN_VIEWER_TEMPLATE) -> str:
+        return template.format(viewer_js=_viewer_js_list("0.40.0"), rrd_base64="")
+
+    def test_viewer_pages_import_from_unpkg_by_default(self):
         """jsDelivr refuses files over 50 MB, and the rerun 0.40.0 .wasm is over that."""
-        for template in (_CDN_VIEWER_TEMPLATE, _CDN_VIEWER_INLINE_TEMPLATE):
-            page = template.format(version="0.40.0", rrd_base64="")
-            assert "https://unpkg.com/@rerun-io/web-viewer@0.40.0/index.js" in page
-            assert "jsdelivr" not in page
+        with mock.patch.dict("os.environ", {}, clear=True):
+            assert _viewer_js_urls("0.40.0") == [self.UNPKG]
+            for template in (_CDN_VIEWER_TEMPLATE, _CDN_VIEWER_INLINE_TEMPLATE):
+                page = self._page(template)
+                assert f'["{self.UNPKG}"]' in page
+                assert "jsdelivr" not in page
+
+    def test_env_var_points_viewer_at_self_hosted_copy(self):
+        """BENCHER_RERUN_VIEWER_URL moves index.js, and with it the .wasm, to one host."""
+        env = {"BENCHER_RERUN_VIEWER_URL": "/_rerun/web-viewer@{version}"}
+        with mock.patch.dict("os.environ", env):
+            page = _get_cdn_viewer_html("0.40.0")
+        assert '["/_rerun/web-viewer@0.40.0/index.js"]' in page
+        assert "unpkg" not in page
+
+    def test_env_var_lists_fallbacks_in_order(self):
+        """A report opened away from the self-hosting server can still fall back to unpkg."""
+        env = {
+            "BENCHER_RERUN_VIEWER_URL": (
+                "/_rerun/web-viewer@{version}/\n https://unpkg.com/@rerun-io/web-viewer@{version}/"
+            )
+        }
+        with mock.patch.dict("os.environ", env):
+            assert _viewer_js_urls("0.40.0") == ["/_rerun/web-viewer@0.40.0/index.js", self.UNPKG]
+
+    def test_env_var_without_version_placeholder_is_rejected(self):
+        """A base URL with no {version} would load one viewer for every recording."""
+        env = {"BENCHER_RERUN_VIEWER_URL": "/_rerun/"}
+        with mock.patch.dict("os.environ", env), pytest.raises(ValueError, match="placeholder"):
+            _viewer_js_urls("0.40.0")
+
+    def test_env_var_that_could_end_the_script_is_rejected(self):
+        """The URLs go into a <script> in the viewer page."""
+        for bad in ('/x"{version}/', "/</script>{version}/"):
+            env = {"BENCHER_RERUN_VIEWER_URL": bad}
+            with mock.patch.dict("os.environ", env), pytest.raises(ValueError, match="quotes"):
+                _viewer_js_urls("0.40.0")
 
 
 class TestWrapViewerControls(unittest.TestCase):
