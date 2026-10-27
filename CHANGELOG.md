@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.150.0] - 2026-10-27
 
 ### Added
 - **`bn.sprt` decides whether a test is flaky with Wald's sequential probability ratio
@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standard-library-only scatter chart against the PASS and FLAKY lines. The result
   lists the run index of each failure, and `SprtCfg.runs_to_pass`, `flaky_window` and
   `expected_runs` give the run counts to budget for. `bencher/example/example_sprt.py`
-  sweeps the true failure rate and plots the run count and the FLAKY rate.
+  sweeps the true failure rate and plots the run count and the FLAKY rate (#1216).
 
 ## [1.149.0] - 2026-10-27
 
