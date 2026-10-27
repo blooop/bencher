@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `<dir>/web-viewer@<version>/`, checks it against the registry's sha512, and rewrites
   its one extensionless `./re_viewer` import so a plain file server can serve it.
 
+## [1.148.2] - 2026-10-27
+
+### Fixed
+- **▲ and ▼ draw again in the evidence infographics on machines with Open Sans.** Open
+  Sans has no triangles, and `font.family` was the generic `"sans-serif"`, which matplotlib
+  expands to its first installed font only, so DejaVu Sans never filled them in and they
+  rendered as an empty box. `font.family` is now the `FONT` list itself (#1213).
+
+### Changed
+- `pixi.lock` pins ty 0.0.91 to match `pyproject.toml`; 0.0.85 failed `pixi run lint` on
+  an unknown rule (#1213).
+
 ## [1.148.1] - 2026-10-27
 
 ### Fixed
