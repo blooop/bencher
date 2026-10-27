@@ -1258,6 +1258,15 @@ class TestParallelCoordinates:
         path = self._directed_path(title="Pareto front")
         assert self._labels(path, "/front/size/title") == ["Pareto front (better is down)"]
 
+    def test_the_title_is_bare_when_no_directions_are_given(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = list(self._AXES)
+        dataset.attrs[READOUT_SCATTER_TITLE_ATTR] = "Pareto front"
+        path = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+        assert self._labels(path, "/front/size/title") == ["Pareto front"]
+        assert self._labels(path, "/front/size/axis_names") == list(self._AXES)
+
     def test_directions_that_do_not_match_the_axes_are_refused(self):
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
         dataset = self._scatter_dataset(res)
