@@ -275,17 +275,23 @@ class TestErrorRates:
     """Monte Carlo check that the decision keeps its alpha/beta promise."""
 
     @pytest.mark.parametrize(
-        ("p_fail", "wrong", "limit"),
-        [(0.001, SprtVerdict.FLAKY, 0.05), (0.01, SprtVerdict.PASS, 0.10)],
+        ("p_fail", "wrong", "bound"),
+        [
+            # Wald's guarantee: P(FLAKY | p0) <= alpha/(1-beta), P(PASS | p1) <= beta/(1-alpha).
+            (0.001, SprtVerdict.FLAKY, CFG.alpha / (1 - CFG.beta)),
+            (0.01, SprtVerdict.PASS, CFG.beta / (1 - CFG.alpha)),
+        ],
     )
-    def test_error_rate_within_nominal(self, p_fail, wrong, limit):
+    def test_error_rate_within_wald_bound(self, p_fail, wrong, bound):
         rng = random.Random(1234)  # noqa: S311 - seeded simulation, not crypto
-        trials = 2000
+        trials = 10_000
         wrong_count = sum(
             sprt(lambda: rng.random() >= p_fail, CFG).verdict is wrong for _ in range(trials)
         )
-        # Wald's bounds are conservative; allow Monte Carlo noise on top.
-        assert wrong_count / trials <= limit + 0.02
+        # Three binomial standard errors at the bound: a rule whose true error rate sits
+        # at the bound passes this almost always, one a point or more above it fails.
+        sigma = math.sqrt(bound * (1 - bound) / trials)
+        assert wrong_count / trials <= bound + 3 * sigma
 
     @pytest.mark.parametrize("p_fail", [0.001, 0.003, 0.01])
     def test_expected_runs_matches_simulation(self, p_fail):
