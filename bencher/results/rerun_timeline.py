@@ -824,19 +824,22 @@ class _ReadoutScatter:
             )
         maximize = None
         if directions is not None and stored is not None:
+            problem = None
             if len(directions) != len(stored):
-                if own_request:
-                    raise ValueError(
-                        f"{READOUT_SCATTER_DIRECTIONS_ATTR} gives {len(directions)} "
-                        f"directions for {len(stored)} axes {list(stored)}"
-                    )
-                # The caller's axes are not the ones that are wrong, so they still draw.
-                logger.warning(
-                    "%s gives %d directions for %d axes; drawing without them",
-                    READOUT_SCATTER_DIRECTIONS_ATTR,
-                    len(directions),
-                    len(stored),
+                problem = (
+                    f"{READOUT_SCATTER_DIRECTIONS_ATTR} gives {len(directions)} "
+                    f"directions for {len(stored)} axes {list(stored)}"
                 )
+            elif len(set(stored)) != len(stored):
+                problem = (
+                    f"{READOUT_SCATTER_ATTR} repeats an axis name in {list(stored)}, "
+                    "so its directions cannot be looked up by name"
+                )
+            if problem is not None:
+                if own_request:
+                    raise ValueError(problem)
+                # The caller's axes are not the ones that are wrong, so they still draw.
+                logger.warning("%s; drawing without directions", problem)
             else:
                 by_name = dict(zip(stored, directions, strict=True))
                 maximize = tuple(_larger_is_better(by_name.get(axis)) for axis in axes)

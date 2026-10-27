@@ -11,6 +11,7 @@ import numpy as np
 import panel as pn
 import pytest
 import rerun as rr
+import xarray as xr
 from PIL import Image
 from rerun.chunk import RrdReader
 
@@ -30,6 +31,7 @@ from bencher.results.rerun_timeline import (
     _ParallelFrame,
     _PlotBox3D,
     _readout_entity,
+    _ReadoutScatter,
     _SequenceIndex,
     default_timeline_dim,
     encode_index,
@@ -1335,6 +1337,17 @@ class TestParallelCoordinates:
     def test_no_known_direction_is_the_same_as_none_given(self):
         path = self._stored_directions_path(["none", "none", "none", "bogus"])
         assert self._labels(path, "/front/size/axis_names") == list(self._AXES)
+
+    @staticmethod
+    def _resolve(axes, directions, requested=None):
+        dataset = xr.Dataset(
+            attrs={READOUT_SCATTER_ATTR: axes, READOUT_SCATTER_DIRECTIONS_ATTR: directions}
+        )
+        return _ReadoutScatter.resolve(dataset, requested)
+
+    def test_repeated_axis_names_do_not_pick_one_direction(self):
+        with pytest.raises(ValueError, match="repeats"):
+            self._resolve(["a", "a", "b", "c"], ["minimize", "maximize", "minimize", "minimize"])
 
     def test_the_cursors_line_is_the_sample_it_is_on(self):
         path = self._path()
