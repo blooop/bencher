@@ -368,13 +368,13 @@ def _render_svg(
         f'<text x="{_SVG_LEFT}" y="48" fill="#4b5563">{escape(params)}</text>',
         '<g clip-path="url(#sprt-plot)">',
         # Regions: FLAKY above the upper line, PASS below the lower one.
-        f'<rect x="{_SVG_LEFT}" y="{_SVG_TOP}" width="{pw}" height="{ph}" fill="#fef2f2"/>',
+        f'<rect x="{_SVG_LEFT}" y="{_SVG_TOP}" width="{pw}" height="{ph}" fill="#fee2e2"/>',
         (
-            f'<polygon fill="#f0fdf4" points="{pt(0, lower(0))} '
+            f'<polygon fill="#d1fae5" points="{pt(0, lower(0))} '
             f'{pt(x_hi, lower(x_hi))} {pt(x_hi, y_lo)} {pt(0, y_lo)}"/>'
         ),
         (
-            f'<polygon class="continue-band" fill="#f3f4f6" points="{pt(0, lower(0))} '
+            f'<polygon class="continue-band" fill="#ffffff" points="{pt(0, lower(0))} '
             f'{pt(x_hi, lower(x_hi))} {pt(x_hi, upper(x_hi))} {pt(0, upper(0))}"/>'
         ),
         '<g stroke="#d1d5db" stroke-width="1">',
@@ -476,7 +476,7 @@ def _render_svg(
         ('<line x1="-8" y1="-4" x2="8" y2="-4" stroke="#b91c1c" stroke-width="2"/>', "FLAKY line"),
         ('<line x1="-8" y1="-4" x2="8" y2="-4" stroke="#15803d" stroke-width="2"/>', "PASS line"),
         (
-            '<rect x="-8" y="-10" width="16" height="12" fill="#f3f4f6" stroke="#d1d5db"/>',
+            '<rect x="-8" y="-10" width="16" height="12" fill="#ffffff" stroke="#6b7280"/>',
             "continue band",
         ),
     ]
