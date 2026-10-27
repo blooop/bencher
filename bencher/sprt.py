@@ -48,8 +48,8 @@ from xml.sax.saxutils import escape
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-# Below this |drift| Wald's ASN formula divides by ~0, so use its zero-drift limit.
-_ZERO_DRIFT = 1e-12
+# Below this |x|, (expm1(x) - x) / x**2 loses digits, so use its Taylor series.
+_SERIES_LIMIT = 1e-2
 
 
 class SprtVerdict(StrEnum):
@@ -145,10 +145,15 @@ class SprtCfg:
             return b / s
         if p_fail == 1.0:
             return a / f
+        h = _oc_exponent(p_fail, f, s)
+        if abs(h) * max(a, -b, f, -s) <= 1:
+            # Near zero drift Wald's formula is 0/0. Written with _phi and _psi it is a
+            # ratio of sums of positive terms, which keeps full precision down to h = 0.
+            mass = p_fail * f * f * _psi(h * f) + (1 - p_fail) * s * s * _psi(h * s)
+            spread = a * _psi(h * a) - b * _psi(h * b)
+            width = a * _phi(h * a) - b * _phi(h * b)
+            return -a * b * spread / (width * mass)
         drift = p_fail * f + (1 - p_fail) * s
-        if abs(drift) < _ZERO_DRIFT:
-            return -a * b / (p_fail * f * f + (1 - p_fail) * s * s)
-        h = _oc_exponent(p_fail, f, s, drift)
         # P(PASS) = (exp(h*a) - 1) / (exp(h*a) - exp(h*b)), divided through by the
         # larger exponential so it cannot overflow.
         if h > 0:
@@ -158,26 +163,49 @@ class SprtCfg:
         return (accept * b + (1 - accept) * a) / drift
 
 
-def _oc_exponent(p_fail: float, f: float, s: float, drift: float) -> float:
-    """The non-zero ``h`` with ``E[exp(h*z)] = 1`` for one run's LLR step ``z``."""
-    log_fail, log_pass = math.log(p_fail), math.log1p(-p_fail)
+def _phi(x: float) -> float:
+    """``expm1(x) / x``, which is 1 at 0."""
+    return math.expm1(x) / x if x else 1.0
 
-    def g(h: float) -> float:
-        # log(E[exp(h*z)]), which has the sign of E[exp(h*z)] - 1 and cannot overflow.
-        x, y = log_fail + h * f, log_pass + h * s
-        top = max(x, y)
-        return top + math.log(math.exp(x - top) + math.exp(y - top))
 
-    # g is convex with g(0) = 0 and g'(0) = drift, so the other root lies on the side
-    # opposite the drift. Bracket it by doubling, then bisect.
-    sign = 1.0 if drift < 0 else -1.0
+def _psi(x: float) -> float:
+    """``(expm1(x) - x) / x**2``, which is 1/2 at 0."""
+    if abs(x) < _SERIES_LIMIT:
+        return 1 / 2 + x * (1 / 6 + x * (1 / 24 + x * (1 / 120 + x * (1 / 720 + x / 5040))))
+    return (math.expm1(x) - x) / (x * x)
+
+
+def _log_phi(x: float) -> float:
+    """``log(expm1(x) / x)`` without overflow."""
+    if x > 0:
+        return x + math.log(-math.expm1(-x) / x)
+    return math.log(_phi(x))
+
+
+def _oc_exponent(p_fail: float, f: float, s: float) -> float:
+    """The ``h`` other than 0 with ``E[exp(h*z)] = 1`` for one run's LLR step ``z``.
+
+    It is 0 when the drift ``E[z]`` is exactly 0, where the two roots meet.
+    """
+    log_fail = math.log(p_fail) + math.log(f)
+    log_pass = math.log1p(-p_fail) + math.log(-s)
+
+    def q(h: float) -> float:
+        # (E[exp(h*z)] - 1) / h = p*f*phi(h*f) + (1-p)*s*phi(h*s) is increasing in h
+        # and equals the drift at 0. This has its sign, in logs so it cannot overflow.
+        return log_fail + _log_phi(h * f) - log_pass - _log_phi(h * s)
+
+    if q(0.0) == 0:
+        return 0.0
+    # The root lies on the side opposite the drift. Bracket it by doubling, then bisect.
+    sign = 1.0 if q(0.0) < 0 else -1.0
     far = 1.0
-    while g(sign * far) < 0:
+    while sign * q(sign * far) < 0:
         far *= 2
     near = 0.0
     for _ in range(200):
         mid = (near + far) / 2
-        if g(sign * mid) < 0:
+        if sign * q(sign * mid) < 0:
             near = mid
         else:
             far = mid

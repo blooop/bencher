@@ -201,6 +201,14 @@ class TestZeroDrift:
         assert at_zero == pytest.approx(CFG.expected_runs(p_zero + 1e-4), rel=0.01)
         assert at_zero == pytest.approx(CFG.expected_runs(p_zero - 1e-4), rel=0.01)
 
+    @pytest.mark.parametrize("offset", [-1e-9, -1e-11, -1e-13, 1e-13, 1e-11, 1e-9])
+    def test_expected_runs_keeps_its_precision_near_zero_drift(self, offset):
+        s, f = CFG.pass_step, CFG.fail_step
+        p_zero = -s / (f - s)
+        assert CFG.expected_runs(p_zero + offset) == pytest.approx(
+            CFG.expected_runs(p_zero), rel=1e-6
+        )
+
 
 class TestExpectedRunsRange:
     @pytest.mark.parametrize("p_fail", [1e-300, 1e-250, 1e-20, 0.5, 0.95, 1 - 1e-6, 1 - 1e-12])
