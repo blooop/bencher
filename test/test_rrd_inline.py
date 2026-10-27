@@ -9,10 +9,23 @@ from pathlib import Path
 from unittest import mock
 
 from bencher.utils_rrd import (
+    _CDN_VIEWER_INLINE_TEMPLATE,
+    _CDN_VIEWER_TEMPLATE,
     _RRD_URL_RE,
     _wrap_viewer_controls,
     inline_rrd_iframes,
 )
+
+
+class TestCdnViewerSource(unittest.TestCase):
+    """The viewer pages import the web viewer from a CDN that serves its .wasm."""
+
+    def test_viewer_pages_import_from_unpkg(self):
+        """jsDelivr refuses files over 50 MB, and the rerun 0.40.0 .wasm is over that."""
+        for template in (_CDN_VIEWER_TEMPLATE, _CDN_VIEWER_INLINE_TEMPLATE):
+            page = template.format(version="0.40.0", rrd_base64="")
+            assert "https://unpkg.com/@rerun-io/web-viewer@0.40.0/index.js" in page
+            assert "jsdelivr" not in page
 
 
 class TestWrapViewerControls(unittest.TestCase):

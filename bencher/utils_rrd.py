@@ -144,6 +144,10 @@ def rrd_file_to_pane(  # pragma: no cover
 
 
 # --- CDN viewer support ---
+#
+# The viewer is loaded from unpkg, not jsDelivr: the viewer fetches its .wasm from
+# the same base URL, and jsDelivr refuses any file over 50 MB with a 403. The
+# rerun 0.40.0 .wasm is over that limit, so a jsDelivr viewer cannot start.
 
 _CDN_VIEWER_TEMPLATE = """\
 <!DOCTYPE html>
@@ -158,7 +162,7 @@ try {{
   const url = p.get("url");
   if (!url) throw new Error("Missing ?url= parameter");
   const {{WebViewer}} = await import(
-    "https://cdn.jsdelivr.net/npm/@rerun-io/web-viewer@{version}/+esm"
+    "https://unpkg.com/@rerun-io/web-viewer@{version}/index.js"
   );
   const v = new WebViewer();
   await v.start(new URL(url, location.href).href,
@@ -183,7 +187,7 @@ try {{
   const b64 = document.getElementById("rrd-data").textContent.trim();
   const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
   const {{WebViewer}} = await import(
-    "https://cdn.jsdelivr.net/npm/@rerun-io/web-viewer@{version}/+esm"
+    "https://unpkg.com/@rerun-io/web-viewer@{version}/index.js"
   );
   const v = new WebViewer();
   await v.start(null, document.getElementById("c"),
