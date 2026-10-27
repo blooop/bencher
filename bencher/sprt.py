@@ -19,8 +19,10 @@ on each failure. The test is :attr:`SprtVerdict.FLAKY` once the LLR reaches
 ``ln(beta/(1-alpha))``. These are Wald's boundaries: they ignore the overshoot past a
 boundary, so ``alpha`` and ``beta`` are targets, not hard limits. Wald proves the real
 rates stay at or below ``alpha/(1-beta)`` and ``beta/(1-alpha)`` (5.6 % and 10.5 % for
-the values below), and their sum stays at or below ``alpha + beta``. With ``p0=0.1%, p1=1%, alpha=5%, beta=10%`` a test with no
-failures passes after 249 runs, one failure pushes that out to about 505, and a fresh
+the values below), and their sum stays at or below ``alpha + beta``.
+
+With ``p0=0.1%, p1=1%, alpha=5%, beta=10%`` a test with no failures passes after
+249 runs, one failure pushes that out to about 505, and a fresh
 test whose first two failures have at most 189 passes between them is rejected.
 Passes before the first failure shrink that window: after 100 passes it is 89.
 
