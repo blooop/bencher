@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.148.1] - 2026-10-27
+
+### Fixed
+- **The embedded rerun viewer loads again on rerun 0.40.** Viewer pages import
+  `@rerun-io/web-viewer` from unpkg instead of jsDelivr. The viewer fetches its `.wasm`
+  from the same base URL, and jsDelivr refuses files over 50 MB; the 0.40.0 `.wasm` is
+  54 MB, so every viewer failed with `Failed to fetch viewer Wasm: 403` (#1211).
+
 ## [1.148.0] - 2026-10-26
 
 ### Changed
