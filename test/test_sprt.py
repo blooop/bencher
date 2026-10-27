@@ -141,3 +141,11 @@ class TestErrorRates:
         )
         # Wald's ASN ignores overshoot past the boundary, so allow a loose margin.
         assert CFG.expected_runs(p_fail) == pytest.approx(mean_runs, rel=0.25)
+
+    def test_expected_runs_never_failing_is_pass_bound_over_pass_step(self):
+        cfg = SprtCfg(p0=0.001, p1=0.01)
+        assert cfg.expected_runs(0.0) == pytest.approx(cfg.pass_bound / cfg.pass_step)
+
+    def test_expected_runs_always_failing_is_flaky_bound_over_fail_step(self):
+        cfg = SprtCfg(p0=0.001, p1=0.01)
+        assert cfg.expected_runs(1.0) == pytest.approx(cfg.flaky_bound / cfg.fail_step)

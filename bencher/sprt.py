@@ -136,6 +136,10 @@ class SprtCfg:
             raise ValueError(f"need 0 <= p_fail <= 1, got {p_fail!r}")
         a, b = self.flaky_bound, self.pass_bound
         f, s = self.fail_step, self.pass_step
+        if p_fail == 0.0:
+            return b / s
+        if p_fail == 1.0:
+            return a / f
         drift = p_fail * f + (1 - p_fail) * s
         if abs(drift) < _ZERO_DRIFT:
             return -a * b / (p_fail * f * f + (1 - p_fail) * s * s)
