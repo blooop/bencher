@@ -20,6 +20,7 @@ from bencher.results.bench_result_base import ReduceType
 from bencher.results.rerun_timeline import (
     READOUT_SCATTER_ATTR,
     READOUT_SCATTER_DIRECTIONS_ATTR,
+    READOUT_SCATTER_TITLE_ATTR,
     TimelineIndex,
     _coord_label,
     _DurationIndex,
@@ -1215,6 +1216,47 @@ class TestParallelCoordinates:
             largest_line_y = strips[largest_sample][index][1]
             assert (largest_tick_y > half) == larger_is_lower
             assert (largest_line_y > half) == larger_is_lower
+
+    @staticmethod
+    def _labels(path: str, entity: str) -> list[str]:
+        """The Points2D labels logged at *entity*, in log order."""
+        reader = RrdReader(str(path))
+        out: list[str] = []
+        for chunk in reader.stream(store=reader.recordings()[0]):
+            if str(chunk.entity_path) != entity:
+                continue
+            batch = chunk.to_record_batch()
+            for i, field in enumerate(batch.schema):
+                if field.name == "Points2D:labels":
+                    for row in batch.column(i).to_pylist():
+                        out.extend(row or [])
+        return out
+
+    def _directed_path(self, title=None):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = list(self._AXES)
+        dataset.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] = [
+            "minimize",
+            "minimize",
+            "minimize",
+            "maximize",
+        ]
+        if title is not None:
+            dataset.attrs[READOUT_SCATTER_TITLE_ATTR] = title
+        return res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+
+    def test_axis_names_say_which_way_is_better_when_directions_are_known(self):
+        labels = self._labels(self._directed_path(), "/front/size/axis_names")
+        assert labels == ["cost (min)", "risk (min)", "mass (min)", "speed (max)"]
+
+    def test_axis_names_are_bare_when_no_direction_is_known(self):
+        labels = self._labels(self._path(), "/front/size/axis_names")
+        assert labels == list(self._AXES)
+
+    def test_the_title_says_better_is_down_when_directions_are_known(self):
+        path = self._directed_path(title="Pareto front")
+        assert self._labels(path, "/front/size/title") == ["Pareto front (better is down)"]
 
     def test_directions_that_do_not_match_the_axes_are_refused(self):
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
