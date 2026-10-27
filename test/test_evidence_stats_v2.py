@@ -420,6 +420,23 @@ def test_every_graphic_renders(groups, theme, tmp_path):
         fig.savefig(tmp_path / f"g{i}.png", dpi=40)
 
 
+def test_glyphs_fall_back_past_the_first_font(groups, monkeypatch):
+    """A first font with no ▲ ▼ (Open Sans has none) hands them to DejaVu Sans, not a tofu box.
+
+    The SVG is saved inside the rc context, as :func:`ig.save_both` does.
+    """
+    import io
+    import warnings
+
+    import matplotlib as mpl
+
+    monkeypatch.setattr(ig, "FONT", ("cmr10", "DejaVu Sans"))
+    with warnings.catch_warnings(), mpl.rc_context(ig._rc()):
+        warnings.filterwarnings("error", message=".*missing from font")
+        for fig in _all_figures(groups, ig.LIGHT):
+            fig.savefig(io.StringIO(), format="svg")
+
+
 def _all_figures(groups, theme):
     cont = groups["planning_time"].cells[0]
     binary = groups["task_success"].cells[0]
