@@ -1155,6 +1155,49 @@ class TestParallelCoordinates:
         assert speed_y.index(max(speed_y)) == 3
         assert speed_y.index(min(speed_y)) == 0
 
+    def _ticks(self, path: str, index: int) -> list[tuple[float, float]]:
+        """``(value, y)`` per tick label logged on axis *index*."""
+        reader = RrdReader(str(path))
+        ys: list[float] = []
+        labels: list[str] = []
+        for chunk in reader.stream(store=reader.recordings()[0]):
+            if str(chunk.entity_path) != f"/front/size/ticks/{index}":
+                continue
+            batch = chunk.to_record_batch()
+            for i, field in enumerate(batch.schema):
+                column = batch.column(i).to_pylist()
+                if field.name.startswith("Points2D") and "positions" in field.name:
+                    ys.extend(float(_xy(point)[1]) for row in column for point in row)
+                elif field.name == "Points2D:labels":
+                    labels.extend(label for row in column for label in row)
+        assert ys
+        assert len(ys) == len(labels)
+        return [(float(label), y) for label, y in zip(labels, ys, strict=True)]
+
+    def test_tick_labels_are_turned_with_the_lines_on_their_axis(self):
+        """A label on the wrong end would read the best sample as the worst."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = list(self._AXES)
+        dataset.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] = [
+            "minimize",
+            "minimize",
+            "minimize",
+            "maximize",
+        ]
+        path = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+        strips = _strips2d(path, "/front/size/all")[0]
+        half = _ParallelFrame.height / 2
+        # speed (axis 3, maximised) is 1, 5, 2, 8; cost (axis 0, minimised) is 4, 3, 2, 1.
+        for index, largest_sample, larger_is_lower in ((3, 3, True), (0, 0, False)):
+            ticks = sorted(self._ticks(path, index))
+            tick_ys = [y for _, y in ticks]
+            assert tick_ys == sorted(tick_ys, reverse=not larger_is_lower)
+            largest_tick_y = ticks[-1][1]
+            largest_line_y = strips[largest_sample][index][1]
+            assert (largest_tick_y > half) == larger_is_lower
+            assert (largest_line_y > half) == larger_is_lower
+
     def test_directions_that_do_not_match_the_axes_are_refused(self):
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
         dataset = self._scatter_dataset(res)
