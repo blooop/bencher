@@ -797,8 +797,10 @@ class _ReadoutScatter:
                 read as those.
             ValueError: if axes were asked for that are fewer than two variables,
                 an empty request included -- that used to be falsy all the way down
-                and so silently suppressed the dataset's request instead -- or the
-                dataset gives a different number of directions than axes.
+                and so silently suppressed the dataset's request instead -- or, when
+                no axes were asked for, the dataset gives a different number of
+                directions than axes or repeats an axis name. Under a caller's axes
+                those only log a warning and draw without directions.
         """
         title = None
         stored = dataset.attrs.get(READOUT_SCATTER_ATTR)
