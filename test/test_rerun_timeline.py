@@ -1349,6 +1349,23 @@ class TestParallelCoordinates:
         with pytest.raises(ValueError, match="repeats"):
             self._resolve(["a", "a", "b", "c"], ["minimize", "maximize", "minimize", "minimize"])
 
+    def test_an_unknown_direction_is_reported_and_leaves_only_its_axis_bare(self, caplog):
+        with caplog.at_level("WARNING", logger="bencher.results.rerun_timeline"):
+            scatter = self._resolve(
+                ["a", "b", "c", "d"], ["minimize", "bogus", "minimize", "maximize"]
+            )
+        assert "not an optimisation direction: 'bogus'" in caplog.text
+        assert scatter.maximize == (False, None, False, True)
+
+    def test_a_direction_count_mismatch_under_a_callers_axes_is_reported(self, caplog):
+        with caplog.at_level("WARNING", logger="bencher.results.rerun_timeline"):
+            path = self._stored_directions_path(
+                ["minimize", "maximize"], requested=("speed", "mass", "cost", "risk")
+            )
+        assert "2 directions for 4 axes" in caplog.text
+        assert self._labels(path, "/front/size/axis_names") == ["speed", "mass", "cost", "risk"]
+        assert len(_strips2d(path, "/front/size/all")[0]) == 4
+
     @pytest.mark.parametrize("requested", [None, ("d", "c", "b", "a")])
     def test_directions_given_as_one_string_are_refused(self, requested):
         with pytest.raises(TypeError, match="one string"):
