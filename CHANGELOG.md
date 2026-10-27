@@ -29,6 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New gallery example `example_optimize_pareto_scrub_nd`: a quadcopter trading hover
   time, thrust-to-weight, mass, span and noise, with the five-objective front drawn as
   parallel coordinates and the cursor's design shown as a 3-D model.
+- **`bn.sprt` decides whether a test is flaky with Wald's sequential probability ratio
+  test.** Give it a pass/fail callable and a `bn.SprtCfg(p0, p1, alpha, beta, max_runs)`;
+  it runs until the evidence says `PASS` or `FLAKY` (or `INCONCLUSIVE` at the cap) and
+  keeps the error rates within Wald's bounds `alpha/(1-beta)` and `beta/(1-alpha)`,
+  unlike re-checking a Clopper-Pearson interval after every run. `bn.Sprt` takes one run
+  at a time for callers that own the loop, and `Sprt.to_svg()` draws the walk as a
+  standard-library-only scatter chart against the PASS and FLAKY lines. The result
+  lists the run index of each failure, and `SprtCfg.runs_to_pass`, `flaky_window` and
+  `expected_runs` give the run counts to budget for. `bencher/example/example_sprt.py`
+  sweeps the true failure rate and plots the run count and the FLAKY rate.
 
 ## [1.149.0] - 2026-10-27
 

@@ -50,6 +50,7 @@ Run any of them with `pixi run python bencher/example/<file>.py`.
 |---|---|
 | [`example_scorecard.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_scorecard.py) | The benchmark health scorecard. Fabricates benchmark summaries with hand-shaped over-time distributions rather than running real sweeps, so every rendering path (sparklines, verdict colours, std bands, category grouping) and every `ScorecardConfig` option can be evaluated. See [Scorecard](scorecard.md). |
 | [`example_evidence.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_evidence.py) | Before/after evidence for a pull request: two results of a metric with a declared claim (`ResultFloat(claim="< 0.7")`), written as the text-only Markdown block and the optional PNGs that `bencher compare --markdown --png` produces. |
+| [`example_sprt.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_sprt.py) | `bn.sprt` on a simulated test, swept over its true failure rate: how many runs the SPRT needs to decide, and how often it says FLAKY. |
 | [`example_self_benchmark.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_self_benchmark.py) | Bencher benchmarking itself: sweeps problem size against a near-zero-cost worker and measures the framework's own per-phase timing, so overhead scaling is visible. `example_self_benchmark_over_time` accumulates that across commits. |
 
 ## Runners and aggregate entry points

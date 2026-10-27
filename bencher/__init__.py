@@ -138,6 +138,13 @@ from .scorecard import (
     generate_scorecard as generate_scorecard,
 )
 from .sparkline import sparkline_svg as sparkline_svg
+from .sprt import (
+    Sprt as Sprt,
+    SprtCfg as SprtCfg,
+    SprtResult as SprtResult,
+    SprtVerdict as SprtVerdict,
+    sprt as sprt,
+)
 from .sweep_spec import SweepSpec as SweepSpec, diff_specs as diff_specs
 from .utils import (
     gen_image_path as gen_image_path,
