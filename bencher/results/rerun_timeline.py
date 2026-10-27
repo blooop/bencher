@@ -1146,7 +1146,7 @@ class _ParallelFrame:
 
     def __init__(self, series: list[np.ndarray], maximize: Sequence[bool] | None) -> None:
         self.ranges = [_padded_range(values) for values in series]
-        self.maximize = tuple(maximize) if maximize is not None else (False,) * len(series)
+        self.maximize: tuple[bool, ...] | None = tuple(maximize) if maximize is not None else None
 
     @property
     def width(self) -> float:
@@ -1159,7 +1159,8 @@ class _ParallelFrame:
         low, high = self.ranges[index]
         unit = (np.asarray(values, dtype=float) - low) / (high - low)
         # Rerun puts +y downward: the better end is the larger y.
-        return unit * self.height if self.maximize[index] else (1.0 - unit) * self.height
+        maximized = self.maximize is not None and self.maximize[index]
+        return unit * self.height if maximized else (1.0 - unit) * self.height
 
     def project(self, series: list[np.ndarray]) -> np.ndarray:
         """``(samples, axes, 2)``: each sample's polyline across the axes."""
@@ -1186,7 +1187,6 @@ def _log_parallel_frame(
     frame: _ParallelFrame,
     names: Sequence[str],
     title: str | None,
-    directions_known: bool,
 ) -> None:
     """Draw the axes, their tick labels, their names and the title for *frame*, static.
 
@@ -1219,10 +1219,14 @@ def _log_parallel_frame(
             ),
             static=True,
         )
-    labels = [
-        f"{name} ({'max' if better else 'min'})" if directions_known else name
-        for name, better in zip(names, frame.maximize, strict=True)
-    ]
+    labels = (
+        list(names)
+        if frame.maximize is None
+        else [
+            f"{name} ({'max' if better else 'min'})"
+            for name, better in zip(names, frame.maximize, strict=True)
+        ]
+    )
     staging.log(
         f"{origin}/axis_names",
         rr.Points2D(
@@ -1235,7 +1239,7 @@ def _log_parallel_frame(
         static=True,
     )
     if title is not None:
-        if directions_known:
+        if frame.maximize is not None:
             title = f"{title} (better is down)"
         staging.log(
             f"{origin}/title",
@@ -1829,9 +1833,7 @@ class RerunTimelineResult(BenchResultBase):
         """
         names = list(scatter.axes)
         frame = _ParallelFrame([values[placed] for values in series], scatter.maximize)
-        _log_parallel_frame(
-            rr, staging, origin, frame, names, scatter.title, scatter.maximize is not None
-        )
+        _log_parallel_frame(rr, staging, origin, frame, names, scatter.title)
         lines = frame.project(series)
         staging.log(
             f"{origin}/all",
