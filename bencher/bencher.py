@@ -40,7 +40,11 @@ from bencher.regression import RegressionError, detect_regressions
 from bencher.result_collector import ResultCollector
 from bencher.results.bench_result import BenchResult
 from bencher.results.optimize_result import Aggregation, OptimizeResult
-from bencher.results.rerun_timeline import READOUT_SCATTER_ATTR, READOUT_SCATTER_TITLE_ATTR
+from bencher.results.rerun_timeline import (
+    READOUT_SCATTER_ATTR,
+    READOUT_SCATTER_DIRECTIONS_ATTR,
+    READOUT_SCATTER_TITLE_ATTR,
+)
 from bencher.sample_order import SampleOrder
 from bencher.sweep_executor import SweepExecutor, validate_declared_vars, worker_kwargs_wrapper
 from bencher.sweep_timings import SweepTimings, phase_timer
@@ -1868,14 +1872,18 @@ class Bench(BenchPlotServer):
                 units = getattr(by_name.get(target), "units", None)
                 if units:
                     res.ds.coords[scored[target]].attrs["units"] = units
-        # Two or three objectives are a picture: the front in the space it was ranked
+        # Two or more objectives are a picture: the front in the space it was ranked
         # in, with the cursor's own design marked on it, which is what says where along
-        # the trade a tick sits. Two are drawn on a flat frame and three go in a rerun
-        # 3-D view the reader can orbit. One objective has no trade to show, and past
-        # three there is no space to put the front in, so neither asks for it.
-        if len(result.target_names) in (2, 3):
+        # the trade a tick sits. Two are drawn on a flat frame, three go in a rerun 3-D
+        # view the reader can orbit, and past three there is no space to put the front
+        # in, so it is drawn as parallel coordinates. One objective has no trade to
+        # show, so it does not ask for one.
+        if len(result.target_names) >= 2:
             res.ds.attrs[READOUT_SCATTER_ATTR] = [scored[target] for target in result.target_names]
             res.ds.attrs[READOUT_SCATTER_TITLE_ATTR] = "Pareto front"
+            res.ds.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] = [
+                str(direction) for direction in result.target_directions
+            ]
         # The coordinates went on after the dataset was set up, so its derived
         # views (plot counts, the to_dataset cache) are rebuilt to see them.
         res.post_setup()

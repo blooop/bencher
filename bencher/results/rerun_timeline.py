@@ -69,6 +69,7 @@ from bencher.utils import callable_name
 from bencher.variables.inputs import with_subsampling_divisions
 from bencher.variables.results import (
     PANEL_TYPES,
+    OptDir,
     ResultImage,
     ResultRerun,
     ResultString,
@@ -103,13 +104,21 @@ _DROPPED_TIMELINES = frozenset({"log_time"})
 # "0.5 rad" or "a/b" cannot inject a path separator or need escaping.
 _UNSAFE_ENTITY_CHARS = re.compile(r"[^0-9A-Za-z_.-]+")
 
-#: Dataset attribute naming two or three per-sample variables to draw as a tracking
+#: Dataset attribute naming two or more per-sample variables to draw as a tracking
 #: scatter beneath the timeline -- every sample as a point, the cursor's own picked
-#: out. Two are drawn on a flat frame, three in a rerun 3-D view. Set by the producer
-#: of the sweep (``Bench.plot_pareto_front`` stamps the study's objectives), because
-#: which values are worth plotting against each other is a fact about the sweep and
-#: not something a renderer can infer from dtypes.
+#: out. Two are drawn on a flat frame, three in a rerun 3-D view, and four or more as
+#: parallel coordinates. Set by the producer of the sweep (``Bench.plot_pareto_front``
+#: stamps the study's objectives), because which values are worth plotting against
+#: each other is a fact about the sweep and not something a renderer can infer from
+#: dtypes.
 READOUT_SCATTER_ATTR = "bencher_readout_scatter"
+
+#: Dataset attribute giving each :data:`READOUT_SCATTER_ATTR` axis its optimisation
+#: direction, as :class:`~bencher.variables.results.OptDir` values in the same order.
+#: Parallel coordinates use it to put the better end of every axis at the bottom, so
+#: lines that cross between two axes are objectives that trade against each other.
+#: Optional: without it every axis runs larger values upward.
+READOUT_SCATTER_DIRECTIONS_ATTR = "bencher_readout_scatter_directions"
 
 #: Dataset attribute naming the tracking scatter's plot, e.g. "Pareto front". Only
 #: the producer of a sweep knows what the set of samples *is*, and that is what a
@@ -244,7 +253,8 @@ _IndexEncoding = _DurationIndex | _SequenceIndex
 # by 1e9 -- roughly +/- 9.2e9 in parameter units.
 _INT64_MIN, _INT64_MAX = -(2**63), 2**63 - 1
 
-# A read-out scatter of this many axes goes in rerun's 3-D view; two get a drawn frame.
+# A read-out scatter of this many axes goes in rerun's 3-D view; two get a drawn frame,
+# and more than this are drawn as parallel coordinates.
 _SPATIAL_AXES = 3
 
 
@@ -737,7 +747,7 @@ def _readout_entity(dim: str) -> str:
 
 @dataclass(frozen=True)
 class _ReadoutScatter:
-    """A request to plot two or three of a sweep's per-sample values against each other.
+    """A request to plot two or more of a sweep's per-sample values against each other.
 
     The axes and their title travel together. A title says what the *set* is, so it
     names the axes somebody asked to see and not whichever the renderer ended up
@@ -745,22 +755,31 @@ class _ReadoutScatter:
     *inputs* "Pareto front".
 
     Two axes are drawn on a flat frame this module builds itself, three in a native
-    rerun 3-D view -- see :meth:`RerunTimelineResult._log_front_scatter`.
+    rerun 3-D view, and four or more as parallel coordinates on a drawn frame -- see
+    :meth:`RerunTimelineResult._log_front_scatter`.
 
     Attributes:
-        axes: Two or three per-sample variable names, in plotting order. The arity
-            is checked once, in :meth:`resolve`, so nothing downstream carries a
-            fourth meaning.
+        axes: Two or more per-sample variable names, in plotting order. The arity is
+            checked once, in :meth:`resolve`.
         title: What the set is, or None to label the plot by its axes.
+        maximize: For each axis, whether larger is better, or None when nothing says.
+            Travels with the axes like the title does: it is a fact about the
+            variables the producer named, not about any the caller asked for.
     """
 
     axes: tuple[str, ...]
     title: str | None = None
+    maximize: tuple[bool, ...] | None = None
 
     @property
     def spatial(self) -> bool:
         """Whether this asks for the 3-D view rather than the drawn frame."""
         return len(self.axes) == _SPATIAL_AXES
+
+    @property
+    def parallel(self) -> bool:
+        """Whether this asks for parallel coordinates: too many axes for any space."""
+        return len(self.axes) > _SPATIAL_AXES
 
     @classmethod
     def resolve(
@@ -771,16 +790,19 @@ class _ReadoutScatter:
         Raises:
             TypeError: if *requested* is one string. A string is a sequence of its
                 own characters, so it would otherwise be read as those.
-            ValueError: if axes were asked for that are not two or three variables.
-                An empty request included -- that used to be falsy all the way down
-                and so silently suppressed the dataset's request instead.
+            ValueError: if axes were asked for that are fewer than two variables,
+                an empty request included -- that used to be falsy all the way down
+                and so silently suppressed the dataset's request instead -- or the
+                dataset gives a different number of directions than axes.
         """
         title = None
+        directions = None
         if requested is None:
             requested = dataset.attrs.get(READOUT_SCATTER_ATTR)
             if requested is None:
                 return None
             title = dataset.attrs.get(READOUT_SCATTER_TITLE_ATTR)
+            directions = dataset.attrs.get(READOUT_SCATTER_DIRECTIONS_ATTR)
         if isinstance(requested, str):
             # tuple("xy") is ('x', 'y'), which passes the arity check below and then
             # suppresses the dataset's own request -- the failure the empty request
@@ -790,12 +812,20 @@ class _ReadoutScatter:
                 f"one string: {requested!r} would be read as its characters"
             )
         axes = tuple(requested)
-        if len(axes) not in (2, 3):
+        if len(axes) < 2:
             raise ValueError(
-                "a tracking scatter needs two or three variables to plot against "
+                "a tracking scatter needs at least two variables to plot against "
                 f"each other, got {list(axes)}"
             )
-        return cls(axes, title)
+        maximize = None
+        if directions is not None:
+            if len(directions) != len(axes):
+                raise ValueError(
+                    f"{READOUT_SCATTER_DIRECTIONS_ATTR} gives {len(directions)} "
+                    f"directions for {len(axes)} axes {list(axes)}"
+                )
+            maximize = tuple(OptDir(direction) == OptDir.maximize for direction in directions)
+        return cls(axes, title, maximize)
 
 
 def _front_entity(dim: str) -> str:
@@ -844,7 +874,8 @@ def _nice_ticks(low: float, high: float, target: int = 4) -> list[float]:
     ticks = np.arange(first, high + step / 2, step)
     # Round off the arithmetic so a tick is 0.3, not 0.30000000000000004.
     decimals = max(0, -int(np.floor(np.log10(step))))
-    rounded = [float(round(t, decimals)) for t in ticks]
+    # + 0.0 turns the -0.0 that rounding a tiny negative gives into 0.0.
+    rounded = [float(round(t, decimals)) + 0.0 for t in ticks]
     return [t for t in rounded if low - step * 1e-9 <= t <= high + step * 1e-9]
 
 
@@ -1089,6 +1120,134 @@ def _log_plot_box_3d(
         )
 
 
+class _ParallelFrame:
+    """The box a parallel-coordinates plot is drawn in, and the mapping onto it.
+
+    Past three values there is no space to put a sample in, so each value gets a
+    vertical axis of its own, side by side, and a sample is the polyline through its
+    value on each -- the plot every survey of many-objective fronts reaches for first,
+    because it keeps every axis and every design and needs no projection that could
+    hide one. Each axis is mapped onto the same height from its own padded range, as
+    :class:`_PlotBox3D` maps each onto the same edge, and the true values go on as
+    tick labels.
+
+    An axis whose larger values are better is turned over, so the better end of every
+    axis is at the bottom. Then a front reads the way it is ranked: lines that run
+    parallel between two axes are objectives that agree, and lines that cross are
+    objectives that trade.
+
+    As with :class:`_PlotFrame`, the values it is built from must be finite.
+    """
+
+    spacing = 50.0
+    height = 100.0
+
+    def __init__(self, series: list[np.ndarray], maximize: Sequence[bool] | None) -> None:
+        self.ranges = [_padded_range(values) for values in series]
+        self.maximize = tuple(maximize) if maximize is not None else (False,) * len(series)
+
+    @property
+    def width(self) -> float:
+        return self.spacing * (len(self.ranges) - 1)
+
+    def axis_x(self, index: int) -> float:
+        return index * self.spacing
+
+    def project_axis(self, index: int, values: ArrayLike) -> np.ndarray:
+        low, high = self.ranges[index]
+        unit = (np.asarray(values, dtype=float) - low) / (high - low)
+        # Rerun puts +y downward: the better end is the larger y.
+        return unit * self.height if self.maximize[index] else (1.0 - unit) * self.height
+
+    def project(self, series: list[np.ndarray]) -> np.ndarray:
+        """``(samples, axes, 2)``: each sample's polyline across the axes."""
+        ys = np.column_stack([self.project_axis(i, v) for i, v in enumerate(series)])
+        xs = np.broadcast_to([self.axis_x(i) for i in range(len(series))], ys.shape)
+        return np.stack((xs, ys), axis=-1)
+
+    def bounds(self, titled: bool) -> tuple[tuple[float, float], tuple[float, float]]:
+        """What the view opens on: the axes plus room for the labels around them.
+
+        Left of the first axis sit its tick labels; under the axes the two staggered
+        rows of axis names; above them the title, when there is one.
+        """
+        return (
+            (-0.5 * self.spacing, self.width + 0.5 * self.spacing),
+            ((-0.45 if titled else -0.15) * self.height, 1.5 * self.height),
+        )
+
+
+def _log_parallel_frame(
+    rr: ModuleType,
+    staging: RecordingStream,
+    origin: str,
+    frame: _ParallelFrame,
+    names: Sequence[str],
+    title: str | None,
+    directions_known: bool,
+) -> None:
+    """Draw the axes, their tick labels, their names and the title for *frame*, static.
+
+    The names go under the axes in two staggered rows: neighbouring axes are a
+    fixed distance apart however long their names are, and one row of long names
+    runs together into one unreadable line.
+    """
+    h = frame.height
+    staging.log(
+        f"{origin}/axes",
+        rr.LineStrips2D(
+            [[[frame.axis_x(i), 0.0], [frame.axis_x(i), h]] for i in range(len(names))],
+            colors=_FRAME_COLOR,
+            radii=rr.Radius.ui_points(1.5),
+        ),
+        static=True,
+    )
+    no_size = rr.Radius.ui_points(0.0)
+    for index in range(len(names)):
+        ticks = _nice_ticks(*frame.ranges[index])
+        x = frame.axis_x(index) - 0.12 * frame.spacing
+        staging.log(
+            f"{origin}/ticks/{index}",
+            rr.Points2D(
+                [[x, float(y)] for y in frame.project_axis(index, ticks)],
+                radii=no_size,
+                colors=_FRAME_COLOR,
+                labels=[_coord_label(t) for t in ticks],
+                show_labels=True,
+            ),
+            static=True,
+        )
+    labels = [
+        f"{name} ({'max' if better else 'min'})" if directions_known else name
+        for name, better in zip(names, frame.maximize, strict=True)
+    ]
+    staging.log(
+        f"{origin}/axis_names",
+        rr.Points2D(
+            [[frame.axis_x(i), h + (0.14 if i % 2 == 0 else 0.3) * h] for i in range(len(names))],
+            radii=no_size,
+            colors=_FRAME_COLOR,
+            labels=labels,
+            show_labels=True,
+        ),
+        static=True,
+    )
+    if title is not None:
+        if directions_known:
+            title = f"{title} (better is down)"
+        staging.log(
+            f"{origin}/title",
+            rr.Points2D(
+                [[0.5 * frame.width, -0.3 * h]],
+                radii=no_size,
+                colors=_TITLE_COLOR,
+                labels=[title],
+                show_labels=True,
+            ),
+            static=True,
+        )
+
+
 def _per_sample_values(dataset: xr.Dataset, name: str, dim: str) -> np.ndarray | None:
     """*name*'s one number per sample of *dim*, whether it is a coordinate or a variable.
 
@@ -1191,11 +1350,12 @@ class RerunTimelineResult(BenchResultBase):
                 this one tiles is branches -- a tick is a slider position, not a
                 panel, so thinning it costs resolution and buys no room.
                 Defaults to None (every sample).
-            readout_scatter (Sequence[str], optional): Two or three per-sample
+            readout_scatter (Sequence[str], optional): Two or more per-sample
                 variables to plot against each other beneath the timeline, every
                 sample a point and the cursor's own picked out — how a sweep over a
                 *set* says where in that set the slider is parked. Two are drawn on
-                a flat frame; three go in a rerun 3-D view the reader can orbit.
+                a flat frame; three go in a rerun 3-D view the reader can orbit;
+                four or more are drawn as parallel coordinates.
                 Defaults to the dataset's ``bencher_readout_scatter`` attribute,
                 which the producer of the sweep sets (see
                 :data:`READOUT_SCATTER_ATTR`); the title carried beside that
@@ -1286,7 +1446,7 @@ class RerunTimelineResult(BenchResultBase):
             TypeError: if *readout_scatter* is one string rather than a sequence of
                 variable names.
             ValueError: if *timeline_dim* names a dimension the dataset does not have,
-                or a *readout_scatter* was asked for that is not two or three
+                or a *readout_scatter* was asked for that is fewer than two
                 variables.
         """
         # Parsed here rather than where it is drawn: an arity error found halfway
@@ -1455,7 +1615,7 @@ class RerunTimelineResult(BenchResultBase):
         encoding: _IndexEncoding,
         scatter: _ReadoutScatter,
     ) -> _View | None:
-        """Plot every sample against two or three of its own numbers, cursor marked.
+        """Plot every sample against two or more of its own numbers, cursor marked.
 
         A sweep over a set of designs is usually a set somebody has to choose *from* --
         a Pareto front, a candidate list -- and the shape of that set in the space it
@@ -1471,6 +1631,11 @@ class RerunTimelineResult(BenchResultBase):
         thing rerun does have: the front goes in as points in a cube the viewer can
         orbit (see :class:`_PlotBox3D`), which is also the only way to read a
         three-objective front, since no one projection of it is faithful.
+
+        Four or more have no space to go in at all, so they are drawn as parallel
+        coordinates: one vertical axis per value and each sample a polyline across
+        them (see :class:`_ParallelFrame`). That keeps every value of every sample,
+        which a projection down to three would not.
 
         Returns:
             _View | None: the scatter's view, or None when the dataset does not carry
@@ -1497,6 +1662,10 @@ class RerunTimelineResult(BenchResultBase):
             logger.warning("no tracking scatter: no sample carries all of %s", ", ".join(names))
             return None
         origin = _front_entity(timeline_dim)
+        if scatter.parallel:
+            return self._log_front_parallel(
+                rr, staging, dataset, timeline_dim, encoding, origin, scatter, series, placed
+            )
         if scatter.spatial:
             return self._log_front_scatter_3d(
                 rr, staging, dataset, timeline_dim, encoding, origin, names, series, placed, title
@@ -1635,6 +1804,81 @@ class RerunTimelineResult(BenchResultBase):
             label=title or " against ".join(names),
             logged=True,
             plot=_Plot3D(),
+        )
+
+    @staticmethod
+    def _log_front_parallel(
+        rr: ModuleType,
+        staging: RecordingStream,
+        dataset: xr.Dataset,
+        timeline_dim: str,
+        encoding: _IndexEncoding,
+        origin: str,
+        scatter: _ReadoutScatter,
+        series: list[np.ndarray],
+        placed: np.ndarray,
+    ) -> _View:
+        """The four-or-more form of :meth:`_log_front_scatter`, as parallel coordinates.
+
+        Every sample is a faint polyline across the axes, logged statically, and the
+        cursor's own is logged per tick on top of it, thick and with its value written
+        at each axis -- the same latest-at highlight the 2-D and 3-D forms use. The
+        axes are drawn on a frame this module builds (see :class:`_ParallelFrame`),
+        because rerun has no parallel-coordinates view of its own.
+        """
+        names = list(scatter.axes)
+        frame = _ParallelFrame([values[placed] for values in series], scatter.maximize)
+        _log_parallel_frame(
+            rr, staging, origin, frame, names, scatter.title, scatter.maximize is not None
+        )
+        lines = frame.project(series)
+        staging.log(
+            f"{origin}/all",
+            rr.LineStrips2D(
+                list(lines[placed]),
+                colors=_SCATTER_ALL_COLOR,
+                radii=rr.Radius.ui_points(1.0),
+                draw_order=1.0,
+            ),
+            static=True,
+        )
+        for position, raw in enumerate(encoding.values):
+            encoding.set_time(staging, timeline_dim, raw)
+            # As in the other forms: an unscored sample clears the highlight rather
+            # than leaving latest-at holding the previous tick's line.
+            line = [lines[position]] if placed[position] else []
+            vertices = lines[position] if placed[position] else _NO_POINTS
+            # Four figures: five values side by side at six figures each run into
+            # each other across the narrow gap between the axes.
+            labels = [f"{float(values[position]):.4g}" for values in series]
+            staging.log(
+                f"{origin}/current",
+                rr.LineStrips2D(
+                    line,
+                    colors=_SCATTER_CURRENT_COLOR,
+                    radii=rr.Radius.ui_points(3.0),
+                    draw_order=2.0,
+                ),
+            )
+            # The values ride on an entity of their own so they are not painted in
+            # the line's colour; see _SCATTER_LABEL_COLOR.
+            staging.log(
+                f"{origin}/current/reading",
+                rr.Points2D(
+                    vertices,
+                    colors=_SCATTER_LABEL_COLOR,
+                    radii=rr.Radius.ui_points(0.0),
+                    labels=labels if placed[position] else [],
+                    show_labels=True,
+                    draw_order=3.0,
+                ),
+            )
+        staging.reset_time()
+        return _View(
+            origin=origin,
+            label=scatter.title or ", ".join(names),
+            logged=True,
+            plot=_Plot2D(frame.bounds(titled=scatter.title is not None)),
         )
 
     def _log_sweep(

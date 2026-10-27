@@ -18,12 +18,15 @@ import bencher as bn
 from bencher.plugins.registry import get_registry
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.rerun_timeline import (
+    READOUT_SCATTER_ATTR,
+    READOUT_SCATTER_DIRECTIONS_ATTR,
     TimelineIndex,
     _coord_label,
     _DurationIndex,
     _entity_parts,
     _layout_views,
     _nice_ticks,
+    _ParallelFrame,
     _PlotBox3D,
     _readout_entity,
     _SequenceIndex,
@@ -221,6 +224,27 @@ class FrontSweep(bn.ParametrizedSweep):
         return super().benchmark()
 
 
+class FourObjectiveFrontSweep(bn.ParametrizedSweep):
+    """Four objectives, one maximised: past three there is no space to draw them in."""
+
+    theta = bn.FloatSweep(default=1.0, bounds=[1.0, 3.0], samples=3)
+    near = bn.ResultFloat(units="m", direction=bn.OptDir.minimize)
+    far = bn.ResultFloat(units="m", direction=bn.OptDir.minimize)
+    cost = bn.ResultFloat(units="ul", direction=bn.OptDir.minimize)
+    reach = bn.ResultFloat(units="m", direction=bn.OptDir.maximize)
+    out_rerun = bn.ResultRerun(width=200, height=150)
+
+    def benchmark(self):
+        self.near = float(self.theta)
+        self.far = 3.0 - float(self.theta)
+        self.cost = abs(2.0 - float(self.theta))
+        self.reach = float(self.theta) ** 2
+        recording = rr.RecordingStream("test_rerun_timeline_front_4d", make_default=False)
+        recording.log("pose", rr.Points2D([[self.theta, 0.0]]))
+        self.out_rerun = bn.capture_rerun_rrd(recording)
+        return super().benchmark()
+
+
 class ThreeObjectiveFrontSweep(bn.ParametrizedSweep):
     """A three-objective design space, so its front has no one plane to be drawn on."""
 
@@ -401,6 +425,23 @@ def _points3d(path: str, entity: str) -> list[list[list[float]]]:
             if field.name.startswith("Points3D") and "positions" in field.name:
                 rows.extend(
                     [[float(v) for v in _xyz(point)] for point in row]
+                    for row in batch.column(i).to_pylist()
+                )
+    return rows
+
+
+def _strips2d(path: str, entity: str) -> list[list[list[list[float]]]]:
+    """The LineStrips2D strips logged at *entity*: per row, a list of point lists."""
+    reader = RrdReader(str(path))
+    rows: list[list[list[list[float]]]] = []
+    for chunk in reader.stream(store=reader.recordings()[0]):
+        if str(chunk.entity_path) != entity:
+            continue
+        batch = chunk.to_record_batch()
+        for i, field in enumerate(batch.schema):
+            if field.name.startswith("LineStrips2D") and "strips" in field.name:
+                rows.extend(
+                    [[[float(v) for v in _xy(point)] for point in strip] for strip in row]
                     for row in batch.column(i).to_pylist()
                 )
     return rows
@@ -835,7 +876,7 @@ class TestTrackingScatter:
 
     def test_a_pair_is_what_a_plane_takes(self):
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
-        with pytest.raises(ValueError, match="two or three"):
+        with pytest.raises(ValueError, match="at least two"):
             res.to_rerun_timeline_path(
                 self._scatter_dataset(res),
                 res.bench_cfg.result_vars,
@@ -884,7 +925,7 @@ class TestTrackingScatter:
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
         dataset = self._scatter_dataset(res)
         dataset.attrs[READOUT_SCATTER_ATTR] = ["cost", "risk"]
-        with pytest.raises(ValueError, match="two or three"):
+        with pytest.raises(ValueError, match="at least two"):
             res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars, readout_scatter=())
 
     def test_one_name_is_not_a_request_for_its_letters(self):
@@ -942,6 +983,10 @@ class TestNiceTicks:
         assert ticks, "an axis with a span always has at least one tick"
         assert min(ticks) >= low
         assert max(ticks) <= high
+
+    def test_zero_is_not_labelled_minus_zero(self):
+        """Rounding a tick a hair below zero gave -0.0, which an axis then printed."""
+        assert all(str(tick) != "-0.0" for tick in _nice_ticks(-1.2, 15.3))
 
     def test_a_flat_axis_is_labelled_at_its_one_value(self):
         assert _nice_ticks(2.0, 2.0) == [2.0]
@@ -1035,15 +1080,6 @@ class TestTrackingScatter3D:
         assert "/front/size/all" not in _indices(path)
         assert "/frame" in _indices(path)
 
-    def test_four_values_are_not_a_space_to_draw_a_front_in(self):
-        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
-        with pytest.raises(ValueError, match="two or three"):
-            res.to_rerun_timeline_path(
-                self._scatter_dataset(res),
-                res.bench_cfg.result_vars,
-                readout_scatter=("cost", "risk", "mass", "cost"),
-            )
-
     def test_a_three_objective_front_plots_itself(self):
         """End to end: a three-objective study stamps three axes and gets the 3-D view."""
         bench = ThreeObjectiveFrontSweep().to_bench(bn.BenchRunCfg(repeats=1))
@@ -1061,6 +1097,113 @@ class TestTrackingScatter3D:
         assert sorted(entities["/front/pareto_rank/current"]["pareto_rank"]) == ranks
         # A 3-D front is a surface, not a line, so it is never joined into a curve.
         assert "/front/pareto_rank/all/curve" not in entities
+
+
+class TestParallelCoordinates:
+    """Four or more values have no space at all, so each gets a vertical axis."""
+
+    _AXES = ("cost", "risk", "mass", "speed")
+
+    def _scatter_dataset(self, res, risk=(1.0, 2.0, 3.0, 4.0)):
+        return res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            cost=("size", [4.0, 3.0, 2.0, 1.0]),
+            risk=("size", list(risk)),
+            mass=("size", [2.0, 2.0, 5.0, 9.0]),
+            speed=("size", [1.0, 5.0, 2.0, 8.0]),
+        )
+
+    def _path(self, dataset=None, axes=_AXES):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        if dataset is None:
+            dataset = self._scatter_dataset(res)
+        return res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars, readout_scatter=axes)
+
+    def test_every_sample_is_a_polyline_across_every_axis(self):
+        """One vertex per value, each on its own axis, so nothing is projected away."""
+        rows = _strips2d(self._path(), "/front/size/all")
+        assert len(rows) == 1, "the whole set arrives as one static chunk"
+        strips = rows[0]
+        assert len(strips) == 4
+        for strip in strips:
+            assert [x for x, _ in strip] == [
+                index * _ParallelFrame.spacing for index in range(len(self._AXES))
+            ]
+            assert all(0.0 <= y <= _ParallelFrame.height for _, y in strip)
+
+    def test_larger_is_upward_when_no_direction_is_known(self):
+        """Rerun puts +y downward, so a larger cost is a smaller y."""
+        strips = _strips2d(self._path(), "/front/size/all")[0]
+        cost_y = [strip[0][1] for strip in strips]
+        assert cost_y == sorted(cost_y), "cost falls along the sweep, so its y grows"
+
+    def test_a_maximised_axis_is_turned_so_better_is_down(self):
+        """Every axis better-at-the-bottom: then lines that cross are a trade."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = list(self._AXES)
+        dataset.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] = [
+            "minimize",
+            "minimize",
+            "minimize",
+            "maximize",
+        ]
+        strips = _strips2d(
+            res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars), "/front/size/all"
+        )[0]
+        speed_y = [strip[3][1] for strip in strips]
+        # speed is 1, 5, 2, 8: the fastest is the lowest on screen, the largest y.
+        assert speed_y.index(max(speed_y)) == 3
+        assert speed_y.index(min(speed_y)) == 0
+
+    def test_directions_that_do_not_match_the_axes_are_refused(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = list(self._AXES)
+        dataset.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] = ["minimize", "maximize"]
+        with pytest.raises(ValueError, match="2 directions for 4 axes"):
+            res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+
+    def test_the_cursors_line_is_the_sample_it_is_on(self):
+        path = self._path()
+        every = _strips2d(path, "/front/size/all")[0]
+        assert _strips2d(path, "/front/size/current") == [[strip] for strip in every]
+        assert _indices(path)["/front/size/current"]["size"] == [2, 3, 4, 5]
+        assert _static(path, "/front/size/all") == [True]
+
+    def test_a_sample_with_no_value_is_left_off_and_clears_the_line(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = self._path(self._scatter_dataset(res, risk=(1.0, 2.0, float("nan"), 4.0)))
+        assert len(_strips2d(path, "/front/size/all")[0]) == 3
+        current = _strips2d(path, "/front/size/current")
+        assert current[2] == [], "the unscored tick clears the highlight"
+        assert all(len(row) == 1 for row in current[:2] + current[3:])
+
+    def test_eight_axes_draw_as_eight(self):
+        """No upper limit: an N-objective front is N axes."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        axes = self._AXES + self._AXES
+        strips = _strips2d(self._path(dataset, axes), "/front/size/all")[0]
+        assert all(len(strip) == 8 for strip in strips)
+
+    def test_a_four_objective_front_plots_itself(self):
+        """End to end: four objectives stamp four axes, their directions, and get lines."""
+        bench = FourObjectiveFrontSweep().to_bench(bn.BenchRunCfg(repeats=1))
+        result = bench.optimize(n_trials=4, warm_start=False, plot=False)
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        assert res.ds.attrs[READOUT_SCATTER_ATTR] == ["near", "far", "cost", "reach"]
+        assert res.ds.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] == [
+            "minimize",
+            "minimize",
+            "minimize",
+            "maximize",
+        ]
+        path = _timeline_path(res)
+        strips = _strips2d(path, "/front/pareto_rank/all")[0]
+        assert len(strips) == len(result.pareto_trials())
+        assert all(len(strip) == 4 for strip in strips)
+        ranks = list(range(len(result.pareto_trials())))
+        assert sorted(_indices(path)["/front/pareto_rank/current"]["pareto_rank"]) == ranks
 
 
 class TestSharedContent:
