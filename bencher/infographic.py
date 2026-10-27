@@ -621,8 +621,9 @@ def _outer_reach(
 
 def _rc() -> dict:
     return {
-        "font.family": "sans-serif",
-        "font.sans-serif": list(FONT),
+        # A list, not the generic "sans-serif": matplotlib expands a generic family to its
+        # first installed font only, so DejaVu Sans would never fill in ▲ ▼ for Open Sans.
+        "font.family": list(FONT),
         "svg.fonttype": "path",
         "axes.unicode_minus": True,
     }

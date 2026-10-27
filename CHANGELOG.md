@@ -16,6 +16,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lists the run index of each failure, and `SprtCfg.runs_to_pass`, `flaky_window` and
   `expected_runs` give the run counts to budget for.
 
+## [1.149.0] - 2026-10-27
+
+### Added
+- **Self-host the rerun web viewer.** Set `BENCHER_RERUN_VIEWER_URL` to one or more base
+  URLs with a `{version}` placeholder (for example
+  `/_rerun/web-viewer@{version}/ https://unpkg.com/@rerun-io/web-viewer@{version}/`).
+  The viewer page imports `index.js` from the first one that serves it, and the glue and
+  the `.wasm` then come from that same place. The default is unpkg alone.
+  `python -m bencher.rerun_web_viewer <version> <dir>` writes the npm package to
+  `<dir>/web-viewer@<version>/`, checks it against the registry's sha512, and rewrites
+  its one extensionless `./re_viewer` import so a plain file server can serve it (#1214).
+
+## [1.148.2] - 2026-10-27
+
+### Fixed
+- **▲ and ▼ draw again in the evidence infographics on machines with Open Sans.** Open
+  Sans has no triangles, and `font.family` was the generic `"sans-serif"`, which matplotlib
+  expands to its first installed font only, so DejaVu Sans never filled them in and they
+  rendered as an empty box. `font.family` is now the `FONT` list itself (#1213).
+
+### Changed
+- `pixi.lock` pins ty 0.0.91 to match `pyproject.toml`; 0.0.85 failed `pixi run lint` on
+  an unknown rule (#1213).
+
+## [1.148.1] - 2026-10-27
+
+### Fixed
+- **The embedded rerun viewer loads again on rerun 0.40.** Viewer pages import
+  `@rerun-io/web-viewer` from unpkg instead of jsDelivr. The viewer fetches its `.wasm`
+  from the same base URL, and jsDelivr refuses files over 50 MB; the 0.40.0 `.wasm` is
+  54 MB, so every viewer failed with `Failed to fetch viewer Wasm: 403` (#1211).
+
 ## [1.148.0] - 2026-10-26
 
 ### Changed
