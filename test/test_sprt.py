@@ -174,6 +174,11 @@ class TestCfgValidation:
             ({"p0": 0.001, "p1": 0.01, "beta": 1.0}, "beta"),
             ({"p0": 0.001, "p1": 0.01, "alpha": 0.6, "beta": 0.5}, "alpha \\+ beta"),
             ({"p0": 0.001, "p1": 0.01, "max_runs": 0}, "max_runs"),
+            ({"p0": 0.001, "p1": 0.01, "max_runs": 1.5}, "max_runs"),
+            ({"p0": 0.001, "p1": 0.01, "max_runs": math.inf}, "max_runs"),
+            ({"p0": 0.001, "p1": 0.01, "max_runs": math.nan}, "max_runs"),
+            ({"p0": 0.001, "p1": 0.01, "max_runs": True}, "max_runs"),
+            ({"p0": 0.001, "p1": 0.01, "max_runs": "10"}, "max_runs"),
         ],
     )
     def test_rejects_bad_config(self, kwargs, match):

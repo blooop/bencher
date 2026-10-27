@@ -39,6 +39,7 @@ dependencies can load the file by path.
 from __future__ import annotations
 
 import math
+import numbers
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -79,8 +80,11 @@ class SprtCfg:
                 raise ValueError(f"need 0 < {name} < 1, got {value!r}")
         if self.alpha + self.beta >= 1.0:
             raise ValueError(f"need alpha + beta < 1, got {self.alpha + self.beta!r}")
-        if self.max_runs < 1:
-            raise ValueError(f"need max_runs >= 1, got {self.max_runs!r}")
+        # A float, inf or nan cap would never equal the int run count, so the cap
+        # would never stop the test.
+        is_int = isinstance(self.max_runs, numbers.Integral) and not isinstance(self.max_runs, bool)
+        if not is_int or self.max_runs < 1:
+            raise ValueError(f"need an int max_runs >= 1, got {self.max_runs!r}")
 
     @property
     def flaky_bound(self) -> float:
