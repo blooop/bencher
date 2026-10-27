@@ -1878,7 +1878,7 @@ class Bench(BenchPlotServer):
         # view the reader can orbit, and past three there is no space to put the front
         # in, so it is drawn as parallel coordinates. One objective has no trade to
         # show, so it does not ask for one.
-        if len(result.target_names) >= 2:
+        if len(result.target_names) > 1:
             res.ds.attrs[READOUT_SCATTER_ATTR] = [scored[target] for target in result.target_names]
             res.ds.attrs[READOUT_SCATTER_TITLE_ATTR] = "Pareto front"
             res.ds.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] = [

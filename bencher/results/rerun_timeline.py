@@ -256,6 +256,8 @@ _INT64_MIN, _INT64_MAX = -(2**63), 2**63 - 1
 # A read-out scatter of this many axes goes in rerun's 3-D view; two get a drawn frame,
 # and more than this are drawn as parallel coordinates.
 _SPATIAL_AXES = 3
+# Fewer than this is not a plot of one value against another.
+_MIN_SCATTER_AXES = 2
 
 
 def _usable(values: tuple[int, ...]) -> bool:
@@ -812,7 +814,7 @@ class _ReadoutScatter:
                 f"one string: {requested!r} would be read as its characters"
             )
         axes = tuple(requested)
-        if len(axes) < 2:
+        if len(axes) < _MIN_SCATTER_AXES:
             raise ValueError(
                 "a tracking scatter needs at least two variables to plot against "
                 f"each other, got {list(axes)}"
@@ -1664,7 +1666,7 @@ class RerunTimelineResult(BenchResultBase):
         origin = _front_entity(timeline_dim)
         if scatter.parallel:
             return self._log_front_parallel(
-                rr, staging, dataset, timeline_dim, encoding, origin, scatter, series, placed
+                rr, staging, timeline_dim, encoding, origin, scatter, series, placed
             )
         if scatter.spatial:
             return self._log_front_scatter_3d(
@@ -1810,7 +1812,6 @@ class RerunTimelineResult(BenchResultBase):
     def _log_front_parallel(
         rr: ModuleType,
         staging: RecordingStream,
-        dataset: xr.Dataset,
         timeline_dim: str,
         encoding: _IndexEncoding,
         origin: str,
