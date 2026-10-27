@@ -115,8 +115,8 @@ READOUT_SCATTER_ATTR = "bencher_readout_scatter"
 
 #: Dataset attribute giving each :data:`READOUT_SCATTER_ATTR` axis its optimisation
 #: direction, as :class:`~bencher.variables.results.OptDir` values in the same order.
-#: Parallel coordinates use it to put the better end of every axis at the bottom, so
-#: lines that cross between two axes are objectives that trade against each other.
+#: Parallel coordinates use it to put the better end of every axis with a known
+#: direction at the bottom, so lines that cross between two axes are objectives that trade against each other.
 #: Optional: without it every axis runs larger values upward.
 READOUT_SCATTER_DIRECTIONS_ATTR = "bencher_readout_scatter_directions"
 
@@ -1179,7 +1179,8 @@ class _ParallelFrame:
     tick labels.
 
     An axis whose larger values are better is turned over, so the better end of every
-    axis is at the bottom. Then a front reads the way it is ranked: lines that run
+    axis with a known direction is at the bottom; an axis with none runs larger values
+    upward. Then a front reads the way it is ranked: lines that run
     parallel between two axes are objectives that agree, and lines that cross are
     objectives that trade.
 
