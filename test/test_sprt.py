@@ -359,6 +359,24 @@ class TestSvg:
         assert len(_by_class(root, "continue-band")) == 1
         assert len(_by_class(root, "max-runs")) == 1
 
+    def test_max_runs_on_the_chart_is_a_line_at_its_run(self):
+        from bencher.sprt import _SVG_LEFT, _SVG_RIGHT, _SVG_W
+
+        verdict, test = _feed(SprtCfg(p0=0.001, p1=0.01, max_runs=50), [True] * 50)
+        assert verdict is SprtVerdict.INCONCLUSIVE
+        (cap,) = _by_class(_svg_tree(test), "max-runs")
+        assert cap.tag == f"{SVG_NS}line"
+        # A cap near the data sets the x axis to 0..max_runs*1.04.
+        x_cap = _SVG_LEFT + 50 / (50 * 1.04) * (_SVG_W - _SVG_LEFT - _SVG_RIGHT)
+        assert float(cap.get("x1")) == pytest.approx(x_cap, abs=0.06)
+        assert float(cap.get("x2")) == pytest.approx(x_cap, abs=0.06)
+
+    def test_max_runs_off_the_chart_is_a_label(self):
+        _, test = _feed(CFG, [False] + [True] * 150 + [False])
+        (cap,) = _by_class(_svg_tree(test), "max-runs")
+        assert cap.tag == f"{SVG_NS}text"
+        assert "off the chart" in "".join(cap.itertext())
+
     def test_pass_chart_draws_one_point_per_pass(self):
         _, test = _feed(CFG, [False] + [True] * 1000)
         root = _svg_tree(test)
