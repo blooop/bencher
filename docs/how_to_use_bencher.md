@@ -1042,7 +1042,8 @@ the first failure shrink that window (after 100 passes it is 89). `cfg.expected_
 gives the mean run count for a true failure rate `p`. The cost grows roughly as
 `1/(p1-p0)**2`, so put `p1` at 5-10x `p0`. Treat `INCONCLUSIVE` as its own outcome, and
 report the verdict rather than an interval. To own the run loop, feed `bn.Sprt(cfg)`
-one run at a time with `.record(passed)`.
+one run at a time with `.record(passed)`. [`example_sprt.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_sprt.py)
+sweeps the true failure rate and plots the run count and the FLAKY rate.
 
 ### A light install for the evidence tools
 
