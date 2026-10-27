@@ -77,6 +77,19 @@ class TestCap:
         with pytest.raises(RuntimeError, match="no verdict"):
             test.result()
 
+    def test_run_state_cannot_be_injected_at_construction(self):
+        state = {"runs": 0, "llr": 0.0, "failure_runs": [7, 3], "verdict": SprtVerdict.FLAKY}
+        with pytest.raises(TypeError):
+            Sprt(CFG, **state)
+
+    def test_a_decided_test_cannot_be_reopened(self):
+        _, test = _feed(CFG, [True] * 249)
+        for name, value in (("verdict", None), ("llr", 100.0), ("runs", 0)):
+            with pytest.raises(AttributeError):
+                setattr(test, name, value)
+        assert test.verdict is SprtVerdict.PASS
+        assert test.runs == 249
+
 
 class TestDriver:
     def test_sprt_calls_run_test_until_a_verdict(self):

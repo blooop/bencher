@@ -190,33 +190,49 @@ class Sprt:
     """An SPRT fed one run at a time, for callers that own the run loop."""
 
     cfg: SprtCfg
-    runs: int = 0
-    llr: float = 0.0
-    failure_runs: list[int] = field(default_factory=list)
-    verdict: SprtVerdict | None = None
+    _runs: int = field(default=0, init=False)
+    _llr: float = field(default=0.0, init=False)
+    _failure_runs: list[int] = field(default_factory=list, init=False)
+    _verdict: SprtVerdict | None = field(default=None, init=False)
+
+    @property
+    def runs(self) -> int:
+        return self._runs
+
+    @property
+    def llr(self) -> float:
+        return self._llr
+
+    @property
+    def failure_runs(self) -> tuple[int, ...]:
+        return tuple(self._failure_runs)
+
+    @property
+    def verdict(self) -> SprtVerdict | None:
+        return self._verdict
 
     def record(self, passed: bool) -> SprtVerdict | None:
         """Add one run. Return the verdict once there is one, else ``None``."""
-        if self.verdict is not None:
-            raise RuntimeError(f"SPRT already decided {self.verdict} after {self.runs} runs")
-        self.runs += 1
+        if self._verdict is not None:
+            raise RuntimeError(f"SPRT already decided {self._verdict} after {self._runs} runs")
+        self._runs += 1
         if passed:
-            self.llr += self.cfg.pass_step
+            self._llr += self.cfg.pass_step
         else:
-            self.llr += self.cfg.fail_step
-            self.failure_runs.append(self.runs)
-        if self.llr >= self.cfg.flaky_bound:
-            self.verdict = SprtVerdict.FLAKY
-        elif self.llr <= self.cfg.pass_bound:
-            self.verdict = SprtVerdict.PASS
-        elif self.runs >= self.cfg.max_runs:
-            self.verdict = SprtVerdict.INCONCLUSIVE
-        return self.verdict
+            self._llr += self.cfg.fail_step
+            self._failure_runs.append(self._runs)
+        if self._llr >= self.cfg.flaky_bound:
+            self._verdict = SprtVerdict.FLAKY
+        elif self._llr <= self.cfg.pass_bound:
+            self._verdict = SprtVerdict.PASS
+        elif self._runs >= self.cfg.max_runs:
+            self._verdict = SprtVerdict.INCONCLUSIVE
+        return self._verdict
 
     def result(self) -> SprtResult:
-        if self.verdict is None:
-            raise RuntimeError(f"SPRT has no verdict yet after {self.runs} runs")
-        return SprtResult(self.verdict, self.runs, tuple(self.failure_runs), self.llr)
+        if self._verdict is None:
+            raise RuntimeError(f"SPRT has no verdict yet after {self._runs} runs")
+        return SprtResult(self._verdict, self._runs, tuple(self._failure_runs), self._llr)
 
 
 def sprt(run_test: Callable[[], bool], cfg: SprtCfg) -> SprtResult:
