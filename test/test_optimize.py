@@ -780,6 +780,70 @@ class TestParetoScrubExample:
         titles = [pane.name for pane in bench.report.pane]
         assert any(title.startswith("Pareto front of") for title in titles), titles
 
+    def test_the_nd_example_walks_a_five_objective_front(self, monkeypatch):
+        """The five-objective gallery example, which is the documented shape of the
+        parallel-coordinates front: five axes and their directions stamped on the
+        dataset, a front with more than one design, and a 3-D model per design."""
+        from bencher.example.optuna.example_optimize_pareto_scrub_nd import (
+            example_optimize_pareto_scrub_nd,
+        )
+        from bencher.results.rerun_timeline import (
+            READOUT_SCATTER_ATTR,
+            READOUT_SCATTER_DIRECTIONS_ATTR,
+        )
+
+        fronts = []
+        original = bn.Bench.plot_pareto_front
+
+        def spy(self, result, *args, **kwargs):
+            res = original(self, result, *args, **kwargs)
+            fronts.append((result, res))
+            return res
+
+        monkeypatch.setattr(bn.Bench, "plot_pareto_front", spy)
+        bench = example_optimize_pareto_scrub_nd(_run_cfg())
+        assert len(fronts) == 1
+        result, res = fronts[0]
+        assert len(result.target_names) == 5
+        assert 1 < res.ds.sizes["pareto_rank"] < len(result.study.trials)
+        assert res.ds.attrs[READOUT_SCATTER_ATTR] == [
+            "hover_time",
+            "thrust_to_weight",
+            "mass",
+            "span",
+            "noise",
+        ]
+        assert res.ds.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] == [
+            "maximize",
+            "maximize",
+            "minimize",
+            "minimize",
+            "minimize",
+        ]
+        assert result.searched == ["arm_length", "prop_diameter", "battery"]
+        assert res.to_rerun_timeline() is not None
+        titles = [pane.name for pane in bench.report.pane]
+        assert any(title.startswith("Pareto front of") for title in titles), titles
+
+    def test_overlapping_propellers_cost_lift(self):
+        """Without a cost for overlap a bigger propeller is free, and the front is
+        every design that maxes it out. With one, a propeller that reaches into its
+        neighbour does worse on hover time, agility and noise than one that fits."""
+        from bencher.example.optuna.example_optimize_pareto_scrub_nd import Quadcopter
+
+        def score(prop: float) -> Quadcopter:
+            quad = Quadcopter()
+            quad.arm_length = 100.0
+            quad.prop_diameter = prop
+            quad.battery = 3000.0
+            quad.benchmark()
+            return quad
+
+        fits, overlaps = score(140.0), score(200.0)
+        assert overlaps.hover_time < fits.hover_time
+        assert overlaps.thrust_to_weight < fits.thrust_to_weight
+        assert overlaps.noise > fits.noise
+
 
 class TestParetoFrontAggregation:
     def test_a_study_that_reduced_only_its_repeats_still_carries_its_score(self):

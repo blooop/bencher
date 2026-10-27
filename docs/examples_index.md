@@ -76,9 +76,11 @@ These sit in the same directory but are imported rather than run:
   toy problem), `example_optimize.py` (the first-class `bench.optimize()` API and the
   `to_optimize()` one-liner), `example_optimize_aggregate.py` (optimising a metric
   aggregated over a nuisance dimension), `example_optimize_pareto_scrub.py` (walking
-  a two-objective Pareto front design by design, each one drawn), and
+  a two-objective Pareto front design by design, each one drawn),
   `example_optimize_pareto_scrub_3d.py` (the same for three objectives, with the front
-  itself in a rerun 3-D view you can turn).
+  itself in a rerun 3-D view you can turn), and `example_optimize_pareto_scrub_nd.py`
+  (five objectives, with the front drawn as parallel coordinates and each design as a
+  3-D model).
 - `bencher/example/generated/` — the auto-generated gallery. Do not edit by hand; it is
   produced by `bencher/example/meta/generate_examples.py`.
 - `bencher/example/meta/` — the generators themselves, plus `BenchMeta`, the

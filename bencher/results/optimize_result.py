@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from bencher.optional_deps import optuna
+from bencher.variables.results import OptDir
 
 if TYPE_CHECKING:
     from bencher.bench_cfg import BenchCfg
@@ -113,6 +114,16 @@ class OptimizeResult:
             key=lambda trial: trial.values[index],
             reverse=descending,
         )
+
+    @property
+    def target_directions(self) -> list[OptDir]:
+        """Each target's direction, in ``target_names`` order, as bencher spells it."""
+        return [
+            OptDir.maximize
+            if direction == optuna.study.StudyDirection.MAXIMIZE
+            else OptDir.minimize
+            for direction in self.study.directions
+        ]
 
     def _target_index(self, objective: str) -> int:
         if objective not in self.target_names:

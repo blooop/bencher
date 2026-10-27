@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **A Pareto front of four or more objectives is drawn as parallel coordinates.**
+  `plot_pareto_front` used to draw a front only for two or three objectives, because
+  past three there is no space to put one in. Now each objective gets a vertical axis
+  of its own, side by side, and each design on the front is a faint line across them;
+  the cursor's design is drawn thick on top, with its value written at each axis.
+  Each axis is scaled from its own range, so unlike units share one height, and the
+  true values go on as tick labels.
+
+  Every axis is turned so its better end is at the bottom: a `maximize` axis runs
+  larger values downward, a `minimize` one upward. Lines that run parallel between two
+  axes are objectives that agree, and lines that cross are objectives that trade. The
+  axis names say `(max)` or `(min)`, and the title says `(better is down)` when every
+  axis has a direction; an axis whose direction is `none` or unknown is drawn bare,
+  larger values upward. The directions come from the new
+  `bencher_readout_scatter_directions` dataset attribute, which `plot_pareto_front`
+  fills from the new `OptimizeResult.target_directions`; without it every axis runs
+  larger values upward.
+  `to_rerun_timeline(readout_scatter=...)` now takes any number of variables from two up.
+- New gallery example `example_optimize_pareto_scrub_nd`: a quadcopter trading hover
+  time, thrust-to-weight, mass, span and noise, with the five-objective front drawn as
+  parallel coordinates and the cursor's design shown as a 3-D model.
+
 ## [1.150.0] - 2026-10-27
 
 ### Added

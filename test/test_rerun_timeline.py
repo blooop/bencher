@@ -11,6 +11,7 @@ import numpy as np
 import panel as pn
 import pytest
 import rerun as rr
+import xarray as xr
 from PIL import Image
 from rerun.chunk import RrdReader
 
@@ -18,14 +19,19 @@ import bencher as bn
 from bencher.plugins.registry import get_registry
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.rerun_timeline import (
+    READOUT_SCATTER_ATTR,
+    READOUT_SCATTER_DIRECTIONS_ATTR,
+    READOUT_SCATTER_TITLE_ATTR,
     TimelineIndex,
     _coord_label,
     _DurationIndex,
     _entity_parts,
     _layout_views,
     _nice_ticks,
+    _ParallelFrame,
     _PlotBox3D,
     _readout_entity,
+    _ReadoutScatter,
     _SequenceIndex,
     default_timeline_dim,
     encode_index,
@@ -221,6 +227,27 @@ class FrontSweep(bn.ParametrizedSweep):
         return super().benchmark()
 
 
+class FourObjectiveFrontSweep(bn.ParametrizedSweep):
+    """Four objectives, one maximised: past three there is no space to draw them in."""
+
+    theta = bn.FloatSweep(default=1.0, bounds=[1.0, 3.0], samples=3)
+    near = bn.ResultFloat(units="m", direction=bn.OptDir.minimize)
+    far = bn.ResultFloat(units="m", direction=bn.OptDir.minimize)
+    cost = bn.ResultFloat(units="ul", direction=bn.OptDir.minimize)
+    reach = bn.ResultFloat(units="m", direction=bn.OptDir.maximize)
+    out_rerun = bn.ResultRerun(width=200, height=150)
+
+    def benchmark(self):
+        self.near = float(self.theta)
+        self.far = 3.0 - float(self.theta)
+        self.cost = abs(2.0 - float(self.theta))
+        self.reach = float(self.theta) ** 2
+        recording = rr.RecordingStream("test_rerun_timeline_front_4d", make_default=False)
+        recording.log("pose", rr.Points2D([[self.theta, 0.0]]))
+        self.out_rerun = bn.capture_rerun_rrd(recording)
+        return super().benchmark()
+
+
 class ThreeObjectiveFrontSweep(bn.ParametrizedSweep):
     """A three-objective design space, so its front has no one plane to be drawn on."""
 
@@ -404,6 +431,41 @@ def _points3d(path: str, entity: str) -> list[list[list[float]]]:
                     for row in batch.column(i).to_pylist()
                 )
     return rows
+
+
+def _strips2d(path: str, entity: str) -> list[list[list[list[float]]]]:
+    """The LineStrips2D strips logged at *entity*: per row, a list of point lists."""
+    reader = RrdReader(str(path))
+    rows: list[list[list[list[float]]]] = []
+    for chunk in reader.stream(store=reader.recordings()[0]):
+        if str(chunk.entity_path) != entity:
+            continue
+        batch = chunk.to_record_batch()
+        for i, field in enumerate(batch.schema):
+            if field.name.startswith("LineStrips2D") and "strips" in field.name:
+                rows.extend(
+                    [[[float(v) for v in _xy(point)] for point in strip] for strip in row]
+                    for row in batch.column(i).to_pylist()
+                )
+    return rows
+
+
+def _labels2d(path: str, entity: str) -> list[list[str]]:
+    """The Points2D labels logged at *entity*, one list per row, in index order."""
+    reader = RrdReader(str(path))
+    rows: list[tuple[int, list[str]]] = []
+    for chunk in reader.stream(store=reader.recordings()[0]):
+        if str(chunk.entity_path) != entity:
+            continue
+        batch = chunk.to_record_batch()
+        index = next(
+            batch.column(i).to_pylist()
+            for i, field in enumerate(batch.schema)
+            if (field.metadata or {}).get(b"rerun:kind") == b"index"
+        )
+        labels = batch.column(batch.schema.get_field_index("Points2D:labels")).to_pylist()
+        rows.extend(zip(index, (row or [] for row in labels), strict=True))
+    return [labels for _, labels in sorted(rows)]
 
 
 def _static(path: str, entity: str) -> list[bool]:
@@ -835,7 +897,7 @@ class TestTrackingScatter:
 
     def test_a_pair_is_what_a_plane_takes(self):
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
-        with pytest.raises(ValueError, match="two or three"):
+        with pytest.raises(ValueError, match="at least two"):
             res.to_rerun_timeline_path(
                 self._scatter_dataset(res),
                 res.bench_cfg.result_vars,
@@ -884,7 +946,7 @@ class TestTrackingScatter:
         res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
         dataset = self._scatter_dataset(res)
         dataset.attrs[READOUT_SCATTER_ATTR] = ["cost", "risk"]
-        with pytest.raises(ValueError, match="two or three"):
+        with pytest.raises(ValueError, match="at least two"):
             res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars, readout_scatter=())
 
     def test_one_name_is_not_a_request_for_its_letters(self):
@@ -942,6 +1004,10 @@ class TestNiceTicks:
         assert ticks, "an axis with a span always has at least one tick"
         assert min(ticks) >= low
         assert max(ticks) <= high
+
+    def test_zero_is_not_labelled_minus_zero(self):
+        """Rounding a tick a hair below zero gave -0.0, which an axis then printed."""
+        assert all(str(tick) != "-0.0" for tick in _nice_ticks(-1.2, 15.3))
 
     def test_a_flat_axis_is_labelled_at_its_one_value(self):
         assert _nice_ticks(2.0, 2.0) == [2.0]
@@ -1035,15 +1101,6 @@ class TestTrackingScatter3D:
         assert "/front/size/all" not in _indices(path)
         assert "/frame" in _indices(path)
 
-    def test_four_values_are_not_a_space_to_draw_a_front_in(self):
-        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
-        with pytest.raises(ValueError, match="two or three"):
-            res.to_rerun_timeline_path(
-                self._scatter_dataset(res),
-                res.bench_cfg.result_vars,
-                readout_scatter=("cost", "risk", "mass", "cost"),
-            )
-
     def test_a_three_objective_front_plots_itself(self):
         """End to end: a three-objective study stamps three axes and gets the 3-D view."""
         bench = ThreeObjectiveFrontSweep().to_bench(bn.BenchRunCfg(repeats=1))
@@ -1061,6 +1118,320 @@ class TestTrackingScatter3D:
         assert sorted(entities["/front/pareto_rank/current"]["pareto_rank"]) == ranks
         # A 3-D front is a surface, not a line, so it is never joined into a curve.
         assert "/front/pareto_rank/all/curve" not in entities
+
+
+class TestParallelCoordinates:
+    """Four or more values have no space at all, so each gets a vertical axis."""
+
+    _AXES = ("cost", "risk", "mass", "speed")
+
+    def _scatter_dataset(self, res, risk=(1.0, 2.0, 3.0, 4.0)):
+        return res.to_dataset(ReduceType.SQUEEZE).assign_coords(
+            cost=("size", [4.0, 3.0, 2.0, 1.0]),
+            risk=("size", list(risk)),
+            mass=("size", [2.0, 2.0, 5.0, 9.0]),
+            speed=("size", [1.0, 5.0, 2.0, 8.0]),
+        )
+
+    def _path(self, dataset=None, axes=_AXES):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        if dataset is None:
+            dataset = self._scatter_dataset(res)
+        return res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars, readout_scatter=axes)
+
+    def test_every_sample_is_a_polyline_across_every_axis(self):
+        """One vertex per value, each on its own axis, so nothing is projected away."""
+        rows = _strips2d(self._path(), "/front/size/all")
+        assert len(rows) == 1, "the whole set arrives as one static chunk"
+        strips = rows[0]
+        assert len(strips) == 4
+        for strip in strips:
+            assert [x for x, _ in strip] == [
+                index * _ParallelFrame.spacing for index in range(len(self._AXES))
+            ]
+            assert all(0.0 <= y <= _ParallelFrame.height for _, y in strip)
+
+    def test_larger_is_upward_when_no_direction_is_known(self):
+        """Rerun puts +y downward, so a larger cost is a smaller y."""
+        strips = _strips2d(self._path(), "/front/size/all")[0]
+        cost_y = [strip[0][1] for strip in strips]
+        assert cost_y == sorted(cost_y), "cost falls along the sweep, so its y grows"
+
+    def test_a_maximised_axis_is_turned_so_better_is_down(self):
+        """Every axis better-at-the-bottom: then lines that cross are a trade."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = list(self._AXES)
+        dataset.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] = [
+            "minimize",
+            "minimize",
+            "minimize",
+            "maximize",
+        ]
+        strips = _strips2d(
+            res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars), "/front/size/all"
+        )[0]
+        speed_y = [strip[3][1] for strip in strips]
+        # speed is 1, 5, 2, 8: the fastest is the lowest on screen, the largest y.
+        assert speed_y.index(max(speed_y)) == 3
+        assert speed_y.index(min(speed_y)) == 0
+
+    @staticmethod
+    def _tick_points(path: str, index: int) -> list[tuple[float, float, float]]:
+        """``(value, x, y)`` per tick label logged on axis *index*."""
+        reader = RrdReader(str(path))
+        points: list[tuple[float, float]] = []
+        labels: list[str] = []
+        for chunk in reader.stream(store=reader.recordings()[0]):
+            if str(chunk.entity_path) != f"/front/size/ticks/{index}":
+                continue
+            batch = chunk.to_record_batch()
+            for i, field in enumerate(batch.schema):
+                column = batch.column(i).to_pylist()
+                if field.name.startswith("Points2D") and "positions" in field.name:
+                    points.extend(
+                        (float(_xy(point)[0]), float(_xy(point)[1]))
+                        for row in column
+                        for point in row
+                    )
+                elif field.name == "Points2D:labels":
+                    labels.extend(label for row in column for label in row)
+        assert points
+        assert len(points) == len(labels)
+        return [(float(label), x, y) for label, (x, y) in zip(labels, points, strict=True)]
+
+    def _ticks(self, path: str, index: int) -> list[tuple[float, float]]:
+        """``(value, y)`` per tick label logged on axis *index*."""
+        return [(value, y) for value, _, y in self._tick_points(path, index)]
+
+    def test_each_axis_has_its_tick_labels_just_left_of_it(self):
+        """Ticks drawn at another axis would label that axis with this one's values."""
+        path = self._path()
+        frame = _ParallelFrame([np.array([0.0, 1.0])] * len(self._AXES), None)
+        offsets = []
+        for index in range(len(self._AXES)):
+            xs = {x for _, x, _ in self._tick_points(path, index)}
+            assert len(xs) == 1, f"axis {index}: its ticks share one x"
+            offsets.append(xs.pop() - frame.axis_x(index))
+        assert offsets == pytest.approx([offsets[0]] * len(offsets))
+        assert -frame.spacing / 2 < offsets[0] < 0.0
+
+    def test_tick_labels_are_turned_with_the_lines_on_their_axis(self):
+        """A label on the wrong end would read the best sample as the worst."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = list(self._AXES)
+        dataset.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] = [
+            "minimize",
+            "minimize",
+            "minimize",
+            "maximize",
+        ]
+        path = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+        strips = _strips2d(path, "/front/size/all")[0]
+        half = _ParallelFrame.height / 2
+        # speed (axis 3, maximised) is 1, 5, 2, 8; cost (axis 0, minimised) is 4, 3, 2, 1.
+        for index, largest_sample, larger_is_lower in ((3, 3, True), (0, 0, False)):
+            ticks = sorted(self._ticks(path, index))
+            tick_ys = [y for _, y in ticks]
+            assert tick_ys == sorted(tick_ys, reverse=not larger_is_lower)
+            largest_tick_y = ticks[-1][1]
+            largest_line_y = strips[largest_sample][index][1]
+            assert (largest_tick_y > half) == larger_is_lower
+            assert (largest_line_y > half) == larger_is_lower
+
+    @staticmethod
+    def _labels(path: str, entity: str) -> list[str]:
+        """The Points2D labels logged at *entity*, in log order."""
+        reader = RrdReader(str(path))
+        out: list[str] = []
+        for chunk in reader.stream(store=reader.recordings()[0]):
+            if str(chunk.entity_path) != entity:
+                continue
+            batch = chunk.to_record_batch()
+            for i, field in enumerate(batch.schema):
+                if field.name == "Points2D:labels":
+                    for row in batch.column(i).to_pylist():
+                        out.extend(row or [])
+        return out
+
+    def _directed_path(self, title=None):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = list(self._AXES)
+        dataset.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] = [
+            "minimize",
+            "minimize",
+            "minimize",
+            "maximize",
+        ]
+        if title is not None:
+            dataset.attrs[READOUT_SCATTER_TITLE_ATTR] = title
+        return res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+
+    def test_axis_names_say_which_way_is_better_when_directions_are_known(self):
+        labels = self._labels(self._directed_path(), "/front/size/axis_names")
+        assert labels == ["cost (min)", "risk (min)", "mass (min)", "speed (max)"]
+
+    def test_axis_names_are_bare_when_no_direction_is_known(self):
+        labels = self._labels(self._path(), "/front/size/axis_names")
+        assert labels == list(self._AXES)
+
+    def test_the_title_says_better_is_down_when_directions_are_known(self):
+        path = self._directed_path(title="Pareto front")
+        assert self._labels(path, "/front/size/title") == ["Pareto front (better is down)"]
+
+    def test_the_title_is_bare_when_no_directions_are_given(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = list(self._AXES)
+        dataset.attrs[READOUT_SCATTER_TITLE_ATTR] = "Pareto front"
+        path = res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+        assert self._labels(path, "/front/size/title") == ["Pareto front"]
+        assert self._labels(path, "/front/size/axis_names") == list(self._AXES)
+
+    def test_directions_that_do_not_match_the_axes_are_refused(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = list(self._AXES)
+        dataset.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] = ["minimize", "maximize"]
+        with pytest.raises(ValueError, match="2 directions for 4 axes"):
+            res.to_rerun_timeline_path(dataset, res.bench_cfg.result_vars)
+
+    def _stored_directions_path(self, directions, requested=None, title=None):
+        """A timeline whose dataset names its own axes and *directions*."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        dataset.attrs[READOUT_SCATTER_ATTR] = list(self._AXES)
+        dataset.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] = directions
+        if title is not None:
+            dataset.attrs[READOUT_SCATTER_TITLE_ATTR] = title
+        return res.to_rerun_timeline_path(
+            dataset, res.bench_cfg.result_vars, readout_scatter=requested
+        )
+
+    def test_axes_a_caller_names_keep_the_datasets_directions(self):
+        """A direction belongs to its variable, whichever axes are drawn."""
+        path = self._stored_directions_path(
+            ["minimize", "minimize", "minimize", "maximize"],
+            requested=("speed", "mass", "cost", "risk"),
+        )
+        labels = self._labels(path, "/front/size/axis_names")
+        assert labels == ["speed (max)", "mass (min)", "cost (min)", "risk (min)"]
+
+    def test_an_unknown_direction_leaves_its_axis_bare_and_still_draws(self):
+        path = self._stored_directions_path(["minimize", "sideways", "minimize", "maximize"])
+        labels = self._labels(path, "/front/size/axis_names")
+        assert labels == ["cost (min)", "risk", "mass (min)", "speed (max)"]
+        assert len(_strips2d(path, "/front/size/all")[0]) == 4
+
+    def test_a_none_direction_is_not_drawn_as_minimised(self):
+        path = self._stored_directions_path(
+            ["minimize", "none", "minimize", "maximize"], title="Pareto front"
+        )
+        labels = self._labels(path, "/front/size/axis_names")
+        assert labels == ["cost (min)", "risk", "mass (min)", "speed (max)"]
+        # risk is drawn larger-up, so "better is down" would be false for it.
+        assert self._labels(path, "/front/size/title") == ["Pareto front"]
+
+    def test_no_known_direction_is_the_same_as_none_given(self):
+        path = self._stored_directions_path(["none", "none", "none", "bogus"])
+        assert self._labels(path, "/front/size/axis_names") == list(self._AXES)
+
+    @staticmethod
+    def _resolve(axes, directions, requested=None):
+        dataset = xr.Dataset(
+            attrs={READOUT_SCATTER_ATTR: axes, READOUT_SCATTER_DIRECTIONS_ATTR: directions}
+        )
+        return _ReadoutScatter.resolve(dataset, requested)
+
+    def test_repeated_axis_names_do_not_pick_one_direction(self):
+        with pytest.raises(ValueError, match="repeats"):
+            self._resolve(["a", "a", "b", "c"], ["minimize", "maximize", "minimize", "minimize"])
+
+    def test_an_unknown_direction_is_reported_and_leaves_only_its_axis_bare(self, caplog):
+        with caplog.at_level("WARNING", logger="bencher.results.rerun_timeline"):
+            scatter = self._resolve(
+                ["a", "b", "c", "d"], ["minimize", "bogus", "minimize", "maximize"]
+            )
+        assert "not an optimisation direction: 'bogus'" in caplog.text
+        assert scatter.maximize == (False, None, False, True)
+
+    def test_a_direction_count_mismatch_under_a_callers_axes_is_reported(self, caplog):
+        with caplog.at_level("WARNING", logger="bencher.results.rerun_timeline"):
+            path = self._stored_directions_path(
+                ["minimize", "maximize"], requested=("speed", "mass", "cost", "risk")
+            )
+        assert "2 directions for 4 axes" in caplog.text
+        assert self._labels(path, "/front/size/axis_names") == ["speed", "mass", "cost", "risk"]
+        assert len(_strips2d(path, "/front/size/all")[0]) == 4
+
+    @pytest.mark.parametrize("requested", [None, ("d", "c", "b", "a")])
+    def test_directions_given_as_one_string_are_refused(self, requested):
+        with pytest.raises(TypeError, match="one string"):
+            self._resolve(["a", "b", "c", "d"], "mini", requested)
+
+    def test_the_cursors_line_is_the_sample_it_is_on(self):
+        path = self._path()
+        every = _strips2d(path, "/front/size/all")[0]
+        assert _strips2d(path, "/front/size/current") == [[strip] for strip in every]
+        assert _indices(path)["/front/size/current"]["size"] == [2, 3, 4, 5]
+        assert _static(path, "/front/size/all") == [True]
+
+    def test_a_sample_with_no_value_is_left_off_and_clears_the_line(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = self._path(self._scatter_dataset(res, risk=(1.0, 2.0, float("nan"), 4.0)))
+        assert len(_strips2d(path, "/front/size/all")[0]) == 3
+        current = _strips2d(path, "/front/size/current")
+        assert current[2] == [], "the unscored tick clears the highlight"
+        assert all(len(row) == 1 for row in current[:2] + current[3:])
+
+    def test_the_cursors_reading_is_its_values_to_four_figures(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = self._path(self._scatter_dataset(res, risk=(1.23456, 2.34567, 3.45678, 4.56789)))
+        assert _labels2d(path, "/front/size/current/reading") == [
+            ["4", "1.235", "2", "1"],
+            ["3", "2.346", "2", "5"],
+            ["2", "3.457", "5", "2"],
+            ["1", "4.568", "9", "8"],
+        ]
+
+    def test_a_sample_with_no_value_clears_the_reading(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = self._path(self._scatter_dataset(res, risk=(1.23456, 2.34567, float("nan"), 4.5)))
+        assert _labels2d(path, "/front/size/current/reading") == [
+            ["4", "1.235", "2", "1"],
+            ["3", "2.346", "2", "5"],
+            [],
+            ["1", "4.5", "9", "8"],
+        ]
+
+    def test_eight_axes_draw_as_eight(self):
+        """No upper limit: an N-objective front is N axes."""
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        dataset = self._scatter_dataset(res)
+        axes = self._AXES + self._AXES
+        strips = _strips2d(self._path(dataset, axes), "/front/size/all")[0]
+        assert all(len(strip) == 8 for strip in strips)
+
+    def test_a_four_objective_front_plots_itself(self):
+        """End to end: four objectives stamp four axes, their directions, and get lines."""
+        bench = FourObjectiveFrontSweep().to_bench(bn.BenchRunCfg(repeats=1))
+        result = bench.optimize(n_trials=4, warm_start=False, plot=False)
+        res = bench.plot_pareto_front(result, auto_plot=False)
+        assert res.ds.attrs[READOUT_SCATTER_ATTR] == ["near", "far", "cost", "reach"]
+        assert res.ds.attrs[READOUT_SCATTER_DIRECTIONS_ATTR] == [
+            "minimize",
+            "minimize",
+            "minimize",
+            "maximize",
+        ]
+        path = _timeline_path(res)
+        strips = _strips2d(path, "/front/pareto_rank/all")[0]
+        assert len(strips) == len(result.pareto_trials())
+        assert all(len(strip) == 4 for strip in strips)
+        ranks = list(range(len(result.pareto_trials())))
+        assert sorted(_indices(path)["/front/pareto_rank/current"]["pareto_rank"]) == ranks
 
 
 class TestSharedContent:
