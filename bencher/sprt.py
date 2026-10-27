@@ -50,8 +50,6 @@ if TYPE_CHECKING:
 
 # Below this |drift| Wald's ASN formula divides by ~0, so use its zero-drift limit.
 _ZERO_DRIFT = 1e-12
-# Cap on the bracket for the OC exponent; real roots sit well inside it.
-_MAX_EXPONENT = 1e3
 
 
 class SprtVerdict(StrEnum):
@@ -151,21 +149,30 @@ class SprtCfg:
         if abs(drift) < _ZERO_DRIFT:
             return -a * b / (p_fail * f * f + (1 - p_fail) * s * s)
         h = _oc_exponent(p_fail, f, s, drift)
-        accept = (math.exp(h * a) - 1) / (math.exp(h * a) - math.exp(h * b))
+        # P(PASS) = (exp(h*a) - 1) / (exp(h*a) - exp(h*b)), divided through by the
+        # larger exponential so it cannot overflow.
+        if h > 0:
+            accept = math.expm1(-h * a) / math.expm1(h * (b - a))
+        else:
+            accept = 1 - math.expm1(-h * b) / math.expm1(h * (a - b))
         return (accept * b + (1 - accept) * a) / drift
 
 
 def _oc_exponent(p_fail: float, f: float, s: float, drift: float) -> float:
     """The non-zero ``h`` with ``E[exp(h*z)] = 1`` for one run's LLR step ``z``."""
+    log_fail, log_pass = math.log(p_fail), math.log1p(-p_fail)
 
     def g(h: float) -> float:
-        return p_fail * math.exp(h * f) + (1 - p_fail) * math.exp(h * s) - 1
+        # log(E[exp(h*z)]), which has the sign of E[exp(h*z)] - 1 and cannot overflow.
+        x, y = log_fail + h * f, log_pass + h * s
+        top = max(x, y)
+        return top + math.log(math.exp(x - top) + math.exp(y - top))
 
     # g is convex with g(0) = 0 and g'(0) = drift, so the other root lies on the side
     # opposite the drift. Bracket it by doubling, then bisect.
     sign = 1.0 if drift < 0 else -1.0
     far = 1.0
-    while g(sign * far) < 0 and far < _MAX_EXPONENT:
+    while g(sign * far) < 0:
         far *= 2
     near = 0.0
     for _ in range(200):

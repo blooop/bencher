@@ -202,6 +202,28 @@ class TestZeroDrift:
         assert at_zero == pytest.approx(CFG.expected_runs(p_zero - 1e-4), rel=0.01)
 
 
+class TestExpectedRunsRange:
+    @pytest.mark.parametrize("p_fail", [1e-300, 1e-250, 1e-20, 0.5, 0.95, 1 - 1e-6, 1 - 1e-12])
+    def test_expected_runs_is_finite_and_positive(self, p_fail):
+        runs = CFG.expected_runs(p_fail)
+        assert math.isfinite(runs)
+        assert runs > 0
+
+    def test_expected_runs_is_continuous_across_0_1(self):
+        rates = sorted(
+            {10 ** (-k / 8) for k in range(1, 2400)}
+            | {1 - 10 ** (-k / 8) for k in range(1, 128)}
+            | {k / 1000 for k in range(1, 1000)}
+        )
+        runs = [CFG.expected_runs(p) for p in rates]
+        for p, before, after in zip(rates[1:], runs, runs[1:], strict=False):
+            assert after == pytest.approx(before, rel=0.2), p
+
+    def test_expected_runs_tends_to_its_endpoint_values(self):
+        assert CFG.expected_runs(1e-300) == pytest.approx(CFG.expected_runs(0.0), rel=1e-9)
+        assert CFG.expected_runs(1 - 1e-15) == pytest.approx(CFG.expected_runs(1.0), rel=1e-9)
+
+
 class TestErrorRates:
     """Monte Carlo check that the decision keeps its alpha/beta promise."""
 
