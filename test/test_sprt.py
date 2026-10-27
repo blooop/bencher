@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import random
 
 import pytest
@@ -65,6 +66,20 @@ class TestWorkedExample:
         assert inside is SprtVerdict.FLAKY
         assert outside is not SprtVerdict.FLAKY
 
+    def test_rejection_window_is_exactly_189_passes(self):
+        # Two failures add 2*ln(p1/p0); the passes between them may spend only the
+        # excess over ln((1-beta)/alpha), each pass costing ln((1-p0)/(1-p1)).
+        slack = 2 * math.log(0.01 / 0.001) - math.log(0.90 / 0.05)
+        per_pass = math.log(0.999 / 0.99)
+        assert slack / per_pass == pytest.approx(189.48, abs=0.01)
+        assert CFG.flaky_window() == 189
+
+    def test_result_llr_is_the_llr_after_the_deciding_run(self):
+        _, test = _feed(CFG, [True] * 1000)
+        result = test.result()
+        assert result.llr == pytest.approx(249 * CFG.pass_step)
+        assert result.llr <= CFG.pass_bound < result.llr - CFG.pass_step
+
 
 class TestCap:
     def test_hitting_max_runs_is_inconclusive(self):
@@ -72,6 +87,12 @@ class TestCap:
         verdict, test = _feed(cfg, [True] * 100)
         assert verdict is SprtVerdict.INCONCLUSIVE
         assert test.result().runs == 100
+
+    def test_a_boundary_on_the_last_allowed_run_beats_the_cap(self):
+        cfg = SprtCfg(p0=0.001, p1=0.01, max_runs=249)
+        verdict, test = _feed(cfg, [True] * 249)
+        assert verdict is SprtVerdict.PASS
+        assert test.result().runs == 249
 
     def test_record_after_a_verdict_raises(self):
         _, test = _feed(CFG, [True] * 249)
@@ -134,6 +155,27 @@ class TestCfgValidation:
     def test_rejects_bad_config(self, kwargs, match):
         with pytest.raises(ValueError, match=match):
             SprtCfg(**kwargs)
+
+
+class TestGuards:
+    @pytest.mark.parametrize("p_fail", [-0.1, 1.1])
+    def test_expected_runs_rejects_a_rate_outside_0_1(self, p_fail):
+        with pytest.raises(ValueError, match="p_fail"):
+            CFG.expected_runs(p_fail)
+
+    def test_runs_to_pass_rejects_negative_failures(self):
+        with pytest.raises(ValueError, match="failures"):
+            CFG.runs_to_pass(failures=-1)
+
+
+class TestZeroDrift:
+    def test_expected_runs_is_continuous_where_the_drift_is_zero(self):
+        s, f = CFG.pass_step, CFG.fail_step
+        p_zero = -s / (f - s)
+        at_zero = CFG.expected_runs(p_zero)
+        assert math.isfinite(at_zero)
+        assert at_zero == pytest.approx(CFG.expected_runs(p_zero + 1e-4), rel=0.01)
+        assert at_zero == pytest.approx(CFG.expected_runs(p_zero - 1e-4), rel=0.01)
 
 
 class TestErrorRates:
