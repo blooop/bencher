@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`bn.sprt` decides whether a test is flaky with Wald's sequential probability ratio
+  test.** Give it a pass/fail callable and a `bn.SprtCfg(p0, p1, alpha, beta, max_runs)`;
+  it runs until the evidence says `PASS` or `FLAKY` (or `INCONCLUSIVE` at the cap) and
+  keeps the alpha/beta error rates, unlike re-checking a Clopper-Pearson interval after
+  every run. `bn.Sprt` takes one run at a time for callers that own the loop, the result
+  lists the run index of each failure, and `SprtCfg.runs_to_pass`, `flaky_window` and
+  `expected_runs` give the run counts to budget for.
+
 ## [1.148.0] - 2026-10-26
 
 ### Changed
