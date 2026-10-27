@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="460" viewBox="0 0 760 460" font-family="sans-serif" font-size="12" fill="#111827">
+<title>FLAKY: 4 runs, 1 failure; the walk reached the FLAKY line</title>
+<defs><clipPath id="sprt-plot"><rect x="64" y="72" width="672" height="304"/></clipPath></defs>
+<rect width="760" height="460" fill="#ffffff"/>
+<text x="64" y="26" font-size="17" font-weight="bold" fill="#b91c1c">FLAKY: 4 runs, 1 failure<tspan font-weight="normal" fill="#374151">; the walk reached the FLAKY line</tspan></text>
+<text x="64" y="48" fill="#4b5563">p0=0.01  p1=0.2  alpha=0.1  beta=0.1  max_runs=10000  LLR=2.36 (FLAKY at 2.20, PASS at -2.20)</text>
+<g clip-path="url(#sprt-plot)">
+<rect x="64" y="72" width="672" height="304" fill="#fee2e2"/>
+<polygon fill="#d1fae5" points="64.0,337.7 736.0,240.0 736.0,376.0 64.0,376.0"/>
+<polygon class="continue-band" fill="#ffffff" points="64.0,337.7 736.0,240.0 736.0,73.4 64.0,171.1"/>
+<g stroke="#d1d5db" stroke-width="1">
+<line x1="64.0" y1="72" x2="64.0" y2="376"/>
+<line x1="341.7" y1="72" x2="341.7" y2="376"/>
+<line x1="619.4" y1="72" x2="619.4" y2="376"/>
+<line x1="64" y1="376.0" x2="736" y2="376.0"/>
+<line x1="64" y1="254.4" x2="736" y2="254.4"/>
+<line x1="64" y1="132.8" x2="736" y2="132.8"/>
+</g>
+<line class="boundary-flaky" x1="64.0" y1="171.1" x2="736.0" y2="73.4" stroke="#b91c1c" stroke-width="2"/>
+<line class="boundary-pass" x1="64.0" y1="337.7" x2="736.0" y2="240.0" stroke="#15803d" stroke-width="2"/>
+<polyline fill="none" stroke="#9ca3af" stroke-width="1" points="64.0,254.4 230.6,254.4 286.1,132.8 286.1,132.8"/>
+<g fill="#9ca3af">
+<circle class="pass" cx="119.5" cy="254.4" r="1.6"/>
+<circle class="pass" cx="175.1" cy="254.4" r="1.6"/>
+<circle class="pass" cx="230.6" cy="254.4" r="1.6"/>
+</g>
+<g fill="#dc2626" stroke="#ffffff" stroke-width="1">
+<circle class="failure" cx="286.1" cy="132.8" r="4.5"/>
+</g></g>
+<rect x="64" y="72" width="672" height="304" fill="none" stroke="#6b7280"/>
+<text class="max-runs" x="730" y="102" text-anchor="end" fill="#b45309">max_runs=10000 is off the chart &#8594;</text>
+<text x="70" y="88" font-weight="bold" fill="#b91c1c">FLAKY region</text>
+<text x="730" y="368" text-anchor="end" font-weight="bold" fill="#15803d">PASS region</text>
+<text x="64.0" y="392" text-anchor="middle">0</text>
+<text x="341.7" y="392" text-anchor="middle">5</text>
+<text x="619.4" y="392" text-anchor="middle">10</text>
+<text x="56" y="380.0" text-anchor="end">-1</text>
+<text x="56" y="258.4" text-anchor="end">0</text>
+<text x="56" y="136.8" text-anchor="end">1</text>
+<text x="400.0" y="410" text-anchor="middle">run</text>
+<text transform="translate(20 224.0) rotate(-90)" text-anchor="middle">cumulative failures</text>
+<g transform="translate(72 444)"><circle cx="0" cy="-4" r="4.5" fill="#dc2626"/><text x="14" y="0">failure</text></g>
+<g transform="translate(155 444)"><circle cx="0" cy="-4" r="2" fill="#9ca3af"/><text x="14" y="0">pass</text></g>
+<g transform="translate(217 444)"><line x1="-8" y1="-4" x2="8" y2="-4" stroke="#b91c1c" stroke-width="2"/><text x="14" y="0">FLAKY line</text></g>
+<g transform="translate(321 444)"><line x1="-8" y1="-4" x2="8" y2="-4" stroke="#15803d" stroke-width="2"/><text x="14" y="0">PASS line</text></g>
+<g transform="translate(418 444)"><rect x="-8" y="-10" width="16" height="12" fill="#ffffff" stroke="#6b7280"/><text x="14" y="0">continue band</text></g>
+</svg>

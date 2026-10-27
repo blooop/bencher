@@ -1,0 +1,302 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="460" viewBox="0 0 760 460" font-family="sans-serif" font-size="12" fill="#111827">
+<title>PASS: 249 runs, 0 failures; the walk fell to the PASS line</title>
+<defs><clipPath id="sprt-plot"><rect x="64" y="72" width="672" height="304"/></clipPath></defs>
+<rect width="760" height="460" fill="#ffffff"/>
+<text x="64" y="26" font-size="17" font-weight="bold" fill="#15803d">PASS: 249 runs, 0 failures<tspan font-weight="normal" fill="#374151">; the walk fell to the PASS line</tspan></text>
+<text x="64" y="48" fill="#4b5563">p0=0.001  p1=0.01  alpha=0.05  beta=0.1  max_runs=10000  LLR=-2.25 (FLAKY at 2.89, PASS at -2.25)</text>
+<g clip-path="url(#sprt-plot)">
+<rect x="64" y="72" width="672" height="304" fill="#fee2e2"/>
+<polygon fill="#d1fae5" points="64.0,374.2 736.0,301.8 736.0,376.0 64.0,376.0"/>
+<polygon class="continue-band" fill="#ffffff" points="64.0,374.2 736.0,301.8 736.0,151.5 64.0,224.0"/>
+<g stroke="#d1d5db" stroke-width="1">
+<line x1="64.0" y1="72" x2="64.0" y2="376"/>
+<line x1="186.7" y1="72" x2="186.7" y2="376"/>
+<line x1="309.3" y1="72" x2="309.3" y2="376"/>
+<line x1="432.0" y1="72" x2="432.0" y2="376"/>
+<line x1="554.7" y1="72" x2="554.7" y2="376"/>
+<line x1="677.4" y1="72" x2="677.4" y2="376"/>
+<line x1="64" y1="376.0" x2="736" y2="376.0"/>
+<line x1="64" y1="308.4" x2="736" y2="308.4"/>
+<line x1="64" y1="240.9" x2="736" y2="240.9"/>
+<line x1="64" y1="173.3" x2="736" y2="173.3"/>
+<line x1="64" y1="105.8" x2="736" y2="105.8"/>
+</g>
+<line class="boundary-flaky" x1="64.0" y1="224.0" x2="736.0" y2="151.5" stroke="#b91c1c" stroke-width="2"/>
+<line class="boundary-pass" x1="64.0" y1="374.2" x2="736.0" y2="301.8" stroke="#15803d" stroke-width="2"/>
+<polyline fill="none" stroke="#9ca3af" stroke-width="1" points="64.0,308.4 674.9,308.4"/>
+<g fill="#9ca3af">
+<circle class="pass" cx="66.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="68.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="71.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="73.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="76.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="78.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="81.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="83.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="86.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="88.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="91.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="93.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="95.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="98.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="100.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="103.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="105.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="108.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="110.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="113.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="115.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="118.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="120.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="122.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="125.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="127.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="130.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="132.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="135.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="137.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="140.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="142.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="145.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="147.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="149.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="152.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="154.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="157.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="159.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="162.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="164.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="167.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="169.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="172.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="174.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="176.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="179.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="181.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="184.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="186.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="189.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="191.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="194.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="196.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="198.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="201.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="203.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="206.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="208.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="211.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="213.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="216.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="218.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="221.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="223.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="225.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="228.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="230.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="233.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="235.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="238.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="240.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="243.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="245.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="248.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="250.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="252.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="255.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="257.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="260.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="262.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="265.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="267.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="270.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="272.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="275.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="277.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="279.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="282.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="284.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="287.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="289.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="292.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="294.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="297.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="299.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="302.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="304.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="306.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="309.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="311.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="314.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="316.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="319.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="321.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="324.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="326.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="329.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="331.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="333.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="336.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="338.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="341.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="343.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="346.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="348.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="351.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="353.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="356.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="358.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="360.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="363.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="365.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="368.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="370.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="373.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="375.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="378.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="380.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="382.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="385.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="387.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="390.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="392.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="395.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="397.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="400.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="402.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="405.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="407.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="409.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="412.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="414.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="417.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="419.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="422.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="424.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="427.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="429.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="432.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="434.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="436.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="439.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="441.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="444.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="446.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="449.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="451.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="454.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="456.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="459.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="461.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="463.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="466.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="468.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="471.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="473.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="476.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="478.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="481.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="483.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="486.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="488.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="490.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="493.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="495.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="498.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="500.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="503.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="505.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="508.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="510.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="513.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="515.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="517.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="520.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="522.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="525.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="527.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="530.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="532.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="535.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="537.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="540.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="542.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="544.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="547.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="549.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="552.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="554.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="557.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="559.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="562.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="564.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="567.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="569.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="571.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="574.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="576.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="579.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="581.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="584.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="586.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="589.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="591.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="593.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="596.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="598.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="601.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="603.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="606.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="608.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="611.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="613.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="616.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="618.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="620.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="623.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="625.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="628.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="630.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="633.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="635.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="638.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="640.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="643.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="645.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="647.9" cy="308.4" r="1.6"/>
+<circle class="pass" cx="650.4" cy="308.4" r="1.6"/>
+<circle class="pass" cx="652.8" cy="308.4" r="1.6"/>
+<circle class="pass" cx="655.3" cy="308.4" r="1.6"/>
+<circle class="pass" cx="657.7" cy="308.4" r="1.6"/>
+<circle class="pass" cx="660.2" cy="308.4" r="1.6"/>
+<circle class="pass" cx="662.6" cy="308.4" r="1.6"/>
+<circle class="pass" cx="665.1" cy="308.4" r="1.6"/>
+<circle class="pass" cx="667.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="670.0" cy="308.4" r="1.6"/>
+<circle class="pass" cx="672.5" cy="308.4" r="1.6"/>
+<circle class="pass" cx="674.9" cy="308.4" r="1.6"/>
+</g>
+<g fill="#dc2626" stroke="#ffffff" stroke-width="1">
+</g></g>
+<rect x="64" y="72" width="672" height="304" fill="none" stroke="#6b7280"/>
+<text class="max-runs" x="730" y="102" text-anchor="end" fill="#b45309">max_runs=10000 is off the chart &#8594;</text>
+<text x="70" y="88" font-weight="bold" fill="#b91c1c">FLAKY region</text>
+<text x="730" y="368" text-anchor="end" font-weight="bold" fill="#15803d">PASS region</text>
+<text x="64.0" y="392" text-anchor="middle">0</text>
+<text x="186.7" y="392" text-anchor="middle">50</text>
+<text x="309.3" y="392" text-anchor="middle">100</text>
+<text x="432.0" y="392" text-anchor="middle">150</text>
+<text x="554.7" y="392" text-anchor="middle">200</text>
+<text x="677.4" y="392" text-anchor="middle">250</text>
+<text x="56" y="380.0" text-anchor="end">-1</text>
+<text x="56" y="312.4" text-anchor="end">0</text>
+<text x="56" y="244.9" text-anchor="end">1</text>
+<text x="56" y="177.3" text-anchor="end">2</text>
+<text x="56" y="109.8" text-anchor="end">3</text>
+<text x="400.0" y="410" text-anchor="middle">run</text>
+<text transform="translate(20 224.0) rotate(-90)" text-anchor="middle">cumulative failures</text>
+<g transform="translate(72 444)"><circle cx="0" cy="-4" r="4.5" fill="#dc2626"/><text x="14" y="0">failure</text></g>
+<g transform="translate(155 444)"><circle cx="0" cy="-4" r="2" fill="#9ca3af"/><text x="14" y="0">pass</text></g>
+<g transform="translate(217 444)"><line x1="-8" y1="-4" x2="8" y2="-4" stroke="#b91c1c" stroke-width="2"/><text x="14" y="0">FLAKY line</text></g>
+<g transform="translate(321 444)"><line x1="-8" y1="-4" x2="8" y2="-4" stroke="#15803d" stroke-width="2"/><text x="14" y="0">PASS line</text></g>
+<g transform="translate(418 444)"><rect x="-8" y="-10" width="16" height="12" fill="#ffffff" stroke="#6b7280"/><text x="14" y="0">continue band</text></g>
+</svg>
