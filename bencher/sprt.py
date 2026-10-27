@@ -17,8 +17,9 @@ A running log-likelihood ratio (LLR) moves down a little on each pass and up a l
 on each failure. The test is :attr:`SprtVerdict.FLAKY` once the LLR reaches
 ``ln((1-beta)/alpha)``, and :attr:`SprtVerdict.PASS` once it falls to
 ``ln(beta/(1-alpha))``. With ``p0=0.1%, p1=1%, alpha=5%, beta=10%`` a test with no
-failures passes after 249 runs, one failure pushes that out to about 505, and two
-failures within about 190 runs of each other reject it.
+failures passes after 249 runs, one failure pushes that out to about 505, and a fresh
+test whose first two failures have at most 189 passes between them is rejected.
+Passes before the first failure shrink that window: after 100 passes it is 89.
 
 Pick ``p1`` at 5-10x ``p0``: the run count grows roughly as ``1/(p1-p0)**2``. Report
 the verdict, not an interval -- the verdict carries the alpha/beta guarantee, and a

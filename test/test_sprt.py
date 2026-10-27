@@ -49,7 +49,7 @@ class TestWorkedExample:
         verdict, _ = _feed(CFG, [False] + [True] * 200 + [False] + [True] * 1000)
         assert verdict is SprtVerdict.PASS
 
-    def test_rejection_window_is_about_190_runs(self):
+    def test_rejection_window_is_about_189_passes(self):
         gap = CFG.flaky_window()
         assert gap is not None
         assert 185 <= gap <= 192
@@ -57,6 +57,13 @@ class TestWorkedExample:
         outside, _ = _feed(CFG, [False] + [True] * (gap + 1) + [False] + [True] * 2000)
         assert inside is SprtVerdict.FLAKY
         assert outside is SprtVerdict.PASS
+
+    def test_earlier_passes_shrink_the_rejection_window(self):
+        # flaky_window() holds only for a fresh test: 100 earlier passes cut 189 to 89.
+        inside, _ = _feed(CFG, [True] * 100 + [False] + [True] * 89 + [False])
+        outside, _ = _feed(CFG, [True] * 100 + [False] + [True] * 90 + [False])
+        assert inside is SprtVerdict.FLAKY
+        assert outside is not SprtVerdict.FLAKY
 
 
 class TestCap:

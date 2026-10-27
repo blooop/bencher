@@ -1036,8 +1036,9 @@ result.failure_runs  # 1-based index of each failure, to spot clustering
 `p0` is an acceptable failure rate, `p1` an unacceptable one, `alpha` the risk of
 calling a good test flaky and `beta` the risk of passing a flaky one. With the values
 above a test with no failures passes after `cfg.runs_to_pass()` = 249 runs, one failure
-pushes that to `cfg.runs_to_pass(1)` = 505, and two failures within
-`cfg.flaky_window()` = 189 runs of each other mark it flaky. `cfg.expected_runs(p)`
+pushes that to `cfg.runs_to_pass(1)` = 505, and a fresh test whose first two failures
+have at most `cfg.flaky_window()` = 189 passes between them is marked flaky. Passes before
+the first failure shrink that window (after 100 passes it is 89). `cfg.expected_runs(p)`
 gives the mean run count for a true failure rate `p`. The cost grows roughly as
 `1/(p1-p0)**2`, so put `p1` at 5-10x `p0`. Treat `INCONCLUSIVE` as its own outcome, and
 report the verdict rather than an interval. To own the run loop, feed `bn.Sprt(cfg)`
