@@ -209,6 +209,40 @@ class TestZeroDrift:
             CFG.expected_runs(p_zero), rel=1e-6
         )
 
+    def test_expected_runs_at_zero_drift_is_walds_limit(self):
+        # At zero drift Wald's mean is -a*b / E[z^2].
+        a, b = CFG.flaky_bound, CFG.pass_bound
+        f, s = CFG.fail_step, CFG.pass_step
+        p = -s / (f - s)
+        expected = -a * b / (p * f * f + (1 - p) * s * s)
+        assert expected == pytest.approx(312.26917765914, rel=1e-9)
+        assert CFG.expected_runs(p) == pytest.approx(expected, rel=1e-9)
+
+    @pytest.mark.parametrize(("p_fail", "approx_runs"), [(0.003, 324.509157), (0.0045, 299.600521)])
+    def test_expected_runs_near_zero_drift_is_walds_closed_form(self, p_fail, approx_runs):
+        a, b = CFG.flaky_bound, CFG.pass_bound
+        f, s = CFG.fail_step, CFG.pass_step
+        drift = p_fail * f + (1 - p_fail) * s
+
+        def mgf_minus_one(h: float) -> float:
+            return p_fail * math.exp(h * f) + (1 - p_fail) * math.exp(h * s) - 1
+
+        # The nonzero root lies on the side opposite the drift; bisect a sign change.
+        sign = -1.0 if drift > 0 else 1.0
+        lo, hi = sign * 1e-6, sign * 10.0
+        assert mgf_minus_one(lo) < 0 < mgf_minus_one(hi)
+        for _ in range(200):
+            mid = (lo + hi) / 2
+            if mgf_minus_one(mid) < 0:
+                lo = mid
+            else:
+                hi = mid
+        h = (lo + hi) / 2
+        accept = (math.exp(h * a) - 1) / (math.exp(h * a) - math.exp(h * b))
+        expected = (accept * b + (1 - accept) * a) / drift
+        assert expected == pytest.approx(approx_runs, rel=1e-6)
+        assert CFG.expected_runs(p_fail) == pytest.approx(expected, rel=1e-9)
+
 
 class TestExpectedRunsRange:
     @pytest.mark.parametrize("p_fail", [1e-300, 1e-250, 1e-20, 0.5, 0.95, 1 - 1e-6, 1 - 1e-12])
