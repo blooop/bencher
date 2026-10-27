@@ -7,9 +7,11 @@ server instead, copy the package there once per rerun version and point
     python -m bencher.rerun_web_viewer 0.40.0 /srv/reports/_rerun
     export BENCHER_RERUN_VIEWER_URL='/_rerun/web-viewer@{version}/'
 
-The package comes from the npm registry, which has no file-size limit, and its
-sha512 is checked against the registry's ``dist.integrity`` before anything is
-written. The server must send ``.wasm`` files as ``application/wasm``.
+The module needs only the standard library, so it also runs as a plain script
+(``python3 -I path/to/rerun_web_viewer.py <version> <dir>``) from a ``--no-deps``
+install, without the rest of bencher. The package comes from the npm registry,
+which has no file-size limit, and its sha512 is checked against the registry's
+``dist.integrity`` before anything is written. The server must send ``.wasm`` files as ``application/wasm``.
 
 ``index.js`` imports ``"./re_viewer"`` with no extension. unpkg resolves that to
 ``re_viewer.js``, but a plain file server does not, so this module rewrites that

@@ -4,6 +4,8 @@ import base64
 import hashlib
 import io
 import json
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -108,3 +110,16 @@ class TestDownloadWebViewer(unittest.TestCase):
         with self._serve(tgz), pytest.raises(ValueError, match="Unsafe path"):
             rerun_web_viewer.download_web_viewer("0.40.0", self.tmp)
         assert not (self.tmp.parent / "evil.js").exists()
+
+
+def test_runs_as_a_plain_script_without_bencher_installed():
+    """CI jobs run the file from a --no-deps install, so it must need only the stdlib."""
+    script = Path(rerun_web_viewer.__file__)
+    result = subprocess.run(
+        [sys.executable, "-I", "-S", str(script), "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "web-viewer" in result.stdout
