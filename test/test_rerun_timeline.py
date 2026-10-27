@@ -447,6 +447,24 @@ def _strips2d(path: str, entity: str) -> list[list[list[list[float]]]]:
     return rows
 
 
+def _labels2d(path: str, entity: str) -> list[list[str]]:
+    """The Points2D labels logged at *entity*, one list per row, in index order."""
+    reader = RrdReader(str(path))
+    rows: list[tuple[int, list[str]]] = []
+    for chunk in reader.stream(store=reader.recordings()[0]):
+        if str(chunk.entity_path) != entity:
+            continue
+        batch = chunk.to_record_batch()
+        index = next(
+            batch.column(i).to_pylist()
+            for i, field in enumerate(batch.schema)
+            if (field.metadata or {}).get(b"rerun:kind") == b"index"
+        )
+        labels = batch.column(batch.schema.get_field_index("Points2D:labels")).to_pylist()
+        rows.extend(zip(index, (row or [] for row in labels), strict=True))
+    return [labels for _, labels in sorted(rows)]
+
+
 def _static(path: str, entity: str) -> list[bool]:
     """Whether each chunk logged at *entity* went to the static store."""
     reader = RrdReader(str(path))
@@ -1220,6 +1238,26 @@ class TestParallelCoordinates:
         current = _strips2d(path, "/front/size/current")
         assert current[2] == [], "the unscored tick clears the highlight"
         assert all(len(row) == 1 for row in current[:2] + current[3:])
+
+    def test_the_cursors_reading_is_its_values_to_four_figures(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = self._path(self._scatter_dataset(res, risk=(1.23456, 2.34567, 3.45678, 4.56789)))
+        assert _labels2d(path, "/front/size/current/reading") == [
+            ["4", "1.235", "2", "1"],
+            ["3", "2.346", "2", "5"],
+            ["2", "3.457", "5", "2"],
+            ["1", "4.568", "9", "8"],
+        ]
+
+    def test_a_sample_with_no_value_clears_the_reading(self):
+        res = _sweep(["size"], cls=ImageAndMetricSweep, result_vars=("frame",))
+        path = self._path(self._scatter_dataset(res, risk=(1.23456, 2.34567, float("nan"), 4.5)))
+        assert _labels2d(path, "/front/size/current/reading") == [
+            ["4", "1.235", "2", "1"],
+            ["3", "2.346", "2", "5"],
+            [],
+            ["1", "4.5", "9", "8"],
+        ]
 
     def test_eight_axes_draw_as_eight(self):
         """No upper limit: an N-objective front is N axes."""
