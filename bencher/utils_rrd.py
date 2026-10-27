@@ -13,6 +13,7 @@ See ``utils_rerun.py`` for functions that require the rerun Python SDK
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import os
 import re
@@ -148,6 +149,41 @@ def rrd_file_to_pane(  # pragma: no cover
 # The viewer is loaded from unpkg, not jsDelivr: the viewer fetches its .wasm from
 # the same base URL, and jsDelivr refuses any file over 50 MB with a 403. The
 # rerun 0.40.0 .wasm is over that limit, so a jsDelivr viewer cannot start.
+#
+# Set BENCHER_RERUN_VIEWER_URL to load the viewer from somewhere else, such as a
+# copy of the npm package on the server that hosts the reports (see
+# ``bencher.rerun_web_viewer``). The value is one or more whitespace-separated base
+# URLs, each with a ``{version}`` placeholder; ``index.js``, ``re_viewer.js`` and
+# ``re_viewer_bg.wasm`` must sit under each. The viewer page imports ``index.js``
+# from the first base that serves it, and the glue and .wasm then come from that
+# same base. A relative or root-relative base resolves against the viewer page, so
+# list unpkg after it when the report may also be opened away from that server.
+
+RERUN_VIEWER_URL_ENV = "BENCHER_RERUN_VIEWER_URL"
+DEFAULT_RERUN_VIEWER_URL = "https://unpkg.com/@rerun-io/web-viewer@{version}/"
+
+
+def _viewer_js_urls(version: str) -> list[str]:
+    """Return the ``index.js`` URLs for *version*, in the order the page tries them."""
+    value = os.environ.get(RERUN_VIEWER_URL_ENV, "").strip() or DEFAULT_RERUN_VIEWER_URL
+    urls = []
+    for base in value.split():
+        if "{version}" not in base:
+            raise ValueError(f"{RERUN_VIEWER_URL_ENV}: {base!r} has no {{version}} placeholder")
+        url = base.replace("{version}", version).rstrip("/") + "/index.js"
+        # The list is written into a <script> as JSON; keep it a plain string list.
+        if any(c in url for c in '"\\<>'):
+            raise ValueError(
+                f"{RERUN_VIEWER_URL_ENV}: {base!r} must not contain quotes, \\, < or >"
+            )
+        urls.append(url)
+    return urls
+
+
+def _viewer_js_list(version: str) -> str:
+    """Return the ``index.js`` URLs for *version* as a JS array literal."""
+    return json.dumps(_viewer_js_urls(version))
+
 
 _CDN_VIEWER_TEMPLATE = """\
 <!DOCTYPE html>
@@ -161,9 +197,14 @@ try {{
   const p = new URLSearchParams(location.search);
   const url = p.get("url");
   if (!url) throw new Error("Missing ?url= parameter");
-  const {{WebViewer}} = await import(
-    "https://unpkg.com/@rerun-io/web-viewer@{version}/index.js"
-  );
+  let mod;
+  const tried = [];
+  for (const u of {viewer_js}) {{
+    try {{ mod = await import(u); break; }}
+    catch (err) {{ tried.push(u + ": " + err.message); console.warn("rerun viewer", u, err); }}
+  }}
+  if (!mod) throw new Error("Could not load the rerun web viewer:\\n" + tried.join("\\n"));
+  const {{WebViewer}} = mod;
   const v = new WebViewer();
   await v.start(new URL(url, location.href).href,
                 document.getElementById("c"),
@@ -186,9 +227,14 @@ _CDN_VIEWER_INLINE_TEMPLATE = """\
 try {{
   const b64 = document.getElementById("rrd-data").textContent.trim();
   const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-  const {{WebViewer}} = await import(
-    "https://unpkg.com/@rerun-io/web-viewer@{version}/index.js"
-  );
+  let mod;
+  const tried = [];
+  for (const u of {viewer_js}) {{
+    try {{ mod = await import(u); break; }}
+    catch (err) {{ tried.push(u + ": " + err.message); console.warn("rerun viewer", u, err); }}
+  }}
+  if (!mod) throw new Error("Could not load the rerun web viewer:\\n" + tried.join("\\n"));
+  const {{WebViewer}} = mod;
   const v = new WebViewer();
   await v.start(null, document.getElementById("c"),
                 {{hide_welcome_screen:true,width:"100%",height:"100%"}});
@@ -236,10 +282,10 @@ def _wrap_viewer_controls(iframe_html: str, viewer_url: str, width: int, height:
     )
 
 
-# Cache of written viewer page filenames, keyed by version (for /rrd_static/ URLs).
+# Viewer HTML last written to cachedir/rrd/, keyed by version (for /rrd_static/ URLs).
 _cdn_viewer_files: dict[str, str] = {}
 
-# Cache of rendered viewer HTML strings, keyed by version (for portable reports).
+# Cache of rendered viewer HTML strings, keyed by index.js URL list (for portable reports).
 _cdn_viewer_html: dict[str, str] = {}
 
 
@@ -248,28 +294,28 @@ def _cdn_viewer_url(rrd_relative: Path, version: str) -> str:
 
     Writes a ``viewer_<version>.html`` page into ``cachedir/rrd/`` (served
     by the Panel server at ``/rrd_static/``) that loads the rerun web viewer
-    from the jsDelivr CDN.  Both the viewer page and the .rrd are on the
+    from ``_viewer_js_urls(version)``.  Both the viewer page and the .rrd are on the
     same HTTP origin, avoiding mixed-content blocks.
     """
-    if version not in _cdn_viewer_files:
-        html = _CDN_VIEWER_TEMPLATE.format(version=version)
-        filename = f"viewer_{version}.html"
+    html = _get_cdn_viewer_html(version)
+    filename = f"viewer_{version}.html"
+    if _cdn_viewer_files.get(version) != html:
         viewer_path = _RRD_CACHE_DIR.resolve() / filename
         viewer_path.parent.mkdir(parents=True, exist_ok=True)
         if not viewer_path.exists() or viewer_path.read_text() != html:
             viewer_path.write_text(html)
-        _cdn_viewer_files[version] = filename
+        _cdn_viewer_files[version] = html
 
-    filename = _cdn_viewer_files[version]
     rrd_url = quote(f"/rrd_static/{rrd_relative.as_posix()}", safe="/:")
     return f"/rrd_static/{filename}?url={rrd_url}"
 
 
 def _get_cdn_viewer_html(version: str) -> str:
     """Return the viewer HTML string for a given rerun version (cached)."""
-    if version not in _cdn_viewer_html:
-        _cdn_viewer_html[version] = _CDN_VIEWER_TEMPLATE.format(version=version)
-    return _cdn_viewer_html[version]
+    viewer_js = _viewer_js_list(version)
+    if viewer_js not in _cdn_viewer_html:
+        _cdn_viewer_html[viewer_js] = _CDN_VIEWER_TEMPLATE.format(viewer_js=viewer_js)
+    return _cdn_viewer_html[viewer_js]
 
 
 def _write_rrd_sidecar(rrd_path: Path, version: str, dest_dir: Path) -> tuple[str, str]:
@@ -350,7 +396,9 @@ def _write_inline_viewer(rrd_path: Path, version: str, dest_dir: Path) -> str:
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
     rrd_b64 = base64.b64encode(rrd_path.read_bytes()).decode("ascii")
-    html = _CDN_VIEWER_INLINE_TEMPLATE.format(version=version, rrd_base64=rrd_b64)
+    html = _CDN_VIEWER_INLINE_TEMPLATE.format(
+        viewer_js=_viewer_js_list(version), rrd_base64=rrd_b64
+    )
     job_key = rrd_path.parent.name
     rrd_stem = rrd_path.stem
     filename = f"viewer_{job_key}_{rrd_stem}.html"

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Self-host the rerun web viewer.** Set `BENCHER_RERUN_VIEWER_URL` to one or more base
+  URLs with a `{version}` placeholder (for example
+  `/_rerun/web-viewer@{version}/ https://unpkg.com/@rerun-io/web-viewer@{version}/`).
+  The viewer page imports `index.js` from the first one that serves it, and the glue and
+  the `.wasm` then come from that same place. The default is unpkg alone.
+  `python -m bencher.rerun_web_viewer <version> <dir>` writes the npm package to
+  `<dir>/web-viewer@<version>/`, checks it against the registry's sha512, and rewrites
+  its one extensionless `./re_viewer` import so a plain file server can serve it.
+
 ## [1.148.1] - 2026-10-27
 
 ### Fixed
