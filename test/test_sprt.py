@@ -259,3 +259,74 @@ def test_sprt_module_needs_only_the_standard_library():
     )
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == "249"
+
+
+SVG_NS = "{http://www.w3.org/2000/svg}"
+
+
+def _svg_tree(test: Sprt):
+    import xml.etree.ElementTree as ET
+
+    return ET.fromstring(test.to_svg())  # noqa: S314 - parses our own output
+
+
+def _by_class(root, cls: str):
+    return [el for el in root.iter() if cls in (el.get("class") or "").split()]
+
+
+def _all_text(root) -> str:
+    return " ".join("".join(el.itertext()) for el in root.iter(f"{SVG_NS}text"))
+
+
+class TestSvg:
+    def test_flaky_chart_shows_verdict_failures_and_boundaries(self):
+        _, test = _feed(CFG, [False] + [True] * 150 + [False])
+        root = _svg_tree(test)
+        assert root.tag == f"{SVG_NS}svg"
+        text = _all_text(root)
+        assert "FLAKY" in text
+        assert "152 runs" in text
+        assert "2 failures" in text
+        assert "p0=0.001" in text
+        assert "p1=0.01" in text
+        assert len(_by_class(root, "failure")) == 2
+        assert len(_by_class(root, "boundary-flaky")) == 1
+        assert len(_by_class(root, "boundary-pass")) == 1
+        assert len(_by_class(root, "continue-band")) == 1
+        assert len(_by_class(root, "max-runs")) == 1
+
+    def test_pass_chart_draws_one_point_per_pass(self):
+        _, test = _feed(CFG, [False] + [True] * 1000)
+        root = _svg_tree(test)
+        assert "PASS" in _all_text(root)
+        assert len(_by_class(root, "failure")) == 1
+        assert len(_by_class(root, "pass")) == test.runs - 1
+
+    def test_undecided_and_inconclusive_render(self):
+        undecided = Sprt(CFG)
+        undecided.record(True)
+        assert "no verdict yet" in _all_text(_svg_tree(undecided))
+        _, capped = _feed(SprtCfg(p0=0.001, p1=0.01, max_runs=50), [True] * 50)
+        assert "INCONCLUSIVE" in _all_text(_svg_tree(capped))
+        assert len(_by_class(_svg_tree(Sprt(CFG)), "failure")) == 0
+
+    def test_long_run_stays_bounded_and_keeps_every_failure(self):
+        # A failure every 256 runs is close to zero drift, so the walk stays inside
+        # the band until the cap.
+        cfg = SprtCfg(p0=0.001, p1=0.01, max_runs=10_000)
+        outcomes = [i % 256 != 1 for i in range(1, 10_001)]
+        verdict, test = _feed(cfg, outcomes)
+        assert verdict is SprtVerdict.INCONCLUSIVE
+        assert test.runs == 10_000
+        svg = test.to_svg()
+        assert len(svg) < 150_000
+        root = _svg_tree(test)
+        assert len(_by_class(root, "failure")) == test.result().failures == 40
+        assert len(_by_class(root, "pass")) <= 2000
+
+    def test_repr_svg_and_save_svg(self, tmp_path):
+        _, test = _feed(CFG, [True] * 300)
+        assert test._repr_svg_() == test.to_svg()
+        path = tmp_path / "sprt.svg"
+        test.save_svg(path)
+        assert path.read_text(encoding="utf-8") == test.to_svg()

@@ -41,7 +41,9 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING
+from xml.sax.saxutils import escape
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -249,6 +251,244 @@ class Sprt:
         if self._verdict is None:
             raise RuntimeError(f"SPRT has no verdict yet after {self._runs} runs")
         return SprtResult(self._verdict, self._runs, tuple(self._failure_runs), self._llr)
+
+    def to_svg(self) -> str:
+        """Draw the walk on Wald's chart: cumulative failures against runs.
+
+        Each run is a point: a grey dot for a pass, a red dot for a failure. The two
+        boundary lines are the LLR bounds mapped to failure counts, and the walk stops
+        at the line it crosses. ``runs`` and ``failure_runs`` fix every point, so the
+        chart is exact. Beyond ``_SVG_MAX_PASS_DOTS`` passes it thins the pass dots;
+        every failure stays a dot. Only the standard library is used.
+        """
+        return _render_svg(self.cfg, self._runs, self._failure_runs, self._verdict, self._llr)
+
+    def _repr_svg_(self) -> str:
+        return self.to_svg()
+
+    def save_svg(self, path: str | Path) -> Path:
+        """Write :meth:`to_svg` to ``path`` and return the path."""
+        path = Path(path)
+        path.write_text(self.to_svg(), encoding="utf-8")
+        return path
+
+
+# Pass dots beyond this count are thinned to every n-th pass; failures are never thinned.
+_SVG_MAX_PASS_DOTS = 1500
+_SVG_W, _SVG_H = 760, 460
+_SVG_LEFT, _SVG_RIGHT, _SVG_TOP, _SVG_BOTTOM = 64, 24, 72, 84
+_VERDICT_COLOUR = {
+    SprtVerdict.PASS: "#15803d",
+    SprtVerdict.FLAKY: "#b91c1c",
+    SprtVerdict.INCONCLUSIVE: "#b45309",
+    None: "#374151",
+}
+_WHY = {
+    SprtVerdict.PASS: "the walk fell to the PASS line",
+    SprtVerdict.FLAKY: "the walk reached the FLAKY line",
+    SprtVerdict.INCONCLUSIVE: "max_runs ran out in the band",
+    None: "no verdict yet, still in the band",
+}
+
+
+def _nice_step(span: float, target: int = 6) -> float:
+    raw = span / target
+    mag = 10 ** math.floor(math.log10(raw))
+    for mult in (1, 2, 5):
+        if raw <= mult * mag:
+            return mult * mag
+    return 10 * mag
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def _render_svg(
+    cfg: SprtCfg,
+    runs: int,
+    failure_runs: list[int],
+    verdict: SprtVerdict | None,
+    llr: float,
+) -> str:
+    failures = len(failure_runs)
+    # In (runs n, cumulative failures k) the LLR is k*f + (n-k)*s, so each bound is a line.
+    f, s = cfg.fail_step, cfg.pass_step
+
+    def upper(n: float) -> float:
+        return (cfg.flaky_bound - n * s) / (f - s)
+
+    def lower(n: float) -> float:
+        return (cfg.pass_bound - n * s) / (f - s)
+
+    x_hi = max(runs, cfg.runs_to_pass(0)) * 1.1
+    if cfg.max_runs <= x_hi * 1.5:
+        x_hi = cfg.max_runs * 1.04
+    y_lo = min(0.0, math.floor(lower(0)))
+    y_hi = math.ceil(max(failures, upper(min(x_hi, max(runs, 1) * 1.1)))) + 0.5
+    pw = _SVG_W - _SVG_LEFT - _SVG_RIGHT
+    ph = _SVG_H - _SVG_TOP - _SVG_BOTTOM
+    bottom = _SVG_TOP + ph
+
+    def px(n: float) -> float:
+        return _SVG_LEFT + n / x_hi * pw
+
+    def py(k: float) -> float:
+        return _SVG_TOP + (y_hi - k) / (y_hi - y_lo) * ph
+
+    def pt(n: float, k: float) -> str:
+        return f"{px(n):.1f},{py(k):.1f}"
+
+    colour = _VERDICT_COLOUR[verdict]
+    why = _WHY[verdict]
+    title = f"{verdict or 'SPRT running'}: {_plural(runs, 'run')}, {_plural(failures, 'failure')}"
+    params = (
+        f"p0={cfg.p0:g}  p1={cfg.p1:g}  alpha={cfg.alpha:g}  beta={cfg.beta:g}  "
+        f"max_runs={cfg.max_runs}  LLR={llr:.2f} (FLAKY at {cfg.flaky_bound:.2f}, "
+        f"PASS at {cfg.pass_bound:.2f})"
+    )
+
+    out = [
+        (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{_SVG_W}" height="{_SVG_H}" '
+            f'viewBox="0 0 {_SVG_W} {_SVG_H}" font-family="sans-serif" font-size="12" '
+            'fill="#111827">'
+        ),
+        f"<title>{escape(title)}; {escape(why)}</title>",
+        (
+            '<defs><clipPath id="sprt-plot">'
+            f'<rect x="{_SVG_LEFT}" y="{_SVG_TOP}" width="{pw}" height="{ph}"/></clipPath></defs>'
+        ),
+        f'<rect width="{_SVG_W}" height="{_SVG_H}" fill="#ffffff"/>',
+        (
+            f'<text x="{_SVG_LEFT}" y="26" font-size="17" font-weight="bold" fill="{colour}">'
+            f'{escape(title)}<tspan font-weight="normal" fill="#374151">; {escape(why)}'
+            "</tspan></text>"
+        ),
+        f'<text x="{_SVG_LEFT}" y="48" fill="#4b5563">{escape(params)}</text>',
+        '<g clip-path="url(#sprt-plot)">',
+        # Regions: FLAKY above the upper line, PASS below the lower one.
+        f'<rect x="{_SVG_LEFT}" y="{_SVG_TOP}" width="{pw}" height="{ph}" fill="#fef2f2"/>',
+        (
+            f'<polygon fill="#f0fdf4" points="{pt(0, lower(0))} '
+            f'{pt(x_hi, lower(x_hi))} {pt(x_hi, y_lo)} {pt(0, y_lo)}"/>'
+        ),
+        (
+            f'<polygon class="continue-band" fill="#f3f4f6" points="{pt(0, lower(0))} '
+            f'{pt(x_hi, lower(x_hi))} {pt(x_hi, upper(x_hi))} {pt(0, upper(0))}"/>'
+        ),
+        '<g stroke="#d1d5db" stroke-width="1">',
+    ]
+
+    labels = []
+    x_step = _nice_step(x_hi)
+    for i in range(int(x_hi / x_step) + 1):
+        x = px(i * x_step)
+        out.append(f'<line x1="{x:.1f}" y1="{_SVG_TOP}" x2="{x:.1f}" y2="{bottom}"/>')
+        labels.append(
+            f'<text x="{x:.1f}" y="{bottom + 16}" text-anchor="middle">{i * x_step:g}</text>'
+        )
+    y_step = max(1, round(_nice_step(y_hi - y_lo)))
+    for k in range(math.ceil(y_lo / y_step) * y_step, math.floor(y_hi) + 1, y_step):
+        y = py(k)
+        out.append(f'<line x1="{_SVG_LEFT}" y1="{y:.1f}" x2="{_SVG_LEFT + pw}" y2="{y:.1f}"/>')
+        labels.append(f'<text x="{_SVG_LEFT - 8}" y="{y + 4:.1f}" text-anchor="end">{k}</text>')
+    out.append("</g>")
+
+    out.append(
+        f'<line class="boundary-flaky" x1="{px(0):.1f}" y1="{py(upper(0)):.1f}" '
+        f'x2="{px(x_hi):.1f}" y2="{py(upper(x_hi)):.1f}" stroke="#b91c1c" stroke-width="2"/>'
+    )
+    out.append(
+        f'<line class="boundary-pass" x1="{px(0):.1f}" y1="{py(lower(0)):.1f}" '
+        f'x2="{px(x_hi):.1f}" y2="{py(lower(x_hi)):.1f}" stroke="#15803d" stroke-width="2"/>'
+    )
+
+    # The walk is a straight line between failures, so only the failure steps need vertices.
+    path = [pt(0, 0)]
+    for i, r in enumerate(failure_runs):
+        path += [pt(r - 1, i), pt(r, i + 1)]
+    path.append(pt(runs, failures))
+    out.append(
+        f'<polyline fill="none" stroke="#9ca3af" stroke-width="1" points="{" ".join(path)}"/>'
+    )
+
+    stride = max(1, math.ceil((runs - failures) / _SVG_MAX_PASS_DOTS))
+    fail_set = set(failure_runs)
+    out.append('<g fill="#9ca3af">')
+    failed = passed = 0
+    for r in range(1, runs + 1):
+        if r in fail_set:
+            failed += 1
+            continue
+        passed += 1
+        if passed % stride == 0 or r == runs:
+            out.append(f'<circle class="pass" cx="{px(r):.1f}" cy="{py(failed):.1f}" r="1.6"/>')
+    out.append("</g>")
+    out.append('<g fill="#dc2626" stroke="#ffffff" stroke-width="1">')
+    out += [
+        f'<circle class="failure" cx="{px(r):.1f}" cy="{py(i + 1):.1f}" r="4.5"/>'
+        for i, r in enumerate(failure_runs)
+    ]
+    out.append("</g></g>")  # end of the clipped plot
+
+    out.append(
+        f'<rect x="{_SVG_LEFT}" y="{_SVG_TOP}" width="{pw}" height="{ph}" fill="none" '
+        'stroke="#6b7280"/>'
+    )
+    if cfg.max_runs <= x_hi:
+        cap = px(cfg.max_runs)
+        out.append(
+            f'<line class="max-runs" x1="{cap:.1f}" y1="{_SVG_TOP}" x2="{cap:.1f}" '
+            f'y2="{bottom}" stroke="#b45309" stroke-width="1.5" stroke-dasharray="6 4"/>'
+        )
+        out.append(
+            f'<text x="{cap - 4:.1f}" y="{bottom - 28}" text-anchor="end" '
+            f'fill="#b45309">max_runs={cfg.max_runs}</text>'
+        )
+    else:
+        out.append(
+            f'<text class="max-runs" x="{_SVG_LEFT + pw - 6}" y="{_SVG_TOP + 30}" '
+            f'text-anchor="end" fill="#b45309">max_runs={cfg.max_runs} is off the chart '
+            "&#8594;</text>"
+        )
+    out.append(
+        f'<text x="{_SVG_LEFT + 6}" y="{_SVG_TOP + 16}" font-weight="bold" '
+        'fill="#b91c1c">FLAKY region</text>'
+    )
+    out.append(
+        f'<text x="{_SVG_LEFT + pw - 6}" y="{bottom - 8}" text-anchor="end" '
+        'font-weight="bold" fill="#15803d">PASS region</text>'
+    )
+    out += labels
+    out.append(
+        f'<text x="{_SVG_LEFT + pw / 2:.1f}" y="{bottom + 34}" text-anchor="middle">run</text>'
+    )
+    out.append(
+        f'<text transform="translate(20 {_SVG_TOP + ph / 2:.1f}) rotate(-90)" '
+        'text-anchor="middle">cumulative failures</text>'
+    )
+
+    pass_label = "pass" if stride == 1 else f"pass (1 in {stride} shown)"
+    legend = [
+        ('<circle cx="0" cy="-4" r="4.5" fill="#dc2626"/>', "failure"),
+        ('<circle cx="0" cy="-4" r="2" fill="#9ca3af"/>', pass_label),
+        ('<line x1="-8" y1="-4" x2="8" y2="-4" stroke="#b91c1c" stroke-width="2"/>', "FLAKY line"),
+        ('<line x1="-8" y1="-4" x2="8" y2="-4" stroke="#15803d" stroke-width="2"/>', "PASS line"),
+        (
+            '<rect x="-8" y="-10" width="16" height="12" fill="#f3f4f6" stroke="#d1d5db"/>',
+            "continue band",
+        ),
+    ]
+    lx = _SVG_LEFT + 8
+    for mark, label in legend:
+        out.append(
+            f'<g transform="translate({lx} {_SVG_H - 16})">{mark}'
+            f'<text x="14" y="0">{escape(label)}</text></g>'
+        )
+        lx += 34 + 7 * len(label)
+    out.append("</svg>")
+    return "\n".join(out)
 
 
 def sprt(run_test: Callable[[], bool], cfg: SprtCfg) -> SprtResult:

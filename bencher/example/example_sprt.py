@@ -8,6 +8,8 @@ always says FLAKY; between the two it needs the most runs.
 
 import random
 
+import panel as pn
+
 import bencher as bn
 
 SPRT_CFG = bn.SprtCfg(p0=0.001, p1=0.01, alpha=0.05, beta=0.10)
@@ -48,6 +50,12 @@ def example_sprt(run_cfg: bn.BenchRunCfg | None = None, trials: int = 1000) -> b
             "531 runs at every failure rate."
         ),
     )
+    # One SPRT on a test that fails at p1, drawn against Wald's boundaries.
+    rng = random.Random(0)
+    one = bn.Sprt(SPRT_CFG)
+    while one.record(rng.random() >= SPRT_CFG.p1) is None:
+        pass
+    bench.report.append(pn.pane.SVG(one.to_svg(), sizing_mode="fixed"), "One SPRT at p1")
     return bench
 
 
