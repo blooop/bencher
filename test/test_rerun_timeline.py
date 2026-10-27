@@ -1174,10 +1174,11 @@ class TestParallelCoordinates:
         assert speed_y.index(max(speed_y)) == 3
         assert speed_y.index(min(speed_y)) == 0
 
-    def _ticks(self, path: str, index: int) -> list[tuple[float, float]]:
-        """``(value, y)`` per tick label logged on axis *index*."""
+    @staticmethod
+    def _tick_points(path: str, index: int) -> list[tuple[float, float, float]]:
+        """``(value, x, y)`` per tick label logged on axis *index*."""
         reader = RrdReader(str(path))
-        ys: list[float] = []
+        points: list[tuple[float, float]] = []
         labels: list[str] = []
         for chunk in reader.stream(store=reader.recordings()[0]):
             if str(chunk.entity_path) != f"/front/size/ticks/{index}":
@@ -1186,12 +1187,32 @@ class TestParallelCoordinates:
             for i, field in enumerate(batch.schema):
                 column = batch.column(i).to_pylist()
                 if field.name.startswith("Points2D") and "positions" in field.name:
-                    ys.extend(float(_xy(point)[1]) for row in column for point in row)
+                    points.extend(
+                        (float(_xy(point)[0]), float(_xy(point)[1]))
+                        for row in column
+                        for point in row
+                    )
                 elif field.name == "Points2D:labels":
                     labels.extend(label for row in column for label in row)
-        assert ys
-        assert len(ys) == len(labels)
-        return [(float(label), y) for label, y in zip(labels, ys, strict=True)]
+        assert points
+        assert len(points) == len(labels)
+        return [(float(label), x, y) for label, (x, y) in zip(labels, points, strict=True)]
+
+    def _ticks(self, path: str, index: int) -> list[tuple[float, float]]:
+        """``(value, y)`` per tick label logged on axis *index*."""
+        return [(value, y) for value, _, y in self._tick_points(path, index)]
+
+    def test_each_axis_has_its_tick_labels_just_left_of_it(self):
+        """Ticks drawn at another axis would label that axis with this one's values."""
+        path = self._path()
+        frame = _ParallelFrame([np.array([0.0, 1.0])] * len(self._AXES), None)
+        offsets = []
+        for index in range(len(self._AXES)):
+            xs = {x for _, x, _ in self._tick_points(path, index)}
+            assert len(xs) == 1, f"axis {index}: its ticks share one x"
+            offsets.append(xs.pop() - frame.axis_x(index))
+        assert offsets == pytest.approx([offsets[0]] * len(offsets))
+        assert -frame.spacing / 2 < offsets[0] < 0.0
 
     def test_tick_labels_are_turned_with_the_lines_on_their_axis(self):
         """A label on the wrong end would read the best sample as the worst."""
