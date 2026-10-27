@@ -1038,8 +1038,10 @@ calling a good test flaky and `beta` the risk of passing a flaky one. With the v
 above a test with no failures passes after `cfg.runs_to_pass()` = 249 runs, one failure
 pushes that to `cfg.runs_to_pass(1)` = 505, and a fresh test whose first two failures
 have at most `cfg.flaky_window()` = 189 passes between them is marked flaky. Passes before
-the first failure shrink that window (after 100 passes it is 89). `cfg.expected_runs(p)`
-gives the mean run count for a true failure rate `p`. The cost grows roughly as
+the first failure shrink that window (after 100 passes it is 89). When one failure alone
+reaches FLAKY (`cfg.fail_step >= cfg.flaky_bound`, e.g. `p1` = 10x `p0` with
+`alpha = beta = 0.1`), there is no window and `flaky_window()` returns `None`.
+`cfg.expected_runs(p)` gives the mean run count for a true failure rate `p`. The cost grows roughly as
 `1/(p1-p0)**2`, so put `p1` at 5-10x `p0`. Treat `INCONCLUSIVE` as its own outcome, and
 report the verdict rather than an interval. To own the run loop, feed `bn.Sprt(cfg)`
 one run at a time with `.record(passed)`. [`example_sprt.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_sprt.py)

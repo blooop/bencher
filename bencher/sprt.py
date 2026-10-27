@@ -122,10 +122,12 @@ class SprtCfg:
     def flaky_window(self) -> int | None:
         """Most passes between a fresh test's first two failures that still reach FLAKY.
 
-        ``None`` when two failures cannot reach FLAKY however close they are.
+        ``None`` when no such window exists: either two failures cannot reach FLAKY
+        however close they are, or one failure alone reaches FLAKY
+        (``fail_step >= flaky_bound``), so there is never a second failure.
         """
         slack = 2 * self.fail_step - self.flaky_bound
-        if slack < 0:
+        if slack < 0 or self.fail_step >= self.flaky_bound:
             return None
         return math.floor(slack / -self.pass_step)
 

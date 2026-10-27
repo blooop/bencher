@@ -43,6 +43,13 @@ class TestWorkedExample:
     def test_two_failures_need_a_gap_to_be_judged(self):
         assert SprtCfg(p0=0.01, p1=0.02).flaky_window() is None
 
+    def test_no_window_when_one_failure_already_rejects(self):
+        cfg = SprtCfg(p0=0.01, p1=0.2, alpha=0.1, beta=0.1)
+        verdict, test = _feed(cfg, [False])
+        assert verdict is SprtVerdict.FLAKY
+        assert test.result().runs == 1
+        assert cfg.flaky_window() is None
+
     def test_two_failures_close_together_reject(self):
         verdict, test = _feed(CFG, [False] + [True] * 150 + [False] + [True] * 1000)
         assert verdict is SprtVerdict.FLAKY
