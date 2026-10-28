@@ -2956,6 +2956,9 @@ class SvgResult(BenchResultBase):
     ) -> list[Path]:
         """Write :meth:`to_svgs` to ``directory`` as ``<prefix><chart>_<result var>.svg``.
 
+        To show the files in a GitHub PR or issue, push them with
+        :func:`bencher.evidence_ref.push_evidence` and link :func:`bencher.evidence_ref.blob_url`.
+
         Returns:
             list[Path]: The files written, in chart order.
         """

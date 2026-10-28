@@ -586,7 +586,31 @@ A sweep outside those shapes (a 0-D `over_time` line, a bool bar with repeats, a
 over a float) falls back to the holoviews (or, for `surface` and `volume`, plotly) chart,
 and so does a result var the svg chart cannot draw. `res.to_svgs()` returns the SVG strings instead of files.
 
-To link the files from a PR, commit them and use a URL pinned to the commit. This repo
+### Showing a chart in a GitHub PR or issue
+
+Any SVG or PNG that bencher writes shows in a PR or issue body, in a public or a private
+repository: `to_svg_files()`, `Sprt.save_svg()`, or a file of your own. Push the files with
+`push_evidence` and link each one with `blob_url`:
+
+```python
+from pathlib import Path
+
+from bencher.evidence_ref import blob_url, push_evidence
+
+sha = push_evidence(".", {"walk.svg": Path("out/walk.svg")}, run_dir="pr-123-sprt")
+url = blob_url("<owner>", "<repo>", sha, "pr-123-sprt/walk.svg")
+print(f'<img src="{url}" alt="SPRT walk: PASS after 249 runs" width="760">')
+```
+
+`push_evidence` stores the files as one commit on `refs/bencher/evidence` of `origin`, the
+ref that `bencher ab --images` uses, so no branch or clone carries them. `blob_url` gives
+`https://github.com/<owner>/<repo>/blob/<sha>/<path>?raw=true`. GitHub serves that as an
+image to anyone who can read the repository, and serves an SVG as `image/svg+xml`, so the
+page draws the real chart. Do not redraw the chart in Mermaid or ASCII, and do not convert it
+to PNG: the SVG link works. A `raw.githubusercontent.com` link does not draw in a private
+repository.
+
+To link files you committed to a branch instead, use a URL pinned to the commit. This repo
 keeps `*.svg` in Git LFS, so use
 `https://media.githubusercontent.com/media/<owner>/<repo>/<sha>/<path>`;
 `raw.githubusercontent.com` serves the LFS pointer, not the image.
@@ -1048,6 +1072,8 @@ reaches FLAKY (`cfg.fail_step >= cfg.flaky_bound`, e.g. `p1` = 10x `p0` with
 report the verdict rather than an interval. To own the run loop, feed `bn.Sprt(cfg)`
 one run at a time with `.record(passed)`. [`example_sprt.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_sprt.py)
 sweeps the true failure rate and plots the run count and the FLAKY rate.
+`Sprt.to_svg()` draws the walk on Wald's chart, and `save_svg(path)` writes it; to show it
+in a PR or issue, see [Showing a chart in a GitHub PR or issue](#showing-a-chart-in-a-github-pr-or-issue).
 
 ### A light install for the evidence tools
 
