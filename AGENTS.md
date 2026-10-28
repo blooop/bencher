@@ -29,6 +29,12 @@ See **[docs/how_to_use_bencher.md](docs/how_to_use_bencher.md)** for the complet
 on using bencher — sweep types, result types, the `benchmark()` pattern, plot callbacks,
 and common mistakes. **Read this before writing any benchmark or example.**
 
+**Charts in a PR or issue:** GitHub draws any bencher SVG or PNG in a PR or issue body, in a
+private repository too. Push the file with `bencher.evidence_ref.push_evidence` and link
+`blob_url(...)` (`blob/<sha>/<path>?raw=true`). Do not redraw a chart in Mermaid or convert it
+to PNG because you think the SVG will not show: see "Showing a chart in a GitHub PR or
+issue" in docs/how_to_use_bencher.md.
+
 ### Updating Examples & Docs
 1. Add or modify the example implementation under `bencher/example/`.
 2. Register the example in `bencher/example/meta/generate_examples.py` so the documentation generator emits a notebook (pick an appropriate gallery subdirectory).
