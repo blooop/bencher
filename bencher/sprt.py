@@ -304,8 +304,9 @@ class Sprt:
         at the line it crosses. ``runs`` and ``failure_runs`` fix every point, so the
         chart is exact. Beyond ``_SVG_MAX_PASS_DOTS`` passes it thins the pass dots;
         every failure stays a dot. Only the standard library is used. To show it in a
-        GitHub PR or issue, push the file with :func:`bencher.evidence_ref.push_evidence`
-        and link :func:`bencher.evidence_ref.blob_url`; GitHub draws the SVG.
+        GitHub PR or issue, write the file with :meth:`save_svg`, push it with
+        :func:`bencher.evidence_ref.push_evidence` and link
+        :func:`bencher.evidence_ref.blob_url`; GitHub draws the SVG.
         """
         return _render_svg(self.cfg, self._runs, self._failure_runs, self._verdict, self._llr)
 
