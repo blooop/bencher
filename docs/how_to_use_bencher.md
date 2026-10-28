@@ -610,6 +610,16 @@ page draws the real chart. Do not redraw the chart in Mermaid or ASCII, and do n
 to PNG: the SVG link works. A `raw.githubusercontent.com` link does not draw in a private
 repository.
 
+The SVG holds its text as paths, so the reader's browser fonts play no part: each glyph comes
+from the fonts on the machine that drew the chart, and the SVG shows exactly what the PNG
+beside it shows. Look at the PNG before you post. A glyph that machine's fonts lack is an
+empty box in both, as the ▲ was in 1.148.1 on any machine with Open Sans installed.
+
+To check that a pushed file is there, ask the API, not the link: `gh api
+"repos/<owner>/<repo>/contents/<path>?ref=<sha>"`. A `curl` of the `blob/...?raw=true` URL
+with an API token gets a 404 from a private repository even when the image draws, because
+the github.com page reads the browser's login, not the token.
+
 To link files you committed to a branch instead, use a URL pinned to the commit. This repo
 keeps `*.svg` in Git LFS, so use
 `https://media.githubusercontent.com/media/<owner>/<repo>/<sha>/<path>`;
