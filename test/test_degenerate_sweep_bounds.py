@@ -259,7 +259,7 @@ def test_one_step_over_time_survives_the_squeeze_beside_a_collapsed_axis():
 
 
 @pytest.mark.parametrize(
-    "input_vars,float_cnt,cat_cnt",
+    ("input_vars", "float_cnt", "cat_cnt"),
     [
         (["lone_str", "f"], 1, 0),
         (["lone_enum", "f", "pose"], 1, 1),
