@@ -9,9 +9,11 @@ the guard is not enough on its own -- ``linspace(x, x, N)`` returns N copies and
 
 import tempfile
 import warnings
+from enum import auto
 
 import numpy as np
 import pytest
+from strenum import StrEnum
 
 import bencher as bn
 from bencher.results.render_failure import RenderFailedWarning
@@ -52,6 +54,23 @@ class FloatsCfg(bn.ParametrizedSweep):
 
     def benchmark(self):
         self.y = float(self.i + self.a + 2 * self.b + 3 * self.c)
+
+
+class OnlyMode(StrEnum):
+    only = auto()
+
+
+class OneValueCatCfg(bn.ParametrizedSweep):
+    """One-value categorical inputs beside inputs that vary."""
+
+    lone_str = bn.StringSweep(["a"])
+    lone_enum = bn.EnumSweep(OnlyMode)
+    f = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3)
+    pose = bn.StringSweep(["p", "q"])
+    y = bn.ResultFloat()
+
+    def benchmark(self):
+        self.y = float(len(self.lone_str) + len(self.pose) + self.f)
 
 
 class StepCfg(bn.ParametrizedSweep):
@@ -236,3 +255,23 @@ def test_one_step_over_time_survives_the_squeeze_beside_a_collapsed_axis():
     assert ds.sizes.get("over_time") == 1
     assert "i" not in ds.dims
     assert res.plt_cnt_cfg.time_steps == 1
+
+
+@pytest.mark.parametrize(
+    "input_vars,float_cnt,cat_cnt",
+    [
+        (["lone_str", "f"], 1, 0),
+        (["lone_enum", "f", "pose"], 1, 1),
+        (["lone_str", "lone_enum", "pose"], 0, 1),
+    ],
+    ids=["str+float", "enum+float+cat", "str+enum+cat"],
+)
+def test_a_one_value_categorical_input_is_not_counted(input_vars, float_cnt, cat_cnt):
+    bench = OneValueCatCfg().to_bench()
+    with warnings.catch_warnings(), tempfile.TemporaryDirectory() as directory:
+        warnings.simplefilter("error", RenderFailedWarning)
+        res = bench.plot_sweep(input_vars=input_vars, result_vars=["y"])
+        bench.report.save(directory=directory)
+    assert res.plt_cnt_cfg.float_cnt == float_cnt
+    assert res.plt_cnt_cfg.cat_cnt == cat_cnt
+    assert res.plt_cnt_cfg.inputs_cnt == float_cnt + cat_cnt
