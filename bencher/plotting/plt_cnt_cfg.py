@@ -44,7 +44,9 @@ class PltCntCfg(param.Parameterized):
     panel_vars = param.List(doc="A list of panel results")
     panel_cnt = param.Integer(0, doc="Number of results represent as panel panes")
     repeats = param.Integer(0, doc="The number of repeat samples")
-    inputs_cnt = param.Integer(0, doc="The number of repeat samples")
+    inputs_cnt = param.Integer(
+        0, doc="The number of inputs that took more than one value (float_cnt + cat_cnt)"
+    )
 
     # Richer signature facts (A2 Phase S1) — additive alongside the counts above.
     has_time = param.Boolean(
@@ -100,10 +102,10 @@ class PltCntCfg(param.Parameterized):
             is_cat = isinstance(iv, (EnumSweep, BoolSweep, StringSweep, YamlSweep))
             if not (is_float or is_cat):
                 raise ValueError(f"No rule for type {type(iv)}")
-            # An input that took one value is not an axis: the squeeze drops it from
-            # the dataset every plot is handed, so a plot chosen for it asks for a
-            # dimension that is not there (a front of one, a range collapsed to a
-            # point).
+            # An input that took one value is not an axis: every reduction in
+            # BenchResultBase.to_dataset drops it from the dataset a plot is handed,
+            # so a plot chosen for it asks for a dimension that is not there (a front
+            # of one, a range collapsed to a point).
             if ds is not None and ds.sizes.get(iv.name) == 1:
                 continue
             if is_float:

@@ -86,9 +86,9 @@ class VolumeResult(BenchResultBase):
         Returns:
             pn.pane.Plotly: A 3d volume plot as a holoview in a pane
         """
-        x = self.bench_cfg.input_vars[0]
-        y = self.bench_cfg.input_vars[1]
-        z = self.bench_cfg.input_vars[2]
+        x = self.plt_cnt_cfg.float_vars[0]
+        y = self.plt_cnt_cfg.float_vars[1]
+        z = self.plt_cnt_cfg.float_vars[2]
         opacity = 0.1
         meandf = dataset[result_var.name].to_dataframe().reset_index()
         data = [

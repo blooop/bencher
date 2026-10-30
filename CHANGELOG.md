@@ -15,8 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ['pareto_rank']`. The same fault hit any sweep with an input that took one value
   (`bounds=(x, x)`): its line plot failed to render, or, beside two categorical inputs,
   failed the save. Plot selection now counts only the inputs that took more than one
-  value, so every plot is chosen for the axes its data has. Under `over_time` the
-  squeeze now drops those one-value inputs too, and keeps `over_time`.
+  value, so every plot is chosen for the axes its data has. Every reduction now drops
+  those one-value inputs, not only the squeeze: with `repeats > 1` a one-value input
+  beside two floats had raised `KeyError` from the heatmap. Under `over_time` the
+  squeeze keeps `over_time`. The volume plot takes its axes from the counted floats.
 
 ## [1.151.0] - 2026-10-27
 

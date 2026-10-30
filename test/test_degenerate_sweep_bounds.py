@@ -41,6 +41,19 @@ class PoseCfg(bn.ParametrizedSweep):
         self.y = float(len(self.pose) + len(self.scenario) + self.i + self.f)
 
 
+class FloatsCfg(bn.ParametrizedSweep):
+    """A collapsed numeric axis beside the swept floats it is judged across."""
+
+    i = bn.IntSweep(default=0, bounds=[0, 0])
+    a = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3)
+    b = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3)
+    c = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3)
+    y = bn.ResultFloat()
+
+    def benchmark(self):
+        self.y = float(self.i + self.a + 2 * self.b + 3 * self.c)
+
+
 class StepCfg(bn.ParametrizedSweep):
     f = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], step=0.25)
     y = bn.ResultFloat()
@@ -192,6 +205,22 @@ def test_a_collapsed_axis_is_not_plotted_against_over_time(input_vars):
     ``i`` and renders an empty DynamicMap."""
     run_cfg = bn.BenchRunCfg(over_time=True)
     bench = PoseCfg().to_bench(run_cfg)
+    with warnings.catch_warnings(), tempfile.TemporaryDirectory() as directory:
+        warnings.simplefilter("error", RenderFailedWarning)
+        bench.plot_sweep(input_vars=input_vars, result_vars=["y"], run_cfg=run_cfg)
+        bench.report.save(directory=directory)
+
+
+@pytest.mark.parametrize(
+    "input_vars", [["i", "a", "b"], ["i", "a", "b", "c"]], ids=["2float", "3float"]
+)
+def test_a_collapsed_axis_is_not_plotted_against_with_repeats(input_vars):
+    """With repeats the reduction is a mean over ``repeat``, not the squeeze, and
+    must still drop the collapsed axis: the heatmap chosen for the two swept floats
+    was handed data that still carried ``i`` and raised KeyError out of
+    ``report.save``."""
+    run_cfg = bn.BenchRunCfg(repeats=3)
+    bench = FloatsCfg().to_bench(run_cfg)
     with warnings.catch_warnings(), tempfile.TemporaryDirectory() as directory:
         warnings.simplefilter("error", RenderFailedWarning)
         bench.plot_sweep(input_vars=input_vars, result_vars=["y"], run_cfg=run_cfg)
