@@ -32,12 +32,13 @@ class PoseCfg(bn.ParametrizedSweep):
     """A collapsed numeric axis beside the categorical ones it is judged across."""
 
     i = bn.IntSweep(default=0, bounds=[0, 0])
+    f = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3)
     pose = bn.StringSweep(["a", "b", "c"])
     scenario = bn.StringSweep(["s1", "s2"])
     y = bn.ResultFloat()
 
     def benchmark(self):
-        self.y = float(len(self.pose) + len(self.scenario) + self.i)
+        self.y = float(len(self.pose) + len(self.scenario) + self.i + self.f)
 
 
 class StepCfg(bn.ParametrizedSweep):
@@ -179,4 +180,19 @@ def test_a_collapsed_axis_is_not_plotted_against(input_vars):
     with warnings.catch_warnings(), tempfile.TemporaryDirectory() as directory:
         warnings.simplefilter("error", RenderFailedWarning)
         bench.plot_sweep(input_vars=input_vars, result_vars=["y"])
+        bench.report.save(directory=directory)
+
+
+@pytest.mark.parametrize(
+    "input_vars", [["i"], ["i", "f"], ["i", "f", "pose"]], ids=["alone", "float", "float+cat"]
+)
+def test_a_collapsed_axis_is_not_plotted_against_over_time(input_vars):
+    """Under ``over_time`` the squeeze keeps ``over_time`` and must still drop the
+    collapsed axis, or the line plot along ``f`` is handed data that still carries
+    ``i`` and renders an empty DynamicMap."""
+    run_cfg = bn.BenchRunCfg(over_time=True)
+    bench = PoseCfg().to_bench(run_cfg)
+    with warnings.catch_warnings(), tempfile.TemporaryDirectory() as directory:
+        warnings.simplefilter("error", RenderFailedWarning)
+        bench.plot_sweep(input_vars=input_vars, result_vars=["y"], run_cfg=run_cfg)
         bench.report.save(directory=directory)
