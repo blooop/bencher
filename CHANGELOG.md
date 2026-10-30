@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.151.1] - 2026-10-30
+
 ### Fixed
+- **`to_scatter` draws `ResultFloat` results.** Its result-type filter still named
+  `ResultVar`, which became a deprecated subclass of `ResultFloat` in the rename. A
+  plain `ResultFloat` is not a `ResultVar`, so every scatter plot of a current sweep
+  came back as `None` -- the "Plot Type: Scatter" gallery page included. The filter
+  now takes `ResultFloat`, which still covers sweeps that use `ResultVar`.
 - **A Pareto front of one design renders and saves.** When one trial dominated every
   other one -- and in every single-objective study -- `plot_pareto_front` chose a line
   plot along `pareto_rank`, but the squeeze had already dropped that one-value axis
