@@ -506,7 +506,8 @@ class HoloviewResult(PaneResult):
         )
         title = pn.pane.Markdown("Selected: None")
 
-        input_vars = self.bench_cfg.input_vars
+        axes = self.plt_cnt_cfg.float_vars + self.plt_cnt_cfg.cat_vars
+        input_vars = [iv for iv in self.bench_cfg.input_vars if iv in axes]
         num_inputs = self.plt_cnt_cfg.inputs_cnt
         state = {"x": None, "y": None, "update": False}
 

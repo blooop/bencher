@@ -7,10 +7,17 @@ the guard is not enough on its own -- ``linspace(x, x, N)`` returns N copies and
 ``arange(x, x, step)`` returns nothing -- so ``values()`` short-circuits.
 """
 
+import tempfile
+import warnings
+from enum import auto
+
 import numpy as np
+import panel as pn
 import pytest
+from strenum import StrEnum
 
 import bencher as bn
+from bencher.results.render_failure import RenderFailedWarning
 
 
 class Cfg(bn.ParametrizedSweep):
@@ -22,6 +29,49 @@ class Cfg(bn.ParametrizedSweep):
         self.update_params_from_kwargs(**kwargs)
         self.y = float(self.f) + float(self.i)
         return self.get_results_values_as_dict()
+
+
+class PoseCfg(bn.ParametrizedSweep):
+    """A collapsed numeric axis beside the categorical ones it is judged across."""
+
+    i = bn.IntSweep(default=0, bounds=[0, 0])
+    f = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3)
+    pose = bn.StringSweep(["a", "b", "c"])
+    scenario = bn.StringSweep(["s1", "s2"])
+    y = bn.ResultFloat()
+
+    def benchmark(self):
+        self.y = float(len(self.pose) + len(self.scenario) + self.i + self.f)
+
+
+class FloatsCfg(bn.ParametrizedSweep):
+    """A collapsed numeric axis beside the swept floats it is judged across."""
+
+    i = bn.IntSweep(default=0, bounds=[0, 0])
+    a = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3)
+    b = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3)
+    c = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3)
+    y = bn.ResultFloat()
+
+    def benchmark(self):
+        self.y = float(self.i + self.a + 2 * self.b + 3 * self.c)
+
+
+class OnlyMode(StrEnum):
+    only = auto()
+
+
+class OneValueCatCfg(bn.ParametrizedSweep):
+    """One-value categorical inputs beside inputs that vary."""
+
+    lone_str = bn.StringSweep(["a"])
+    lone_enum = bn.EnumSweep(OnlyMode)
+    f = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3)
+    pose = bn.StringSweep(["p", "q"])
+    y = bn.ResultFloat()
+
+    def benchmark(self):
+        self.y = float(len(self.lone_str) + len(self.pose) + self.f)
 
 
 class StepCfg(bn.ParametrizedSweep):
@@ -146,3 +196,137 @@ def test_existing_ranges_are_unaffected():
     normal = Cfg.param.f.with_bounds(0.0, 1.0)
     assert len(list(normal.values())) > 1
     assert normal.hash_persistent() == Cfg.param.f.with_bounds(0.0, 1.0).hash_persistent()
+
+
+@pytest.mark.parametrize(
+    "input_vars", [["i"], ["i", "pose"], ["i", "pose", "scenario"]], ids=["0cat", "1cat", "2cat"]
+)
+def test_a_collapsed_axis_is_not_plotted_against(input_vars):
+    """Every plot is chosen for the data it is handed, which has no collapsed axis.
+
+    The squeeze drops a one-value input from the dataset, but the line plot was
+    chosen as if it were still there and asked hvplot for it as the x axis: the
+    plot failed to render, or -- beside two categorical inputs, where hvplot builds
+    a lazy DynamicMap -- raised DataError out of ``report.save``.
+    """
+    bench = PoseCfg().to_bench()
+    with warnings.catch_warnings(), tempfile.TemporaryDirectory() as directory:
+        warnings.simplefilter("error", RenderFailedWarning)
+        bench.plot_sweep(input_vars=input_vars, result_vars=["y"])
+        bench.report.save(directory=directory)
+
+
+@pytest.mark.parametrize(
+    "input_vars", [["i"], ["i", "f"], ["i", "f", "pose"]], ids=["alone", "float", "float+cat"]
+)
+def test_a_collapsed_axis_is_not_plotted_against_over_time(input_vars):
+    """Under ``over_time`` the squeeze keeps ``over_time`` and must still drop the
+    collapsed axis, or the line plot along ``f`` is handed data that still carries
+    ``i`` and renders an empty DynamicMap."""
+    run_cfg = bn.BenchRunCfg(over_time=True)
+    bench = PoseCfg().to_bench(run_cfg)
+    with warnings.catch_warnings(), tempfile.TemporaryDirectory() as directory:
+        warnings.simplefilter("error", RenderFailedWarning)
+        bench.plot_sweep(input_vars=input_vars, result_vars=["y"], run_cfg=run_cfg)
+        bench.report.save(directory=directory)
+
+
+@pytest.mark.parametrize(
+    "input_vars", [["i", "a", "b"], ["i", "a", "b", "c"]], ids=["2float", "3float"]
+)
+def test_a_collapsed_axis_is_not_plotted_against_with_repeats(input_vars):
+    """With repeats the reduction is a mean over ``repeat``, not the squeeze, and
+    must still drop the collapsed axis: the heatmap chosen for the two swept floats
+    was handed data that still carried ``i`` and raised KeyError out of
+    ``report.save``."""
+    run_cfg = bn.BenchRunCfg(repeats=3)
+    bench = FloatsCfg().to_bench(run_cfg)
+    with warnings.catch_warnings(), tempfile.TemporaryDirectory() as directory:
+        warnings.simplefilter("error", RenderFailedWarning)
+        bench.plot_sweep(input_vars=input_vars, result_vars=["y"], run_cfg=run_cfg)
+        bench.report.save(directory=directory)
+
+
+def test_one_step_over_time_survives_the_squeeze_beside_a_collapsed_axis():
+    """``over_time`` stays a dim at one step, for the time slider; ``i`` goes."""
+    run_cfg = bn.BenchRunCfg(over_time=True, clear_history=True)
+    bench = PoseCfg().to_bench(run_cfg)
+    res = bench.plot_sweep(input_vars=["i", "f"], result_vars=["y"], run_cfg=run_cfg)
+    ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+    assert ds.sizes.get("over_time") == 1
+    assert "i" not in ds.dims
+    assert res.plt_cnt_cfg.time_steps == 1
+
+
+@pytest.mark.parametrize(
+    ("input_vars", "float_cnt", "cat_cnt"),
+    [
+        (["lone_str", "f"], 1, 0),
+        (["lone_enum", "f", "pose"], 1, 1),
+        (["lone_str", "lone_enum", "pose"], 0, 1),
+    ],
+    ids=["str+float", "enum+float+cat", "str+enum+cat"],
+)
+def test_a_one_value_categorical_input_is_not_counted(input_vars, float_cnt, cat_cnt):
+    bench = OneValueCatCfg().to_bench()
+    with warnings.catch_warnings(), tempfile.TemporaryDirectory() as directory:
+        warnings.simplefilter("error", RenderFailedWarning)
+        res = bench.plot_sweep(input_vars=input_vars, result_vars=["y"])
+        bench.report.save(directory=directory)
+    assert res.plt_cnt_cfg.float_cnt == float_cnt
+    assert res.plt_cnt_cfg.cat_cnt == cat_cnt
+    assert res.plt_cnt_cfg.inputs_cnt == float_cnt + cat_cnt
+
+
+class VolumeCfg(bn.ParametrizedSweep):
+    i = bn.IntSweep(default=0, bounds=[0, 0])
+    a = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=2)
+    b = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=2)
+    c = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=2)
+    y = bn.ResultFloat()
+
+    def benchmark(self):
+        self.y = float(self.i + self.a + 2 * self.b + 4 * self.c)
+
+
+def test_a_collapsed_axis_is_not_a_volume_axis():
+    res = VolumeCfg().to_bench().plot_sweep(input_vars=["i", "a", "b", "c"], auto_plot=False)
+    panes = res.to_volume().select(pn.pane.Plotly)
+    axes = [
+        (s.xaxis.title.text, s.yaxis.title.text, s.zaxis.title.text)
+        for s in (p.object["layout"].scene for p in panes)
+    ]
+    assert axes == [("a [ul]", "b [ul]", "c [ul]")]
+
+
+class ScatterCfg(bn.ParametrizedSweep):
+    i = bn.IntSweep(default=0, bounds=[0, 0])
+    pose = bn.StringSweep(["a", "b", "c"])
+    scenario = bn.StringSweep(["s1", "s2"])
+    y = bn.ResultVar()
+
+    def benchmark(self):
+        self.y = float(len(self.pose) + len(self.scenario) + self.i)
+
+
+def test_a_collapsed_axis_is_not_a_scatter_group(monkeypatch):
+    from bencher.results.holoview_results import scatter_result
+
+    calls = []
+
+    class Spy:
+        def scatter(self, **kwargs):
+            calls.append(kwargs)
+
+    monkeypatch.setattr(scatter_result, "hvplot_of", lambda ds: Spy())
+    monkeypatch.setattr(scatter_result.ScatterResult, "_apply_opts", lambda self, p, **kw: p)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        res = (
+            ScatterCfg()
+            .to_bench()
+            .plot_sweep(input_vars=["i", "pose", "scenario"], auto_plot=False)
+        )
+    res.to_scatter()
+    assert calls[0]["by"] == ["scenario"]
+    assert calls[0]["xlabel"] == "pose"

@@ -488,7 +488,10 @@ class BenchResultBase:
                     and "repeat" in ds_out.dims
                     and ds_out.sizes["repeat"] == 1
                 ):
-                    ds_out = ds_out.squeeze("repeat", drop=True).copy(deep=True)
+                    # over_time stays even at one step, for the time slider. Every
+                    # other one-value dim goes, as below.
+                    single = [d for d, n in ds_out.sizes.items() if n == 1 and d != "over_time"]
+                    ds_out = ds_out.squeeze(single, drop=True).copy(deep=True)
                 else:
                     ds_out = ds_out.squeeze(drop=True).copy(deep=True)
             case ReduceType.NONE:
@@ -496,6 +499,14 @@ class BenchResultBase:
                 ds_out = ds_out.copy(deep=True)
             case _ as unreachable:
                 assert_never(unreachable)
+
+        # PltCntCfg does not count a one-value input as an axis, so no plot is chosen
+        # for it: drop it here under every reduction, not only the squeeze.
+        single_inputs = [
+            iv.name for iv in self.bench_cfg.input_vars if ds_out.sizes.get(iv.name) == 1
+        ]
+        if single_inputs:
+            ds_out = ds_out.squeeze(single_inputs, drop=True)
 
         # Optional aggregation across non-repeat dimensions (e.g., categorical)
         if agg_over_dims:
