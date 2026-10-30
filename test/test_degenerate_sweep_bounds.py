@@ -225,3 +225,14 @@ def test_a_collapsed_axis_is_not_plotted_against_with_repeats(input_vars):
         warnings.simplefilter("error", RenderFailedWarning)
         bench.plot_sweep(input_vars=input_vars, result_vars=["y"], run_cfg=run_cfg)
         bench.report.save(directory=directory)
+
+
+def test_one_step_over_time_survives_the_squeeze_beside_a_collapsed_axis():
+    """``over_time`` stays a dim at one step, for the time slider; ``i`` goes."""
+    run_cfg = bn.BenchRunCfg(over_time=True, clear_history=True)
+    bench = PoseCfg().to_bench(run_cfg)
+    res = bench.plot_sweep(input_vars=["i", "f"], result_vars=["y"], run_cfg=run_cfg)
+    ds = res.to_dataset(bn.ReduceType.SQUEEZE)
+    assert ds.sizes.get("over_time") == 1
+    assert "i" not in ds.dims
+    assert res.plt_cnt_cfg.time_steps == 1
