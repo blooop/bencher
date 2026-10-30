@@ -12,6 +12,7 @@ import warnings
 from enum import auto
 
 import numpy as np
+import panel as pn
 import pytest
 from strenum import StrEnum
 
@@ -275,3 +276,57 @@ def test_a_one_value_categorical_input_is_not_counted(input_vars, float_cnt, cat
     assert res.plt_cnt_cfg.float_cnt == float_cnt
     assert res.plt_cnt_cfg.cat_cnt == cat_cnt
     assert res.plt_cnt_cfg.inputs_cnt == float_cnt + cat_cnt
+
+
+class VolumeCfg(bn.ParametrizedSweep):
+    i = bn.IntSweep(default=0, bounds=[0, 0])
+    a = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=2)
+    b = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=2)
+    c = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=2)
+    y = bn.ResultFloat()
+
+    def benchmark(self):
+        self.y = float(self.i + self.a + 2 * self.b + 4 * self.c)
+
+
+def test_a_collapsed_axis_is_not_a_volume_axis():
+    res = VolumeCfg().to_bench().plot_sweep(input_vars=["i", "a", "b", "c"], auto_plot=False)
+    panes = res.to_volume().select(pn.pane.Plotly)
+    axes = [
+        (s.xaxis.title.text, s.yaxis.title.text, s.zaxis.title.text)
+        for s in (p.object["layout"].scene for p in panes)
+    ]
+    assert axes == [("a [ul]", "b [ul]", "c [ul]")]
+
+
+class ScatterCfg(bn.ParametrizedSweep):
+    i = bn.IntSweep(default=0, bounds=[0, 0])
+    pose = bn.StringSweep(["a", "b", "c"])
+    scenario = bn.StringSweep(["s1", "s2"])
+    y = bn.ResultVar()
+
+    def benchmark(self):
+        self.y = float(len(self.pose) + len(self.scenario) + self.i)
+
+
+def test_a_collapsed_axis_is_not_a_scatter_group(monkeypatch):
+    from bencher.results.holoview_results import scatter_result
+
+    calls = []
+
+    class Spy:
+        def scatter(self, **kwargs):
+            calls.append(kwargs)
+
+    monkeypatch.setattr(scatter_result, "hvplot_of", lambda ds: Spy())
+    monkeypatch.setattr(scatter_result.ScatterResult, "_apply_opts", lambda self, p, **kw: p)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        res = (
+            ScatterCfg()
+            .to_bench()
+            .plot_sweep(input_vars=["i", "pose", "scenario"], auto_plot=False)
+        )
+    res.to_scatter()
+    assert calls[0]["by"] == ["scenario"]
+    assert calls[0]["xlabel"] == "pose"

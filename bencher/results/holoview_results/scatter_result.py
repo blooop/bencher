@@ -65,13 +65,15 @@ class ScatterResult(HoloviewResult):
         Returns:
             pn.panel | None: A scatter plot visualization.
         """
+        axes = self.plt_cnt_cfg.float_vars + self.plt_cnt_cfg.cat_vars
+        axes = [iv for iv in self.bench_cfg.input_vars if iv in axes]
         by = None
         if self.plt_cnt_cfg.cat_cnt > 1:
-            by = [v.name for v in self.bench_cfg.input_vars[1:]]
+            by = [v.name for v in axes[1:]]
         # Show units on both axes: x from the first input var, y from the result var
         kwargs.setdefault("ylabel", label_with_units(result_var))
-        if self.bench_cfg.input_vars:
-            kwargs.setdefault("xlabel", label_with_units(self.bench_cfg.input_vars[0]))
+        if axes:
+            kwargs.setdefault("xlabel", label_with_units(axes[0]))
         plot = hvplot_of(dataset).scatter(
             by=by,
             subplots=False,
