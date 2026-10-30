@@ -488,7 +488,11 @@ class BenchResultBase:
                     and "repeat" in ds_out.dims
                     and ds_out.sizes["repeat"] == 1
                 ):
-                    ds_out = ds_out.squeeze("repeat", drop=True).copy(deep=True)
+                    # over_time stays even at one step, for the time slider. Every
+                    # other one-value dim goes, as below: PltCntCfg does not count a
+                    # one-value input as an axis, so no plot is chosen for it.
+                    single = [d for d, n in ds_out.sizes.items() if n == 1 and d != "over_time"]
+                    ds_out = ds_out.squeeze(single, drop=True).copy(deep=True)
                 else:
                     ds_out = ds_out.squeeze(drop=True).copy(deep=True)
             case ReduceType.NONE:

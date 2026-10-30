@@ -845,6 +845,96 @@ class TestParetoScrubExample:
         assert overlaps.noise > fits.noise
 
 
+class Dominated(bn.ParametrizedSweep):
+    """Two objectives that agree, so the best design dominates every other one.
+
+    Judged across a pose and a scenario, as a robot policy is: the front is one
+    design, swept beside two categorical looped dimensions.
+    """
+
+    x = bn.FloatSweep(default=0, bounds=[0, 5], samples=5)
+    pose = bn.StringSweep(["a", "b", "c"])
+    scenario = bn.StringSweep(["s1", "s2"])
+
+    obj1 = bn.ResultFloat("ul", bn.OptDir.minimize)
+    obj2 = bn.ResultFloat("ul", bn.OptDir.minimize)
+
+    def benchmark(self):
+        offset = len(self.pose) * 0.1 + len(self.scenario) * 0.01
+        self.obj1 = float(self.x + offset)
+        self.obj2 = float(2 * self.x + offset)
+
+
+class PoseSphere(bn.ParametrizedSweep):
+    """One objective judged across a pose and a scenario."""
+
+    x = bn.FloatSweep(default=0, bounds=[-5, 5], samples=5)
+    pose = bn.StringSweep(["a", "b", "c"])
+    scenario = bn.StringSweep(["s1", "s2"])
+
+    loss = bn.ResultFloat("ul", bn.OptDir.minimize)
+
+    def benchmark(self):
+        self.loss = float(self.x**2 + len(self.pose) * 0.1 + len(self.scenario) * 0.01)
+
+
+class TestParetoFrontOfOne:
+    """A front of one squeezes ``pareto_rank`` away, and the report must still save.
+
+    The line plot was chosen for the rank axis, and the squeezed dataset it was
+    handed no longer had one: ``report.save`` raised DataError naming
+    ``pareto_rank``.
+    """
+
+    @staticmethod
+    def _plot_and_save(bench, result):
+        """Lay the front out and save the report, with any plot that fails to render
+        an error rather than a warning."""
+        import tempfile
+        import warnings
+
+        from bencher.results.render_failure import RenderFailedWarning
+
+        with warnings.catch_warnings(), tempfile.TemporaryDirectory() as directory:
+            warnings.simplefilter("error", RenderFailedWarning)
+            res = bench.plot_pareto_front(result)
+            bench.report.save(directory=directory)
+        return res
+
+    def test_a_front_of_one_dominating_design_saves(self):
+        bench = bn.Bench("pareto_dominated", Dominated(), run_cfg=_run_cfg())
+        result = bench.optimize(
+            sampler=_seeded_sampler(),
+            n_trials=6,
+            aggregate=["pose", "scenario"],
+            agg_fn="mean",
+            warm_start=False,
+            plot=False,
+        )
+        assert len(result.pareto_trials()) == 1
+        res = self._plot_and_save(bench, result)
+        assert res.ds.sizes["pareto_rank"] == 1
+
+    def test_a_single_objective_front_saves(self):
+        bench = bn.Bench("pareto_single_pose", PoseSphere(), run_cfg=_run_cfg())
+        result = bench.optimize(
+            sampler=_seeded_sampler(),
+            n_trials=4,
+            aggregate=["pose", "scenario"],
+            agg_fn="mean",
+            warm_start=False,
+            plot=False,
+        )
+        self._plot_and_save(bench, result)
+
+    def test_a_single_objective_front_over_a_numeric_looped_dim_saves(self):
+        bench = bn.Bench("pareto_single_seed", SphereWithSeed(), run_cfg=_run_cfg())
+        result = bench.optimize(
+            sampler=_seeded_sampler(), n_trials=4, aggregate=["seed"], agg_fn="mean", plot=False
+        )
+        self._plot_and_save(bench, result)
+
+
 class TestParetoFrontAggregation:
     def test_a_study_that_reduced_only_its_repeats_still_carries_its_score(self):
         """``repeats > 1`` aggregates as surely as ``aggregate=`` does: the trial's

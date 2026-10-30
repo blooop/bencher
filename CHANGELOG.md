@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **A Pareto front of one design renders and saves.** When one trial dominated every
+  other one -- and in every single-objective study -- `plot_pareto_front` chose a line
+  plot along `pareto_rank`, but the squeeze had already dropped that one-value axis
+  from the data, so `report.save()` raised `DataError: ... dimensions were not found:
+  ['pareto_rank']`. The same fault hit any sweep with an input that took one value
+  (`bounds=(x, x)`): its line plot failed to render, or, beside two categorical inputs,
+  failed the save. Plot selection now counts only the inputs that took more than one
+  value, so every plot is chosen for the axes its data has. Under `over_time` the
+  squeeze now drops those one-value inputs too, and keeps `over_time`.
+
 ## [1.151.0] - 2026-10-27
 
 ### Added

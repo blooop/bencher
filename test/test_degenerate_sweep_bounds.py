@@ -7,10 +7,14 @@ the guard is not enough on its own -- ``linspace(x, x, N)`` returns N copies and
 ``arange(x, x, step)`` returns nothing -- so ``values()`` short-circuits.
 """
 
+import tempfile
+import warnings
+
 import numpy as np
 import pytest
 
 import bencher as bn
+from bencher.results.render_failure import RenderFailedWarning
 
 
 class Cfg(bn.ParametrizedSweep):
@@ -22,6 +26,18 @@ class Cfg(bn.ParametrizedSweep):
         self.update_params_from_kwargs(**kwargs)
         self.y = float(self.f) + float(self.i)
         return self.get_results_values_as_dict()
+
+
+class PoseCfg(bn.ParametrizedSweep):
+    """A collapsed numeric axis beside the categorical ones it is judged across."""
+
+    i = bn.IntSweep(default=0, bounds=[0, 0])
+    pose = bn.StringSweep(["a", "b", "c"])
+    scenario = bn.StringSweep(["s1", "s2"])
+    y = bn.ResultFloat()
+
+    def benchmark(self):
+        self.y = float(len(self.pose) + len(self.scenario) + self.i)
 
 
 class StepCfg(bn.ParametrizedSweep):
@@ -146,3 +162,21 @@ def test_existing_ranges_are_unaffected():
     normal = Cfg.param.f.with_bounds(0.0, 1.0)
     assert len(list(normal.values())) > 1
     assert normal.hash_persistent() == Cfg.param.f.with_bounds(0.0, 1.0).hash_persistent()
+
+
+@pytest.mark.parametrize(
+    "input_vars", [["i"], ["i", "pose"], ["i", "pose", "scenario"]], ids=["0cat", "1cat", "2cat"]
+)
+def test_a_collapsed_axis_is_not_plotted_against(input_vars):
+    """Every plot is chosen for the data it is handed, which has no collapsed axis.
+
+    The squeeze drops a one-value input from the dataset, but the line plot was
+    chosen as if it were still there and asked hvplot for it as the x axis: the
+    plot failed to render, or -- beside two categorical inputs, where hvplot builds
+    a lazy DynamicMap -- raised DataError out of ``report.save``.
+    """
+    bench = PoseCfg().to_bench()
+    with warnings.catch_warnings(), tempfile.TemporaryDirectory() as directory:
+        warnings.simplefilter("error", RenderFailedWarning)
+        bench.plot_sweep(input_vars=input_vars, result_vars=["y"])
+        bench.report.save(directory=directory)

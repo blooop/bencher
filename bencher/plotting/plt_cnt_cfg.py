@@ -96,16 +96,20 @@ class PltCntCfg(param.Parameterized):
         plt_cnt_cfg.float_vars = []
 
         for iv in bench_cfg.input_vars:
-            type_allocated = False
-            if isinstance(iv, (IntSweep, FloatSweep, *TIME_TYPES)):
-                plt_cnt_cfg.float_vars.append(iv)
-                type_allocated = True
-            if isinstance(iv, (EnumSweep, BoolSweep, StringSweep, YamlSweep)):
-                plt_cnt_cfg.cat_vars.append(iv)
-                type_allocated = True
-
-            if not type_allocated:
+            is_float = isinstance(iv, (IntSweep, FloatSweep, *TIME_TYPES))
+            is_cat = isinstance(iv, (EnumSweep, BoolSweep, StringSweep, YamlSweep))
+            if not (is_float or is_cat):
                 raise ValueError(f"No rule for type {type(iv)}")
+            # An input that took one value is not an axis: the squeeze drops it from
+            # the dataset every plot is handed, so a plot chosen for it asks for a
+            # dimension that is not there (a front of one, a range collapsed to a
+            # point).
+            if ds is not None and ds.sizes.get(iv.name) == 1:
+                continue
+            if is_float:
+                plt_cnt_cfg.float_vars.append(iv)
+            if is_cat:
+                plt_cnt_cfg.cat_vars.append(iv)
 
         for rv in bench_cfg.result_vars:
             if isinstance(rv, PANEL_TYPES):
@@ -115,7 +119,7 @@ class PltCntCfg(param.Parameterized):
         plt_cnt_cfg.cat_cnt = len(plt_cnt_cfg.cat_vars)
         plt_cnt_cfg.panel_cnt = len(plt_cnt_cfg.panel_vars)
         plt_cnt_cfg.repeats = bench_cfg.repeats
-        plt_cnt_cfg.inputs_cnt = len(bench_cfg.input_vars)
+        plt_cnt_cfg.inputs_cnt = plt_cnt_cfg.float_cnt + plt_cnt_cfg.cat_cnt
 
         plt_cnt_cfg.has_time = bool(bench_cfg.over_time) or any(
             isinstance(iv, TIME_TYPES) for iv in bench_cfg.input_vars
