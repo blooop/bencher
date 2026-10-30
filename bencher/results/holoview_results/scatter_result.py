@@ -7,7 +7,7 @@ from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.hvplot_accessor import hvplot_of
 from bencher.utils import label_with_units
-from bencher.variables.results import ResultVar
+from bencher.variables.results import ResultFloat
 
 if TYPE_CHECKING:
     import panel as pn
@@ -47,7 +47,7 @@ class ScatterResult(HoloviewResult):
             repeats_range=VarRange.exactly(1),
             reduce=ReduceType.SQUEEZE,
             result_var=result_var,
-            result_types=(ResultVar,),
+            result_types=(ResultFloat,),
             override=override,
             **kwargs,
         )
