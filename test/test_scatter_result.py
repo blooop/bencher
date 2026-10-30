@@ -54,8 +54,7 @@ class Float1DBench(bn.ParametrizedSweep):
 
 
 with warnings.catch_warnings():
-    # ResultVar is deprecated, but to_scatter's result_types filter only accepts it,
-    # so the full public path is exercised with a ResultVar result.
+    # ResultVar is deprecated, but sweeps that still use it must keep their scatter plot.
     warnings.simplefilter("ignore", DeprecationWarning)
 
     class LegacyScatterBench(bn.ParametrizedSweep):
@@ -109,10 +108,15 @@ class TestScatterResult(unittest.TestCase):
         assert isinstance(result, pn.Row)
         assert isinstance(result[0].object, hv.Scatter)
 
-    def test_to_scatter_result_float_returns_none(self):
-        """Documents current behavior: result_types=(ResultVar,) excludes plain
-        ResultFloat results, so the public to_scatter path yields no panes."""
-        assert self.res_cat.to_scatter() is None
+    def test_to_scatter_full_path_with_result_float(self):
+        """The public to_scatter path draws a plain ResultFloat result.
+
+        The filter once named the deprecated ResultVar subclass, so every
+        ResultFloat result was dropped and to_scatter returned None."""
+        result = self.res_cat.to_scatter()
+        assert isinstance(result, pn.Row)
+        assert len(result) > 0
+        assert isinstance(result[0].object, hv.Scatter)
 
     def test_to_scatter_ds_nan_does_not_crash(self):
         ds = self.res_nan.to_dataset()
