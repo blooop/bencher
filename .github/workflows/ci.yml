@@ -77,3 +77,22 @@ jobs:
           pixi update
           pixi run -e py313 generate-examples
           pixi run -e py313 test-split
+
+  # Build the wheel and install it with plain `pip install` (no extras) into a fresh
+  # venv: that is the light install users get. Runs `bencher ab`, `bencher compare
+  # --report` and the scorecard there, and checks a heavy feature names
+  # `pip install "holobench[full]"`. See test/test_packaging.py.
+  light-wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - uses: prefix-dev/setup-pixi@v0.11.2
+        with:
+          cache: true
+          frozen: true
+          environments: py313
+      - name: Light install from the built wheel
+        run: |
+          pixi update
+          pixi run -e py313 test-wheel

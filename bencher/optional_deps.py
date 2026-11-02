@@ -1,10 +1,9 @@
 """The heavy packages bencher plots, serves and optimises with, and what to do without them.
 
-``pip install holobench`` installs everything. A light install
-(``pip install --no-deps holobench`` plus the light dependencies by hand) has only what
-a sweep, its claims, ``bencher compare`` and ``bencher ab`` need, and leaves out the
-plotting stack (HoloViews, Panel, Bokeh, hvplot, plotly), Optuna, moviepy and
-scikit-learn.
+``pip install holobench`` is the light install: it has only what a sweep, its claims,
+``bencher compare``, ``bencher ab`` and the scorecard need, and leaves out the plotting
+stack (HoloViews, Panel, Bokeh, hvplot, plotly), Optuna, moviepy and scikit-learn.
+``pip install "holobench[full]"`` adds them.
 
 So the modules that use one of those import it from here, not directly::
 
@@ -13,7 +12,7 @@ So the modules that use one of those import it from here, not directly::
 On a full install each name *is* the real module, imported here at the point
 ``import bencher`` always imported it -- nothing changes. On a light install it is a
 stand-in, and the first use of it raises :class:`FullInstallRequiredError`, which
-says to ``pip install holobench``, instead of failing ``import bencher`` with a
+says to ``pip install "holobench[full]"``, instead of failing ``import bencher`` with a
 ``ModuleNotFoundError`` from deep inside a plotting module.
 
 A heavy import inside a function (moviepy, hvplot, ``optuna.visualization``,
@@ -30,6 +29,9 @@ from typing import TYPE_CHECKING, NoReturn
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+
+#: The command that adds the heavy packages to a light install.
+FULL_INSTALL_COMMAND = 'pip install "holobench[full]"'
 
 # Top-level names of every package a full install has and a light install does not.
 # scipy and tornado are not declared by holobench, but come with what it declares
@@ -51,7 +53,7 @@ HEAVY_PACKAGES = frozenset(
 
 
 class FullInstallRequiredError(ModuleNotFoundError):
-    """A feature needs a package that only the full ``holobench`` install has.
+    """A feature needs a package that only ``holobench[full]`` installs.
 
     A ``ModuleNotFoundError`` (so an ``ImportError``), so code that already guards an
     optional feature with ``except ImportError`` keeps working on a light install.
@@ -62,7 +64,7 @@ def _message(package: str) -> str:
     return (
         f"this bencher feature needs '{package}', which is not installed. "
         "A light install leaves out the plotting, report-server, optimisation and video "
-        "packages; install the full package with `pip install holobench`."
+        f"packages; add them with `{FULL_INSTALL_COMMAND}`."
     )
 
 

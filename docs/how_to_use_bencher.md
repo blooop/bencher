@@ -4,7 +4,8 @@ A practical quick-start reference — install bencher, write your first benchmar
 learn the core patterns. For a tour of all features (repeats, over-time tracking,
 optimization), see the [Feature Guide](intro.md).
 
-Install: `pip install holobench`
+Install: `pip install "holobench[full]"` (plots and reports). Plain `pip install holobench`
+is [the light install](#the-light-install-and-the-full-extra).
 
 ## Quick Start
 
@@ -530,7 +531,8 @@ res.to_svg_files("docs/my_plots", svg_layout="grid")  # overrides the run config
 The value charts reduce repeats by the mean; the curve draws one standard deviation as a
 band. The distribution charts draw every repeat as a dot, with a thick median line.
 
-seaborn is optional. With it installed (`pip install holobench[seaborn]`; the pixi dev
+seaborn is optional. With it installed (`pip install "holobench[full,seaborn]"`: the svg
+charts are sweep plots, so they need `full` too; the pixi dev
 environments have it) and a seaborn `svg_style` (below), the svg charts share one seaborn
 theme, and seaborn draws the panels of the value and distribution charts: a beeswarm of every repeat (the jitter
 strip when the dots do not fit side by side), seaborn's boxes, violins, bars and lines,
@@ -1086,27 +1088,29 @@ sweeps the true failure rate and plots the run count and the FLAKY rate.
 `Sprt.to_svg()` draws the walk on Wald's chart, and `save_svg(path)` writes it; to show it
 in a PR or issue, see [Showing a chart in a GitHub PR or issue](#showing-a-chart-in-a-github-pr-or-issue).
 
-### A light install for the evidence tools
+### The light install and the full extra
 
-A CI job that only gates a change does not need the plotting stack. Install the package
-without its dependencies, then the light ones by hand:
+`pip install holobench` is the light install. It has what a CI job that gates a change
+needs, without the plotting stack:
 
 ```bash
-pip install --no-deps holobench
-pip install numpy param diskcache xarray pandas strenum matplotlib jinja2 pyyaml
+pip install holobench            # light: numpy, param, xarray, pandas, matplotlib, jinja2, ...
+pip install "holobench[full]"    # everything: adds holoviews, panel, hvplot, plotly, optuna, scikit-learn, moviepy
 ```
 
-The second list is holobench's own dependencies without the heavy ones, plus pyyaml, which
-bencher imports and a full install gets through panel. pip then warns that holobench's other requirements (holoviews, panel, hvplot, optuna,
-plotly, scikit-learn, moviepy) are missing; that is expected. It can also warn that a light
-package is newer than holobench's upper pin; add the pin to the second command (for example
-`"numpy<=2.5.1"`) if you want to stay inside it.
+What works on the light install: `import bencher`, sweeps (`bn.run`, `collect`), claims,
+`bn.compare_results`, `bencher compare` (`--json`, `--markdown`, `--png`, `--report`),
+`bencher ab` (with `--png-dir` and `--images`), `bencher evidence-rows`,
+`bencher.evidence_ref.push_evidence` and `bencher.scorecard`. A sweep that would plot
+warns once and collects without plots.
 
-What works: `import bencher`, sweeps, claims, `bn.compare_results`, `bencher compare` (JSON,
-Markdown and PNG evidence) and `bencher ab`. A sweep that would plot warns once and collects
-without plots. Plots, HTML reports, the report server, `bencher <result.pkl> <dir>`,
-optimisation and video raise an `ImportError` that says to run `pip install holobench`, which
-adds them.
+What needs `[full]`: plots, HTML reports (`bencher <result.pkl> <dir>`, `save=True`,
+`BenchReport`), the report server, optimisation and video. Each raises
+`FullInstallRequiredError` (an `ImportError`) that says to run
+`pip install "holobench[full]"`.
+
+Before holobench 2.0, `pip install holobench` installed everything. A project that plots
+must now ask for `holobench[full]`.
 
 ## Complete execution reports
 

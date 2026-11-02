@@ -34,7 +34,13 @@ from bencher.launch_env import (
     check_no_forbidden_code,
     result_path_from_env,
 )
-from bencher.optional_deps import PLOTTING_INSTALLED, full_install_required, optuna, pn
+from bencher.optional_deps import (
+    FULL_INSTALL_COMMAND,
+    PLOTTING_INSTALLED,
+    full_install_required,
+    optuna,
+    pn,
+)
 from bencher.optuna_conversions import sweep_var_to_optuna_dist, sweep_var_to_suggest
 from bencher.regression import RegressionError, detect_regressions
 from bencher.result_collector import ResultCollector
@@ -95,7 +101,7 @@ def _warn_collected_without_plots() -> None:
     # that runs between two sweeps resets the registry, and the warning repeats.
     warnings.warn(
         "bencher: the plotting packages are not installed (a light install), so "
-        "the sweep was collected without plots. `pip install holobench` adds them.",
+        f"the sweep was collected without plots. `{FULL_INSTALL_COMMAND}` adds them.",
         stacklevel=4,
     )
 

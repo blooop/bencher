@@ -6,6 +6,6 @@ dependencies:
   - pip
   - sqlite=3.48.0
   - pip:
-      - -e ../
+      - -e ../[full]
       - -r requirements.txt
       - matplotlib
