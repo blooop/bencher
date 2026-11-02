@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A cached `.rrd` opens in the viewer of the rerun release that wrote it.**
+  `rrd_file_to_pane` used to pick the viewer from the installed `rerun-sdk`, or from
+  the 0.39.0 fallback when none was installed. A recording cached under rerun 0.38
+  then got a 0.39, 0.40 or 0.41 viewer. The viewer version now comes from the `.rrd`
+  file header. An explicit `viewer_version` still wins. A header with no release
+  version (a prerelease or dev build) falls back to the installed `rerun-sdk`.
+
 ## [1.152.0] - 2026-11-02
 
 ### Changed
