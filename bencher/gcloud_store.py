@@ -22,7 +22,6 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 from uuid import uuid4
 
-from bencher.complete_report import safe_path
 from bencher.object_store import (
     Absent,
     Conflict,
@@ -41,6 +40,7 @@ from bencher.object_store import (
     encode_token,
     validate_listing,
 )
+from bencher.report_inventory import safe_path
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

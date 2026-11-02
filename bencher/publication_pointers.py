@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from bencher.complete_report import safe_path
 from bencher.object_store import (
     CreateOnly,
     Match,
@@ -20,6 +19,7 @@ from bencher.object_store import (
     Written,
 )
 from bencher.publishing import PublicationReceipt, http_base
+from bencher.report_inventory import safe_path
 
 if TYPE_CHECKING:
     from collections.abc import Callable

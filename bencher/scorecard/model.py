@@ -11,8 +11,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from bencher.report_export import _verdict as _core_verdict
 from bencher.sparkline import sparkline_svg
+from bencher.verdict import _verdict as _core_verdict
 
 if TYPE_CHECKING:
     from bencher.scorecard.config import ScorecardConfig
