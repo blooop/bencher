@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.152.0] - 2026-11-02
+
+### Changed
+- **The `rerun` extra accepts rerun-sdk and rerun-notebook 0.39, 0.40 and 0.41**
+  (`>=0.39.0,<0.42`; before: `>=0.38.0,<0.41`). The window moves up one minor at each
+  end, so rerun 0.38 is no longer supported. The default environment resolves 0.41.0;
+  `rerun-mid` pins 0.40 and `rerun-floor` pins 0.39. With no `rerun-sdk` installed,
+  the RRD viewer falls back to the new floor, 0.39.0.
+
 ## [1.151.1] - 2026-10-30
 
 ### Fixed
