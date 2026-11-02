@@ -531,7 +531,8 @@ res.to_svg_files("docs/my_plots", svg_layout="grid")  # overrides the run config
 The value charts reduce repeats by the mean; the curve draws one standard deviation as a
 band. The distribution charts draw every repeat as a dot, with a thick median line.
 
-seaborn is optional. With it installed (`pip install holobench[seaborn]`; the pixi dev
+seaborn is optional. With it installed (`pip install "holobench[full,seaborn]"`: the svg
+charts are sweep plots, so they need `full` too; the pixi dev
 environments have it) and a seaborn `svg_style` (below), the svg charts share one seaborn
 theme, and seaborn draws the panels of the value and distribution charts: a beeswarm of every repeat (the jitter
 strip when the dots do not fit side by side), seaborn's boxes, violins, bars and lines,
