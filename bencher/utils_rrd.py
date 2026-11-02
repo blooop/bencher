@@ -36,6 +36,8 @@ _VERSION_RE = re.compile(r"^[0-9A-Za-z._-]+$")
 
 # An .rrd header starts with 4 magic bytes, then 4 version bytes.
 _RRD_HEADER_VERSION_END = 8
+# The magics rerun has written: RRF2 now, RRF0 and RRF1 in older releases.
+_RRD_MAGICS = (b"RRF0", b"RRF1", b"RRF2")
 
 
 def _get_rerun_version() -> str:
@@ -55,17 +57,18 @@ def _get_rerun_version() -> str:
 def _rrd_recorded_version(rrd_path: str | Path) -> str | None:
     """Return the rerun release that wrote *rrd_path*, read off its file header.
 
-    An ``.rrd`` starts with the magic ``RRF2``, then the writer's version as the bytes
+    An ``.rrd`` starts with a magic (``RRF2``, or ``RRF0``/``RRF1`` from older
+    releases), then the writer's version as the bytes
     ``[major, minor, patch, meta]``. A non-zero ``meta`` marks a prerelease or dev
     build, which has no exact name on the CDN. Returns ``None`` for those, and for a
-    file that is missing, short, or not an ``.rrd``.
+    file that is missing, short, or has an unknown magic.
     """
     try:
         with Path(rrd_path).open("rb") as handle:
             header = handle.read(_RRD_HEADER_VERSION_END)
     except OSError:
         return None
-    if len(header) < _RRD_HEADER_VERSION_END or not header.startswith(b"RRF"):
+    if len(header) < _RRD_HEADER_VERSION_END or header[:4] not in _RRD_MAGICS:
         return None
     major, minor, patch, meta = header[4:_RRD_HEADER_VERSION_END]
     if meta != 0:
@@ -108,8 +111,9 @@ def rrd_file_to_pane(  # pragma: no cover
     """Create a rerun viewer pane from an .rrd file path.
 
     Uses an HTML iframe to display the .rrd file.  By default the viewer
-    is loaded from the ``@rerun-io/web-viewer`` CDN at the installed
-    ``rerun-sdk`` version.  The viewer page and the ``.rrd`` data are
+    is loaded from the ``@rerun-io/web-viewer`` CDN at the rerun release
+    named in the ``.rrd`` file header, or at the installed ``rerun-sdk``
+    version when the header names no release.  The viewer page and the ``.rrd`` data are
     both served from the Panel server's ``/rrd_static/`` route, keeping
     everything on a single origin (no CORS, no extra ports).
 

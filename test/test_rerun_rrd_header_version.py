@@ -38,6 +38,9 @@ class TestRerunRrdHeaderVersion(unittest.TestCase):
         cases = {
             "prerelease": write_rrd_header(self.tmp / "b.rrd", bytes([0, 42, 0, 0x41])),
             "not an rrd": write_rrd_header(self.tmp / "c.rrd", bytes([0, 41, 0, 0]), b"PK\x03\x04"),
+            "unknown rrd magic": write_rrd_header(
+                self.tmp / "e.rrd", bytes([0, 41, 0, 0]), b"RRF9"
+            ),
             "truncated": self.tmp / "d.rrd",
             "missing": self.tmp / "missing.rrd",
         }
