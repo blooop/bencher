@@ -30,6 +30,9 @@ PROJECT = PYPROJECT["project"]
 
 # Distribution name -> top-level import name, where they differ.
 IMPORT_NAME = {"scikit-learn": "sklearn", "pyyaml": "yaml"}
+# What `full` must install, spelled out here so that dropping a package from both
+# pyproject's `full` and HEAVY_PACKAGES still fails a test.
+EXPECTED_FULL = {"holoviews", "hvplot", "panel", "optuna", "plotly", "sklearn", "moviepy"}
 # Declared by `full` only; the other HEAVY_PACKAGES come in with them.
 TRANSITIVE_HEAVY = {"bokeh", "scipy", "tornado"}
 
@@ -48,6 +51,7 @@ def test_the_full_extra_is_exactly_what_a_light_install_lacks() -> None:
     """
     full = {_import_name(r) for r in PROJECT["optional-dependencies"]["full"]}
     light = {_import_name(r) for r in PROJECT["dependencies"]}
+    assert full == EXPECTED_FULL
     assert full == HEAVY_PACKAGES - TRANSITIVE_HEAVY
     assert not light & HEAVY_PACKAGES
 
@@ -134,7 +138,7 @@ def _run(venv: Path, args: list[str], cwd: Path) -> subprocess.CompletedProcess[
 def test_the_light_install_has_no_heavy_package(light_venv: Path, tmp_path: Path) -> None:
     probe = (
         "import importlib.util, json; "
-        f"print(json.dumps(sorted(m for m in {sorted(HEAVY_PACKAGES)!r} "
+        f"print(json.dumps(sorted(m for m in {sorted(HEAVY_PACKAGES | EXPECTED_FULL)!r} "
         "if importlib.util.find_spec(m))))"
     )
     proc = _run(light_venv, [str(light_venv / "bin" / "python"), "-c", probe], tmp_path)
