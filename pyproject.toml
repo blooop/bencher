@@ -9,22 +9,22 @@ license = "MIT"
 
 requires-python = ">=3.11,<3.15"
 
+# `pip install holobench` is the light install: sweeps, claims, `bencher compare`,
+# `bencher ab`, the evidence PNGs and the scorecard. The plotting stack, the report
+# server, optimisation and video are in the `full` extra below
+# (`pip install "holobench[full]"`).
 dependencies = [
-    "holoviews>=1.15,<=1.23.2",
     "numpy>=1.0,<=2.5.1",
     "param>=2.0,<=2.4.2",
-    "hvplot>=0.12.0,<=0.12.2",
-    "panel>=1.9.0,<=1.9.4",
     "diskcache>=5.6,<=5.6.3",
-    "optuna>=3.2,<=5.0.0",
     "xarray>=2023.7,<=2026.9.0",
-    "plotly>=5.15,<=7.1.0",
     "pandas>=2.0,<=3.1.0",
     "strenum>=0.4.0,<=0.4.15",
-    "scikit-learn>=1.2,<=1.9.1",
-    "moviepy>=2.1.2,<=2.2.1",
+    # The evidence PNGs (`bencher compare` / `bencher ab`) and the svg backend.
     "matplotlib>=3.7,<=3.11.2",
+    # The scorecard templates.
     "jinja2>=3.0,<=3.1.6",
+    # `import bencher` needs it (bencher/variables/inputs.py, for YamlSweep).
     "pyyaml>=6.0,<=6.0.3",
 ]
 
@@ -74,6 +74,19 @@ rerun-notebook = ">=0.40.0,<0.41"
 holobench = { path = ".", editable = true }
 
 [project.optional-dependencies]
+# Plotting, HTML reports, the report server, optimisation and video: everything
+# `pip install holobench` used to install. bencher.optional_deps.HEAVY_PACKAGES
+# names what a light install lacks; test/test_packaging.py keeps the two in step.
+full = [
+    "holoviews>=1.15,<=1.23.2",
+    "hvplot>=0.12.0,<=0.12.2",
+    "panel>=1.9.0,<=1.9.4",
+    "optuna>=3.2,<=5.0.0",
+    "plotly>=5.15,<=7.1.0",
+    "scikit-learn>=1.2,<=1.9.1",
+    "moviepy>=2.1.2,<=2.2.1",
+]
+
 test = [
     "nbformat",
     "nbclient>=0.7,<=0.11.0",
@@ -129,14 +142,14 @@ include = ["bencher", "CHANGELOG.md"]
 
 # Environments
 [tool.pixi.environments]
-default = { features = ["test", "rerun", "seaborn"], solve-group = "default" }
-docs = { features = ["test", "rerun", "seaborn", "docs"], solve-group = "default" }
-py311 = ["py311", "test", "rerun", "seaborn"]
-py312 = ["py312", "test", "rerun", "seaborn"]
-py313 = ["py313", "test", "rerun", "seaborn"]
-py314 = ["py314", "test", "rerun", "seaborn"]
-rerun-floor = ["py313", "test", "rerun-floor"]
-rerun-mid = ["py313", "test", "rerun-mid"]
+default = { features = ["full", "test", "rerun", "seaborn"], solve-group = "default" }
+docs = { features = ["full", "test", "rerun", "seaborn", "docs"], solve-group = "default" }
+py311 = ["full", "py311", "test", "rerun", "seaborn"]
+py312 = ["full", "py312", "test", "rerun", "seaborn"]
+py313 = ["full", "py313", "test", "rerun", "seaborn"]
+py314 = ["full", "py314", "test", "rerun", "seaborn"]
+rerun-floor = ["full", "py313", "test", "rerun-floor"]
+rerun-mid = ["full", "py313", "test", "rerun-mid"]
 
 [tool.pixi.tasks]
 #AI AGENT TASKS
@@ -186,6 +199,9 @@ test-rerun = "pytest -k rerun"
 # report build is routed through save_result -> load_result -> render so any
 # pickle / render-from-loaded divergence surfaces in the existing assertions.
 test-split = { cmd = "pytest", env = { BENCHER_FORCE_SPLIT_RENDER = "1" } }
+# Build the wheel, pip install it with no extras into a fresh venv, and run the light
+# features there (test/test_packaging.py). Downloads the light dependencies.
+test-wheel = { cmd = "pytest test/test_packaging.py", env = { BENCHER_TEST_WHEEL = "1" } }
 coverage = "coverage run -m pytest && coverage xml -o coverage.xml"
 coverage-report = "coverage report -m"
 update-lock = "pixi update && git commit -a -m'update pixi.lock' || true"

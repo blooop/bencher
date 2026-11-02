@@ -1,8 +1,9 @@
 """The evidence tools work on a light install, without the plotting stack.
 
-A light install is ``pip install --no-deps holobench`` plus only the light dependencies
-(see ``pyproject.toml`` and ``docs/how_to_use_bencher.md``); ``pip install holobench``
-adds the rest. A repo that only wants to *gate* a
+A light install is plain ``pip install holobench`` (see ``pyproject.toml`` and
+``docs/how_to_use_bencher.md``); ``pip install "holobench[full]"`` adds the rest.
+test/test_packaging.py installs the built wheel for real; the tests here are faster and
+block the heavy packages in the full pixi environment instead. A repo that only wants to *gate* a
 change -- run a sweep, check its claims, compare two runs, ``bencher ab`` -- gets that
 without Panel, Bokeh, HoloViews, hvplot, Optuna, moviepy, scikit-learn or plotly.
 
@@ -31,7 +32,7 @@ import pytest
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
-from bencher.optional_deps import HEAVY_PACKAGES
+from bencher.optional_deps import FULL_INSTALL_COMMAND, HEAVY_PACKAGES
 
 HEAVY = tuple(sorted(HEAVY_PACKAGES))
 REPO = Path(__file__).resolve().parents[1]
@@ -250,7 +251,7 @@ def test_a_heavy_feature_says_how_to_get_it(tmp_path, core_env, call):
     proc = _run([sys.executable, "-c", HEAVY_FEATURE_PROBE.format(call=call)], tmp_path, core_env)
     assert proc.returncode == 0, proc.stderr
     assert "IMPORT-ERROR:" in proc.stdout, proc.stdout
-    assert "pip install holobench" in proc.stdout, proc.stdout
+    assert FULL_INSTALL_COMMAND in proc.stdout, proc.stdout
 
 
 def test_loading_a_result_that_holds_a_plot_says_how_to_get_it(tmp_path, core_env):
@@ -266,7 +267,7 @@ except ImportError as exc:
 """
     proc = _run([sys.executable, "-c", probe], tmp_path, core_env)
     assert proc.returncode == 0, proc.stderr
-    assert "pip install holobench" in proc.stdout, proc.stdout
+    assert FULL_INSTALL_COMMAND in proc.stdout, proc.stdout
 
 
 def test_the_cli_names_the_missing_install_without_a_traceback(tmp_path, core_env):
@@ -283,7 +284,7 @@ def test_the_cli_names_the_missing_install_without_a_traceback(tmp_path, core_en
     ):
         proc = _run([*BENCHER_CLI, *args], tmp_path, core_env)
         assert proc.returncode == 1, proc.stderr
-        assert "pip install holobench" in proc.stderr, proc.stderr
+        assert FULL_INSTALL_COMMAND in proc.stderr, proc.stderr
         assert "Traceback" not in proc.stderr, proc.stderr
 
 
@@ -300,7 +301,7 @@ def test_the_cli_still_writes_json_without_the_plotting_stack(tmp_path, core_env
         core_env,
     )
     assert proc.returncode == 1, proc.stderr
-    assert "pip install holobench" in proc.stderr, proc.stderr
+    assert FULL_INSTALL_COMMAND in proc.stderr, proc.stderr
     assert "schema_version" in json.loads(json_path.read_text(encoding="utf-8"))
 
 

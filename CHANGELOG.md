@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **BREAKING: `pip install holobench` is now the light install; `pip install
+  "holobench[full]"` installs everything.** The plotting stack (holoviews, panel, hvplot,
+  plotly), optuna, scikit-learn and moviepy move from `dependencies` to the new `full`
+  extra, with the same version bounds. The light install keeps numpy, param, diskcache,
+  xarray, pandas, strenum, matplotlib, jinja2 and pyyaml: 21 packages and 292 MB of
+  site-packages, against 61 packages and 951 MB for `[full]` (fresh venvs, Python 3.13).
+  Sweeps, claims, `bencher compare`, `bencher ab`, `bencher evidence-rows`,
+  `push_evidence` and `bencher.scorecard` work on it. **What to change:** if you plot,
+  render HTML reports (`bencher <result.pkl> <dir>`, `save=True`), serve reports,
+  optimise or write video, install `holobench[full]` -- in `requirements.txt`, write
+  `holobench[full]`; in `pyproject.toml`, `"holobench[full]>=2"`. Without it, those
+  features raise `FullInstallRequiredError`, which says the same. The old light recipe
+  (`pip install --no-deps holobench` plus a hand-written list) still works but is no
+  longer needed.
 - **`import bencher` loads its public names on first use** (PEP 562 `__getattr__`), so
   `import bencher.scorecard` loads 159 modules in about 55 ms, down from 2325 modules in
   about 1.6 s on a full install. It no longer imports numpy, pandas, xarray, param,

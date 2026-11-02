@@ -23,10 +23,14 @@ instead of starting over. You declare the inputs, the outputs, and the body of t
 measurement — no sweep loops, no plotting code, no report scaffolding.
 
 ```bash
-pip install holobench
+pip install "holobench[full]"
 ```
 
-Only gating changes in CI (sweeps, claims, `bencher compare`, `bencher ab`)? See [a light install](docs/how_to_use_bencher.md#a-light-install-for-the-evidence-tools) without the plotting stack.
+`[full]` adds the plotting stack: plots, HTML reports, the report server, optimisation
+and video. Plain `pip install holobench` is [the light install](docs/how_to_use_bencher.md#the-light-install-and-the-full-extra):
+sweeps, claims, `bencher compare`, `bencher ab` and the scorecard, without the plotting
+stack. Before holobench 2.0, plain `pip install holobench` installed everything; if you
+plot, add `[full]`.
 
 ```python
 import math

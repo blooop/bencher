@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import pickle
+import re
 
 import pytest
 
 from bencher.optional_deps import (
+    FULL_INSTALL_COMMAND,
     FullInstallRequiredError,
     _import_or_stand_in,
     _MissingModule,
@@ -20,7 +22,7 @@ def _missing(name: str) -> ModuleNotFoundError:
 
 def test_a_missing_heavy_package_says_to_install_holobench():
     with (
-        pytest.raises(FullInstallRequiredError, match="pip install holobench") as info,
+        pytest.raises(FullInstallRequiredError, match=re.escape(FULL_INSTALL_COMMAND)) as info,
         full_install_required(),
     ):
         raise _missing("holoviews")
@@ -44,7 +46,9 @@ def test_a_missing_light_package_is_left_alone():
 
 def test_the_stand_in_raises_the_hint_on_use():
     pn = _MissingModule("panel", _missing("panel"))
-    with pytest.raises(FullInstallRequiredError, match=r"'panel'.*pip install holobench"):
+    with pytest.raises(
+        FullInstallRequiredError, match=r"'panel'.*" + re.escape(FULL_INSTALL_COMMAND)
+    ):
         pn.Column  # noqa: B018 - the attribute read is what raises
 
 
