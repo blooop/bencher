@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`import bencher` loads its public names on first use** (PEP 562 `__getattr__`), so
+  `import bencher.scorecard` loads 159 modules in about 55 ms, down from 2325 modules in
+  about 1.6 s on a full install. It no longer imports numpy, pandas, xarray, param,
+  holoviews, panel or bokeh. `from bencher import X` and `bencher.X` work as before, and
+  type checkers see the same names. The verdict and report-verification helpers that the
+  scorecard needs moved to the stdlib-only `bencher.verdict` and
+  `bencher.report_inventory`; `bencher.report_export` and `bencher.complete_report` still
+  export them.
+
 ## [1.152.0] - 2026-11-02
 
 ### Changed
