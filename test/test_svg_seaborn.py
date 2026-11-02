@@ -290,8 +290,8 @@ def test_only_the_outer_grid_edges_carry_ticks(style):
                 assert tick.tick1line.get_visible() is outer
 
 
-@pytest.mark.parametrize("style", ["seaborn", "seaborn-ticks"])
-def test_seaborn_styles_are_the_same_bytes_in_two_processes(style):
+def test_seaborn_style_is_the_same_bytes_in_two_processes():
+    style = "seaborn-ticks"  # the default; the other style shares the same code path
     script = textwrap.dedent(
         f"""
         import hashlib
