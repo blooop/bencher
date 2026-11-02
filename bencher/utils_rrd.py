@@ -34,6 +34,9 @@ _RRD_CACHE_DIR = Path("cachedir/rrd")
 # Pattern for valid viewer version strings (semver-like, e.g. "0.30.1", "0.30.0-alpha.1").
 _VERSION_RE = re.compile(r"^[0-9A-Za-z._-]+$")
 
+# An .rrd header starts with 4 magic bytes, then 4 version bytes.
+_RRD_HEADER_VERSION_END = 8
+
 
 def _get_rerun_version() -> str:
     """Get the installed rerun package version, or the oldest supported release.
@@ -47,6 +50,27 @@ def _get_rerun_version() -> str:
         return get_package_version("rerun-sdk")
     except PackageNotFoundError:
         return "0.39.0"
+
+
+def _rrd_recorded_version(rrd_path: str | Path) -> str | None:
+    """Return the rerun release that wrote *rrd_path*, read off its file header.
+
+    An ``.rrd`` starts with the magic ``RRF2``, then the writer's version as the bytes
+    ``[major, minor, patch, meta]``. A non-zero ``meta`` marks a prerelease or dev
+    build, which has no exact name on the CDN. Returns ``None`` for those, and for a
+    file that is missing, short, or not an ``.rrd``.
+    """
+    try:
+        with Path(rrd_path).open("rb") as handle:
+            header = handle.read(_RRD_HEADER_VERSION_END)
+    except OSError:
+        return None
+    if len(header) < _RRD_HEADER_VERSION_END or not header.startswith(b"RRF"):
+        return None
+    major, minor, patch, meta = header[4:_RRD_HEADER_VERSION_END]
+    if meta != 0:
+        return None
+    return f"{major}.{minor}.{patch}"
 
 
 def rrd_to_pane(
@@ -101,8 +125,9 @@ def rrd_file_to_pane(  # pragma: no cover
         Height of the viewer iframe in pixels.
     viewer_version:
         Rerun web-viewer version to load from CDN.  Defaults to the
-        installed ``rerun-sdk`` version.  Set explicitly when the .rrd
-        was recorded with a different SDK version.
+        release named in the ``.rrd`` file header, so a recording keeps a
+        matching viewer after the installed ``rerun-sdk`` changes.  When the
+        header names no release, falls back to the installed ``rerun-sdk``.
     report_dir:
         When set, copies the .rrd and viewer HTML into this directory
         and uses relative URLs in the iframe.  This makes the report
@@ -114,9 +139,9 @@ def rrd_file_to_pane(  # pragma: no cover
 
     rrd_path = Path(file_path).resolve()
 
-    # Resolve viewer version: explicit > installed SDK > fallback.
+    # Resolve viewer version: explicit > the file's writer > installed SDK > fallback.
     if viewer_version is None:
-        viewer_version = _get_rerun_version()
+        viewer_version = _rrd_recorded_version(rrd_path) or _get_rerun_version()
     if not _VERSION_RE.match(viewer_version):
         raise ValueError(f"Invalid viewer_version {viewer_version!r}: must match [0-9A-Za-z._-]+")
 
