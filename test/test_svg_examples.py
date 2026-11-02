@@ -1,10 +1,14 @@
-"""Every generated example, re-run with ``backend="svg"``: the svg backend is a run_cfg swap.
+"""Generated examples, re-run with ``backend="svg"``: the svg backend is a run_cfg swap.
 
 No example is written for the svg backend. Each existing example takes a ``run_cfg``, so
 ``example_x(bn.BenchRunCfg(backend="svg"))`` draws it with the svg charts. Here every
 chart the svg backend claims must render a self-contained SVG, and every shape it does not
 claim must fall back to the holoviews (or plotly) twin, with the report built without
 error.
+
+Only the SVG_GALLERY examples run, plus the one example that gets the svg ``bar`` chart.
+Together they claim every svg chart that the full set of examples claims, but they are
+11 examples, not all of them, so the file takes a small part of the CI time.
 """
 
 from __future__ import annotations
@@ -33,7 +37,18 @@ def _twin_backend(name: str) -> str:
     return "plotly" if name in ("surface", "volume") else "holoviews"
 
 
-@pytest.mark.parametrize("example_path", _examples, ids=lambda p: str(p.relative_to(GENERATED_DIR)))
+# The gallery examples, plus the only example whose sweep the svg ``bar`` chart claims.
+_SVG_STEMS = {entry.stem for entry in SVG_GALLERY} | {"example_stats_repeats_comparison"}
+_svg_examples = [p for p in _examples if p.stem in _SVG_STEMS]
+
+
+def test_svg_examples_all_exist():
+    assert {p.stem for p in _svg_examples} == _SVG_STEMS
+
+
+@pytest.mark.parametrize(
+    "example_path", _svg_examples, ids=lambda p: str(p.relative_to(GENERATED_DIR))
+)
 def test_generated_example_with_svg_backend(example_path):
     run_cfg = bn.BenchRunCfg(backend="svg", subsampling_divisions=2, repeats=2)
     # plot_sweep builds the report with auto_plot: every fallback chart renders here.
