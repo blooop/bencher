@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import quote, urlsplit
 
-from bencher.complete_report import safe_path, verify_report
 from bencher.object_store import (
     Absent,
     CreateOnly,
@@ -20,6 +19,7 @@ from bencher.object_store import (
     ReadFailed,
     WriteFailed,
 )
+from bencher.report_inventory import safe_path, verify_report
 
 if TYPE_CHECKING:
     from collections.abc import Callable

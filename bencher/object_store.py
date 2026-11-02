@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 
-from bencher.complete_report import safe_path
+from bencher.report_inventory import safe_path
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Mapping

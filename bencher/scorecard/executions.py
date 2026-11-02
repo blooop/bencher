@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 
-from bencher.complete_report import verify_report
+from bencher.report_inventory import verify_report
 
 
 def _load_summary(path: Path) -> dict:
