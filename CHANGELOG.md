@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.152.1] - 2026-11-02
-
 ### Fixed
 - **A cached `.rrd` opens in the viewer of the rerun release that wrote it.**
   `rrd_file_to_pane` used to pick the viewer from the installed `rerun-sdk`, or from
