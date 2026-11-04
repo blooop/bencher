@@ -1077,3 +1077,45 @@ deviations by this plan.
 - **A6 phases 3–5:** phase 3's plan doc should be written only after P4 here lands,
   against the final divergence ledger — the ledger is phase 3's review contract, the
   same way plan 23 §8 gated this plan on the P4 registry.
+
+---
+
+## Amendment — rerun-first reorder (2026-08-06)
+
+Owner rulings on [#1108](https://github.com/blooop/bencher/issues/1108), sequenced by
+the phase-order ruling on [#1111](https://github.com/blooop/bencher/issues/1111),
+resequence this plan; they do not rewrite it. Recorded here so this plan and A6 cannot
+describe different worlds.
+
+- **A6 Law 10's phase 4 splits**: 4a (the rerun backend) executes *ahead* of phases
+  2–3, driven by the rerun map
+  ([#1103](https://github.com/blooop/bencher/issues/1103)); 4b (video) stays where
+  Law 10 put it. Phases 2 → 3 → 4b → 5 keep their relative order, and the per-phase
+  acceptance gate (before/after regenerated gallery docs per PR) is unchanged. (#1111)
+- **Landed ahead of P1, on branch `task/grammar-foundation-1108`**: D1's package
+  skeleton, D2 verbatim (`channels.py`: `GRAMMAR_VERSION`, the nine-member `Channel`),
+  a **`Compose` node this plan never specified** (`compose.py` — Law 4: items + one
+  layout channel; how it evaluates, `view` vs `materialize`, is a capability-table
+  property, never a node field; user producer only, the planner producer arrives with
+  phase 3), and a **Law 3 embryo** (`capability.py`: per-channel
+  `Native | Approx | Unsupported` — the arm *is* the fidelity — the documented
+  substitution chain `Time→Tabs`, `Overlay→FacetCol`, `Spread→Overlay`, a total
+  `substitute()`, and the **rerun** table as seed, inverting this plan's panel-first
+  scoping; the panel table joins in phase 3).
+- **D1's isolation rule is amended.** The DoD grep "nothing under `bencher/results/`
+  or `bencher/plugins/` imports `bencher.grammar`" assumed a shadow-mode planner whose
+  only consumers sit in `test/`. With a real rerun consumer the rule becomes
+  **direction-of-import**: renderers may import grammar; grammar imports no rendering
+  module and no `param` — enforced by `test/test_grammar.py::TestImportDirection`, not
+  by grep. D1's other clauses (fixed module ownership, one-way intra-package order,
+  strict-`ty` ratchet from birth, `assert_never` on every match) apply unchanged and
+  are already enforced on the landed modules.
+- **What survives, per the #1108 rulings**: P1 survives whole — it *is* the vocabulary
+  landed above. P2's type layer survives as the landed records need it; the full
+  serialization layer waits for plans that need serializing. **P3 and P4 defer to
+  phase 3 — deferred 100%, avoided 0%** (#1111): if phase 3 executes, the shadow
+  harness, divergence ledger, and golden corpus are still built in full, and phase 3
+  receives Laws-3/4/5 types already exercised by a real backend, with no golden-churn
+  exposure (no goldens exist yet to churn).
+- **Absorption path when phase 3 lands D1's remaining modules**: `marks.py` absorbs
+  the capability-table type, `planner.py` absorbs `substitute()`; `compose.py` stays.
