@@ -1,6 +1,6 @@
 [project]
 name = "holobench"
-version = "2.0.0"
+version = "2.1.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -63,12 +63,12 @@ python = "3.14.*"
 # bencher's rerun surface includes `rerun.chunk` (RrdReader, Chunk), which is where
 # an alpha API moves.
 [tool.pixi.feature.rerun-floor.pypi-dependencies]
-rerun-sdk = ">=0.39.0,<0.40"
-rerun-notebook = ">=0.39.0,<0.40"
-
-[tool.pixi.feature.rerun-mid.pypi-dependencies]
 rerun-sdk = ">=0.40.0,<0.41"
 rerun-notebook = ">=0.40.0,<0.41"
+
+[tool.pixi.feature.rerun-mid.pypi-dependencies]
+rerun-sdk = ">=0.41.0,<0.42"
+rerun-notebook = ">=0.41.0,<0.42"
 
 [tool.pixi.pypi-dependencies]
 holobench = { path = ".", editable = true }
@@ -124,7 +124,7 @@ docs = [
 #at most three minors; every one is resolved by an environment and tested: the floor
 #by `rerun-floor`, the middle by `rerun-mid`, the ceiling by the default env. Widen
 #this only with a job to match.
-rerun = ["rerun-sdk>=0.39.0,<0.42", "rerun-notebook>=0.39.0,<0.42"]
+rerun = ["rerun-sdk>=0.40.0,<0.43", "rerun-notebook>=0.40.0,<0.43"]
 
 #draws the svg backend's panels with seaborn (beeswarms, boxes, violins, densities);
 #without it the svg backend draws the same charts with plain matplotlib

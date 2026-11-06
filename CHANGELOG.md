@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-11-06
+
+### Changed
+- **The `rerun` extra accepts rerun-sdk and rerun-notebook 0.40, 0.41 and 0.42**
+  (`>=0.40.0,<0.43`; before: `>=0.39.0,<0.42`). The window moves up one minor at each
+  end, so rerun 0.39 is no longer supported. The default environment resolves 0.42.0;
+  `rerun-mid` pins 0.41 and `rerun-floor` pins 0.40. With no `rerun-sdk` installed,
+  the RRD viewer falls back to the new floor, 0.40.0.
+
 ## [2.0.0] - 2026-11-02
 
 ### Changed
