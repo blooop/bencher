@@ -51,7 +51,7 @@ def _get_rerun_version() -> str:
     try:
         return get_package_version("rerun-sdk")
     except PackageNotFoundError:
-        return "0.39.0"
+        return "0.40.0"
 
 
 def _rrd_recorded_version(rrd_path: str | Path) -> str | None:
