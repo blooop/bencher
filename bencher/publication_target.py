@@ -8,6 +8,7 @@ land under the same key and are described by the same receipt.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import tempfile
@@ -20,13 +21,14 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from bencher.gcloud_store import GcloudStore
-    from bencher.object_store import LocalStore
+    from bencher.object_store import LocalStore, ObjectStore
     from bencher.publishing import (
         CompleteReportPublisher,
         PublicationReceipt,
         Published,
         PublishFailed,
     )
+    from bencher.source_index import SourceIndex
 
 STORE_ENV = "BENCHER_PUBLISH_STORE"
 PREFIX_ENV = "BENCHER_PUBLISH_PREFIX"
@@ -34,9 +36,18 @@ HTTP_BASE_ENV = "BENCHER_PUBLISH_HTTP_BASE"
 RECEIPT_ENV = "BENCHER_PUBLISH_RECEIPT"
 EXPIRY_DAYS_ENV = "BENCHER_PUBLISH_EXPIRY_DAYS"
 MINIMUM_REMAINING_DAYS_ENV = "BENCHER_PUBLISH_MINIMUM_REMAINING_DAYS"
+INDEX_HTTP_BASE_ENV = "BENCHER_PUBLISH_INDEX_HTTP_BASE"
 
 _REQUIRED = (STORE_ENV, PREFIX_ENV, HTTP_BASE_ENV)
-_ALL = (*_REQUIRED, RECEIPT_ENV, EXPIRY_DAYS_ENV, MINIMUM_REMAINING_DAYS_ENV)
+_ALL = (
+    *_REQUIRED,
+    RECEIPT_ENV,
+    EXPIRY_DAYS_ENV,
+    MINIMUM_REMAINING_DAYS_ENV,
+    INDEX_HTTP_BASE_ENV,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class PublicationFailed(RuntimeError):  # noqa: N818 - public name, renaming breaks callers
@@ -62,6 +73,12 @@ class PublicationTarget:
     ``expiry_days`` describes a backend Age-based Delete policy the caller has
     already verified; ``minimum_remaining_days`` refuses to publish new
     references without that much evidenced lifetime.
+
+    Each publish also adds the run to the ``by-src/<hash>/index.html`` page of
+    each source file it ran (:mod:`bencher.source_index`). With
+    ``index_http_base`` set, ``by-src/`` sits at the root of the store, served
+    at that URL, so every prefix shares one page per source. Without it,
+    ``by-src/`` sits under ``prefix``, served under ``http_base``.
     """
 
     store: str
@@ -70,6 +87,7 @@ class PublicationTarget:
     receipt: Path | None = None
     expiry_days: float | None = None
     minimum_remaining_days: float = 0
+    index_http_base: str | None = None
 
     def __post_init__(self) -> None:
         """Reject what no store can honour, however the target was built.
@@ -82,6 +100,10 @@ class PublicationTarget:
         for name in ("store", "prefix", "http_base"):
             if not getattr(self, name):
                 raise ValueError(f"{name} must not be empty")
+        if self.index_http_base is not None:
+            from bencher.source_link import serving_root
+
+            serving_root(self.index_http_base)
         if self.expiry_days is not None and not (
             math.isfinite(self.expiry_days) and self.expiry_days > 0
         ):
@@ -127,6 +149,7 @@ class PublicationTarget:
                 if values[MINIMUM_REMAINING_DAYS_ENV]
                 else 0
             ),
+            index_http_base=values[INDEX_HTTP_BASE_ENV] or None,
         )
 
     def open_store(self) -> GcloudStore | LocalStore:
@@ -154,6 +177,39 @@ class PublicationTarget:
             self.http_base,
             minimum_remaining_seconds=self.minimum_remaining_days * 86400,
         )
+
+    def source_index(self, store: ObjectStore) -> SourceIndex:
+        """The ``by-src/`` index this target writes, in *store*."""
+        from bencher.source_index import SourceIndex
+
+        if self.index_http_base:
+            return SourceIndex(store, self.index_http_base)
+        return SourceIndex(store, self.http_base, self.prefix)
+
+
+def index_published(
+    receipt: PublicationReceipt, target: PublicationTarget, publisher: CompleteReportPublisher
+) -> None:
+    """Add a published report to its source index pages; log, never raise, on failure.
+
+    The report is committed by now, so a failed index write must not fail the
+    publish: the next publish of the same source writes the page again.
+    """
+    from bencher.source_index import IndexFailed, receipt_entries
+
+    try:
+        pairs = receipt_entries(receipt, http_root=publisher.http_root)
+        if not pairs:
+            return
+        outcomes = target.source_index(publisher.store).add_all(pairs)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        logger.warning("source index not written for %s: %s", receipt.url, exc)
+        return
+    for outcome in outcomes.values():
+        if isinstance(outcome, IndexFailed):
+            logger.warning("source index %s not written: %s", outcome.key, outcome.reason)
+        else:
+            logger.info("source index: %s", outcome.url)
 
 
 def receipt_json(receipt: PublicationReceipt) -> str:
@@ -210,6 +266,8 @@ def publish_frozen_report(
             # The bytes are committed and immutable by now, and this is the only
             # place the URL has been named.
             raise OSError(f"{outcome.url} was published, but {failure}") from failure
+    if isinstance(outcome, Published):
+        index_published(outcome.receipt, target, publisher)
     return outcome
 
 

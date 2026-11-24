@@ -132,8 +132,9 @@ class _Assets:
 
 
 def _result_entries(report: BenchReport) -> list[dict]:
-    return [
-        {
+    entries = []
+    for index, result in enumerate(report.bench_results):
+        entry = {
             "benchmark": result.identity.bench_name,
             "tag": result.identity.tag,
             "series": result.collected_series or result.bench_cfg.series,
@@ -142,8 +143,12 @@ def _result_entries(report: BenchReport) -> list[dict]:
             "summary": f"summaries/{index:04d}.json",
             "page": "index.html",
         }
-        for index, result in enumerate(report.bench_results)
-    ]
+        source = getattr(result.bench_cfg, "source", None)
+        if source is not None:
+            # The file that defines the benchmark, for the by-src index pages.
+            entry["source"] = source.to_dict()
+        entries.append(entry)
+    return entries
 
 
 def save_complete_report(report: BenchReport, directory: str | Path) -> Path:

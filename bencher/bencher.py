@@ -52,6 +52,7 @@ from bencher.results.rerun_timeline import (
     READOUT_SCATTER_TITLE_ATTR,
 )
 from bencher.sample_order import SampleOrder
+from bencher.source_link import source_of
 from bencher.sweep_executor import SweepExecutor, validate_declared_vars, worker_kwargs_wrapper
 from bencher.sweep_timings import SweepTimings, phase_timer
 from bencher.utils import AGG_FN_MAP, AggFn, normalize_agg_fn, params_to_str, resolve_aggregate
@@ -943,6 +944,11 @@ class Bench(BenchPlotServer):
             )
 
         bench_cfg.param.update(run_cfg_values)
+        # Not part of any cache key: the file that defines the benchmark, for the
+        # by-src report index (bencher.source_link).
+        bench_cfg.source = source_of(
+            self.worker_class_instance if self.worker_class_instance is not None else self.worker
+        )
         bench_cfg_hash = bench_cfg.hash_persistent(True)
         bench_cfg.hash_value = bench_cfg_hash
 

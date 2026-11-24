@@ -447,9 +447,20 @@ def main(argv: list[str] | None = None) -> int:
     Evidence from kbench rows: ``bencher evidence-rows BASE.json CAND.json --report DIR
     [--primary M1,M2] [--margin 0.05] [--paired]``
     A/B: ``bencher ab [--base REF] [--out DIR] [--png-dir DIR] -- <command...>``
+    Report lines: ``bencher stamp [--check] [--root URL] [--only-stamped] FILE...``
+    Source index: ``bencher source-index DIR --store URL --http-base URL
+    --uploaded-prefix KEY [--index-prefix KEY]``
     """
     argv = sys.argv[1:] if argv is None else argv
 
+    if argv and argv[0] == "stamp":
+        from bencher.source_link import main as stamp_main
+
+        return stamp_main(argv[1:])
+    if argv and argv[0] == "source-index":
+        from bencher.source_index import main as source_index_main
+
+        return source_index_main(argv[1:])
     if argv and argv[0] in ("compare", "ab", "publish", "evidence-rows"):
         return _run_subcommand(argv[0], argv[1:])
 

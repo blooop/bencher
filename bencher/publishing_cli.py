@@ -30,6 +30,11 @@ def main(argv: list[str]) -> int:
         default=0,
         help="Require this much verified lifetime before committing references",
     )
+    parser.add_argument(
+        "--index-http-base",
+        help="URL that serves the store root: write by-src/ index pages there "
+        "(default: under --prefix, served under --http-base)",
+    )
     args = parser.parse_args(argv)
     try:
         target = PublicationTarget(
@@ -39,6 +44,7 @@ def main(argv: list[str]) -> int:
             receipt=args.receipt,
             expiry_days=args.expiry_days,
             minimum_remaining_days=args.minimum_remaining_days,
+            index_http_base=args.index_http_base,
         )
         publisher = target.publisher()
         # Persists the committed report's receipt before its separate pointer update.

@@ -18,6 +18,7 @@ from bencher.job import Executors
 from bencher.optional_deps import pn
 from bencher.results.composable_container.composable_container_base import PaneLayout
 from bencher.results.laxtex_result import to_latex
+from bencher.source_link import SourceIdentity
 from bencher.utils import AggFn
 from bencher.variables.results import OptDir
 from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, describe_variable, hash_sha1
@@ -871,6 +872,13 @@ class BenchCfg(BenchRunCfg):
 
     execution = param.ClassSelector(
         class_=Execution, default=None, doc="Collection-time identity; excluded from cache keys."
+    )
+
+    source = param.ClassSelector(
+        class_=SourceIdentity,
+        default=None,
+        doc="Hash and repo-relative path of the file that defines the benchmark "
+        "(bencher.source_link); excluded from cache keys.",
     )
 
     meta_vars = param.List(
