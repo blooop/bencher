@@ -170,7 +170,8 @@ def source_of(benchmark: object) -> SourceIdentity | None:
         target = owner if inspect.isclass(owner) else type(owner)
     try:
         filename = inspect.getsourcefile(target)  # ty: ignore[invalid-argument-type]
-    except TypeError:
+    except (TypeError, OSError):
+        # A builtin, or a class defined in `python -c` or a notebook cell.
         return None
     if filename is None or not Path(filename).is_file():
         return None
