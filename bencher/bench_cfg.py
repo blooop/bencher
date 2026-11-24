@@ -13,12 +13,12 @@ from strenum import LowercaseStrEnum
 
 from bencher.cache_management import CACHE_VERSION
 from bencher.execution import Execution
-from bencher.source_link import SourceIdentity
 from bencher.history import OnHistoryReset
 from bencher.job import Executors
 from bencher.optional_deps import pn
 from bencher.results.composable_container.composable_container_base import PaneLayout
 from bencher.results.laxtex_result import to_latex
+from bencher.source_link import SourceIdentity
 from bencher.utils import AggFn
 from bencher.variables.results import OptDir
 from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, describe_variable, hash_sha1

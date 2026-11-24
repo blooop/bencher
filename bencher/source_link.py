@@ -1,4 +1,4 @@
-"""Link a benchmark's source file to its published reports, by content hash.
+r"""Link a benchmark's source file to its published reports, by content hash.
 
 A file that defines a benchmark carries one comment line::
 
@@ -12,11 +12,11 @@ the file. Before a run is published at that version, the URL gives a 404.
 The hash rule (:func:`source_hash_bytes`), exactly:
 
 1. Read the file as bytes. Do not decode it.
-2. Replace every ``\\r\\n``, then every remaining ``\\r``, with ``\\n``.
-3. Split on ``\\n`` and drop every line that starts with ``#`` and then, after
+2. Replace every ``\r\n``, then every remaining ``\r``, with ``\n``.
+3. Split on ``\n`` and drop every line that starts with ``#`` and then, after
    optional spaces or tabs, ``report:`` (the report line, see
    :data:`REPORT_LINE`). Indented lines are code, not report lines.
-4. Join the remaining lines with ``\\n`` and take the SHA-256 of the bytes.
+4. Join the remaining lines with ``\n`` and take the SHA-256 of the bytes.
 5. Keep the first 16 hex digits.
 
 So writing, moving or updating the report line does not change the hash, and the
@@ -329,9 +329,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
     try:
         root = resolve_root(args.root)
-        statuses = stamp_files(
-            args.files, root, check=args.check, only_stamped=args.only_stamped
-        )
+        statuses = stamp_files(args.files, root, check=args.check, only_stamped=args.only_stamped)
     except (OSError, ValueError) as exc:
         print(f"bencher stamp: {exc}", file=sys.stderr)  # noqa: T201 - CLI output
         return 2

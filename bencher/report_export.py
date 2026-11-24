@@ -156,7 +156,9 @@ def result_to_dict(bench_res: BenchResult, *, include_series: bool = False) -> d
         whose result variable declares a claim (``ResultFloat(claim="< 0.7")``)
         carries ``claim``: the claim text, ``holds`` (None when nothing was
         recorded), the worst sample's ``worst_value`` and ``worst_inputs``, and
-        the number of ``samples`` judged.
+        the number of ``samples`` judged. When the file that defines the
+        benchmark is known, ``source`` holds its ``hash`` and repo-relative
+        ``path`` (:mod:`bencher.source_link`).
     """
     cfg = bench_res.bench_cfg
     scalar_vars = [rv for rv in cfg.result_vars if isinstance(rv, SCALAR_RESULT_TYPES)]
@@ -175,7 +177,7 @@ def result_to_dict(bench_res: BenchResult, *, include_series: bool = False) -> d
                 if metric["variable"] in ds:
                     metric["series"] = series_for_var(ds, metric["variable"])
 
-    return {
+    summary = {
         "schema_version": SCHEMA_VERSION,
         "bench_name": bench_res.identity.bench_name,
         "provenance": _provenance(bench_res),
@@ -186,6 +188,10 @@ def result_to_dict(bench_res: BenchResult, *, include_series: bool = False) -> d
         "metrics": metrics,
         "regressions": regressions,
     }
+    source = getattr(cfg, "source", None)
+    if source is not None:
+        summary["source"] = source.to_dict()
+    return summary
 
 
 def result_to_json(

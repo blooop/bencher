@@ -1406,6 +1406,88 @@ GCS contracts follow the official [preconditions](https://docs.cloud.google.com/
 [listing](https://docs.cloud.google.com/storage/docs/json_api/v1/objects/list), and
 [lifecycle](https://docs.cloud.google.com/storage/docs/lifecycle) documentation.
 
+## Linking source files to their reports
+
+A file that defines a benchmark can carry one comment line that names the page of
+every published run of that file:
+
+```python
+# report: https://reports.example.org/by-src/3f9a1c2e7b4d5e60/index.html
+```
+
+The hash in the URL comes from the file itself, so the URL is known before any run.
+Once a run of that version of the file is published, the page lists it. Until then
+the URL gives a 404.
+
+### The hash rule
+
+`bencher.source_link.source_hash` reads the file as bytes, turns `\r\n` and `\r`
+into `\n`, drops every line that starts with `#` and then (after optional spaces or
+tabs) `report:`, joins the rest with `\n`, and keeps the first 16 hex digits of the
+SHA-256. So writing or updating the report line does not change the hash, and the
+same file hashes the same on every machine. An indented line is code, not a report
+line.
+
+The hash covers that one file only. A change to a helper module it imports, to a
+dependency or to a data file does not change it. Each row of the page shows the run's
+source revision (`BENCHER_SOURCE_REVISION`), so a reader can see how old a result is.
+
+Each run records the hash and the path of the file relative to the repository root
+(the nearest directory above it that holds `.git`) as `source` in each result of
+`report.json` and in the result summary (`result_to_dict`). The file is the one that
+defines the worker class, or the worker function.
+
+### Writing and checking the line
+
+```bash
+bencher stamp --root https://reports.example.org path/to/bench_*.py
+bencher stamp --check path/to/bench_*.py      # exit 1 when a line is missing or stale
+bencher stamp --check --only-stamped FILES    # skip files with no line yet
+```
+
+The root comes from `--root`, then `BENCHER_REPORT_ROOT`, then `report_root` under
+`[tool.bencher]` in the nearest `pyproject.toml`. A run that writes a file exits 1,
+like a formatter, so a pre-commit hook stops the commit until the file is added.
+`python -m bencher.source_link` runs the same command and imports only the standard
+library, which suits a hook that has no plotting stack.
+
+### The `by-src/` pages
+
+Publishing writes `by-src/<hash>/index.html` beside the report store:
+
+- `bencher publish` and `BENCHER_PUBLISH_*` write it under the publish prefix, served
+  under the HTTP base. Set `--index-http-base` or `BENCHER_PUBLISH_INDEX_HTTP_BASE`
+  to the URL that serves the root of the store, and `by-src/` sits at the store root
+  instead, so every prefix shares one page per source. That URL is the root to give
+  `bencher stamp`.
+- An in-process `Publisher` calls `bencher.source_index.report_entries` and
+  `SourceIndex(store, http_base).add_all(...)` after its upload.
+- A repository that uploads a report tree with its own tooling (a plain
+  `gcloud storage rsync`, say) runs this on the uploaded tree:
+
+  ```bash
+  bencher source-index LOCAL_TREE --store gs://my-reports-bucket \
+    --http-base https://reports.example.org --uploaded-prefix ci/2026-01-01_abc123
+  ```
+
+  It reads each `report.json` and each `*.summary.json`, `*.result.json` or
+  `result.json` that records a `source`, and links the HTML page beside it.
+
+A page holds **only links**, newest first, with the benchmark name, the time and the
+source revision. It never copies a report, so each report is stored once. Two runs that
+publish the same source at once both land: the page is rewritten with a conditional
+write and merged again on a conflict. An index write that fails logs a warning and
+never fails the publish.
+
+### Retention
+
+Index pages are small and have no expiry, so `by-src/` needs no age rule; keep it
+outside the rules that age reports out. When a page is rewritten, each link on it is
+checked against the store, and the links whose report is gone are dropped. A page whose
+source is never published again keeps its dead links. To clean `by-src/` up in bulk,
+delete the whole prefix (`gcloud storage rm -r gs://BUCKET/by-src/`): the next publish
+of each source writes its page again, with the runs published from then on.
+
 ## Transferring history
 
 Set `BenchRunCfg(history_namespace="machine-name")` to isolate a machine's

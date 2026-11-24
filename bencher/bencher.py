@@ -19,7 +19,6 @@ from bencher.bench_report import BenchReport
 from bencher.blob_store import collect_cache_dir, record_blob_cache_dir
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
 from bencher.execution import current_execution
-from bencher.source_link import source_of
 from bencher.history import OnHistoryReset, config_summary as history_config_summary
 from bencher.job import (
     Executors,
@@ -53,6 +52,7 @@ from bencher.results.rerun_timeline import (
     READOUT_SCATTER_TITLE_ATTR,
 )
 from bencher.sample_order import SampleOrder
+from bencher.source_link import source_of
 from bencher.sweep_executor import SweepExecutor, validate_declared_vars, worker_kwargs_wrapper
 from bencher.sweep_timings import SweepTimings, phase_timer
 from bencher.utils import AGG_FN_MAP, AggFn, normalize_agg_fn, params_to_str, resolve_aggregate

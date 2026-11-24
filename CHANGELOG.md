@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-11-24
+
+### Added
+- **Source report links (#1236).** A benchmark source file can carry a
+  `# report: <root>/by-src/<hash>/index.html` line. The hash comes from the file's
+  bytes with that line removed and line endings normalised, so the URL is known before
+  any run. `bencher stamp [--check] [--only-stamped]` writes or checks the line; the
+  root comes from `--root`, `BENCHER_REPORT_ROOT` or `[tool.bencher] report_root`.
+- Each run records `source` (hash and repo-relative path) in each `report.json` result
+  and in `result_to_dict` summaries.
+- Publishing writes `by-src/<hash>/index.html`: links only, newest first, merged with a
+  conditional write, dead links dropped on rewrite, no expiry.
+  `BENCHER_PUBLISH_INDEX_HTTP_BASE` / `bencher publish --index-http-base` puts
+  `by-src/` at the store root. `bencher source-index` and
+  `bencher.source_index.index_tree` index a tree uploaded with other tooling;
+  `report_entries` serves in-process `Publisher` implementations.
+
 ## [2.1.0] - 2026-11-06
 
 ### Changed

@@ -99,7 +99,8 @@ class IndexEntry:
         return asdict(self)
 
     @property
-    def _order(self) -> tuple:
+    def order(self) -> tuple:
+        """Sort key: execution time (unparseable last), then URL and benchmark."""
         try:
             moment = datetime.fromisoformat(self.executed_at).timestamp()
         except ValueError:
@@ -144,7 +145,7 @@ def _render(digest: str, entries: Sequence[IndexEntry]) -> bytes:
         for entry in entries
     )
     return (
-        "<!doctype html>\n<html><head><meta charset=\"utf-8\">"
+        '<!doctype html>\n<html><head><meta charset="utf-8">'
         f"<title>Reports: {title}</title>"
         "<style>body{font-family:sans-serif;margin:2em}"
         "td,th{padding:.2em .8em;text-align:left}</style>\n"
@@ -248,7 +249,7 @@ class SourceIndex:
                     # Fail closed: never overwrite an object this module did not write.
                     return IndexFailed(f"invalid current index: {exc}", key)
             kept = [e for e in old if (e.url, e.benchmark) not in new and self._alive(e)]
-            merged = sorted([*kept, *new.values()], key=lambda e: e._order, reverse=True)
+            merged = sorted([*kept, *new.values()], key=lambda e: e.order, reverse=True)
             dropped = len(old) - len(kept) - sum((e.url, e.benchmark) in new for e in old)
             data = _render(digest, merged)
             url = self.page_url(digest)
@@ -307,9 +308,7 @@ def _entry(
     )
 
 
-def manifest_entries(
-    manifest: dict, *, run: str, run_url: str
-) -> list[tuple[str, IndexEntry]]:
+def manifest_entries(manifest: dict, *, run: str, run_url: str) -> list[tuple[str, IndexEntry]]:
     """``(hash, entry)`` for each result of a complete report's ``report.json``.
 
     *run* is the store key prefix the report directory was written under and
@@ -335,9 +334,23 @@ def manifest_entries(
     return pairs
 
 
-def report_entries(
-    report: object, *, url: str, run: str, key: str
-) -> list[tuple[str, IndexEntry]]:
+def receipt_entries(receipt: object, *, http_root: str) -> list[tuple[str, IndexEntry]]:
+    """``(hash, entry)`` for each result of a ``PublicationReceipt``.
+
+    *http_root* is the root the ``CompleteReportPublisher`` served the report
+    from: the run is served at ``<http_root>/<execution uuid>``.
+    """
+    execution = getattr(receipt, "execution", {})
+    manifest = {
+        "results": list(getattr(receipt, "results", ())),
+        "execution": execution,
+        "entry_page": "index.html",
+    }
+    run_url = f"{serving_root(http_root)}/{quote(str(execution['uuid']), safe='')}"
+    return manifest_entries(manifest, run=str(getattr(receipt, "prefix", "")), run_url=run_url)
+
+
+def report_entries(report: object, *, url: str, run: str, key: str) -> list[tuple[str, IndexEntry]]:
     """``(hash, entry)`` for each result of a live ``BenchReport`` a publisher uploaded.
 
     For implementations of the in-process ``Publisher`` protocol: *run* is the
@@ -358,7 +371,9 @@ def report_entries(
                 url=url,
                 run=run,
                 key=key,
-                benchmark=str(getattr(identity, "bench_name", "") or getattr(cfg, "bench_name", "")),
+                benchmark=str(
+                    getattr(identity, "bench_name", "") or getattr(cfg, "bench_name", "")
+                ),
                 execution=execution.to_dict() if execution is not None else None,
             )
         )
@@ -461,9 +476,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("directory", help="The local report tree that was uploaded")
     parser.add_argument("--store", required=True, help="Local object database or gs:// URL")
-    parser.add_argument(
-        "--http-base", required=True, help="URL that serves the root of --store"
-    )
+    parser.add_argument("--http-base", required=True, help="URL that serves the root of --store")
     parser.add_argument(
         "--uploaded-prefix",
         required=True,
