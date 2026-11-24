@@ -100,7 +100,7 @@ class IndexEntry:
 
     @property
     def order(self) -> tuple:
-        """Sort key: execution time (unparseable last), then URL and benchmark."""
+        """Sort key: execution time (unparsable last), then URL and benchmark."""
         try:
             moment = datetime.fromisoformat(self.executed_at).timestamp()
         except ValueError:
