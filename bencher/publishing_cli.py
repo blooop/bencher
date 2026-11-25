@@ -32,7 +32,7 @@ def main(argv: list[str]) -> int:
     )
     parser.add_argument(
         "--index-http-base",
-        help="URL that serves the store root: write by-src/ index pages there "
+        help="URL that serves the store root: write by-src/ and by-path/ index pages there "
         "(default: under --prefix, served under --http-base)",
     )
     args = parser.parse_args(argv)

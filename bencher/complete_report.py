@@ -145,7 +145,7 @@ def _result_entries(report: BenchReport) -> list[dict]:
         }
         source = getattr(result.bench_cfg, "source", None)
         if source is not None:
-            # The file that defines the benchmark, for the by-src index pages.
+            # The file that defines the benchmark, for the by-src and by-path index pages.
             entry["source"] = source.to_dict()
         entries.append(entry)
     return entries

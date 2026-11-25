@@ -945,7 +945,7 @@ class Bench(BenchPlotServer):
 
         bench_cfg.param.update(run_cfg_values)
         # Not part of any cache key: the file that defines the benchmark, for the
-        # by-src report index (bencher.source_link).
+        # by-src and by-path report index (bencher.source_link).
         bench_cfg.source = source_of(
             self.worker_class_instance if self.worker_class_instance is not None else self.worker
         )

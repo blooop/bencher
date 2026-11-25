@@ -74,11 +74,11 @@ class PublicationTarget:
     already verified; ``minimum_remaining_days`` refuses to publish new
     references without that much evidenced lifetime.
 
-    Each publish also adds the run to the ``by-src/<hash>/index.html`` page of
-    each source file it ran (:mod:`bencher.source_index`). With
-    ``index_http_base`` set, ``by-src/`` sits at the root of the store, served
-    at that URL, so every prefix shares one page per source. Without it,
-    ``by-src/`` sits under ``prefix``, served under ``http_base``.
+    Each publish also adds the run to the ``by-src/<hash>/index.html`` and
+    ``by-path/<path>/index.html`` pages of each source file it ran
+    (:mod:`bencher.source_index`). With ``index_http_base`` set, both sit at the
+    root of the store, served at that URL, so every prefix shares one page per
+    source. Without it, they sit under ``prefix``, served under ``http_base``.
     """
 
     store: str
@@ -179,7 +179,7 @@ class PublicationTarget:
         )
 
     def source_index(self, store: ObjectStore) -> SourceIndex:
-        """The ``by-src/`` index this target writes, in *store*."""
+        """The ``by-src/`` and ``by-path/`` index this target writes, in *store*."""
         from bencher.source_index import SourceIndex
 
         if self.index_http_base:

@@ -1409,15 +1409,26 @@ GCS contracts follow the official [preconditions](https://docs.cloud.google.com/
 ## Linking source files to their reports
 
 A file that defines a benchmark can carry one comment line that names the page of
-every published run of that file:
+its published runs. The line has two modes, the *report key*:
 
 ```python
-# report: https://reports.example.org/by-src/3f9a1c2e7b4d5e60/index.html
+# report: https://reports.example.org/by-src/3f9a1c2e7b4d5e60/index.html   # hash (default)
+# report: https://reports.example.org/by-path/ros/pkg/bench_x.py/index.html  # path
 ```
 
-The hash in the URL comes from the file itself, so the URL is known before any run.
-Once a run of that version of the file is published, the page lists it. Until then
-the URL gives a 404.
+- **hash** keys the page by the file's content hash. The page lists the runs of that
+  version of the file only, and gives a 404 until a run of that version is published.
+  Every edit changes the hash, so every edit makes the line stale. Two branches that
+  edit the same file can both merge and leave a stale line on the main branch, which
+  then fails a `bencher stamp --check` hook for everyone.
+- **path** keys the page by the file's path from the repository root. The line changes
+  only when the file moves. The page lists every published run of every version of the
+  file, newest first, with the source hash and revision of each run, so old runs stay
+  on it and an edit never makes the line stale.
+
+Publishing writes both pages for every run, whatever line the file carries, so a
+repository can change mode at any time. Use path mode for a repository where many
+people edit the benchmarks.
 
 ### The hash rule
 
@@ -1432,10 +1443,17 @@ The hash covers that one file only. A change to a helper module it imports, to a
 dependency or to a data file does not change it. Each row of the page shows the run's
 source revision (`BENCHER_SOURCE_REVISION`), so a reader can see how old a result is.
 
-Each run records the hash and the path of the file relative to the repository root
-(the nearest directory above it that holds `.git`) as `source` in each result of
+Each run records the hash and the path of the file as `source` in each result of
 `report.json` and in the result summary (`result_to_dict`). The file is the one that
-defines the worker class, or the worker function.
+defines the worker class, or the worker function. The path comes from the file's
+`by-path/` report line when it has a valid one. Otherwise it is the path relative to
+the nearest directory above the file that holds `.git`, or the bare file name when
+there is none. So a bench that runs from an install tree or Bazel runfiles, with no
+`.git` above it, still records its repository path when it carries a path line.
+
+A path is a store key, so `bencher.source_link.safe_source_path` checks it first: a
+relative POSIX path, no empty, `.` or `..` segment, and only letters, digits and
+`._-/+@`. A run whose path fails the check gets no `by-path/` page (the index logs why).
 
 ### Writing and checking the line
 
@@ -1443,25 +1461,39 @@ defines the worker class, or the worker function.
 bencher stamp --root https://reports.example.org path/to/bench_*.py
 bencher stamp --check path/to/bench_*.py      # exit 1 when a line is missing or stale
 bencher stamp --check --only-stamped FILES    # skip files with no line yet
+bencher stamp --key path FILES                # write by-path lines
 ```
 
 The root comes from `--root`, then `BENCHER_REPORT_ROOT`, then `report_root` under
-`[tool.bencher]` in the nearest `pyproject.toml`. A run that writes a file exits 1,
+`[tool.bencher]` in the nearest `pyproject.toml`. The mode comes from `--key`, then
+`report_key` under `[tool.bencher]`, then `BENCHER_REPORT_KEY`, else `hash`:
+
+```toml
+[tool.bencher]
+report_root = "https://reports.example.org"
+report_key = "path"
+```
+
+In path mode, `stamp` and `--check` take each path from the git root above the file,
+and refuse a file with no git root. `--check` passes when the file has exactly one
+report line and it is the expected path line; a renamed or copied file is stale. A run that writes a file exits 1,
 like a formatter, so a pre-commit hook stops the commit until the file is added.
 `python -m bencher.source_link` runs the same command and imports only the standard
 library, which suits a hook that has no plotting stack.
 
-### The `by-src/` pages
+### The `by-src/` and `by-path/` pages
 
-Publishing writes `by-src/<hash>/index.html` beside the report store:
+Publishing writes `by-src/<hash>/index.html` and `by-path/<path>/index.html` beside
+the report store:
 
 - `bencher publish` and `BENCHER_PUBLISH_*` write it under the publish prefix, served
   under the HTTP base. Set `--index-http-base` or `BENCHER_PUBLISH_INDEX_HTTP_BASE`
-  to the URL that serves the root of the store, and `by-src/` sits at the store root
+  to the URL that serves the root of the store, and both sit at the store root
   instead, so every prefix shares one page per source. That URL is the root to give
   `bencher stamp`.
 - An in-process `Publisher` calls `bencher.source_index.report_entries` and
-  `SourceIndex(store, http_base).add_all(...)` after its upload.
+  `SourceIndex(store, http_base).add_all(...)` after its upload. `add_all` writes both
+  pages; `add` and `add_path` write one.
 - A repository that uploads a report tree with its own tooling (a plain
   `gcloud storage rsync`, say) runs this on the uploaded tree:
 
@@ -1481,10 +1513,10 @@ never fails the publish.
 
 ### Retention
 
-Index pages are small and have no expiry, so `by-src/` needs no age rule; keep it
-outside the rules that age reports out. When a page is rewritten, each link on it is
+Index pages are small and have no expiry, so `by-src/` and `by-path/` need no age
+rule; keep them outside the rules that age reports out. When a page is rewritten, each link on it is
 checked against the store, and the links whose report is gone are dropped. A page whose
-source is never published again keeps its dead links. To clean `by-src/` up in bulk,
+source is never published again keeps its dead links. To clean either up in bulk,
 delete the whole prefix (`gcloud storage rm -r gs://BUCKET/by-src/`): the next publish
 of each source writes its page again, with the runs published from then on.
 
