@@ -278,7 +278,7 @@ def test_key_resolution_order(tmp_path, monkeypatch):
         "a\\b.py",
         "a?b.py",
         "a%2e.py",
-        "caf\u00e9.py",
+        "\u00e9t\u00e9.py",
         "a/b.py\n",
     ],
 )
