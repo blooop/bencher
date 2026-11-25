@@ -1,8 +1,8 @@
 | Metric | Value |
 |--------|-------|
-| Total tests | 4148 |
-| Total time | 349.73s |
-| Mean | 0.0843s |
+| Total tests | 4186 |
+| Total time | 287.04s |
+| Mean | 0.0686s |
 | Median | 0.0020s |
 
 <details>
@@ -10,15 +10,15 @@
 
 | Test | Time (s) |
 |------|----------|
-| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 14.163 |
-| `test.test_ab::test_ab_on_a_clean_tree_names_the_head_even_when_its_output_is_not_ignored` | 12.851 |
-| `test.test_ab::test_ab_images_pushes_them_to_the_evidence_ref_and_links_them` | 7.701 |
-| `test.test_ab::test_ab_png_dir_writes_one_png_per_metric` | 7.639 |
-| `test.test_ab::test_ab_images_without_a_github_remote_keeps_text_and_exits_0` | 7.620 |
-| `test.test_ab::test_ab_explicit_base_and_image_url` | 7.420 |
-| `test.test_ab::test_ab_without_images_pushes_nothing` | 7.410 |
-| `test.test_ab::test_ab_judges_a_claim_on_a_metric_the_change_adds` | 7.375 |
-| `test.test_ab::test_ab_runs_an_ignored_interpreter_on_the_base_side_too` | 7.329 |
-| `test.test_ab::test_ab_measures_each_side_with_its_own_code` | 7.271 |
+| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 11.580 |
+| `test.test_ab::test_ab_on_a_clean_tree_names_the_head_even_when_its_output_is_not_ignored` | 9.421 |
+| `test.test_evidence_flow::test_every_svg_keeps_the_motion_rule` | 6.286 |
+| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 5.790 |
+| `test.test_ab::test_ab_images_pushes_them_to_the_evidence_ref_and_links_them` | 5.741 |
+| `test.test_ab::test_ab_png_dir_writes_one_png_per_metric` | 5.708 |
+| `test.test_ab::test_ab_images_without_a_github_remote_keeps_text_and_exits_0` | 5.703 |
+| `test.test_ab::test_ab_measures_each_side_with_its_own_code` | 5.626 |
+| `test.test_ab::test_ab_reports_which_side_failed_and_keeps_its_output` | 5.543 |
+| `test.test_ab::test_ab_without_images_pushes_nothing` | 5.529 |
 
 </details>
