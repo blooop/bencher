@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-11-25
+
+### Added
+- **Path-keyed source report links.** `bencher stamp --key path` writes
+  `# report: <root>/by-path/<repo-relative path>/index.html`. The line does not change
+  when the file changes, so two branches that edit one file no longer merge into a
+  stale line that fails `bencher stamp --check`. The mode comes from `--key`, then
+  `[tool.bencher] report_key`, then `BENCHER_REPORT_KEY`, else `hash` (the 2.2.0
+  behaviour). In path mode `--check` passes on exactly one line equal to the expected
+  path line, so a renamed or copied file is stale.
+- Publishing writes `by-path/<path>/index.html` beside `by-src/<hash>/index.html` for
+  each run: every published run of every version of the file, newest first, with each
+  run's source hash and revision. Same merge rules as `by-src/`. `SourceIndex.add_path`
+  writes one; `SourceIndex.add_all` now writes both and keys a by-path outcome
+  `"by-path/<path>"`.
+- A run takes its source path from the file's by-path report line when it has a valid
+  one, so a bench run from an install tree or Bazel runfiles (no `.git`) records its
+  repository path. Otherwise the path is `repo_relative` as before.
+- `bencher.source_link.safe_source_path` checks a path before it becomes a store key:
+  relative POSIX, no empty, `.` or `..` segments, letters, digits and `._-/+@` only.
+  An unsafe path writes no by-path page.
+- `HASH_INDEX_DIR` (`by-src`) and `PATH_INDEX_DIR` (`by-path`); `INDEX_DIR` stays as
+  the 2.2.0 name for `HASH_INDEX_DIR`. `IndexEntry` gains `source_hash`.
+
 ## [2.2.0] - 2026-11-24
 
 ### Added
