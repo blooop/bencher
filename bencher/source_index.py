@@ -1,17 +1,27 @@
-"""The ``by-src/<hash>/index.html`` pages: every published run of one source file.
+"""The ``by-src/`` and ``by-path/`` pages: every published run of one source file.
 
-Each page belongs to one source hash (:mod:`bencher.source_link`) and lists every
-published run of that version of the file, newest first: benchmark name, time,
-source revision and a link to the run's report. A page holds **only links**. It
-never copies a report, so each report is stored once, wherever its publisher put
-it.
+Two kinds of page (:mod:`bencher.source_link` has the report line for each):
+
+* ``by-src/<hash>/index.html`` belongs to one source hash and lists every
+  published run of that version of the file.
+* ``by-path/<path>/index.html`` belongs to one repo-relative source path and
+  lists every published run of every version of the file, with each run's
+  source hash.
+
+Each publish writes both pages for each run. A run whose path fails
+:func:`bencher.source_link.safe_source_path` gets no ``by-path/`` page: its
+outcome is an :class:`IndexFailed`, never a key outside ``by-path/``.
+
+A page lists runs newest first: benchmark name, time, source revision and a link
+to the run's report. A page holds **only links**. It never copies a report, so
+each report is stored once, wherever its publisher put it.
 
 Pages are small and have no expiry. When a page is rewritten, each link already
 on it is checked against the store and the links whose report is gone are
-dropped, so a store can keep ``by-src/`` forever under no age rule while its
-reports age out under theirs. To clean ``by-src/`` up in bulk, delete the whole
-prefix: the next publish of each source writes its page again, with the runs
-published from then on.
+dropped, so a store can keep ``by-src/`` and ``by-path/`` forever under no age
+rule while its reports age out under theirs. To clean either up in bulk, delete
+the whole prefix: the next publish of each source writes its page again, with the
+runs published from then on.
 
 Two writers that publish the same source at once both land: a page is rewritten
 with a conditional write (generation or version match) and re-read and merged on
@@ -53,10 +63,16 @@ from bencher.object_store import (
     Written,
 )
 from bencher.report_inventory import safe_path
-from bencher.source_link import INDEX_DIR, SourceIdentity, serving_root
+from bencher.source_link import (
+    HASH_INDEX_DIR,
+    PATH_INDEX_DIR,
+    SourceIdentity,
+    safe_source_path,
+    serving_root,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Callable, Iterable, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +92,7 @@ class IndexEntry:
     ``run`` is the store key prefix that holds the run's whole report tree and
     ``key`` the store key of the linked page under it: the dead-link check lists
     ``run`` and looks for ``key``. ``url`` is where that page is served.
+    ``source_hash`` is the hash of the source file the run used.
     """
 
     url: str
@@ -85,6 +102,7 @@ class IndexEntry:
     executed_at: str = ""
     source_revision: str | None = None
     source_path: str = ""
+    source_hash: str = ""
 
     def __post_init__(self) -> None:
         parts = urlsplit(self.url)
@@ -123,23 +141,47 @@ class IndexFailed:
     key: str
 
 
-def _render(digest: str, entries: Sequence[IndexEntry]) -> bytes:
+def _entry_state(entry: IndexEntry, *, by_path: bool) -> dict:
+    state = entry.to_dict()
+    if not by_path:
+        # The page's own hash; leaving it out keeps by-src pages readable by 2.2.0.
+        del state["source_hash"]
+    return state
+
+
+def _render(digest: str, entries: Sequence[IndexEntry], *, path: str | None = None) -> bytes:
+    """A ``by-src/`` page for *digest*, or with *path*, a ``by-path/`` page for *path*."""
+    by_path = path is not None
+    header: dict = {"source_path": path} if by_path else {"source_hash": digest}
     state = json.dumps(
         {
             "schema_version": SCHEMA_VERSION,
-            "source_hash": digest,
-            "entries": [entry.to_dict() for entry in entries],
+            **header,
+            "entries": [_entry_state(entry, by_path=by_path) for entry in entries],
         },
         indent=1,
         sort_keys=True,
     ).replace("<", "\\u003c")
-    paths = sorted({entry.source_path for entry in entries if entry.source_path})
-    title = html.escape(", ".join(paths) or digest)
+    if by_path:
+        title = html.escape(path)
+        intro = (
+            f"Source path <code>{title}</code>. Every published run of every version of "
+            "the file, newest first. This page holds links only."
+        )
+    else:
+        paths = sorted({entry.source_path for entry in entries if entry.source_path})
+        title = html.escape(", ".join(paths) or digest)
+        intro = (
+            f"Source hash <code>{digest}</code>. Every published run of this version of "
+            "the file, newest first. This page holds links only."
+        )
+    hash_head = "<th>Source hash</th>" if by_path else ""
     rows = "\n".join(
         "<tr>"
         f"<td>{html.escape(entry.benchmark)}</td>"
         f"<td>{html.escape(entry.executed_at)}</td>"
-        f"<td><code>{html.escape(entry.source_revision or '')}</code></td>"
+        + (f"<td><code>{html.escape(entry.source_hash)}</code></td>" if by_path else "")
+        + f"<td><code>{html.escape(entry.source_revision or '')}</code></td>"
         f'<td><a href="{html.escape(entry.url, quote=True)}">report</a></td>'
         "</tr>"
         for entry in entries
@@ -151,16 +193,21 @@ def _render(digest: str, entries: Sequence[IndexEntry]) -> bytes:
         "td,th{padding:.2em .8em;text-align:left}</style>\n"
         f'<script id="bencher-source-index" type="application/json">{state}</script>\n'
         f"</head><body>\n<h1>Reports: {title}</h1>\n"
-        f"<p>Source hash <code>{digest}</code>. Every published run of this version of "
-        "the file, newest first. This page holds links only.</p>\n"
-        "<table><thead><tr><th>Benchmark</th><th>Executed (UTC)</th>"
+        f"<p>{intro}</p>\n"
+        f"<table><thead><tr><th>Benchmark</th><th>Executed (UTC)</th>{hash_head}"
         "<th>Source revision</th><th></th></tr></thead><tbody>\n"
         f"{rows}\n</tbody></table>\n</body></html>\n"
     ).encode()
 
 
+_ENTRY_FIELDS = frozenset(IndexEntry.__dataclass_fields__)
+
+
 def read_index(data: bytes) -> list[IndexEntry]:
-    """The entries of an index page :func:`_render` wrote.
+    """The entries of an index page :func:`_render` wrote, of either kind.
+
+    Fields a newer bencher added are ignored, so an older page and a newer one
+    both read.
 
     Raises:
         ValueError: If *data* is not a bencher source index of a known schema.
@@ -171,16 +218,24 @@ def read_index(data: bytes) -> list[IndexEntry]:
     state = json.loads(match.group(1))
     if state.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("unsupported source index schema")
-    return [IndexEntry(**entry) for entry in state["entries"]]
+    digest = state.get("source_hash")
+    entries = []
+    for raw in state["entries"]:
+        fields = {name: value for name, value in raw.items() if name in _ENTRY_FIELDS}
+        if isinstance(digest, str) and "source_hash" not in fields:
+            fields["source_hash"] = digest
+        entries.append(IndexEntry(**fields))
+    return entries
 
 
 class SourceIndex:
-    """Writes ``<prefix>/by-src/<hash>/index.html`` in *store*, served at *http_base*.
+    """Writes ``<prefix>/by-src/<hash>/index.html`` and ``<prefix>/by-path/<path>/index.html``.
 
-    *prefix* is the store key root of ``by-src/`` ("" for the store's own root)
-    and *http_base* the URL that serves that root, so a page is served at
-    ``<http_base>/by-src/<hash>/index.html`` -- the URL ``bencher stamp`` writes
-    when given the same root.
+    *prefix* is the store key root of ``by-src/`` and ``by-path/`` ("" for the
+    store's own root) and *http_base* the URL that serves that root, so a page is
+    served at ``<http_base>/by-src/<hash>/index.html`` or
+    ``<http_base>/by-path/<path>/index.html`` -- the URLs ``bencher stamp``
+    writes when given the same root.
     """
 
     def __init__(
@@ -196,14 +251,28 @@ class SourceIndex:
         self.attempts = attempts
         self._runs: dict[str, frozenset[str] | None] = {}
 
+    def _key(self, relative: str) -> str:
+        return f"{self.prefix}/{relative}" if self.prefix else relative
+
     def page_key(self, digest: str) -> str:
+        """The store key of the ``by-src/`` page for *digest*."""
         if SourceIdentity.from_dict({"hash": digest, "path": ""}) is None:
             raise ValueError(f"not a source hash: {digest!r}")
-        key = f"{INDEX_DIR}/{digest}/index.html"
-        return f"{self.prefix}/{key}" if self.prefix else key
+        return self._key(f"{HASH_INDEX_DIR}/{digest}/index.html")
 
     def page_url(self, digest: str) -> str:
-        return f"{self.http_base}/{INDEX_DIR}/{digest}/index.html"
+        return f"{self.http_base}/{HASH_INDEX_DIR}/{digest}/index.html"
+
+    def path_page_key(self, path: str) -> str:
+        """The store key of the ``by-path/`` page for *path*.
+
+        Raises:
+            ValueError: If *path* fails :func:`bencher.source_link.safe_source_path`.
+        """
+        return self._key(f"{PATH_INDEX_DIR}/{safe_source_path(path)}/index.html")
+
+    def path_page_url(self, path: str) -> str:
+        return f"{self.http_base}/{PATH_INDEX_DIR}/{safe_source_path(path)}/index.html"
 
     def _run_keys(self, run: str) -> frozenset[str] | None:
         """Every key under *run*, listed once per index; None when the listing failed."""
@@ -230,12 +299,36 @@ class SourceIndex:
         return keys is None or entry.key in keys
 
     def add(self, digest: str, entries: Iterable[IndexEntry]) -> IndexUpdated | IndexFailed:
-        """Merge *entries* into the page for *digest*, dropping dead links.
+        """Merge *entries* into the ``by-src/`` page for *digest*, dropping dead links.
 
         *entries* are runs just published, so they are not checked. Every link
         already on the page is checked once per :class:`SourceIndex`.
         """
-        key = self.page_key(digest)
+        return self._merge(
+            self.page_key(digest),
+            self.page_url(digest),
+            lambda merged: _render(digest, merged),
+            entries,
+        )
+
+    def add_path(self, path: str, entries: Iterable[IndexEntry]) -> IndexUpdated | IndexFailed:
+        """Merge *entries* into the ``by-path/`` page for *path*, as :meth:`add` does.
+
+        An unsafe *path* writes nothing and returns an :class:`IndexFailed`.
+        """
+        try:
+            key, url = self.path_page_key(path), self.path_page_url(path)
+        except ValueError as exc:
+            return IndexFailed(str(exc), f"{PATH_INDEX_DIR}/{path!r}")
+        return self._merge(key, url, lambda merged: _render("", merged, path=path), entries)
+
+    def _merge(
+        self,
+        key: str,
+        url: str,
+        render: Callable[[list[IndexEntry]], bytes],
+        entries: Iterable[IndexEntry],
+    ) -> IndexUpdated | IndexFailed:
         new = {(entry.url, entry.benchmark): entry for entry in entries}
         for _ in range(self.attempts):
             current = self.store.read(key)
@@ -251,8 +344,7 @@ class SourceIndex:
             kept = [e for e in old if (e.url, e.benchmark) not in new and self._alive(e)]
             merged = sorted([*kept, *new.values()], key=lambda e: e.order, reverse=True)
             dropped = len(old) - len(kept) - sum((e.url, e.benchmark) in new for e in old)
-            data = _render(digest, merged)
-            url = self.page_url(digest)
+            data = render(merged)
             if not isinstance(current, Absent) and current.data == data:
                 return IndexUpdated(url, key, len(merged), 0, written=False)
             condition = CreateOnly() if isinstance(current, Absent) else Match(current.version)
@@ -273,11 +365,22 @@ class SourceIndex:
     def add_all(
         self, pairs: Iterable[tuple[str, IndexEntry]]
     ) -> dict[str, IndexUpdated | IndexFailed]:
-        """Add each ``(hash, entry)`` pair, one page write per hash."""
-        grouped: dict[str, list[IndexEntry]] = {}
+        """Add each ``(hash, entry)`` pair to its ``by-src/`` and ``by-path/`` pages.
+
+        One page write per hash and one per path. The result is keyed by the hash
+        for a ``by-src/`` page and by ``"by-path/<path>"`` for a ``by-path/`` page.
+        An entry with no ``source_path`` gets no ``by-path/`` page.
+        """
+        by_hash: dict[str, list[IndexEntry]] = {}
+        by_path: dict[str, list[IndexEntry]] = {}
         for digest, entry in pairs:
-            grouped.setdefault(digest, []).append(entry)
-        return {digest: self.add(digest, entries) for digest, entries in grouped.items()}
+            by_hash.setdefault(digest, []).append(entry)
+            if entry.source_path:
+                by_path.setdefault(entry.source_path, []).append(entry)
+        outcomes = {digest: self.add(digest, entries) for digest, entries in by_hash.items()}
+        for path, entries in by_path.items():
+            outcomes[f"{PATH_INDEX_DIR}/{path}"] = self.add_path(path, entries)
+        return outcomes
 
 
 # --- entries -------------------------------------------------------------------------
@@ -305,6 +408,7 @@ def _entry(
         executed_at=str(execution.get("executed_at") or ""),
         source_revision=execution.get("source_revision"),
         source_path=source.path,
+        source_hash=source.hash,
     )
 
 
@@ -461,7 +565,7 @@ def index_tree(
         run: The store key prefix it was uploaded under.
         run_url: The URL that serves *run*.
         http_base: The URL that serves *prefix* (the index root).
-        prefix: The store key root of ``by-src/``; "" for the store root.
+        prefix: The store key root of ``by-src/`` and ``by-path/``; "" for the store root.
     """
     index = SourceIndex(store, http_base, prefix)
     return index.add_all(tree_entries(directory, run=run, run_url=run_url))
@@ -471,7 +575,8 @@ def main(argv: list[str] | None = None) -> int:
     """``bencher source-index DIR --store URL --http-base URL --uploaded-prefix KEY``."""
     parser = argparse.ArgumentParser(
         prog="bencher source-index",
-        description="Write by-src/<hash>/index.html pages for a report tree that was "
+        description="Write by-src/<hash>/ and by-path/<path>/ index pages for a report tree "
+        "that was "
         "uploaded with other tooling (for example a plain object-store sync).",
     )
     parser.add_argument("directory", help="The local report tree that was uploaded")
@@ -485,7 +590,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--index-prefix",
         default="",
-        help="Store key root of by-src/ (default: the root of --store)",
+        help="Store key root of by-src/ and by-path/ (default: the root of --store)",
     )
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
     from bencher.publication_target import PublicationTarget
@@ -507,11 +612,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"source-index failed: {exc}", file=sys.stderr)  # noqa: T201 - CLI output
         return 1
     failed = False
-    for digest, outcome in sorted(outcomes.items()):
+    for name, outcome in sorted(outcomes.items()):
         if isinstance(outcome, IndexFailed):
             failed = True
             print(  # noqa: T201 - CLI output
-                f"{digest}: index failed: {outcome.reason} ({outcome.key})", file=sys.stderr
+                f"{name}: index failed: {outcome.reason} ({outcome.key})", file=sys.stderr
             )
         else:
             print(  # noqa: T201 - CLI output
