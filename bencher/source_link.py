@@ -1,13 +1,38 @@
-r"""Link a benchmark's source file to its published reports, by content hash.
+r"""Link a benchmark's source file to its published reports, by hash or by path.
 
-A file that defines a benchmark carries one comment line::
+A file that defines a benchmark carries one comment line. The line has two
+forms, the *report key* modes:
+
+``hash`` (the default)::
 
     # report: https://reports.example.org/by-src/3f9a1c2e7b4d5e60/index.html
 
-The hash in that URL comes from the file's own bytes, so the URL is known before
-any run. Publication writes ``by-src/<hash>/index.html`` (see
-:mod:`bencher.source_index`), which lists every published run of that version of
-the file. Before a run is published at that version, the URL gives a 404.
+  The hash in that URL comes from the file's own bytes, so the URL is known
+  before any run. ``by-src/<hash>/index.html`` lists every published run of that
+  version of the file. Before a run is published at that version, the URL gives
+  a 404. Every edit makes the line stale, so two branches that edit one file can
+  merge and leave a stale line behind.
+
+``path``::
+
+    # report: https://reports.example.org/by-path/pkg/bench_x.py/index.html
+
+  The path is the file's path from the git root (:func:`repo_relative`). The
+  line does not change when the file changes, only when it moves.
+  ``by-path/<path>/index.html`` lists every published run of every version of
+  the file, newest first, with the source hash and revision of each run. A run
+  takes its path from this line (:func:`path_from_line`), so a bench that runs
+  from an install tree or Bazel runfiles, with no ``.git`` above it, still
+  records its repository path.
+
+Publication writes both pages for each run (see :mod:`bencher.source_index`),
+whatever line the file carries. ``bencher stamp --key {hash,path}`` picks the
+mode; the default comes from ``report_key`` under ``[tool.bencher]`` in
+``pyproject.toml``, then ``BENCHER_REPORT_KEY``, else ``hash``.
+
+A path is a store key, so :func:`safe_source_path` checks it before any use:
+relative POSIX, no empty, ``.`` or ``..`` segment, and only letters, digits and
+``._-/+@``.
 
 The hash rule (:func:`source_hash_bytes`), exactly:
 
@@ -47,7 +72,15 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 #: The directory, under a serving root, that holds one index page per source hash.
-INDEX_DIR = "by-src"
+HASH_INDEX_DIR = "by-src"
+#: The directory, under a serving root, that holds one index page per source path.
+PATH_INDEX_DIR = "by-path"
+#: The name 2.2.0 used for :data:`HASH_INDEX_DIR`.
+INDEX_DIR = HASH_INDEX_DIR
+#: The report key modes: what the report line's URL is keyed by.
+REPORT_KEYS = ("hash", "path")
+#: The environment variable that names the report key mode for ``bencher stamp``.
+REPORT_KEY_ENV = "BENCHER_REPORT_KEY"
 #: How many hex digits of the SHA-256 the URL carries.
 HASH_LENGTH = 16
 #: The environment variable that names the serving root for ``bencher stamp``.
@@ -56,6 +89,11 @@ REPORT_ROOT_ENV = "BENCHER_REPORT_ROOT"
 REPORT_LINE_PREFIX = "# report: "
 #: A report line, as the hash rule and ``bencher stamp`` recognise it.
 REPORT_LINE = re.compile(rb"^#[ \t]*report:")
+# A path-keyed report line: the URL's path part, between "/by-path/" and "/index.html".
+_PATH_LINE = re.compile(
+    rb"^#[ \t]*report:[ \t]*https?://[^/\s]+\S*?/by-path/(\S+)/index\.html[ \t]*$"
+)
+_PATH_SEGMENT = re.compile(r"[A-Za-z0-9._+@-]+")
 
 _SHEBANG = b"#!"
 _CODING = re.compile(rb"^[ \t\f]*#.*?coding[:=][ \t]*[-\w.]+")
@@ -104,14 +142,74 @@ def serving_root(value: str) -> str:
     return value.rstrip("/")
 
 
+def safe_source_path(path: str) -> str:
+    """Return *path* if it is safe as a ``by-path/`` store key and URL part.
+
+    Safe: a relative POSIX path of one or more segments, each made of letters,
+    digits and ``._-+@`` only, and none of them ``.`` or ``..``. So no empty
+    segment, leading ``/``, backslash, whitespace or control character.
+
+    Raises:
+        ValueError: If *path* is not safe.
+    """
+    if not isinstance(path, str) or not path:
+        raise ValueError(f"source path must be a non-empty string, not {path!r}")
+    for segment in path.split("/"):
+        if segment in {".", ".."} or not _PATH_SEGMENT.fullmatch(segment):
+            raise ValueError(
+                f"unsafe source path {path!r}: use a relative POSIX path of letters, "
+                "digits and ._-+@ with no empty, '.' or '..' segment"
+            )
+    return path
+
+
 def index_url(root: str, digest: str) -> str:
     """The URL of the index page for *digest* under the serving *root*."""
-    return f"{serving_root(root)}/{INDEX_DIR}/{digest}/index.html"
+    return f"{serving_root(root)}/{HASH_INDEX_DIR}/{digest}/index.html"
+
+
+def path_index_url(root: str, path: str) -> str:
+    """The URL of the index page for source *path* under the serving *root*.
+
+    Raises:
+        ValueError: If *path* fails :func:`safe_source_path`.
+    """
+    return f"{serving_root(root)}/{PATH_INDEX_DIR}/{safe_source_path(path)}/index.html"
 
 
 def report_line(root: str, digest: str) -> str:
     """The comment line a source file with hash *digest* carries."""
     return f"{REPORT_LINE_PREFIX}{index_url(root, digest)}"
+
+
+def path_report_line(root: str, path: str) -> str:
+    """The comment line a source file at repo-relative *path* carries in path mode."""
+    return f"{REPORT_LINE_PREFIX}{path_index_url(root, path)}"
+
+
+def path_from_line(data: bytes) -> str | None:
+    """The source path that the first by-path report line in *data* names, or None.
+
+    None when there is no by-path report line, or its path fails
+    :func:`safe_source_path`.
+    """
+    for line in _lines(data):
+        match = _PATH_LINE.match(line)
+        if match:
+            try:
+                return safe_source_path(match.group(1).decode("ascii"))
+            except (UnicodeDecodeError, ValueError):
+                return None
+    return None
+
+
+def git_relative(path: Path) -> str | None:
+    """*path* relative to the nearest directory above it that holds ``.git``, or None."""
+    resolved = path.resolve()
+    for parent in resolved.parents:
+        if (parent / ".git").exists():
+            return resolved.relative_to(parent).as_posix()
+    return None
 
 
 def repo_relative(path: Path) -> str:
@@ -120,11 +218,7 @@ def repo_relative(path: Path) -> str:
     With no such directory, the file name alone: a path relative to wherever the
     process started would differ between machines.
     """
-    resolved = path.resolve()
-    for parent in resolved.parents:
-        if (parent / ".git").exists():
-            return resolved.relative_to(parent).as_posix()
-    return resolved.name
+    return git_relative(path) or path.resolve().name
 
 
 @dataclass(frozen=True)
@@ -151,7 +245,13 @@ class SourceIdentity:
 
     @classmethod
     def of_file(cls, path: str | Path) -> SourceIdentity:
-        return cls(source_hash(path), repo_relative(Path(path)))
+        """The identity of the file at *path*.
+
+        The path comes from the file's by-path report line when it has a valid
+        one (:func:`path_from_line`), else from :func:`repo_relative`.
+        """
+        data = Path(path).read_bytes()
+        return cls(source_hash_bytes(data), path_from_line(data) or repo_relative(Path(path)))
 
 
 def source_of(benchmark: object) -> SourceIdentity | None:
@@ -192,8 +292,25 @@ def _newline(data: bytes) -> bytes:
     return b"\n"
 
 
-def stamp_bytes(data: bytes, root: str) -> bytes:
-    """*data* with exactly one current report line.
+def expected_line(data: bytes, root: str, key: str = "hash", path: str | None = None) -> str:
+    """The report line *data* should carry in report key mode *key*.
+
+    *path* is the file's repo-relative path, which path mode needs.
+
+    Raises:
+        ValueError: If *key* is not a report key, or path mode has no safe *path*.
+    """
+    if key == "hash":
+        return report_line(root, source_hash_bytes(data))
+    if key == "path":
+        if path is None:
+            raise ValueError("path mode needs the file's repo-relative path")
+        return path_report_line(root, path)
+    raise ValueError(f"report key must be one of {', '.join(REPORT_KEYS)}, not {key!r}")
+
+
+def stamp_bytes(data: bytes, root: str, key: str = "hash", path: str | None = None) -> bytes:
+    """*data* with exactly one current report line (see :func:`expected_line`).
 
     An existing report line is replaced in place and any others are removed. With
     none, the line goes after a shebang and a PEP 263 encoding line, and before
@@ -201,7 +318,7 @@ def stamp_bytes(data: bytes, root: str) -> bytes:
     The file keeps its own line endings.
     """
     newline = _newline(data)
-    line = report_line(root, source_hash_bytes(data)).encode()
+    line = expected_line(data, root, key, path).encode()
     lines = _lines(data)
     positions = [i for i, text in enumerate(lines) if REPORT_LINE.match(text)]
     if positions:
@@ -228,12 +345,16 @@ class StampStatus:
     expected: str
 
 
-def check_bytes(data: bytes, root: str) -> str:
-    """``"current"``, ``"missing"`` or ``"stale"`` for the report line(s) in *data*."""
+def check_bytes(data: bytes, root: str, key: str = "hash", path: str | None = None) -> str:
+    """``"current"``, ``"missing"`` or ``"stale"`` for the report line(s) in *data*.
+
+    Current means exactly one report line, equal to :func:`expected_line`. In path
+    mode a renamed or copied file is stale: its line names another path.
+    """
     found = [line for line in _lines(data) if REPORT_LINE.match(line)]
     if not found:
         return "missing"
-    expected = report_line(root, source_hash_bytes(data)).encode()
+    expected = expected_line(data, root, key, path).encode()
     return "current" if found == [expected] else "stale"
 
 
@@ -241,7 +362,7 @@ def has_report_line(data: bytes) -> bool:
     return any(REPORT_LINE.match(line) for line in _lines(data))
 
 
-def _pyproject_root(start: Path) -> str | None:
+def _pyproject_setting(start: Path, name: str) -> str | None:
     for directory in (start, *start.parents):
         candidate = directory / "pyproject.toml"
         if candidate.is_file():
@@ -249,7 +370,7 @@ def _pyproject_root(start: Path) -> str | None:
                 config = tomllib.loads(candidate.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 return None
-            value = config.get("tool", {}).get("bencher", {}).get("report_root")
+            value = config.get("tool", {}).get("bencher", {}).get(name)
             return value if isinstance(value, str) and value else None
     return None
 
@@ -272,7 +393,7 @@ def resolve_root(
     value = (
         explicit
         or source.get(REPORT_ROOT_ENV, "").strip()
-        or _pyproject_root((start or Path.cwd()).resolve())
+        or _pyproject_setting((start or Path.cwd()).resolve(), "report_root")
     )
     if not value:
         raise ValueError(
@@ -282,31 +403,82 @@ def resolve_root(
     return serving_root(value)
 
 
+def resolve_key(
+    explicit: str | None = None,
+    env: Mapping[str, str] | None = None,
+    start: Path | None = None,
+) -> str:
+    """The report key mode, ``"hash"`` or ``"path"``.
+
+    In order: *explicit* (``--key``), ``report_key`` under ``[tool.bencher]`` in the
+    nearest ``pyproject.toml`` above *start* (the working directory by default),
+    the ``BENCHER_REPORT_KEY`` variable, then ``"hash"``. The repository's own
+    setting wins over the environment, so every checkout writes the same lines.
+
+    Raises:
+        ValueError: If the value is not a report key.
+    """
+    source = os.environ if env is None else env
+    value = (
+        explicit
+        or _pyproject_setting((start or Path.cwd()).resolve(), "report_key")
+        or source.get(REPORT_KEY_ENV, "").strip()
+        or "hash"
+    )
+    if value not in REPORT_KEYS:
+        raise ValueError(f"report key must be one of {', '.join(REPORT_KEYS)}, not {value!r}")
+    return value
+
+
+def stamp_path(path: Path) -> str:
+    """The repo-relative path that path mode writes for the file at *path*.
+
+    Raises:
+        ValueError: If no directory above *path* holds ``.git``, or the path is
+            not safe (:func:`safe_source_path`).
+    """
+    relative = git_relative(path)
+    if relative is None:
+        raise ValueError(f"{path}: path mode needs a git repository above the file")
+    return safe_source_path(relative)
+
+
 def stamp_files(
-    paths: Sequence[str | Path], root: str, *, check: bool = False, only_stamped: bool = False
+    paths: Sequence[str | Path],
+    root: str,
+    *,
+    check: bool = False,
+    only_stamped: bool = False,
+    key: str = "hash",
 ) -> list[StampStatus]:
     """Stamp (or with *check*, only inspect) each file in *paths*.
 
     With *only_stamped*, a file with no report line is skipped (state
-    ``"unstamped"``): a repository can opt files in one at a time.
+    ``"unstamped"``): a repository can opt files in one at a time. *key* is the
+    report key mode; path mode takes each path from the git root above the file
+    (:func:`stamp_path`).
+
+    Raises:
+        ValueError: In path mode, for a file with no git root or an unsafe path.
     """
     statuses = []
     for raw in paths:
         path = Path(raw)
         data = path.read_bytes()
-        expected = report_line(root, source_hash_bytes(data))
+        relative = stamp_path(path) if key == "path" else None
+        expected = expected_line(data, root, key, relative)
         if only_stamped and not has_report_line(data):
             statuses.append(StampStatus(path, "unstamped", expected))
             continue
-        state = check_bytes(data, root)
+        state = check_bytes(data, root, key, relative)
         if not check and state != "current":
-            path.write_bytes(stamp_bytes(data, root))
+            path.write_bytes(stamp_bytes(data, root, key, relative))
         statuses.append(StampStatus(path, state, expected))
     return statuses
 
 
 def main(argv: list[str] | None = None) -> int:
-    """``bencher stamp [--check] [--root URL] [--only-stamped] FILE...``."""
+    """``bencher stamp [--check] [--root URL] [--key hash|path] [--only-stamped] FILE...``."""
     parser = argparse.ArgumentParser(
         prog="bencher stamp",
         description="Write or check the '# report:' line in benchmark source files.",
@@ -323,6 +495,13 @@ def main(argv: list[str] | None = None) -> int:
         "then [tool.bencher] report_root in pyproject.toml)",
     )
     parser.add_argument(
+        "--key",
+        choices=REPORT_KEYS,
+        help="What the report URL is keyed by: the file's content hash (by-src/) or its "
+        "repo-relative path (by-path/). Default: [tool.bencher] report_key in "
+        f"pyproject.toml, then ${REPORT_KEY_ENV}, then hash",
+    )
+    parser.add_argument(
         "--only-stamped",
         action="store_true",
         help="Skip files that have no report line yet",
@@ -330,7 +509,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
     try:
         root = resolve_root(args.root)
-        statuses = stamp_files(args.files, root, check=args.check, only_stamped=args.only_stamped)
+        key = resolve_key(args.key)
+        statuses = stamp_files(
+            args.files, root, check=args.check, only_stamped=args.only_stamped, key=key
+        )
     except (OSError, ValueError) as exc:
         print(f"bencher stamp: {exc}", file=sys.stderr)  # noqa: T201 - CLI output
         return 2
@@ -342,7 +524,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.check:
             print(  # noqa: T201 - CLI output
                 f"{status.path}: report line is {status.state}; expected\n  {status.expected}\n"
-                f"  run: bencher stamp {status.path}",
+                f"  run: bencher stamp --key {key} {status.path}",
                 file=sys.stderr,
             )
         else:
